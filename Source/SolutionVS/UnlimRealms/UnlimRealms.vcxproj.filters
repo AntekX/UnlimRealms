@@ -1,0 +1,253 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="..\..\UnlimRealms\UnlimRealms.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\BaseTypes.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Core\Math.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Common.h" />
+    <ClInclude Include="..\..\UnlimRealms\Gfx\GfxSystem.h">
+      <Filter>Gfx</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Gfx\GfxSystem.inline.h">
+      <Filter>Gfx</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\TaskManager.h">
+      <Filter>Sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\TaskManager.inline.h">
+      <Filter>Sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinCanvas.h">
+      <Filter>Sys\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Core\Core.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Canvas.h">
+      <Filter>Sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Canvas.inline.h">
+      <Filter>Sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Realm\Realm.h">
+      <Filter>Realm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Realm\Realm.inline.h">
+      <Filter>Realm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinCanvas.inline.h">
+      <Filter>Sys\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.h">
+      <Filter>Gfx\D3D11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Gfx\GfxTypes.h">
+      <Filter>Gfx</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.inline.h">
+      <Filter>Gfx\D3D11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Storage.h">
+      <Filter>Sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Std\StdStorage.h">
+      <Filter>Sys\Std</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Core\ResultTypes.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Log.h">
+      <Filter>Sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Storage.inline.h">
+      <Filter>Sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\imconfig.h">
+      <Filter>Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\imgui.h">
+      <Filter>Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\imgui_internal.h">
+      <Filter>Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\stb_rect_pack.h">
+      <Filter>Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\stb_textedit.h">
+      <Filter>Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\stb_truetype.h">
+      <Filter>Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\ImguiRender\ImguiRender.h">
+      <Filter>ImguiRender</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Input.h">
+      <Filter>Sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinInput.h">
+      <Filter>Sys\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Input.inline.h">
+      <Filter>Sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\GenericRender\GenericRender.h">
+      <Filter>GenericRender</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Camera\Camera.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Camera\Camera.inline.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Camera\CameraControl.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Camera\CameraControl.inline.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Core\Algorithms.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Core\Algorithms.inline.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Isosurface\Isosurface.h">
+      <Filter>Isosurface</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Gfx\GfxSystem.cpp">
+      <Filter>Gfx</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Sys\TaskManager.cpp">
+      <Filter>Sys</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Sys\Windows\WinCanvas.cpp">
+      <Filter>Sys\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Sys\Canvas.cpp">
+      <Filter>Sys</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Realm\Realm.cpp">
+      <Filter>Realm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.cpp">
+      <Filter>Gfx\D3D11</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Gfx\GfxTypes.cpp">
+      <Filter>Gfx</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Sys\Storage.cpp">
+      <Filter>Sys</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Sys\Std\StdStorage.cpp">
+      <Filter>Sys\Std</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Core\ResultTypes.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Sys\Log.cpp">
+      <Filter>Sys</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\imgui\imgui.cpp">
+      <Filter>Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\imgui\imgui_demo.cpp">
+      <Filter>Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\imgui\imgui_draw.cpp">
+      <Filter>Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\ImguiRender\ImguiRender.cpp">
+      <Filter>ImguiRender</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Sys\Input.cpp">
+      <Filter>Sys</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Sys\Windows\WinInput.cpp">
+      <Filter>Sys\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\GenericRender\GenericRender.cpp">
+      <Filter>GenericRender</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Camera\Camera.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Camera\CameraControl.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Core\Algorithms.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Isosurface\Isosurface.cpp">
+      <Filter>Isosurface</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Core">
+      <UniqueIdentifier>{4bd61845-787c-49d9-a635-0bd2553ff13d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gfx">
+      <UniqueIdentifier>{95b3f0bb-3a4c-4f8f-82e1-e883bc21dbb0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Realm">
+      <UniqueIdentifier>{f20177aa-e69e-4071-8867-914ffd24b632}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gfx\D3D11">
+      <UniqueIdentifier>{e2c92149-5c1c-42aa-ac3f-e4327ae46ebb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sys">
+      <UniqueIdentifier>{aef693cf-8a07-4b7c-81d9-62406c65b666}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sys\Windows">
+      <UniqueIdentifier>{ec68098c-61c9-4f81-b003-e0de230b26ca}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sys\Std">
+      <UniqueIdentifier>{dc65d448-242a-4191-a0ef-1882988eb5fd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Imgui">
+      <UniqueIdentifier>{48cda07e-62a2-4e84-bc77-ad99e46bf74f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ImguiRender">
+      <UniqueIdentifier>{bc8d4244-91e9-4897-9f1e-3d806d7e6053}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="GenericRender">
+      <UniqueIdentifier>{23f7705b-23b4-48d3-84b8-59c9a87ca6bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Camera">
+      <UniqueIdentifier>{0412afb3-b9a4-48ce-a105-39d9d9f287ea}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Isosurface">
+      <UniqueIdentifier>{055a3b5c-0852-413b-abb4-e13ce7500490}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="..\..\UnlimRealms\ImguiRender\Imgui_ps.hlsl">
+      <Filter>ImguiRender</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\ImguiRender\Imgui_vs.hlsl">
+      <Filter>ImguiRender</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\GenericRender\Generic_ps.hlsl">
+      <Filter>GenericRender</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\GenericRender\Generic_vs.hlsl">
+      <Filter>GenericRender</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Isosurface\Isosurface_ps.hlsl">
+      <Filter>Isosurface</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Isosurface\Isosurface_vs.hlsl">
+      <Filter>Isosurface</Filter>
+    </FxCompile>
+  </ItemGroup>
+</Project>

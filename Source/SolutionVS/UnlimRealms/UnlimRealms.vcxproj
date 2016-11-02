@@ -1,0 +1,255 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B76C296A-5A0D-4CE6-966A-545F4596271B}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>UnlimRealms</RootNamespace>
+    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>..\..\..\Bin\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>..\..\..\Bin\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>..\..\..\Bin\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>..\..\..\Bin\</OutDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x86;_DEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x64;_DEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x86;NDEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x64;NDEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\3rdParty\imgui\imconfig.h" />
+    <ClInclude Include="..\..\3rdParty\imgui\imgui.h" />
+    <ClInclude Include="..\..\3rdParty\imgui\imgui_internal.h" />
+    <ClInclude Include="..\..\3rdParty\imgui\stb_rect_pack.h" />
+    <ClInclude Include="..\..\3rdParty\imgui\stb_textedit.h" />
+    <ClInclude Include="..\..\3rdParty\imgui\stb_truetype.h" />
+    <ClInclude Include="..\..\UnlimRealms\Camera\Camera.h" />
+    <ClInclude Include="..\..\UnlimRealms\Camera\Camera.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Camera\CameraControl.h" />
+    <ClInclude Include="..\..\UnlimRealms\Camera\CameraControl.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Common.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\Algorithms.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\Algorithms.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\BaseTypes.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\Core.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\Math.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\ResultTypes.h" />
+    <ClInclude Include="..\..\UnlimRealms\GenericRender\GenericRender.h" />
+    <ClInclude Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.h" />
+    <ClInclude Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Gfx\GfxSystem.h" />
+    <ClInclude Include="..\..\UnlimRealms\Gfx\GfxSystem.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Gfx\GfxTypes.h" />
+    <ClInclude Include="..\..\UnlimRealms\ImguiRender\ImguiRender.h" />
+    <ClInclude Include="..\..\UnlimRealms\Isosurface\Isosurface.h" />
+    <ClInclude Include="..\..\UnlimRealms\Realm\Realm.h" />
+    <ClInclude Include="..\..\UnlimRealms\Realm\Realm.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Canvas.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Canvas.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Input.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Input.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Log.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Std\StdStorage.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Storage.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Storage.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\TaskManager.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\TaskManager.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinCanvas.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinCanvas.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinInput.h" />
+    <ClInclude Include="..\..\UnlimRealms\UnlimRealms.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\3rdParty\imgui\imgui.cpp" />
+    <ClCompile Include="..\..\3rdParty\imgui\imgui_demo.cpp" />
+    <ClCompile Include="..\..\3rdParty\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Camera\Camera.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Camera\CameraControl.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Core\Algorithms.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Core\ResultTypes.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\GenericRender\GenericRender.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Gfx\GfxSystem.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Gfx\GfxTypes.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\ImguiRender\ImguiRender.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Isosurface\Isosurface.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Realm\Realm.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Sys\Canvas.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Sys\Input.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Sys\Log.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Sys\Std\StdStorage.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Sys\Storage.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Sys\TaskManager.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Sys\Windows\WinCanvas.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Sys\Windows\WinInput.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="..\..\UnlimRealms\GenericRender\Generic_ps.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\GenericRender\Generic_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\ImguiRender\Imgui_ps.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\ImguiRender\Imgui_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Isosurface\Isosurface_ps.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Isosurface\Isosurface_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
