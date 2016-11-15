@@ -216,7 +216,7 @@ namespace UnlimRealms
 		// Hybrid triangulation approach
 		// Subdivides volume box in to hierarchy of tetrahedra
 		// Each tetrahedron is then divided into 4 hexahedra
-		// Each hexahedron bounds the lattice used for surface mesh construction
+		// Each hexahedron bounds the lattice used for surface mesh extraction
 		//
 		// TODO: tetrahedra based approach doesn't fit "blocky" build logic, where per block data can be independent and stores gfx resources.
 		// Triangulator should be refactored into some abstract Mesh constructor, which manages gfx buffers and rendering
