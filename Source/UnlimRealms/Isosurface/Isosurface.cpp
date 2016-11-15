@@ -576,21 +576,21 @@ namespace UnlimRealms
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Isosurface::MarchingTetrahedra
+	// Isosurface::HybridTetrahedra
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Isosurface::MarchingTetrahedra::MarchingTetrahedra(Isosurface &isosurface) :
+	Isosurface::HybridTetrahedra::HybridTetrahedra(Isosurface &isosurface) :
 		Triangulator(isosurface)
 	{
 
 	}
 
-	Isosurface::MarchingTetrahedra::~MarchingTetrahedra()
+	Isosurface::HybridTetrahedra::~HybridTetrahedra()
 	{
 
 	}
 
-	Result Isosurface::MarchingTetrahedra::Construct(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox)
+	Result Isosurface::HybridTetrahedra::Construct(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox)
 	{
 		// TODO:
 		return Result(NotImplemented);

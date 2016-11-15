@@ -211,18 +211,56 @@ namespace UnlimRealms
 			virtual Result Construct(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox);
 		};
 
+
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// "Marching Tetrahedra" triangulator implementation
+		// Hybrid triangulation approach
+		// Subdivides volume box in to hierarchy of tetrahedra
+		// Each tetrahedron is then divided into 4 hexahedra
+		// Each hexahedron bounds the lattice used for surface mesh construction
+		//
+		// TODO: tetrahedra based approach doesn't fit "blocky" build logic, where per block data can be independent and stores gfx resources.
+		// Triangulator should be refactored into some abstract Mesh constructor, which manages gfx buffers and rendering
+		// (in this new approach crnt version of SurfaceNet triangulator will have to duplicate blocks hierachy)
+		//
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		class UR_DECL MarchingTetrahedra : public Triangulator
+		class UR_DECL HybridTetrahedra : public Triangulator
 		{
 		public:
 
-			MarchingTetrahedra(Isosurface &isosurface);
+			struct UR_DECL Tetrahedron
+			{
+				typedef ur_float3 Vertex;
 
-			~MarchingTetrahedra();
+				struct UR_DECL Face
+				{
+					ur_byte v0;
+					ur_byte v1;
+					ur_byte v2;
+				};
+
+				struct UR_DECL Edge
+				{
+					ur_byte v0;
+					ur_byte v1;
+				};
+
+				Vertex vertices[4];
+				Face faces[4];
+				Edge edges[6];
+
+				Tetrahedron *children[2];
+				Tetrahedron *neighbors[4];
+			};
+
+			HybridTetrahedra(Isosurface &isosurface);
+
+			~HybridTetrahedra();
 
 			virtual Result Construct(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox);
+
+		private:
+
+			std::unique_ptr<Tetrahedron> root[6];
 		};
 
 
