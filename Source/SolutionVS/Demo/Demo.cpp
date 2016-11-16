@@ -98,10 +98,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		std::unique_ptr<Isosurface::ProceduralGenerator> loader(new Isosurface::ProceduralGenerator(*isosurface.get(),
 			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));
 
-		std::unique_ptr<Isosurface::SurfaceNet> triangulator(new Isosurface::SurfaceNet(*isosurface.get()));
-		//std::unique_ptr<Isosurface::MarchingTetrahedra> triangulator(new Isosurface::MarchingTetrahedra(*isosurface.get()));
+		std::unique_ptr<Isosurface::SurfaceNet> presentation(new Isosurface::SurfaceNet(*isosurface.get()));
 
-		isosurface->Init(desc, std::move(loader), std::move(triangulator));
+		isosurface->Init(desc, std::move(loader), std::move(presentation));
 	}
 	
     // Main message loop:

@@ -19,20 +19,6 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL Isosurface : public RealmEntity
 	{
-	protected:
-
-
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Isosurface inner data block
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		struct UR_DECL Block
-		{
-			typedef ur_float ValueType;
-			std::vector<ValueType> field;
-			std::unique_ptr<GfxBuffer> gfxVB;
-			std::unique_ptr<GfxBuffer> gfxIB;
-		};
-		
 	public:
 
 
@@ -55,6 +41,16 @@ namespace UnlimRealms
 		protected:
 
 			Isosurface &isosurface;
+		};
+
+
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Isosurface volume data block
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		struct UR_DECL Block
+		{
+			typedef ur_float ValueType;
+			std::vector<ValueType> field;
 		};
 
 
@@ -183,24 +179,26 @@ namespace UnlimRealms
 
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Abstract isosurface triangulator
+		// Abstract isosurface presentation
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		class UR_DECL Triangulator : public SubSystem
+		class UR_DECL Presentation : public SubSystem
 		{
 		public:
 
-			Triangulator(Isosurface &isosurface);
+			Presentation(Isosurface &isosurface);
 
-			~Triangulator();
+			~Presentation();
 
-			virtual Result Construct(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox);
+			virtual Result Construct(AdaptiveVolume &volume);
+
+			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 		};
 
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// "Surface Net" triangulator implementation
+		// "Surface Net" presentation implementation
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		class UR_DECL SurfaceNet : public Triangulator
+		class UR_DECL SurfaceNet : public Presentation
 		{
 		public:
 
@@ -208,7 +206,48 @@ namespace UnlimRealms
 
 			~SurfaceNet();
 
-			virtual Result Construct(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox);
+			virtual Result Construct(AdaptiveVolume &volume);
+
+			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
+
+		private:
+
+			struct UR_DECL MeshBlock
+			{
+				bool initialized;
+				std::unique_ptr<GfxBuffer> gfxVB;
+				std::unique_ptr<GfxBuffer> gfxIB;
+
+				MeshBlock() : initialized(false) {}
+			};
+
+			typedef Octree<MeshBlock> MeshTree;
+
+			Result Construct(AdaptiveVolume &volume, AdaptiveVolume::Node *volumeNode, MeshTree::Node *meshNode);
+
+			Result Construct(AdaptiveVolume &volume, const BoundingBox &bbox, Block &block, MeshBlock &mesh);
+
+			Result Render(GfxContext &gfxContext, MeshTree::Node *meshNode);
+
+
+			std::unique_ptr<MeshTree> tree;
+
+
+			struct Stat
+			{
+				ur_uint nodes;
+				ur_uint verticesCount;
+				ur_uint primitivesCount;
+				ur_uint videoMemory;
+			} stats;
+
+			std::unique_ptr<GenericRender> debugRender;
+
+			void DrawTreeBounds(const MeshTree::Node *node);
+
+			void DrawStats();
+
+			void GatherStats(const MeshTree::Node *node);
 		};
 
 
@@ -217,15 +256,12 @@ namespace UnlimRealms
 		// Subdivides volume box in to hierarchy of tetrahedra
 		// Each tetrahedron is then divided into 4 hexahedra
 		// Each hexahedron bounds the lattice used for surface mesh extraction
-		//
-		// TODO: tetrahedra based approach doesn't fit "blocky" build logic, where per block data can be independent and stores gfx resources.
-		// Triangulator should be refactored into some abstract Mesh constructor, which manages gfx buffers and rendering
-		// (in this new approach crnt version of SurfaceNet triangulator will have to duplicate blocks hierachy)
-		//
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		class UR_DECL HybridTetrahedra : public Triangulator
+		class UR_DECL HybridTetrahedra : public Presentation
 		{
 		public:
+
+			// TODO
 
 			struct UR_DECL Tetrahedron
 			{
@@ -256,7 +292,9 @@ namespace UnlimRealms
 
 			~HybridTetrahedra();
 
-			virtual Result Construct(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox);
+			virtual Result Construct(AdaptiveVolume &volume);
+
+			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
 		private:
 
@@ -284,26 +322,6 @@ namespace UnlimRealms
 		private:
 
 			std::set<AdaptiveVolume::Node*> newNodes;
-			std::multimap<ur_float, AdaptiveVolume::Node*> priorityQueue;
-
-			// temp: async build test implementation
-			// todo: rewrite
-			std::thread thread;
-			struct BuildCacheEntry
-			{
-				enum class State
-				{
-					Idle,
-					Working,
-					Finished,
-				};
-				Block block;
-				BoundingBox bbox;
-				std::atomic<State> state;
-			};
-			BuildCacheEntry buildCache;
-
-			static void BuildBlock(AdaptiveVolume *volume, BuildCacheEntry *cacheEntry);
 		};
 
 
@@ -311,7 +329,7 @@ namespace UnlimRealms
 
 		virtual ~Isosurface();
 
-		Result Init(const AdaptiveVolume::Desc &desc, std::unique_ptr<Loader> loader, std::unique_ptr<Triangulator> triangulator);
+		Result Init(const AdaptiveVolume::Desc &desc, std::unique_ptr<Loader> loader, std::unique_ptr<Presentation> presentation);
 
 		Result Update();
 
@@ -321,21 +339,13 @@ namespace UnlimRealms
 
 		inline Loader* GetLoader() const { return this->loader.get(); }
 
-		inline Triangulator* GetTriangulator() const { return this->triangulator.get(); }
+		inline Presentation* GetPresentation() const { return this->presentation.get(); }
 
 		inline Builder* GetBuilder() const { return this->builder.get(); }
 	
 	protected:
 
-		Result RenderSurface(GfxContext &gfxContext, AdaptiveVolume::Node *volumeNode);
-
 		Result CreateGfxObjects();
-
-		void DrawDebugTreeBounds(const AdaptiveVolume::Node *node);
-
-		void GatherStats();
-
-		void GatherStats(const AdaptiveVolume::Node *node);
 
 		struct GfxObjects
 		{
@@ -361,14 +371,11 @@ namespace UnlimRealms
 
 		std::unique_ptr<AdaptiveVolume> volume;
 		std::unique_ptr<Loader> loader;
-		std::unique_ptr<Triangulator> triangulator;
+		std::unique_ptr<Presentation> presentation;
 		std::unique_ptr<Builder> builder;
 		std::unique_ptr<GfxObjects> gfxObjects;
-		GenericRender debugRender;
-		ur_bool drawDebugBounds;
-		ur_bool drawWireframe;
 
-		struct Stat
+		/*struct Stat
 		{
 			ur_uint volumeNodes;
 			ur_uint surfaceNodes;
@@ -376,7 +383,7 @@ namespace UnlimRealms
 			ur_uint primitivesCount;
 			ur_uint videoMemory;
 			ur_uint sysMemory;
-		} stats;
+		} stats;*/
 	};
 
 } // end namespace UnlimRealms

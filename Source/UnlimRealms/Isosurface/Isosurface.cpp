@@ -306,21 +306,26 @@ namespace UnlimRealms
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Isosurface::Triangulator
+	// Isosurface::Presentation
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Isosurface::Triangulator::Triangulator(Isosurface &isosurface) :
+	Isosurface::Presentation::Presentation(Isosurface &isosurface) :
 		SubSystem(isosurface)
 	{
 
 	}
 
-	Isosurface::Triangulator::~Triangulator()
+	Isosurface::Presentation::~Presentation()
 	{
 
 	}
 
-	Result Isosurface::Triangulator::Construct(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox)
+	Result Isosurface::Presentation::Construct(AdaptiveVolume &volume)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result Isosurface::Presentation::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
 	{
 		return Result(NotImplemented);
 	}
@@ -331,9 +336,10 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	Isosurface::SurfaceNet::SurfaceNet(Isosurface &isosurface) :
-		Triangulator(isosurface)
+		Presentation(isosurface)
 	{
-
+		this->debugRender.reset(new GenericRender(isosurface.GetRealm()));
+		this->debugRender->Init();
 	}
 
 	Isosurface::SurfaceNet::~SurfaceNet()
@@ -341,8 +347,61 @@ namespace UnlimRealms
 
 	}
 
-	Result Isosurface::SurfaceNet::Construct(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox)
+	Result Isosurface::SurfaceNet::Construct(AdaptiveVolume &volume)
 	{
+		// init tree
+		if (ur_null == this->tree.get())
+		{
+			this->tree.reset(new MeshTree());
+			this->tree->Init(volume.GetDesc().Bound);
+		}
+
+		// update mesh blocks from volume
+		return this->Construct(volume, volume.GetRoot(), this->tree->GetRoot());
+	}
+
+	Result Isosurface::SurfaceNet::Construct(AdaptiveVolume &volume, AdaptiveVolume::Node *volumeNode, MeshTree::Node *meshNode)
+	{
+		Result res = Result(Success);
+
+		if (ur_null == meshNode)
+			return Result(InvalidArgs);
+
+		if (volumeNode != ur_null)
+		{
+			// construct mesh for current data field
+			if (!meshNode->GetData().initialized)
+			{
+				Result buildRes = this->Construct(volume, volumeNode->GetBBox(), volumeNode->GetData(), meshNode->GetData());
+				res = CombinedResult(res, buildRes);
+			}
+
+			if (volumeNode->HasSubNodes())
+			{
+				// build higher detail sub meshes
+				meshNode->Split();
+				for (ur_uint i = 0; i < MeshTree::Node::SubNodesCount; ++i)
+				{
+					this->Construct(volume, volumeNode->GetSubNode(i), meshNode->GetSubNode(i));
+				}
+			}
+			else
+			{
+				meshNode->Merge();
+			}
+		}
+		else
+		{
+			meshNode->Merge();
+		}
+
+		return res;
+	}
+
+	Result Isosurface::SurfaceNet::Construct(AdaptiveVolume &volume, const BoundingBox &bbox, Block &block, MeshBlock &mesh)
+	{
+		mesh.initialized = true;
+
 		// compute surface data
 
 		const ur_uint &blockBorder = AdaptiveVolume::BorderSize;
@@ -550,7 +609,7 @@ namespace UnlimRealms
 			return Result(Failure);
 
 		// create vertex Buffer
-		auto &gfxVB = block.gfxVB;
+		auto &gfxVB = mesh.gfxVB;
 		Result res = gfxSystem->CreateBuffer(gfxVB);
 		if (Succeeded(res))
 		{
@@ -561,7 +620,7 @@ namespace UnlimRealms
 			return Result(Failure);
 
 		// create index buffer
-		auto &gfxIB = block.gfxIB;
+		auto &gfxIB = mesh.gfxIB;
 		res = gfxSystem->CreateBuffer(gfxIB);
 		if (Succeeded(res))
 		{
@@ -574,13 +633,135 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result Isosurface::SurfaceNet::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
+	{
+		Result res = Result(Success);
+
+		if (this->tree.get() != ur_null)
+		{
+			res = this->Render(gfxContext, this->tree->GetRoot());
+		}
+
+		// temp: alwyas draw debug info
+		DrawStats();
+		if (this->tree.get() != ur_null)
+		{
+			DrawTreeBounds(this->tree->GetRoot());
+		}
+		this->debugRender->Render(gfxContext, viewProj);
+
+		return res;
+	}
+
+	Result Isosurface::SurfaceNet::Render(GfxContext &gfxContext, MeshTree::Node *meshNode)
+	{
+		if (ur_null == meshNode)
+			return Result(InvalidArgs);
+
+		if (meshNode->HasSubNodes())
+		{
+			for (ur_uint i = 0; i < AdaptiveVolume::Node::SubNodesCount; ++i)
+			{
+				this->Render(gfxContext, meshNode->GetSubNode(i));
+			}
+		}
+		else
+		{
+			const MeshBlock &meshBlock = meshNode->GetData();
+			const ur_uint indexCount = (meshBlock.gfxIB.get() ? meshBlock.gfxIB->GetDesc().Size / sizeof(Index) : 0);
+			gfxContext.SetVertexBuffer(meshBlock.gfxVB.get(), 0, sizeof(Vertex), 0);
+			gfxContext.SetIndexBuffer(meshBlock.gfxIB.get(), sizeof(Index) * 8, 0);
+			gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
+		}
+
+		return Result(Success);
+	}
+
+	void Isosurface::SurfaceNet::DrawTreeBounds(const MeshTree::Node *node)
+	{
+		if (ur_null == node)
+			return;
+
+		if (node->HasSubNodes())
+		{
+			for (ur_uint i = 0; i < MeshTree::Node::SubNodesCount; ++i)
+			{
+				this->DrawTreeBounds(node->GetSubNode(i));
+			}
+		}
+		else
+		{
+			static ur_float4 DebugColor[2] = {
+				{ 0.5f, 0.5f, 0.55f, 1.0f },
+				{ 1.0f, 1.0f, 0.0f, 1.0f }
+			};
+			bool hasSurface = (node->GetData().gfxIB.get() != ur_null && node->GetData().gfxIB->GetDesc().Size > 0);
+			if (hasSurface)
+			{
+				this->debugRender->DrawBox(node->GetBBox().Min, node->GetBBox().Max, DebugColor[1]);
+			}
+		}
+	}
+
+	void Isosurface::SurfaceNet::DrawStats()
+	{
+		memset(&this->stats, 0, sizeof(this->stats));
+		if (this->tree.get() != ur_null)
+		{
+			this->GatherStats(this->tree->GetRoot());
+		}
+
+		ImGui::SetNextWindowSize({ 250.0f, 250.0f });
+		ImGui::SetNextWindowPos({ 0.0f, 0.0f });
+		ImGui::Begin("Isosurface", ur_null, ImGuiWindowFlags_NoResize);
+		ImGui::Separator();
+		ImGui::Text("Options:");
+		//ImGui::Checkbox("Draw bounds", &this->drawDebugBounds);
+		//ImGui::Checkbox("Draw Wireframe", &this->drawWireframe);
+		ImGui::Separator();
+		ImGui::Text("Statistics:");
+		ImGui::Text("Tree Depth: %i", this->tree.get() ? this->tree->GetDepth(): 0);
+		ImGui::Text("Tree Nodes: %i", this->stats.nodes);
+		ImGui::Text("Primitives: %i", this->stats.primitivesCount);
+		ImGui::Text("Vertices: %i", this->stats.verticesCount);
+		ImGui::Text("VideoMemory: %i", this->stats.videoMemory);
+		ImGui::End();
+	}
+
+	void Isosurface::SurfaceNet::GatherStats(const MeshTree::Node *node)
+	{
+		if (ur_null == node)
+			return;
+
+		this->stats.nodes += 1;
+
+		if (node->GetData().gfxVB.get() != ur_null)
+		{
+			this->stats.videoMemory += node->GetData().gfxVB->GetDesc().Size;
+			this->stats.verticesCount += node->GetData().gfxVB->GetDesc().Size / sizeof(Vertex);
+		}
+		if (node->GetData().gfxIB.get() != ur_null)
+		{
+			this->stats.videoMemory += node->GetData().gfxIB->GetDesc().Size;
+			this->stats.primitivesCount += (node->GetData().gfxIB->GetDesc().Size / sizeof(Index)) / 3;
+		}
+
+		if (node->HasSubNodes())
+		{
+			for (ur_uint i = 0; i < AdaptiveVolume::Node::SubNodesCount; ++i)
+			{
+				this->GatherStats(node->GetSubNode(i));
+			}
+		}
+	}
+
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Isosurface::HybridTetrahedra
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	Isosurface::HybridTetrahedra::HybridTetrahedra(Isosurface &isosurface) :
-		Triangulator(isosurface)
+		Presentation(isosurface)
 	{
 
 	}
@@ -590,9 +771,13 @@ namespace UnlimRealms
 
 	}
 
-	Result Isosurface::HybridTetrahedra::Construct(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox)
+	Result Isosurface::HybridTetrahedra::Construct(AdaptiveVolume &volume)
 	{
-		// TODO:
+		return Result(NotImplemented);
+	}
+
+	Result Isosurface::HybridTetrahedra::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
+	{
 		return Result(NotImplemented);
 	}
 
@@ -604,7 +789,6 @@ namespace UnlimRealms
 	Isosurface::Builder::Builder(Isosurface &isosurface) :
 		SubSystem(isosurface)
 	{
-		this->buildCache.state = BuildCacheEntry::State::Idle;
 	}
 
 	Isosurface::Builder::~Builder()
@@ -618,23 +802,10 @@ namespace UnlimRealms
 			return;
 
 		this->newNodes.insert(node);
-
-		AdaptiveVolume& volume = static_cast<AdaptiveVolume&>(node->GetTree());
-		//ur_float priority = node->GetBBox().Distance(volume.GetPartitionPoint());
-		ur_float priority = (ur_float)node->GetLevel();
-		this->priorityQueue.insert(std::make_pair(priority, node));
 	}
 
 	void Isosurface::Builder::RemoveNode(AdaptiveVolume::Node *node)
 	{
-		auto ientry = std::find_if(this->priorityQueue.begin(), this->priorityQueue.end(), [&node](auto &entry) -> bool {
-			return (entry.second == node);
-		});
-		if (ientry != this->priorityQueue.end())
-		{
-			this->priorityQueue.erase(ientry);
-		}
-
 		this->newNodes.erase(node);
 	}
 
@@ -643,93 +814,36 @@ namespace UnlimRealms
 		// acquire sub systems
 		AdaptiveVolume *volume = this->isosurface.GetVolume();
 		Loader *loader = this->isosurface.GetLoader();
-		Triangulator *triangulater = this->isosurface.GetTriangulator();
+		Presentation *presentation = this->isosurface.GetPresentation();
 		if (ur_null == volume ||
 			ur_null == loader ||
-			ur_null == triangulater)
+			ur_null == presentation)
 			return Result(NotInitialized);
 
-		bool syncMode = false;
-		if (syncMode)
-		{
-			// temp: simple synchronous build process
-			// support: sync/async construction
-			for (AdaptiveVolume::Node *node : this->newNodes)
-			{
-				loader->Load(*volume, node->GetData(), node->GetBBox());
-				triangulater->Construct(*volume, node->GetData(), node->GetBBox());
-			}
-			this->newNodes.clear();
-			this->priorityQueue.clear();
-		}
-		else
-		{
-			// todo: rewrite
-			// temp: simple one thread async builder test
-			ur_size idx = 0;
-			if (BuildCacheEntry::State::Finished == this->buildCache.state)
-			{
-				this->thread.join();
-				AdaptiveVolume::Node *node = volume->FindNode(this->buildCache.bbox);
-				if (node != ur_null)
-				{
-					node->GetData().field = std::move(this->buildCache.block.field);
-					node->GetData().gfxVB = std::move(this->buildCache.block.gfxVB);
-					node->GetData().gfxIB = std::move(this->buildCache.block.gfxIB);
-				}
-				this->buildCache.bbox.Min = this->buildCache.bbox.Max = 0.0f;
-				this->buildCache.state = BuildCacheEntry::State::Idle;
-			}
+		// temp: simple synchronous build process
+		// support: sync/async construction
 
-			if (BuildCacheEntry::State::Idle == this->buildCache.state &&
-				this->newNodes.size() > 0)
-			{
-				auto ientry = this->priorityQueue.begin();
-				this->buildCache.bbox = ientry->second->GetBBox();
-				this->buildCache.state = BuildCacheEntry::State::Working;
-				this->newNodes.erase(ientry->second);
-				this->priorityQueue.erase(ientry);
-				this->thread = std::thread(BuildBlock, volume, &this->buildCache);
-			}
+		// load new volume blocks
+		for (AdaptiveVolume::Node *node : this->newNodes)
+		{
+			loader->Load(*volume, node->GetData(), node->GetBBox());
 		}
+		this->newNodes.clear();
+
+		// update presentation
+		presentation->Construct(*volume);
 
 		return Result(Success);
 	}
 
-	void Isosurface::Builder::BuildBlock(AdaptiveVolume *volume, BuildCacheEntry *cacheEntry)
-	{
-		if (volume != ur_null)
-		{
-			Isosurface &isosurface = volume->GetIsosurface();
-			Loader *loader = isosurface.GetLoader();
-			Triangulator *triangulater = isosurface.GetTriangulator();
-
-			if (loader != ur_null)
-			{
-				loader->Load(*volume, cacheEntry->block, cacheEntry->bbox);
-			}
-
-			if (triangulater != ur_null)
-			{
-				triangulater->Construct(*volume, cacheEntry->block, cacheEntry->bbox);
-			}
-		}
-
-		cacheEntry->state = BuildCacheEntry::State::Finished;
-	}
-
-
+	
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Isosurface
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	Isosurface::Isosurface(Realm &realm) :
-		RealmEntity(realm),
-		debugRender(realm)
+		RealmEntity(realm)
 	{
-		this->drawDebugBounds = true;
-		this->drawWireframe = false;
-		memset(&this->stats, 0, sizeof(this->stats));
 	}
 
 	Isosurface::~Isosurface()
@@ -739,24 +853,22 @@ namespace UnlimRealms
 		this->volume.reset(ur_null);
 		this->builder.reset(ur_null);
 		this->loader.reset(ur_null);
-		this->triangulator.reset(ur_null);
+		this->presentation.reset(ur_null);
 	}
 
-	Result Isosurface::Init(const AdaptiveVolume::Desc &desc, std::unique_ptr<Loader> loader, std::unique_ptr<Triangulator> triangulator)
+	Result Isosurface::Init(const AdaptiveVolume::Desc &desc, std::unique_ptr<Loader> loader, std::unique_ptr<Presentation> presentation)
 	{
 		Result res(Success);
 
 		this->volume.reset(new AdaptiveVolume(*this));
 		this->builder.reset(new Builder(*this));
 		this->loader = std::move(loader);
-		this->triangulator = std::move(triangulator);
+		this->presentation = std::move(presentation);
 		
 		res = this->volume->Init(desc);
 		if (Failed(res))
 			return ResultError(Failure, "Isosurface::Init: failed to initialize volume");
 		
-		this->debugRender.Init();
-
 		res = this->CreateGfxObjects();
 
 		return res;
@@ -858,41 +970,6 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result Isosurface::RenderSurface(GfxContext &gfxContext, AdaptiveVolume::Node *volumeNode)
-	{
-		if (ur_null == volumeNode)
-			return Result(InvalidArgs);
-
-		bool hasSubSurface = volumeNode->HasSubNodes();
-		if (hasSubSurface)
-		{
-			for (ur_uint i = 0; i < AdaptiveVolume::Node::SubNodesCount; ++i)
-			{
-				const Block &subBlock = volumeNode->GetSubNode(i)->GetData();
-				hasSubSurface &= !subBlock.field.empty();
-				if (!hasSubSurface) break;
-			}
-		}
-
-		if (hasSubSurface)
-		{
-			for (ur_uint i = 0; i < AdaptiveVolume::Node::SubNodesCount; ++i)
-			{
-				this->RenderSurface(gfxContext, volumeNode->GetSubNode(i));
-			}
-		}
-		else
-		{
-			const Block &surfBlock = volumeNode->GetData();
-			const ur_uint indexCount = (surfBlock.gfxIB.get() ? surfBlock.gfxIB->GetDesc().Size / sizeof(Index) : 0);
-			gfxContext.SetVertexBuffer(surfBlock.gfxVB.get(), 0, sizeof(Vertex), 0);
-			gfxContext.SetIndexBuffer(surfBlock.gfxIB.get(), sizeof(Index) * 8, 0);
-			gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
-		}
-
-		return Result(Success);
-	}
-
 	Result Isosurface::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
 	{
 		Result res(Success);
@@ -901,20 +978,23 @@ namespace UnlimRealms
 
 		// render isosurface
 
-		CommonCB cb;
-		cb.viewProj = viewProj;
-		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
-		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
-		const RectI &canvasBound = this->GetRealm().GetCanvas()->GetBound();
-		GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
-		gfxContext.SetViewPort(&viewPort);
-		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
-		gfxContext.SetPipelineState(this->gfxObjects->pipelineState.get());
+		if (this->presentation.get() != ur_null)
+		{
+			CommonCB cb;
+			cb.viewProj = viewProj;
+			GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
+			gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+			const RectI &canvasBound = this->GetRealm().GetCanvas()->GetBound();
+			GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
+			gfxContext.SetViewPort(&viewPort);
+			gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
+			gfxContext.SetPipelineState(this->gfxObjects->pipelineState.get());
 
-		res = this->RenderSurface(gfxContext, this->volume->GetRoot());
+			res = this->presentation->Render(gfxContext, viewProj);
+		}
 
 		// render debug info
-
+		/*
 		if (this->GetRealm().GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::B)) this->drawDebugBounds = !this->drawDebugBounds;
 		if (this->GetRealm().GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::M)) this->drawWireframe = !this->drawWireframe;
 		
@@ -955,69 +1035,8 @@ namespace UnlimRealms
 				this->gfxObjects->pipelineState->SetRenderState(gfxRS);
 			}
 		}
-
+		*/
 		return res;
-	}
-
-	void Isosurface::DrawDebugTreeBounds(const AdaptiveVolume::Node *node)
-	{
-		if (ur_null == node)
-			return;
-
-		if (node->HasSubNodes())
-		{
-			for (ur_uint i = 0; i < AdaptiveVolume::Node::SubNodesCount; ++i)
-			{
-				this->DrawDebugTreeBounds(node->GetSubNode(i));
-			}
-		}
-		else
-		{
-			static ur_float4 DebugColor[2] = {
-				{ 0.5f, 0.5f, 0.55f, 1.0f },
-				{ 1.0f, 1.0f, 0.0f, 1.0f }
-			};
-			bool hasSurface = (node->GetData().gfxIB.get() != ur_null && node->GetData().gfxIB->GetDesc().Size > 0);
-			this->debugRender.DrawBox(node->GetBBox().Min, node->GetBBox().Max, DebugColor[hasSurface ? 1 : 0]);
-		}
-	}
-
-	void Isosurface::GatherStats()
-	{
-		memset(&this->stats, 0, sizeof(this->stats));
-		this->GatherStats(this->volume->GetRoot());
-	}
-
-	void Isosurface::GatherStats(const AdaptiveVolume::Node *node)
-	{
-		if (ur_null == node)
-			return;
-
-		this->stats.volumeNodes += 1;
-
-		this->stats.sysMemory += (ur_uint)node->GetData().field.size() * sizeof(Block::ValueType);
-		if (node->GetData().gfxVB.get() != ur_null)
-		{
-			this->stats.videoMemory += node->GetData().gfxVB->GetDesc().Size;
-			this->stats.verticesCount += node->GetData().gfxVB->GetDesc().Size / sizeof(Vertex);
-		}
-		if (node->GetData().gfxIB.get() != ur_null)
-		{
-			this->stats.videoMemory += node->GetData().gfxIB->GetDesc().Size;
-			this->stats.primitivesCount += (node->GetData().gfxIB->GetDesc().Size / sizeof(Index)) / 3;
-		}
-
-		if (node->HasSubNodes())
-		{
-			for (ur_uint i = 0; i < AdaptiveVolume::Node::SubNodesCount; ++i)
-			{
-				this->GatherStats(node->GetSubNode(i));
-			}
-		}
-		else if (node->GetData().gfxIB.get() != ur_null && node->GetData().gfxIB->GetDesc().Size > 0)
-		{
-			this->stats.surfaceNodes += 1;
-		}
 	}
 
 } // end namespace UnlimRealms
