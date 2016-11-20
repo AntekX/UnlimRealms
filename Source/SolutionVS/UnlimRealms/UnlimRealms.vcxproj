@@ -162,6 +162,7 @@
     <ClInclude Include="..\..\UnlimRealms\Core\Algorithms.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\Algorithms.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\BaseTypes.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\Composite.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\Core.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\Math.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\ResultTypes.h" />
@@ -197,6 +198,7 @@
     <ClCompile Include="..\..\UnlimRealms\Camera\Camera.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Camera\CameraControl.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Core\Algorithms.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Core\Composite.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Core\ResultTypes.cpp" />
     <ClCompile Include="..\..\UnlimRealms\GenericRender\GenericRender.cpp" />

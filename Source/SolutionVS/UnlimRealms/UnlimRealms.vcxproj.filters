@@ -120,6 +120,9 @@
     <ClInclude Include="..\..\UnlimRealms\Isosurface\Isosurface.h">
       <Filter>Isosurface</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Core\Composite.h">
+      <Filter>Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -190,6 +193,9 @@
     </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\Isosurface\Isosurface.cpp">
       <Filter>Isosurface</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Core\Composite.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
