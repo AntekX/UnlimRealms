@@ -163,6 +163,7 @@
     <ClInclude Include="..\..\UnlimRealms\Core\Algorithms.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\BaseTypes.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\Composite.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\Composite.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\Core.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\Math.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\ResultTypes.h" />

@@ -123,6 +123,9 @@
     <ClInclude Include="..\..\UnlimRealms\Core\Composite.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Core\Composite.inline.h">
+      <Filter>Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">

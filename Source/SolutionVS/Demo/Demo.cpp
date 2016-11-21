@@ -25,23 +25,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
-	// test
-	/*class PropertyA : public Component
-	{
-	public:
-	};
-	class PropertyB : public Component
-	{
-	public:
-		PropertyB(int i) : i(i) {}
-		int i;
-	};
-	Composite superObject;
-	superObject.AddComponent<PropertyA>();
-	std::unique_ptr<Component> customProperty(new PropertyB(1));
-	superObject.AddComponent(Component::GetUID<PropertyB>(), customProperty);
-	PropertyB *p = superObject.GetComponent<PropertyB>();*/
-	
 	// create realm
 	Realm realm;
 	realm.Initialize();
