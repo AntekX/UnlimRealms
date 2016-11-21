@@ -27,11 +27,11 @@ namespace UnlimRealms
 	// Composite
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	template <class T>
-	bool Composite::AddComponent()
+	template <class T, class ... Args>
+	bool Composite::AddComponent(Args... args)
 	{
 		static_assert(std::is_base_of<Component, T>(), "Composite::AddComponent: class type is not a component");
-		return this->AddComponent(Component::GetUID<T>(), std::unique_ptr<Component>(new T()));
+		return this->AddComponent(Component::GetUID<T>(), std::unique_ptr<Component>(new T(args...)));
 	}
 
 	bool Composite::AddComponent(Component::UID uid, std::unique_ptr<Component> &component)
@@ -82,7 +82,7 @@ namespace UnlimRealms
 		auto &ientry = this->components.find(uid);
 		if (ientry == this->components.end())
 			return ur_null;
-		return ientry->second.get();
+		return static_cast<Component*>(ientry->second.get());
 	}
 
 } // end namespace UnlimRealms

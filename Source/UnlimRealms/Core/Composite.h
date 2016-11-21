@@ -58,7 +58,7 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Base Composite Object
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	class UR_DECL Composite : public NonCopyable, public virtual Component
+	class UR_DECL Composite : public NonCopyable, public Component
 	{
 	public:
 
@@ -66,8 +66,8 @@ namespace UnlimRealms
 
 		~Composite();
 
-		template <class T>
-		inline bool AddComponent();
+		template <class T, class ... Args>
+		inline bool AddComponent(Args... args);
 		inline bool AddComponent(Component::UID uid, std::unique_ptr<Component> &component);
 
 		template <class T>
