@@ -25,27 +25,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
-	// test: composite
-	/*struct S : public Component
-	{
-		int i;
-		float f;
-		S(int i, float f) : i(i), f(f) {}
-	};
-	struct C : public Composite
-	{
-	};
-	Composite c;
-	c.AddComponent<C>();
-	if (c.HasComponent<C>())
-	{
-		c.GetComponent<C>()->AddComponent<S>(1, 2.0f);
-	}
-	S *s = c.GetComponent<C>()->GetComponent<S>();*/
-
 	// create realm
 	Realm realm;
 	realm.Initialize();
+
+	// test: composite
+	struct S : public Component
+	{
+		Realm &realm;
+		float f;
+		S(Realm &r, float f) : realm(r), f(f) {}
+	};
+	Composite c;
+	c.AddComponent<S>(realm, 2.0f);
 
 	// create system canvas
 	ur_uint screenWidth = (ur_uint)GetSystemMetrics(SM_CXSCREEN);

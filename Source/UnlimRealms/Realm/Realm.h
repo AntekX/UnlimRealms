@@ -31,7 +31,7 @@ namespace UnlimRealms
 
 		virtual ~Realm();
 
-		virtual Result Initialize();
+		virtual Result Initialize(); 
 
 		void SetStorage(std::unique_ptr<Storage> storage);
 

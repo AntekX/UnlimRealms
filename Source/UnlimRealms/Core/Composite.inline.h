@@ -28,7 +28,7 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <class T, class ... Args>
-	bool Composite::AddComponent(Args... args)
+	bool Composite::AddComponent(Args&&... args)
 	{
 		static_assert(std::is_base_of<Component, T>(), "Composite::AddComponent: class type is not a component");
 		return this->AddComponent(Component::GetUID<T>(), std::unique_ptr<Component>(new T(args...)));
@@ -59,25 +59,25 @@ namespace UnlimRealms
 	}
 
 	template <class T>
-	bool Composite::HasComponent()
+	bool Composite::HasComponent() const
 	{
 		static_assert(std::is_base_of<Component, T>(), "Composite::HasComponent: class type is not a component");
 		return this->HasComponent(Component::GetUID<T>());
 	}
 
-	bool Composite::HasComponent(Component::UID uid)
+	bool Composite::HasComponent(Component::UID uid) const
 	{
 		return (this->components.count(uid) > 0);
 	}
 
 	template <class T>
-	T* Composite::GetComponent()
+	T* Composite::GetComponent() const
 	{
 		static_assert(std::is_base_of<Component, T>(), "Composite::GetComponent: class type is not a component");
 		return static_cast<T*>(this->GetComponent(Component::GetUID<T>()));
 	}
 
-	Component* Composite::GetComponent(Component::UID uid)
+	Component* Composite::GetComponent(Component::UID uid) const
 	{
 		auto &ientry = this->components.find(uid);
 		if (ientry == this->components.end())

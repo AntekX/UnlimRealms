@@ -67,7 +67,7 @@ namespace UnlimRealms
 		~Composite();
 
 		template <class T, class ... Args>
-		inline bool AddComponent(Args... args);
+		inline bool AddComponent(Args&&... args);
 		inline bool AddComponent(Component::UID uid, std::unique_ptr<Component> &component);
 
 		template <class T>
@@ -75,12 +75,12 @@ namespace UnlimRealms
 		inline bool RemoveComponent(Component::UID uid);
 
 		template <class T>
-		inline bool HasComponent();
-		inline bool HasComponent(Component::UID uid);
+		inline bool HasComponent() const;
+		inline bool HasComponent(Component::UID uid) const;
 
 		template <class T>
-		inline T* GetComponent();
-		inline Component* GetComponent(Component::UID uid);
+		inline T* GetComponent() const;
+		inline Component* GetComponent(Component::UID uid) const;
 
 	private:
 
