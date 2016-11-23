@@ -241,8 +241,6 @@ namespace UnlimRealms
 				ur_uint videoMemory;
 			} stats;
 
-			std::unique_ptr<GenericRender> debugRender;
-
 			void DrawTreeBounds(const MeshTree::Node *node);
 
 			void DrawStats();

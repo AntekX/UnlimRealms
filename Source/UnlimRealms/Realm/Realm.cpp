@@ -23,18 +23,9 @@ namespace UnlimRealms
 
 	Realm::~Realm()
 	{
+		// remove components before Log and/or Storage destroyed
+		this->RemoveComponents();
 		this->GetLog().WriteLine("Realm: destroyed");
-	}
-
-	void Realm::CreateDefaultStorage()
-	{
-		//this->AddComponent<Storage, StdStorage>(*this);
-	}
-
-	void Realm::CreateDefaultLog()
-	{
-		this->AddComponent<Log, Log>(*this, "unlim_log.txt");
-		this->GetLog().SetPriority(Log::Note);
 	}
 
 	Result Realm::Initialize()
@@ -43,6 +34,44 @@ namespace UnlimRealms
 		CreateDefaultLog();
 		this->GetLog().WriteLine("Realm: initialized");
 		return Result(Success);
+	}
+
+	void Realm::CreateDefaultStorage()
+	{
+		std::unique_ptr<StdStorage> defaultStorage(new StdStorage(*this));
+		this->storage = std::move(defaultStorage);
+	}
+
+	void Realm::CreateDefaultLog()
+	{
+		std::unique_ptr<Log> defaultLog(new Log(*this, "unlim_log.txt"));
+		defaultLog->SetPriority(Log::Note);
+		this->log = std::move(defaultLog);
+	}
+
+	Storage& Realm::GetStorage()
+	{
+		return *this->storage.get();
+	}
+
+	Log& Realm::GetLog()
+	{
+		return *this->log.get();
+	}
+
+	Input* Realm::GetInput() const
+	{
+		return this->GetComponent<Input>();
+	}
+
+	Canvas* Realm::GetCanvas() const
+	{
+		return this->GetComponent<Canvas>();
+	}
+
+	GfxSystem* Realm::GetGfxSystem() const
+	{
+		return this->GetComponent<GfxSystem>();
 	}
 
 	RealmEntity::RealmEntity(Realm &realm) :

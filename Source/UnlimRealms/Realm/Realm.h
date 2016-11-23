@@ -65,6 +65,9 @@ namespace UnlimRealms
 		void CreateDefaultStorage();
 
 		void CreateDefaultLog();
+
+		std::unique_ptr<Log> log;
+		std::unique_ptr<Storage> storage;
 	};
 
 

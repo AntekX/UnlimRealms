@@ -29,30 +29,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	Realm realm;
 	realm.Initialize();
 
-	// test: composite
-	/*struct Base : public Component
-	{
-		Realm &realm;
-		float f;
-		Base(Realm &r, float f) : realm(r), f(f) {}
-	};
-	struct Impl : public Base
-	{
-		int i;
-		Impl(Realm &r, float f, int i) : Base(r, f), i(i) {}
-	};
-	struct S : public Component
-	{
-		int i0;
-		int i1;
-		S(int i0, int i1) : i0(i0), i1(i1) {}
-	};
-	Composite c;
-	c.AddComponent<Base, Impl>(realm, 2.0f, 8);
-	c.AddComponent<S>(3, 4);
-	Impl *b = dynamic_cast<Impl*>(c.GetComponent<Base>());
-	S *s = c.GetComponent<S>();*/
-
 	// create system canvas
 	ur_uint screenWidth = (ur_uint)GetSystemMetrics(SM_CXSCREEN);
 	ur_uint screenHeight = (ur_uint)GetSystemMetrics(SM_CYSCREEN);
@@ -85,12 +61,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	}
 
 	// initialize ImguiRender
-	std::unique_ptr<ImguiRender> imguiRender(new ImguiRender(realm));
-	imguiRender->Init();
+	ImguiRender *imguiRender = ur_null;
+	if (realm.AddComponent<ImguiRender>(realm))
+	{
+		imguiRender = realm.GetComponent<ImguiRender>();
+		imguiRender->Init();
+	}
 
 	// initialize GenericRender
-	std::unique_ptr<GenericRender> genericRender(new GenericRender(realm));
-	genericRender->Init();
+	GenericRender *genericRender = ur_null;
+	if (realm.AddComponent<GenericRender>(realm))
+	{
+		genericRender = realm.GetComponent<GenericRender>();
+		genericRender->Init();
+	}
 
 	// demo camera
 	Camera camera(realm);
@@ -165,15 +149,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 				true, 1.0f,
 				true, 0);
 
-			// render some demo primitives
-			//genericRender->DrawBox(ur_float3(-1.0f, -1.0f, -1.0f), ur_float3(1.0f, 1.0f, 1.0f), ur_float4(1.0f, 1.0f, 0.0f, 1.0f));
-			genericRender->DrawLine(ur_float3(0.0f, 0.0f, 0.0f), ur_float3(1.0f, 0.0f, 0.0f), ur_float4(1.0f, 0.0f, 0.0f, 1.0f));
-			genericRender->DrawLine(ur_float3(0.0f, 0.0f, 0.0f), ur_float3(0.0f, 1.0f, 0.0f), ur_float4(0.0f, 1.0f, 0.0f, 1.0f));
-			genericRender->DrawLine(ur_float3(0.0f, 0.0f, 0.0f), ur_float3(0.0f, 0.0f, 1.0f), ur_float4(0.0f, 0.0f, 1.0f, 1.0f));
-			genericRender->Render(*gfxContext, camera.GetViewProj());
-
 			// draw isosurface
 			isosurface->Render(*gfxContext, camera.GetViewProj());
+
+			// draw generic primitives
+			if (genericRender != ur_null)
+			{
+				// render some demo primitives
+				genericRender->DrawLine(ur_float3(0.0f, 0.0f, 0.0f), ur_float3(1.0f, 0.0f, 0.0f), ur_float4(1.0f, 0.0f, 0.0f, 1.0f));
+				genericRender->DrawLine(ur_float3(0.0f, 0.0f, 0.0f), ur_float3(0.0f, 1.0f, 0.0f), ur_float4(0.0f, 1.0f, 0.0f, 1.0f));
+				genericRender->DrawLine(ur_float3(0.0f, 0.0f, 0.0f), ur_float3(0.0f, 0.0f, 1.0f), ur_float4(0.0f, 0.0f, 1.0f, 1.0f));
+
+				genericRender->Render(*gfxContext, camera.GetViewProj());
+			}
 
 			// render some demo UI
 			ImGui::ShowMetricsWindow();
@@ -187,9 +175,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		gfxSwapChain->Present();
     }
 	realm.GetLog().WriteLine("Left main message loop");
-
-	// shutdown realm sub systems
-	imguiRender.reset(ur_null);
 
 	return 0;//(int)msg.wParam;
 }

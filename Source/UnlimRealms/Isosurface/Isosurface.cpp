@@ -338,8 +338,6 @@ namespace UnlimRealms
 	Isosurface::SurfaceNet::SurfaceNet(Isosurface &isosurface) :
 		Presentation(isosurface)
 	{
-		this->debugRender.reset(new GenericRender(isosurface.GetRealm()));
-		this->debugRender->Init();
 	}
 
 	Isosurface::SurfaceNet::~SurfaceNet()
@@ -648,7 +646,11 @@ namespace UnlimRealms
 		{
 			DrawTreeBounds(this->tree->GetRoot());
 		}
-		this->debugRender->Render(gfxContext, viewProj);
+		GenericRender *genericRender = this->isosurface.GetRealm().GetComponent<GenericRender>();
+		if (genericRender != ur_null)
+		{
+			genericRender->Render(gfxContext, viewProj);
+		}
 
 		return res;
 	}
@@ -698,7 +700,11 @@ namespace UnlimRealms
 			bool hasSurface = (node->GetData().gfxIB.get() != ur_null && node->GetData().gfxIB->GetDesc().Size > 0);
 			if (hasSurface)
 			{
-				this->debugRender->DrawBox(node->GetBBox().Min, node->GetBBox().Max, DebugColor[1]);
+				GenericRender *genericRender = this->isosurface.GetRealm().GetComponent<GenericRender>();
+				if (genericRender != ur_null)
+				{
+					genericRender->DrawBox(node->GetBBox().Min, node->GetBBox().Max, DebugColor[1]);
+				}
 			}
 		}
 	}

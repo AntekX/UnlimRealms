@@ -14,16 +14,14 @@ namespace UnlimRealms
 	void Realm::SetStorage(std::unique_ptr<TStorage> storage)
 	{
 		static_assert(std::is_base_of<Storage, TStorage>(), "Realm::SetStorage: invalid implementation class type");
-		this->RemoveComponent<Storage>();
-		this->AddComponent<Storage, TStorage>(*this);
+		this->storage = std::move(storage);
 	}
 
 	template <class TLog>
 	void Realm::SetLog(std::unique_ptr<TLog> log)
 	{
 		static_assert(std::is_base_of<Log, TLog>(), "Realm::SetLog: invalid implementation class type");
-		this->RemoveComponent<Log>();
-		this->AddComponent<Log, TLog>(*this);
+		this->log = std::move(log);
 	}
 
 	template <class TInput>
@@ -31,7 +29,7 @@ namespace UnlimRealms
 	{
 		static_assert(std::is_base_of<Input, TInput>(), "Realm::SetInput: invalid implementation class type");
 		this->RemoveComponent<Input>();
-		this->AddComponent<Input, TInput>(*this);
+		this->AddComponent(Component::GetUID<Input>(), std::unique_ptr<Component>(static_cast<Component*>(input.release())));
 	}
 
 	template <class TCanvas>
@@ -39,7 +37,7 @@ namespace UnlimRealms
 	{
 		static_assert(std::is_base_of<Canvas, TCanvas>(), "Realm::SetCanvas: invalid implementation class type");
 		this->RemoveComponent<Canvas>();
-		this->AddComponent<Canvas, TCanvas>(*this);
+		this->AddComponent(Component::GetUID<Canvas>(), std::unique_ptr<Component>(static_cast<Component*>(canvas.release())));
 	}
 
 	template <class TGfxSystem>
@@ -47,32 +45,7 @@ namespace UnlimRealms
 	{
 		static_assert(std::is_base_of<GfxSystem, TGfxSystem>(), "Realm::SetGfxSystem: invalid implementation class type");
 		this->RemoveComponent<GfxSystem>();
-		this->AddComponent<GfxSystem, TGfxSystem>(*this);
-	}
-
-	inline Storage& Realm::GetStorage()
-	{
-		return *this->GetComponent<Storage>();
-	}
-
-	inline Log& Realm::GetLog()
-	{
-		return *this->GetComponent<Log>();
-	}
-
-	inline Input* Realm::GetInput() const
-	{
-		return this->GetComponent<Input>();
-	}
-
-	inline Canvas* Realm::GetCanvas() const
-	{
-		return this->GetComponent<Canvas>();
-	}
-
-	inline GfxSystem* Realm::GetGfxSystem() const
-	{
-		return this->GetComponent<GfxSystem>();
+		this->AddComponent(Component::GetUID<GfxSystem>(), std::unique_ptr<Component>(static_cast<Component*>(gfxSystem.release())));
 	}
 
 	inline Realm& RealmEntity::GetRealm()

@@ -79,6 +79,8 @@ namespace UnlimRealms
 		
 		inline bool RemoveComponent(Component::UID uid);
 
+		inline void RemoveComponents();
+
 		template <class T>
 		inline bool HasComponent() const;
 		
