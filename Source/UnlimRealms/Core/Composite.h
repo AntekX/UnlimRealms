@@ -43,7 +43,7 @@ namespace UnlimRealms
 
 		Component();
 
-		~Component();
+		virtual ~Component();
 
 		// run time UID generation
 		template <class T>
@@ -68,18 +68,25 @@ namespace UnlimRealms
 
 		template <class T, class ... Args>
 		inline bool AddComponent(Args&&... args);
+		
+		template <class TBase, class TImpl, class ... Args>
+		inline bool AddComponent(Args&&... args);
+		
 		inline bool AddComponent(Component::UID uid, std::unique_ptr<Component> &component);
 
 		template <class T>
 		inline bool RemoveComponent();
+		
 		inline bool RemoveComponent(Component::UID uid);
 
 		template <class T>
 		inline bool HasComponent() const;
+		
 		inline bool HasComponent(Component::UID uid) const;
 
 		template <class T>
 		inline T* GetComponent() const;
+		
 		inline Component* GetComponent(Component::UID uid) const;
 
 	private:

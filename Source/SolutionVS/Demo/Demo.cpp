@@ -30,14 +30,28 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	realm.Initialize();
 
 	// test: composite
-	struct S : public Component
+	/*struct Base : public Component
 	{
 		Realm &realm;
 		float f;
-		S(Realm &r, float f) : realm(r), f(f) {}
+		Base(Realm &r, float f) : realm(r), f(f) {}
+	};
+	struct Impl : public Base
+	{
+		int i;
+		Impl(Realm &r, float f, int i) : Base(r, f), i(i) {}
+	};
+	struct S : public Component
+	{
+		int i0;
+		int i1;
+		S(int i0, int i1) : i0(i0), i1(i1) {}
 	};
 	Composite c;
-	c.AddComponent<S>(realm, 2.0f);
+	c.AddComponent<Base, Impl>(realm, 2.0f, 8);
+	c.AddComponent<S>(3, 4);
+	Impl *b = dynamic_cast<Impl*>(c.GetComponent<Base>());
+	S *s = c.GetComponent<S>();*/
 
 	// create system canvas
 	ur_uint screenWidth = (ur_uint)GetSystemMetrics(SM_CXSCREEN);

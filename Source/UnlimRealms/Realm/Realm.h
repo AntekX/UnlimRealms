@@ -23,7 +23,7 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Realm
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
-	class UR_DECL Realm
+	class UR_DECL Realm : public Composite
 	{
 	public:
 
@@ -31,17 +31,24 @@ namespace UnlimRealms
 
 		virtual ~Realm();
 
-		virtual Result Initialize(); 
+		virtual Result Initialize();
 
-		void SetStorage(std::unique_ptr<Storage> storage);
+		template <class TStorage>
+		void SetStorage(std::unique_ptr<TStorage> storage);
 
-		void SetLog(std::unique_ptr<Log> log);
+		template <class TLog>
+		void SetLog(std::unique_ptr<TLog> log);
 
-		void SetInput(std::unique_ptr<Input> input);
+		template <class TInput>
+		void SetInput(std::unique_ptr<TInput> input);
 
-		void SetCanvas(std::unique_ptr<Canvas> canvas);
+		template <class TCanvas>
+		void SetCanvas(std::unique_ptr<TCanvas> canvas);
 
-		void SetGfxSystem(std::unique_ptr<GfxSystem> gfxSystem);
+		template <class TGfxSystem>
+		void SetGfxSystem(std::unique_ptr<TGfxSystem> gfxSystem);
+
+		// base components access shortcuts
 
 		inline Storage& GetStorage();
 
@@ -58,25 +65,19 @@ namespace UnlimRealms
 		void CreateDefaultStorage();
 
 		void CreateDefaultLog();
-
-		std::unique_ptr<Storage> storage;
-		std::unique_ptr<Log> log;
-		std::unique_ptr<Input> input;
-		std::unique_ptr<Canvas> canvas;
-		std::unique_ptr<GfxSystem> gfxSystem;
 	};
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Basic realm entity
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
-	class UR_DECL RealmEntity
+	class UR_DECL RealmEntity : public Component
 	{
 	public:
 
 		RealmEntity(Realm &realm);
 		
-		~RealmEntity();
+		virtual ~RealmEntity();
 
 		inline Realm& GetRealm();
 
