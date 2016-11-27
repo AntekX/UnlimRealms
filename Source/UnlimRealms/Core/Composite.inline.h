@@ -18,7 +18,7 @@ namespace UnlimRealms
 	Component::UID Component::GetUID()
 	{
 		static_assert(std::is_base_of<Component, T>(), "Component::GetUID: class type is not a component");
-		static const UID TypeUID = ++lastUID;
+		static const UID TypeUID = typeid(T).hash_code();//++lastUID;
 		return TypeUID;
 	}
 
@@ -35,7 +35,7 @@ namespace UnlimRealms
 	}
 
 	template <class TBase, class TImpl, class ... Args>
-	inline bool AddComponent(Args&&... args)
+	inline bool Composite::AddComponent(Args&&... args)
 	{
 		static_assert(std::is_base_of<Component, TBase>(), "Composite::AddComponent: TBase is not a component");
 		static_assert(std::is_base_of<TBase, TImpl>(), "Composite::AddComponent: TBase is not a base type for TImpl");
@@ -64,6 +64,11 @@ namespace UnlimRealms
 			return false;
 		this->components.erase(ientry);
 		return true;
+	}
+
+	void Composite::RemoveComponents()
+	{
+		this->components.clear();
 	}
 
 	template <class T>
