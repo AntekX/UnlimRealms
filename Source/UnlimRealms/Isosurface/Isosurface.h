@@ -259,6 +259,16 @@ namespace UnlimRealms
 		{
 		public:
 
+			HybridTetrahedra(Isosurface &isosurface);
+
+			~HybridTetrahedra();
+
+			virtual Result Construct(AdaptiveVolume &volume);
+
+			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
+
+		private:
+
 			// TODO
 
 			struct UR_DECL Tetrahedron
@@ -288,6 +298,12 @@ namespace UnlimRealms
 				static const ur_uint ChildrenCount = 2;
 				std::unique_ptr<Tetrahedron> children[ChildrenCount];
 
+				struct UR_DECL SplitInfo
+				{
+					ur_byte subTetrahedra[ChildrenCount][VerticesCount];
+				};
+				static const SplitInfo EdgeSplitInfo[EdgesCount];
+
 				Tetrahedron();
 
 				void Init(const Vertex &v0, const Vertex &v1, const Vertex &v2, const Vertex &v3);
@@ -301,21 +317,14 @@ namespace UnlimRealms
 				inline bool HasChildren() const { return (this->children[0] != ur_null); }
 			};
 
-			HybridTetrahedra(Isosurface &isosurface);
+			float SmallestNodeSize(const BoundingBox &bbox, AdaptiveVolume::Node *volumeNode);
 
-			~HybridTetrahedra();
-
-			virtual Result Construct(AdaptiveVolume &volume);
-
-			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
-
-		private:
-
-			Result Construct(AdaptiveVolume &volume, AdaptiveVolume::Node *volumeNode);
+			Result Construct(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
 			
 			void DrawTetrahedra(GfxContext &gfxContext, GenericRender &genericRender, Tetrahedron *tetrahedron);
 
-			std::unique_ptr<Tetrahedron> root[6];
+			static const ur_uint RootsCount = 6;
+			std::unique_ptr<Tetrahedron> root[RootsCount];
 		};
 
 

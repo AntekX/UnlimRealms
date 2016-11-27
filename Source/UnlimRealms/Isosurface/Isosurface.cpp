@@ -777,6 +777,15 @@ namespace UnlimRealms
 		{ { 2, 3, 0 }, { 2, 5, 3 } }
 	};
 
+	const Isosurface::HybridTetrahedra::Tetrahedron::SplitInfo Isosurface::HybridTetrahedra::Tetrahedron::EdgeSplitInfo[EdgesCount] = {
+		{ { { 0, 0xff, 2, 3 },	{ 0xff, 1, 2, 3 } } },
+		{ { { 0, 1, 0xff, 3 },	{ 0, 0xff, 2, 3 } } },
+		{ { { 0, 1, 0xff, 3 },	{ 0xff, 1, 2, 3 } } },
+		{ { { 0, 1, 2, 0xff },	{ 0xff, 1, 2, 3 } } },
+		{ { { 0, 1, 2, 0xff },	{ 0, 0xff, 2, 3 } } },
+		{ { { 0, 1, 2, 0xff },	{ 0, 1, 0xff, 3 } } }
+	};
+
 	Isosurface::HybridTetrahedra::Tetrahedron::Tetrahedron()
 	{
 		memset(this->faceNeighbors, 0, sizeof(this->faceNeighbors));
@@ -837,8 +846,25 @@ namespace UnlimRealms
 
 	void Isosurface::HybridTetrahedra::Tetrahedron::Split()
 	{
-		// todo
+		if (this->HasChildren())
+			return;
 
+		// todo: setup neighbors info
+
+		const ur_byte *ev = this->Edges[this->longestEdgeIdx].vid;
+		Vector3 ecp = this->vertices[ev[0]] * 0.5f + this->vertices[ev[1]] * 0.5f;
+		const SplitInfo &splitInfo = EdgeSplitInfo[this->longestEdgeIdx];
+		for (ur_uint subIdx = 0; subIdx < ChildrenCount; ++subIdx)
+		{
+			std::unique_ptr<Tetrahedron> subTetrahedron(new Tetrahedron());
+			const ur_byte *vid = splitInfo.subTetrahedra[subIdx];
+			subTetrahedron->Init(
+				(vid[0] != 0xff ? this->vertices[vid[0]] : ecp),
+				(vid[1] != 0xff ? this->vertices[vid[1]] : ecp),
+				(vid[2] != 0xff ? this->vertices[vid[2]] : ecp),
+				(vid[3] != 0xff ? this->vertices[vid[3]] : ecp));
+			this->children[subIdx] = std::move(subTetrahedron);
+		}
 	}
 
 	void Isosurface::HybridTetrahedra::Tetrahedron::Merge()
@@ -941,12 +967,66 @@ namespace UnlimRealms
 		}
 
 		// update hierarchy
-		return this->Construct(volume, volume.GetRoot());
+		Result res(Success);
+		for (auto &tetrahedron : this->root)
+		{
+			res = CombinedResult(res, this->Construct(volume, tetrahedron.get()));
+		}
+
+		return res;
 	}
 
-	Result Isosurface::HybridTetrahedra::Construct(AdaptiveVolume &volume, AdaptiveVolume::Node *volumeNode)
+	float Isosurface::HybridTetrahedra::SmallestNodeSize(const BoundingBox &bbox, AdaptiveVolume::Node *volumeNode)
 	{
-		return Result(NotImplemented);
+		if (ur_null == volumeNode || !bbox.Intersects(volumeNode->GetBBox()))
+			return bbox.SizeMin();
+
+		float nodeSize = volumeNode->GetBBox().SizeMin();
+		if (volumeNode->HasSubNodes())
+		{
+			for (ur_uint i = 0; i < AdaptiveVolume::Node::SubNodesCount; ++i)
+			{
+				nodeSize = std::min(nodeSize, this->SmallestNodeSize(bbox, volumeNode->GetSubNode(i)));
+			}
+		}
+
+		return nodeSize;
+	}
+
+	Result Isosurface::HybridTetrahedra::Construct(AdaptiveVolume &volume, Tetrahedron *tetrahedron)
+	{
+		Result res(Success);
+		if (ur_null == tetrahedron)
+			return res;
+
+		// todo: precompute BBox suring init step
+		BoundingBox bbox;
+		for (ur_uint vi = 0; vi < Tetrahedron::VerticesCount; ++vi)
+		{
+			bbox.Min.SetMin(tetrahedron->vertices[vi]);
+			bbox.Max.SetMax(tetrahedron->vertices[vi]);
+		}
+
+		// find smallest node size in underlying volume
+		float nodeSize = this->SmallestNodeSize(bbox, volume.GetRoot());
+		if (nodeSize < bbox.SizeMin())
+		{
+			tetrahedron->Split();
+		}
+		else
+		{
+			tetrahedron->Merge();
+		}
+
+		if (tetrahedron->HasChildren())
+		{
+			for (auto &subTetrahedron : tetrahedron->children)
+			{
+				this->Construct(volume, subTetrahedron.get());
+			}
+		}
+
+		return res;
 	}
 
 	Result Isosurface::HybridTetrahedra::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
