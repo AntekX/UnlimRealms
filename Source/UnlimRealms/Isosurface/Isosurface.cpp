@@ -766,6 +766,92 @@ namespace UnlimRealms
 	// Isosurface::HybridTetrahedra
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	const Isosurface::HybridTetrahedra::Tetrahedron::Edge Isosurface::HybridTetrahedra::Tetrahedron::Edges[EdgesCount] = {
+		{ 0, 1 }, { 1, 2 }, { 2, 0 }, { 0, 3 }, { 1, 3 }, { 2, 3 }
+	};
+
+	const Isosurface::HybridTetrahedra::Tetrahedron::Face Isosurface::HybridTetrahedra::Tetrahedron::Faces[FacesCount] = {
+		{ { 0, 1, 2 }, { 0, 1, 2 } },
+		{ { 0, 3, 1 }, { 0, 3, 4 } },
+		{ { 1, 3, 2 }, { 1, 4, 5 } },
+		{ { 2, 3, 0 }, { 2, 5, 3 } }
+	};
+
+	Isosurface::HybridTetrahedra::Tetrahedron::Tetrahedron()
+	{
+		memset(this->faceNeighbors, 0, sizeof(this->faceNeighbors));
+		this->longestEdgeIdx = 0;
+	}
+
+	void Isosurface::HybridTetrahedra::Tetrahedron::Init(const Vertex &v0, const Vertex &v1, const Vertex &v2, const Vertex &v3)
+	{
+		this->vertices[0] = v0;
+		this->vertices[1] = v1;
+		this->vertices[2] = v2;
+		this->vertices[3] = v3;
+
+		float maxLen = 0.0f;
+		for (ur_byte eidx = 0; eidx < EdgesCount; ++eidx)
+		{
+			const Edge &e = Edges[eidx];
+			float len = (this->vertices[e.vid[0]] - this->vertices[e.vid[1]]).Length();
+			if (len > maxLen)
+			{
+				maxLen = len;
+				this->longestEdgeIdx = eidx;
+			}
+		}
+	}
+
+	int Isosurface::HybridTetrahedra::Tetrahedron::LinkNeighbor(Tetrahedron *th)
+	{
+		if (ur_null == th)
+			return -1;
+
+		// compare faces with each other
+		// faces are equal if there are three equal vertices found
+		for (ur_uint f0 = 0; f0 < FacesCount; ++f0)
+		{
+			for (ur_uint f1 = 0; f1 < FacesCount; ++f1)
+			{
+				ur_uint equalPoints = 0;
+				for (ur_uint v0 = 0; v0 < 3; ++v0)
+				{
+					for (ur_uint v1 = 0; v1 < 3; ++v1)
+					{
+						equalPoints += (this->vertices[Faces[f0].vid[v0]] == th->vertices[Faces[f1].vid[v1]] ? 1 : 0);
+					}
+				}
+				if (equalPoints == 3)
+				{
+					// update adjacency info
+					this->faceNeighbors[f0] = th;
+					th->faceNeighbors[f1] = this;
+					return f0;
+				}
+			}
+		}
+
+		return -1;
+	}
+
+	void Isosurface::HybridTetrahedra::Tetrahedron::Split()
+	{
+		// todo
+
+	}
+
+	void Isosurface::HybridTetrahedra::Tetrahedron::Merge()
+	{
+		if (!this->HasChildren())
+			return;
+
+		for (ur_size i = 0; i < ChildrenCount; ++i)
+		{
+			this->children[i].reset(ur_null);
+		}
+	}
+
 	Isosurface::HybridTetrahedra::HybridTetrahedra(Isosurface &isosurface) :
 		Presentation(isosurface)
 	{
@@ -779,12 +865,145 @@ namespace UnlimRealms
 
 	Result Isosurface::HybridTetrahedra::Construct(AdaptiveVolume &volume)
 	{
+		// init roots
+		const BoundingBox &bbox = volume.GetDesc().Bound;
+		if (ur_null == this->root[0].get())
+		{
+			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
+			th->Init(
+				{ bbox.Min.x, bbox.Min.y, bbox.Min.z },
+				{ bbox.Min.x, bbox.Max.y, bbox.Min.z },
+				{ bbox.Max.x, bbox.Max.y, bbox.Min.z },
+				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
+			);
+			this->root[0] = std::move(th);
+		}
+		if (ur_null == this->root[1].get())
+		{
+			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
+			th->Init(
+				{ bbox.Min.x, bbox.Min.y, bbox.Min.z },
+				{ bbox.Max.x, bbox.Min.y, bbox.Min.z },
+				{ bbox.Max.x, bbox.Max.y, bbox.Min.z },
+				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
+			);
+			th->LinkNeighbor(this->root[0].get());
+			this->root[1] = std::move(th);
+		}
+		if (ur_null == this->root[2].get())
+		{
+			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
+			th->Init(
+				{ bbox.Min.x, bbox.Min.y, bbox.Min.z },
+				{ bbox.Max.x, bbox.Min.y, bbox.Min.z },
+				{ bbox.Max.x, bbox.Min.y, bbox.Max.z },
+				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
+			);
+			th->LinkNeighbor(this->root[1].get());
+			this->root[2] = std::move(th);
+		}
+		if (ur_null == this->root[3].get())
+		{
+			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
+			th->Init(
+				{ bbox.Min.x, bbox.Min.y, bbox.Min.z },
+				{ bbox.Min.x, bbox.Max.y, bbox.Min.z },
+				{ bbox.Min.x, bbox.Max.y, bbox.Max.z },
+				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
+			);
+			th->LinkNeighbor(this->root[0].get());
+			this->root[3] = std::move(th);
+		}
+		if (ur_null == this->root[4].get())
+		{
+			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
+			th->Init(
+				{ bbox.Min.x, bbox.Min.y, bbox.Min.z },
+				{ bbox.Min.x, bbox.Min.y, bbox.Max.z },
+				{ bbox.Min.x, bbox.Max.y, bbox.Max.z },
+				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
+			);
+			th->LinkNeighbor(this->root[3].get());
+			this->root[4] = std::move(th);
+		}
+		if (ur_null == this->root[5].get())
+		{
+			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
+			th->Init(
+				{ bbox.Min.x, bbox.Min.y, bbox.Min.z },
+				{ bbox.Min.x, bbox.Min.y, bbox.Max.z },
+				{ bbox.Max.x, bbox.Min.y, bbox.Max.z },
+				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
+			);
+			th->LinkNeighbor(this->root[4].get());
+			th->LinkNeighbor(this->root[2].get());
+			this->root[5] = std::move(th);
+		}
+
+		// update hierarchy
+		return this->Construct(volume, volume.GetRoot());
+	}
+
+	Result Isosurface::HybridTetrahedra::Construct(AdaptiveVolume &volume, AdaptiveVolume::Node *volumeNode)
+	{
 		return Result(NotImplemented);
 	}
 
 	Result Isosurface::HybridTetrahedra::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
 	{
-		return Result(NotImplemented);
+		// todo
+
+		// debug render
+		GenericRender *genericRender = this->isosurface.GetRealm().GetComponent<GenericRender>();
+		if (genericRender != ur_null)
+		{
+			for (auto &tetrahedron : this->root)
+			{
+				DrawTetrahedra(gfxContext, *genericRender, tetrahedron.get());
+			}
+		}
+
+		return Result(Success);
+	}
+
+	void Isosurface::HybridTetrahedra::DrawTetrahedra(GfxContext &gfxContext, GenericRender &genericRender, Tetrahedron *tetrahedron)
+	{
+		if (ur_null == tetrahedron)
+			return;
+
+		if (tetrahedron->HasChildren())
+		{
+			for (auto &child : tetrahedron->children)
+			{
+				DrawTetrahedra(gfxContext, genericRender, child.get());
+			}
+		}
+		else
+		{
+			static const ur_float4 s_debugColor = { 1.0f, 1.0f, 0.0f, 1.0f };
+			for (const auto &edge : Tetrahedron::Edges)
+			{
+				genericRender.DrawLine(
+					tetrahedron->vertices[edge.vid[0]],
+					tetrahedron->vertices[edge.vid[1]],
+					s_debugColor);
+			}
+
+			static const ur_float4 s_debugLinkColor = { 0.0f, 1.0f, 0.0f, 1.0f };
+			ur_float3 c0 = 0.0;
+			for (ur_uint vi = 0; vi < 4; ++vi)
+				c0 += tetrahedron->vertices[vi] * 0.25f;
+			for (auto &neighbor : tetrahedron->faceNeighbors)
+			{
+				if (neighbor != ur_null)
+				{
+					ur_float3 c1 = 0.0f;
+					for (ur_uint vi = 0; vi < 4; ++vi)
+						c1 += neighbor->vertices[vi] * 0.25f;
+					genericRender.DrawLine(c0, c1, s_debugLinkColor);
+				}
+			}
+		}
 	}
 
 

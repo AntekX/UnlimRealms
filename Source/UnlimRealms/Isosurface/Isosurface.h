@@ -263,27 +263,42 @@ namespace UnlimRealms
 
 			struct UR_DECL Tetrahedron
 			{
-				typedef ur_float3 Vertex;
+				struct UR_DECL Edge
+				{
+					ur_byte vid[2];
+				};
+				static const ur_uint EdgesCount = 6;
+				static const Edge Edges[EdgesCount];
 
 				struct UR_DECL Face
 				{
-					ur_byte v0;
-					ur_byte v1;
-					ur_byte v2;
+					ur_byte vid[3];
+					ur_byte eid[3];
 				};
+				static const ur_uint FacesCount = 4;
+				static const Face Faces[FacesCount];
 
-				struct UR_DECL Edge
-				{
-					ur_byte v0;
-					ur_byte v1;
-				};
+				typedef ur_float3 Vertex;
+				static const ur_uint VerticesCount = 4;
 
-				Vertex vertices[4];
-				Face faces[4];
-				Edge edges[6];
+				Vertex vertices[VerticesCount];
+				ur_byte longestEdgeIdx;
+				Tetrahedron *faceNeighbors[FacesCount];
 
-				Tetrahedron *children[2];
-				Tetrahedron *neighbors[4];
+				static const ur_uint ChildrenCount = 2;
+				std::unique_ptr<Tetrahedron> children[ChildrenCount];
+
+				Tetrahedron();
+
+				void Init(const Vertex &v0, const Vertex &v1, const Vertex &v2, const Vertex &v3);
+
+				int LinkNeighbor(Tetrahedron *th);
+
+				void Split();
+
+				void Merge();
+
+				inline bool HasChildren() const { return (this->children[0] != ur_null); }
 			};
 
 			HybridTetrahedra(Isosurface &isosurface);
@@ -295,6 +310,10 @@ namespace UnlimRealms
 			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
 		private:
+
+			Result Construct(AdaptiveVolume &volume, AdaptiveVolume::Node *volumeNode);
+			
+			void DrawTetrahedra(GfxContext &gfxContext, GenericRender &genericRender, Tetrahedron *tetrahedron);
 
 			std::unique_ptr<Tetrahedron> root[6];
 		};
