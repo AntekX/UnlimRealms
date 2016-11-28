@@ -966,6 +966,14 @@ namespace UnlimRealms
 			this->root[5] = std::move(th);
 		}
 
+		// temp
+		static bool freeze = false;
+		Input *input = this->isosurface.GetRealm().GetInput();
+		if (input && input->GetKeyboard() && input->GetKeyboard()->IsKeyReleased(Input::VKey::P))
+			freeze = !freeze;
+		if (freeze)
+			return Success;
+
 		// update hierarchy
 		Result res(Success);
 		for (auto &tetrahedron : this->root)
@@ -1009,7 +1017,7 @@ namespace UnlimRealms
 
 		// find smallest node size in underlying volume
 		float nodeSize = this->SmallestNodeSize(bbox, volume.GetRoot());
-		if (nodeSize < bbox.SizeMin())
+		if (nodeSize < bbox.SizeMin() * 0.5f)
 		{
 			tetrahedron->Split();
 		}

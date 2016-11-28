@@ -135,10 +135,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		cameraControl.Update();
 		camera.SetAspectRatio((float)realm.GetCanvas()->GetBound().Width() / realm.GetCanvas()->GetBound().Height());
 		
-		if (!realm.GetInput()->GetKeyboard()->IsKeyDown(Input::VKey::F))
-		{
+		static bool freezePartition = false;
+		if (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F))
+			freezePartition = !freezePartition;
+		if (!freezePartition)
 			isosurface->GetVolume()->PartitionByDistance(camera.GetPosition());
-		}
 		isosurface->Update();
 
 		{ // use context to draw
