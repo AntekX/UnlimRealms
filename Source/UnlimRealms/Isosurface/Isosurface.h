@@ -300,6 +300,7 @@ namespace UnlimRealms
 
 				struct UR_DECL SplitInfo
 				{
+					ur_uint adjFaces[2];
 					ur_byte subTetrahedra[ChildrenCount][VerticesCount];
 				};
 				static const SplitInfo EdgeSplitInfo[EdgesCount];

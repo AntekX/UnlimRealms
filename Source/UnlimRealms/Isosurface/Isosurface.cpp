@@ -778,12 +778,12 @@ namespace UnlimRealms
 	};
 
 	const Isosurface::HybridTetrahedra::Tetrahedron::SplitInfo Isosurface::HybridTetrahedra::Tetrahedron::EdgeSplitInfo[EdgesCount] = {
-		{ { { 0, 0xff, 2, 3 },	{ 0xff, 1, 2, 3 } } },
-		{ { { 0, 1, 0xff, 3 },	{ 0, 0xff, 2, 3 } } },
-		{ { { 0, 1, 0xff, 3 },	{ 0xff, 1, 2, 3 } } },
-		{ { { 0, 1, 2, 0xff },	{ 0xff, 1, 2, 3 } } },
-		{ { { 0, 1, 2, 0xff },	{ 0, 0xff, 2, 3 } } },
-		{ { { 0, 1, 2, 0xff },	{ 0, 1, 0xff, 3 } } }
+		{ { 0, 1 }, { { 0, 0xff, 2, 3 }, { 0xff, 1, 2, 3 } } },
+		{ { 0, 2 }, { { 0, 1, 0xff, 3 }, { 0, 0xff, 2, 3 } } },
+		{ { 0, 3 }, { { 0, 1, 0xff, 3 }, { 0xff, 1, 2, 3 } } },
+		{ { 1, 3 }, { { 0, 1, 2, 0xff }, { 0xff, 1, 2, 3 } } },
+		{ { 1, 2 }, { { 0, 1, 2, 0xff }, { 0, 0xff, 2, 3 } } },
+		{ { 2, 3 }, { { 0, 1, 2, 0xff }, { 0, 1, 0xff, 3 } } }
 	};
 
 	Isosurface::HybridTetrahedra::Tetrahedron::Tetrahedron()
@@ -849,8 +849,7 @@ namespace UnlimRealms
 		if (this->HasChildren())
 			return;
 
-		// todo: setup neighbors info
-
+		// create sub tetrahedra
 		const ur_byte *ev = this->Edges[this->longestEdgeIdx].vid;
 		Vector3 ecp = this->vertices[ev[0]] * 0.5f + this->vertices[ev[1]] * 0.5f;
 		const SplitInfo &splitInfo = EdgeSplitInfo[this->longestEdgeIdx];
@@ -864,6 +863,33 @@ namespace UnlimRealms
 				(vid[2] != 0xff ? this->vertices[vid[2]] : ecp),
 				(vid[3] != 0xff ? this->vertices[vid[3]] : ecp));
 			this->children[subIdx] = std::move(subTetrahedron);
+		}
+		this->children[0]->LinkNeighbor(this->children[1].get());
+
+		// split adjacent neighbors sharing bisected faces
+		for (ur_uint ai = 0; ai < 2; ++ai)
+		{
+			Tetrahedron *adjTetrahedron = this->faceNeighbors[splitInfo.adjFaces[ai]];
+			if (adjTetrahedron != ur_null)
+			{
+				adjTetrahedron->Split();
+				// todo: split neighbor's child if required...
+				if (this->children[0]->LinkNeighbor(adjTetrahedron->children[0].get()) == -1)
+					this->children[0]->LinkNeighbor(adjTetrahedron->children[1].get());
+				if (this->children[1]->LinkNeighbor(adjTetrahedron->children[0].get()) == -1)
+					this->children[1]->LinkNeighbor(adjTetrahedron->children[1].get());
+			}
+		}
+
+		// link to parent neighbors
+		for (ur_uint fi = 0; fi < FacesCount; ++fi)
+		{
+			Tetrahedron *adjTetrahedron = this->faceNeighbors[fi];
+			if (adjTetrahedron != ur_null)
+			{
+				if (this->children[0]->LinkNeighbor(adjTetrahedron) == -1)
+					this->children[1]->LinkNeighbor(adjTetrahedron);
+			}
 		}
 	}
 
@@ -904,7 +930,7 @@ namespace UnlimRealms
 			);
 			this->root[0] = std::move(th);
 		}
-		if (ur_null == this->root[1].get())
+		/*if (ur_null == this->root[1].get())
 		{
 			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
 			th->Init(
@@ -964,8 +990,14 @@ namespace UnlimRealms
 			th->LinkNeighbor(this->root[4].get());
 			th->LinkNeighbor(this->root[2].get());
 			this->root[5] = std::move(th);
-		}
+		}*/
 
+		// adjacency test
+		this->root[0]->Split();
+		this->root[0]->children[0]->Split();
+		this->root[0]->children[0]->children[1]->Split();
+		return Success;
+			
 		// temp
 		static bool freeze = false;
 		Input *input = this->isosurface.GetRealm().GetInput();
@@ -1007,7 +1039,7 @@ namespace UnlimRealms
 		if (ur_null == tetrahedron)
 			return res;
 
-		// todo: precompute BBox suring init step
+		// todo: precompute BBox during init step
 		BoundingBox bbox;
 		for (ur_uint vi = 0; vi < Tetrahedron::VerticesCount; ++vi)
 		{
