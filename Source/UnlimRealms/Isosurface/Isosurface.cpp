@@ -874,6 +874,7 @@ namespace UnlimRealms
 			{
 				adjTetrahedron->Split();
 				
+				// link children
 				bool anyLink = false;
 				bool linked;
 				linked = (this->children[0]->LinkNeighbor(adjTetrahedron->children[0].get()) != -1);
@@ -884,7 +885,7 @@ namespace UnlimRealms
 				if (!linked) linked = (this->children[1]->LinkNeighbor(adjTetrahedron->children[1].get()) != -1);
 				anyLink |= linked;
 
-				// split neighbor's child if required...
+				// split neighbor's child if it's linked to this tetrahedron (must be linked to the child one)
 				if (!anyLink)
 				{
 					for (auto &child : adjTetrahedron->children)
