@@ -873,11 +873,32 @@ namespace UnlimRealms
 			if (adjTetrahedron != ur_null)
 			{
 				adjTetrahedron->Split();
-				// todo: split neighbor's child if required...
-				if (this->children[0]->LinkNeighbor(adjTetrahedron->children[0].get()) == -1)
-					this->children[0]->LinkNeighbor(adjTetrahedron->children[1].get());
-				if (this->children[1]->LinkNeighbor(adjTetrahedron->children[0].get()) == -1)
-					this->children[1]->LinkNeighbor(adjTetrahedron->children[1].get());
+				
+				bool anyLink = false;
+				bool linked;
+				linked = (this->children[0]->LinkNeighbor(adjTetrahedron->children[0].get()) != -1);
+				if (!linked) linked = (this->children[0]->LinkNeighbor(adjTetrahedron->children[1].get()) != -1);
+				anyLink |= linked;
+				
+				linked = (this->children[1]->LinkNeighbor(adjTetrahedron->children[0].get()) != -1);
+				if (!linked) linked = (this->children[1]->LinkNeighbor(adjTetrahedron->children[1].get()) != -1);
+				anyLink |= linked;
+
+				// split neighbor's child if required...
+				if (!anyLink)
+				{
+					for (auto &child : adjTetrahedron->children)
+					{
+						for (auto &neighbor : child->faceNeighbors)
+						{
+							if (neighbor == this)
+							{
+								child->Split();
+								break;
+							}
+						}
+					}
+				}
 			}
 		}
 
@@ -898,10 +919,11 @@ namespace UnlimRealms
 		if (!this->HasChildren())
 			return;
 
-		for (ur_size i = 0; i < ChildrenCount; ++i)
+		// todo: update links
+		/*for (ur_size i = 0; i < ChildrenCount; ++i)
 		{
 			this->children[i].reset(ur_null);
-		}
+		}*/
 	}
 
 	Isosurface::HybridTetrahedra::HybridTetrahedra(Isosurface &isosurface) :
@@ -930,7 +952,7 @@ namespace UnlimRealms
 			);
 			this->root[0] = std::move(th);
 		}
-		/*if (ur_null == this->root[1].get())
+		if (ur_null == this->root[1].get())
 		{
 			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
 			th->Init(
@@ -990,13 +1012,7 @@ namespace UnlimRealms
 			th->LinkNeighbor(this->root[4].get());
 			th->LinkNeighbor(this->root[2].get());
 			this->root[5] = std::move(th);
-		}*/
-
-		// adjacency test
-		this->root[0]->Split();
-		this->root[0]->children[0]->Split();
-		this->root[0]->children[0]->children[1]->Split();
-		return Success;
+		}
 			
 		// temp
 		static bool freeze = false;

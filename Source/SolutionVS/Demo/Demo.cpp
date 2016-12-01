@@ -43,21 +43,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	// create gfx system
 	std::unique_ptr<GfxSystemD3D11> gfx(new GfxSystemD3D11(realm));
-	gfx->Initialize( realm.GetCanvas() );
+	Result res = gfx->Initialize( realm.GetCanvas() );
 	realm.SetGfxSystem( std::move(gfx) );
 
 	// create swap chain
 	std::unique_ptr<GfxSwapChain> gfxSwapChain;
 	if (Succeeded(realm.GetGfxSystem()->CreateSwapChain(gfxSwapChain)))
 	{
-		gfxSwapChain->Initialize(screenWidth, screenHeight);
+		res = gfxSwapChain->Initialize(screenWidth, screenHeight);
 	}
 
 	// create gfx context
 	std::unique_ptr<GfxContext> gfxContext;
 	if (Succeeded(realm.GetGfxSystem()->CreateContext(gfxContext)))
 	{
-		gfxContext->Initialize();
+		res = gfxContext->Initialize();
 	}
 
 	// initialize ImguiRender
@@ -65,7 +65,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	if (realm.AddComponent<ImguiRender>(realm))
 	{
 		imguiRender = realm.GetComponent<ImguiRender>();
-		imguiRender->Init();
+		res = imguiRender->Init();
 	}
 
 	// initialize GenericRender
