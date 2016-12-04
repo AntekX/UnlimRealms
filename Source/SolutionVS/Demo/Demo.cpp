@@ -90,21 +90,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		desc.BlockSize = 0.125f;
 		desc.BlockResolution = 16;
 		desc.DetailLevelDistance = desc.BlockSize.x * 2.0f;
-		desc.PartitionProgression = 2.0f;
+		desc.RefinementProgression = 2.0f;
 
 		/*Isosurface::ProceduralGenerator::FillParams generateParams;
 		generateParams.internalValue = +1.0f;
 		generateParams.externalValue = -1.0f;
 		std::unique_ptr<Isosurface::ProceduralGenerator> loader(new Isosurface::ProceduralGenerator(*isosurface.get(),
 			Isosurface::ProceduralGenerator::Algorithm::Fill, generateParams));*/
-		/*Isosurface::ProceduralGenerator::SphericalDistanceFieldParams generateParams;
+		Isosurface::ProceduralGenerator::SphericalDistanceFieldParams generateParams;
 		generateParams.center = desc.Bound.Center();
 		generateParams.radius = desc.Bound.SizeMin() * 0.5f;
 		std::unique_ptr<Isosurface::ProceduralGenerator> loader(new Isosurface::ProceduralGenerator(*isosurface.get(),
-			Isosurface::ProceduralGenerator::Algorithm::SphericalDistanceField, generateParams));*/
-		Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
+			Isosurface::ProceduralGenerator::Algorithm::SphericalDistanceField, generateParams));
+		/*Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
 		std::unique_ptr<Isosurface::ProceduralGenerator> loader(new Isosurface::ProceduralGenerator(*isosurface.get(),
-			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));
+			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));*/
 
 		//std::unique_ptr<Isosurface::SurfaceNet> presentation(new Isosurface::SurfaceNet(*isosurface.get()));
 		std::unique_ptr<Isosurface::HybridTetrahedra> presentation(new Isosurface::HybridTetrahedra(*isosurface.get()));
@@ -135,11 +135,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		cameraControl.Update();
 		camera.SetAspectRatio((float)realm.GetCanvas()->GetBound().Width() / realm.GetCanvas()->GetBound().Height());
 		
-		static bool freezePartition = false;
+		static bool freezeRefinement = false;
 		if (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F))
-			freezePartition = !freezePartition;
-		if (!freezePartition)
-			isosurface->GetVolume()->PartitionByDistance(camera.GetPosition());
+			freezeRefinement = !freezeRefinement;
+		if (!freezeRefinement)
+			isosurface->GetVolume()->RefinementByDistance(camera.GetPosition());
 		isosurface->Update();
 
 		{ // use context to draw

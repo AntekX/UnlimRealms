@@ -67,7 +67,7 @@ namespace UnlimRealms
 				ur_uint3 BlockResolution; // data block field dimensions (min 3x3x3)
 				ur_float3 BlockSize; // most detailed octree node world size
 				ur_float DetailLevelDistance; // distance at which most detailed blocks are expected
-				ur_float PartitionProgression; // per level partition distance increase factor
+				ur_float RefinementProgression; // per level refinement distance increase factor
 			};
 
 			struct LevelInfo
@@ -83,7 +83,7 @@ namespace UnlimRealms
 
 			Result Init(const Desc &desc);
 
-			void PartitionByDistance(const ur_float3 &point);
+			void RefinementByDistance(const ur_float3 &point);
 
 			inline Isosurface& GetIsosurface() { return this->isosurface; }
 
@@ -93,18 +93,18 @@ namespace UnlimRealms
 
 			inline const LevelInfo& GetLevelInfo(ur_uint i) const { return this->levelInfo[i]; }
 
-			inline const Vector3& GetPartitionPoint() const { return this->partitionPoint; }
+			inline const Vector3& GetRefinementPoint() const { return this->refinementPoint; }
 
 		private:
 
 			static void OnNodeChanged(Node* node, Event e);
 
-			void PartitionByDistance(const ur_float3 &pos, AdaptiveVolume::Node *node);
+			void RefinementByDistance(const ur_float3 &pos, AdaptiveVolume::Node *node);
 
 			Desc desc;
 			BoundingBox alignedBound;
 			std::vector<LevelInfo> levelInfo;
-			Vector3 partitionPoint;
+			Vector3 refinementPoint;
 		};
 
 
@@ -269,8 +269,6 @@ namespace UnlimRealms
 
 		private:
 
-			// TODO
-
 			struct UR_DECL Tetrahedron
 			{
 				struct UR_DECL Edge
@@ -293,14 +291,13 @@ namespace UnlimRealms
 
 				Vertex vertices[VerticesCount];
 				ur_byte longestEdgeIdx;
-				Tetrahedron *faceNeighbors[FacesCount];
+				Tetrahedron *edgeAdjacency[EdgesCount][6];
 
 				static const ur_uint ChildrenCount = 2;
 				std::unique_ptr<Tetrahedron> children[ChildrenCount];
 
 				struct UR_DECL SplitInfo
 				{
-					ur_uint adjFaces[2];
 					ur_byte subTetrahedra[ChildrenCount][VerticesCount];
 				};
 				static const SplitInfo EdgeSplitInfo[EdgesCount];
@@ -309,7 +306,11 @@ namespace UnlimRealms
 
 				void Init(const Vertex &v0, const Vertex &v1, const Vertex &v2, const Vertex &v3);
 
-				int LinkNeighbor(Tetrahedron *th);
+				int UpdateAdjacency(Tetrahedron *th);
+
+				void LinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx);
+				
+				void UnlinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx);
 
 				void Split();
 

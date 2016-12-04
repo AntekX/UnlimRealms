@@ -42,7 +42,7 @@ namespace UnlimRealms
 		if (this->desc.Bound.IsInsideOut() ||
 			this->desc.BlockSize.All() == false ||
 			this->desc.DetailLevelDistance <= 0 ||
-			this->desc.PartitionProgression < 1.0f)
+			this->desc.RefinementProgression < 1.0f)
 			return Result(InvalidArgs);
 
 		ur_float blockSizeMax = std::max(std::max(this->desc.BlockSize.x, this->desc.BlockSize.y), this->desc.BlockSize.z);
@@ -61,7 +61,7 @@ namespace UnlimRealms
 			ur_uint blocksInRange = std::max(ur_uint(levelDistance / blockSizeMax + 0.5f), ur_uint(2));
 			levelDistance = std::max(blockSizeMax * blocksInRange, levelDistance);
 			level.Distance = levelDistance;
-			levelDistance *= this->desc.PartitionProgression;
+			levelDistance *= this->desc.RefinementProgression;
 		}
 
 		return Octree<Isosurface::Block>::Init(this->alignedBound);
@@ -84,17 +84,17 @@ namespace UnlimRealms
 		}
 	}
 
-	void Isosurface::AdaptiveVolume::PartitionByDistance(const ur_float3 &pos)
+	void Isosurface::AdaptiveVolume::RefinementByDistance(const ur_float3 &pos)
 	{
 		if (this->levelInfo.empty())
 			return;
 
-		this->partitionPoint = pos;
+		this->refinementPoint = pos;
 
-		this->PartitionByDistance(pos, this->GetRoot());
+		this->RefinementByDistance(pos, this->GetRoot());
 	}
 
-	void Isosurface::AdaptiveVolume::PartitionByDistance(const ur_float3 &pos, AdaptiveVolume::Node *node)
+	void Isosurface::AdaptiveVolume::RefinementByDistance(const ur_float3 &pos, AdaptiveVolume::Node *node)
 	{
 		if (ur_null == node || (node->GetLevel() + 1) >= this->GetLevelsCount())
 			return;
@@ -106,7 +106,7 @@ namespace UnlimRealms
 			{
 				for (ur_uint i = 0; i < Node::SubNodesCount; ++i)
 				{
-					this->PartitionByDistance(pos, node->GetSubNode(i));
+					this->RefinementByDistance(pos, node->GetSubNode(i));
 				}
 			}
 		}
@@ -778,17 +778,17 @@ namespace UnlimRealms
 	};
 
 	const Isosurface::HybridTetrahedra::Tetrahedron::SplitInfo Isosurface::HybridTetrahedra::Tetrahedron::EdgeSplitInfo[EdgesCount] = {
-		{ { 0, 1 }, { { 0, 0xff, 2, 3 }, { 0xff, 1, 2, 3 } } },
-		{ { 0, 2 }, { { 0, 1, 0xff, 3 }, { 0, 0xff, 2, 3 } } },
-		{ { 0, 3 }, { { 0, 1, 0xff, 3 }, { 0xff, 1, 2, 3 } } },
-		{ { 1, 3 }, { { 0, 1, 2, 0xff }, { 0xff, 1, 2, 3 } } },
-		{ { 1, 2 }, { { 0, 1, 2, 0xff }, { 0, 0xff, 2, 3 } } },
-		{ { 2, 3 }, { { 0, 1, 2, 0xff }, { 0, 1, 0xff, 3 } } }
+		{ { { 0, 0xff, 2, 3 }, { 0xff, 1, 2, 3 } } },
+		{ { { 0, 1, 0xff, 3 }, { 0, 0xff, 2, 3 } } },
+		{ { { 0, 1, 0xff, 3 }, { 0xff, 1, 2, 3 } } },
+		{ { { 0, 1, 2, 0xff }, { 0xff, 1, 2, 3 } } },
+		{ { { 0, 1, 2, 0xff }, { 0, 0xff, 2, 3 } } },
+		{ { { 0, 1, 2, 0xff }, { 0, 1, 0xff, 3 } } }
 	};
 
 	Isosurface::HybridTetrahedra::Tetrahedron::Tetrahedron()
 	{
-		memset(this->faceNeighbors, 0, sizeof(this->faceNeighbors));
+		memset(this->edgeAdjacency, 0, sizeof(this->edgeAdjacency));
 		this->longestEdgeIdx = 0;
 	}
 
@@ -812,36 +812,66 @@ namespace UnlimRealms
 		}
 	}
 
-	int Isosurface::HybridTetrahedra::Tetrahedron::LinkNeighbor(Tetrahedron *th)
+	int Isosurface::HybridTetrahedra::Tetrahedron::UpdateAdjacency(Tetrahedron *th)
 	{
 		if (ur_null == th)
 			return -1;
 
-		// compare faces with each other
-		// faces are equal if there are three equal vertices found
-		for (ur_uint f0 = 0; f0 < FacesCount; ++f0)
+		// compare edges with each other
+		// edges are equal if they have 2 equal vertices
+		for (ur_uint e0 = 0; e0 < EdgesCount; ++e0)
 		{
-			for (ur_uint f1 = 0; f1 < FacesCount; ++f1)
+			for (ur_uint e1 = 0; e1 < EdgesCount; ++e1)
 			{
-				ur_uint equalPoints = 0;
-				for (ur_uint v0 = 0; v0 < 3; ++v0)
+				const ur_float3 &e0_v0 = this->vertices[Edges[e0].vid[0]];
+				const ur_float3 &e0_v1 = this->vertices[Edges[e0].vid[1]];
+				const ur_float3 &e1_v0 = th->vertices[Edges[e1].vid[0]];
+				const ur_float3 &e1_v1 = th->vertices[Edges[e1].vid[1]];
+				if ((e0_v0 == e1_v0 && e0_v1 == e1_v1) || (e0_v0 == e1_v1 && e0_v1 == e1_v0))
 				{
-					for (ur_uint v1 = 0; v1 < 3; ++v1)
-					{
-						equalPoints += (this->vertices[Faces[f0].vid[v0]] == th->vertices[Faces[f1].vid[v1]] ? 1 : 0);
-					}
-				}
-				if (equalPoints == 3)
-				{
-					// update adjacency info
-					this->faceNeighbors[f0] = th;
-					th->faceNeighbors[f1] = this;
-					return f0;
+					this->LinkAdjacentTetrahedra(th, e0, e1);
+					return e1;
 				}
 			}
 		}
 
 		return -1;
+	}
+
+	void Isosurface::HybridTetrahedra::Tetrahedron::LinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx)
+	{
+		auto insertToAdjList = [](Tetrahedron **list, Tetrahedron *item) -> void
+		{
+			int insertPos = -1;
+			for (int i = 5; i >= 0; --i)
+			{
+				if (list[i] == ur_null) insertPos = i;
+				else if (list[i] == item) return;
+			}
+			assert(insertPos >= 0);
+			list[insertPos] = item;
+		};
+
+		Tetrahedron **myEdgeList = this->edgeAdjacency[myEdgeIdx];
+		Tetrahedron **adjEdgeList = th->edgeAdjacency[adjEdgeIdx];
+		insertToAdjList(myEdgeList, th);
+		insertToAdjList(adjEdgeList, this);
+	}
+
+	void Isosurface::HybridTetrahedra::Tetrahedron::UnlinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx)
+	{
+		auto removeFromAdjList = [](Tetrahedron **list, Tetrahedron *item) -> void
+		{
+			for (int i = 5; i >= 0; --i)
+			{
+				if (list[i] == item) list[i] = ur_null;
+			}
+		};
+
+		Tetrahedron **myEdgeList = this->edgeAdjacency[myEdgeIdx];
+		Tetrahedron **adjEdgeList = th->edgeAdjacency[adjEdgeIdx];
+		removeFromAdjList(myEdgeList, th);
+		removeFromAdjList(adjEdgeList, this);
 	}
 
 	void Isosurface::HybridTetrahedra::Tetrahedron::Split()
@@ -864,55 +894,6 @@ namespace UnlimRealms
 				(vid[3] != 0xff ? this->vertices[vid[3]] : ecp));
 			this->children[subIdx] = std::move(subTetrahedron);
 		}
-		this->children[0]->LinkNeighbor(this->children[1].get());
-
-		// split adjacent neighbors sharing bisected faces
-		for (ur_uint ai = 0; ai < 2; ++ai)
-		{
-			Tetrahedron *adjTetrahedron = this->faceNeighbors[splitInfo.adjFaces[ai]];
-			if (adjTetrahedron != ur_null)
-			{
-				adjTetrahedron->Split();
-				
-				// link children
-				bool anyLink = false;
-				bool linked;
-				linked = (this->children[0]->LinkNeighbor(adjTetrahedron->children[0].get()) != -1);
-				if (!linked) linked = (this->children[0]->LinkNeighbor(adjTetrahedron->children[1].get()) != -1);
-				anyLink |= linked;
-				
-				linked = (this->children[1]->LinkNeighbor(adjTetrahedron->children[0].get()) != -1);
-				if (!linked) linked = (this->children[1]->LinkNeighbor(adjTetrahedron->children[1].get()) != -1);
-				anyLink |= linked;
-
-				// split neighbor's child if it's linked to this tetrahedron (must be linked to the child one)
-				if (!anyLink)
-				{
-					for (auto &child : adjTetrahedron->children)
-					{
-						for (auto &neighbor : child->faceNeighbors)
-						{
-							if (neighbor == this)
-							{
-								child->Split();
-								break;
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// link to parent neighbors
-		for (ur_uint fi = 0; fi < FacesCount; ++fi)
-		{
-			Tetrahedron *adjTetrahedron = this->faceNeighbors[fi];
-			if (adjTetrahedron != ur_null)
-			{
-				if (this->children[0]->LinkNeighbor(adjTetrahedron) == -1)
-					this->children[1]->LinkNeighbor(adjTetrahedron);
-			}
-		}
 	}
 
 	void Isosurface::HybridTetrahedra::Tetrahedron::Merge()
@@ -920,11 +901,10 @@ namespace UnlimRealms
 		if (!this->HasChildren())
 			return;
 
-		// todo: update links
-		/*for (ur_size i = 0; i < ChildrenCount; ++i)
+		for (ur_size i = 0; i < ChildrenCount; ++i)
 		{
 			this->children[i].reset(ur_null);
-		}*/
+		}
 	}
 
 	Isosurface::HybridTetrahedra::HybridTetrahedra(Isosurface &isosurface) :
@@ -962,7 +942,7 @@ namespace UnlimRealms
 				{ bbox.Max.x, bbox.Max.y, bbox.Min.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			th->LinkNeighbor(this->root[0].get());
+			for (ur_uint i = 0; i < 1; ++i) th->UpdateAdjacency(this->root[i].get());
 			this->root[1] = std::move(th);
 		}
 		if (ur_null == this->root[2].get())
@@ -974,7 +954,7 @@ namespace UnlimRealms
 				{ bbox.Max.x, bbox.Min.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			th->LinkNeighbor(this->root[1].get());
+			for (ur_uint i = 0; i < 2; ++i) th->UpdateAdjacency(this->root[i].get());
 			this->root[2] = std::move(th);
 		}
 		if (ur_null == this->root[3].get())
@@ -986,7 +966,7 @@ namespace UnlimRealms
 				{ bbox.Min.x, bbox.Max.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			th->LinkNeighbor(this->root[0].get());
+			for (ur_uint i = 0; i < 3; ++i) th->UpdateAdjacency(this->root[i].get());
 			this->root[3] = std::move(th);
 		}
 		if (ur_null == this->root[4].get())
@@ -998,7 +978,7 @@ namespace UnlimRealms
 				{ bbox.Min.x, bbox.Max.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			th->LinkNeighbor(this->root[3].get());
+			for (ur_uint i = 0; i < 4; ++i) th->UpdateAdjacency(this->root[i].get());
 			this->root[4] = std::move(th);
 		}
 		if (ur_null == this->root[5].get())
@@ -1010,8 +990,7 @@ namespace UnlimRealms
 				{ bbox.Max.x, bbox.Min.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			th->LinkNeighbor(this->root[4].get());
-			th->LinkNeighbor(this->root[2].get());
+			for (ur_uint i = 0; i < 5; ++i) th->UpdateAdjacency(this->root[i].get());
 			this->root[5] = std::move(th);
 		}
 			
@@ -1036,7 +1015,7 @@ namespace UnlimRealms
 	float Isosurface::HybridTetrahedra::SmallestNodeSize(const BoundingBox &bbox, AdaptiveVolume::Node *volumeNode)
 	{
 		if (ur_null == volumeNode || !bbox.Intersects(volumeNode->GetBBox()))
-			return bbox.SizeMin();
+			return bbox.SizeMax();
 
 		float nodeSize = volumeNode->GetBBox().SizeMin();
 		if (volumeNode->HasSubNodes())
@@ -1056,17 +1035,39 @@ namespace UnlimRealms
 		if (ur_null == tetrahedron)
 			return res;
 
-		// todo: precompute BBox during init step
-		BoundingBox bbox;
-		for (ur_uint vi = 0; vi < Tetrahedron::VerticesCount; ++vi)
+		// check whether tetrahedron's longest edge is a termional edge
+		bool isTerminalEdge = true;
+		Tetrahedron **edgeAdj = tetrahedron->edgeAdjacency[tetrahedron->longestEdgeIdx];
+		for (int i = 0; i < 6; ++i)
 		{
-			bbox.Min.SetMin(tetrahedron->vertices[vi]);
-			bbox.Max.SetMax(tetrahedron->vertices[vi]);
+			Tetrahedron *adjTetrahedron = edgeAdj[i];
+			if (adjTetrahedron != ur_null)
+			{
+				const ur_float3 &e0_v0 = tetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
+				const ur_float3 &e0_v1 = tetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
+				const ur_float3 &e1_v0 = adjTetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[adjTetrahedron->longestEdgeIdx].vid[0]];
+				const ur_float3 &e1_v1 = adjTetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[adjTetrahedron->longestEdgeIdx].vid[1]];
+				bool equalEdges = ((e0_v0 == e1_v0 && e0_v1 == e1_v1) || (e0_v0 == e1_v1 && e0_v1 == e1_v0));
+				isTerminalEdge &= equalEdges;
+				if (!isTerminalEdge) break;
+			}
+		}
+		bool doSplit = isTerminalEdge;
+
+		if (doSplit)
+		{
+			// find smallest node size in the intersected volume
+			// todo: precompute BBox during init step
+			const ur_float3 &ev0 = tetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
+			const ur_float3 &ev1 = tetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
+			BoundingBox bbox;
+			bbox.Min.SetMin(ev0); bbox.Min.SetMin(ev1);
+			bbox.Max.SetMax(ev0); bbox.Max.SetMax(ev1);
+			float nodeSize = this->SmallestNodeSize(bbox, volume.GetRoot());
+			doSplit = (nodeSize < bbox.SizeMax() * 0.5f);
 		}
 
-		// find smallest node size in underlying volume
-		float nodeSize = this->SmallestNodeSize(bbox, volume.GetRoot());
-		if (nodeSize < bbox.SizeMin() * 0.5f)
+		if (doSplit)
 		{
 			tetrahedron->Split();
 		}
@@ -1124,21 +1125,6 @@ namespace UnlimRealms
 					tetrahedron->vertices[edge.vid[0]],
 					tetrahedron->vertices[edge.vid[1]],
 					s_debugColor);
-			}
-
-			static const ur_float4 s_debugLinkColor = { 0.0f, 1.0f, 0.0f, 1.0f };
-			ur_float3 c0 = 0.0;
-			for (ur_uint vi = 0; vi < 4; ++vi)
-				c0 += tetrahedron->vertices[vi] * 0.25f;
-			for (auto &neighbor : tetrahedron->faceNeighbors)
-			{
-				if (neighbor != ur_null)
-				{
-					ur_float3 c1 = 0.0f;
-					for (ur_uint vi = 0; vi < 4; ++vi)
-						c1 += neighbor->vertices[vi] * 0.25f;
-					genericRender.DrawLine(c0, c1, s_debugLinkColor);
-				}
 			}
 		}
 	}
