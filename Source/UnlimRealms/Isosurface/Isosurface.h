@@ -85,6 +85,14 @@ namespace UnlimRealms
 
 			void RefinementByDistance(const ur_float3 &point);
 
+			ur_uint MaxRefinementLevel(const BoundingBox &bbox);
+
+			void GatherBlocks(const ur_uint level, const BoundingBox &bbox,
+				std::vector<Block*> &blocks, ur_uint3 &gridSize, ur_float3 &gridBlockSize, BoundingBox &gridBBox);
+
+			Block::ValueType SampleBlocks(const ur_float3 &point, const std::vector<Block*> &blocks,
+				const ur_uint3 &gridSize, const ur_uint3 &gridBlockSize, const BoundingBox &gridBBox);
+
 			inline Isosurface& GetIsosurface() { return this->isosurface; }
 
 			inline const Desc& GetDesc() const { return this->desc; }
@@ -100,6 +108,11 @@ namespace UnlimRealms
 			static void OnNodeChanged(Node* node, Event e);
 
 			void RefinementByDistance(const ur_float3 &pos, AdaptiveVolume::Node *node);
+
+			void MaxRefinementLevel(ur_uint &maxLevel, const BoundingBox &bbox, AdaptiveVolume::Node *node);
+
+			void GatherBlocks(AdaptiveVolume::Node *node, const ur_uint level, std::vector<Block*> &blocks,
+				const ur_float3 &blockSize, const ur_uint3 &gridSize, const BoundingBox &gridBBox);
 
 			Desc desc;
 			BoundingBox alignedBound;
@@ -285,22 +298,24 @@ namespace UnlimRealms
 				};
 				static const ur_uint FacesCount = 4;
 				static const Face Faces[FacesCount];
-
+				
 				typedef ur_float3 Vertex;
 				static const ur_uint VerticesCount = 4;
-
-				Vertex vertices[VerticesCount];
-				ur_byte longestEdgeIdx;
-				Tetrahedron *edgeAdjacency[EdgesCount][6];
-
 				static const ur_uint ChildrenCount = 2;
-				std::unique_ptr<Tetrahedron> children[ChildrenCount];
 
 				struct UR_DECL SplitInfo
 				{
 					ur_byte subTetrahedra[ChildrenCount][VerticesCount];
 				};
 				static const SplitInfo EdgeSplitInfo[EdgesCount];
+
+				std::unique_ptr<Tetrahedron> children[ChildrenCount];
+				Vertex vertices[VerticesCount];
+				ur_byte longestEdgeIdx;
+				Tetrahedron *edgeAdjacency[EdgesCount][6];
+				std::unique_ptr<GfxBuffer> gfxVB;
+				std::unique_ptr<GfxBuffer> gfxIB;
+				
 
 				Tetrahedron();
 
@@ -322,6 +337,10 @@ namespace UnlimRealms
 			float SmallestNodeSize(const BoundingBox &bbox, AdaptiveVolume::Node *volumeNode);
 
 			Result Construct(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
+
+			Result UpdateLoD(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
+
+			Result BuildMesh(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
 			
 			void DrawTetrahedra(GfxContext &gfxContext, GenericRender &genericRender, Tetrahedron *tetrahedron);
 

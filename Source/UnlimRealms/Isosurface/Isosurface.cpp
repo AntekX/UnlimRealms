@@ -116,6 +116,156 @@ namespace UnlimRealms
 		}
 	}
 
+	ur_uint Isosurface::AdaptiveVolume::MaxRefinementLevel(const BoundingBox &bbox)
+	{
+		if (ur_null == this->GetRoot() || !bbox.Intersects(this->GetRoot()->GetBBox()))
+			return 0;
+
+		ur_uint maxLevel = this->GetLevelsCount();
+		
+		this->MaxRefinementLevel(maxLevel, bbox, this->GetRoot());
+		
+		return maxLevel;
+	}
+
+	void Isosurface::AdaptiveVolume::MaxRefinementLevel(ur_uint &maxLevel, const BoundingBox &bbox, AdaptiveVolume::Node *node)
+	{
+		if (node == ur_null ||
+			node->GetLevel() > maxLevel ||
+			node->GetBBox().Intersects(bbox) == false)
+			return;
+
+		if (node->HasSubNodes())
+		{
+			for (ur_uint i = 0; i < Node::SubNodesCount; ++i)
+			{
+				this->MaxRefinementLevel(maxLevel, bbox, node->GetSubNode(i));
+			}
+		}
+		else
+		{
+			maxLevel = std::min(maxLevel, node->GetLevel());
+		}
+	}
+
+	void Isosurface::AdaptiveVolume::GatherBlocks(const ur_uint level, const BoundingBox &bbox,
+		std::vector<Block*> &blocks, ur_uint3 &gridSize, ur_float3 &gridBlockSize, BoundingBox &gridBBox)
+	{		
+		if (0 == this->GetLevelsCount() || ur_null == this->GetRoot())
+			return;
+
+		BoundingBox ibbox = this->GetRoot()->GetBBox();
+		ibbox.Min.SetMax(bbox.Min);
+		ibbox.Max.SetMin(bbox.Max);
+		if (ibbox.IsInsideOut())
+			return;
+
+		gridBlockSize = this->desc.BlockSize * float(1 << (this->GetLevelsCount() - level));
+		
+		ur_int3 gridMin(
+			(ur_int)floor(ibbox.Min.x / gridBlockSize.x),
+			(ur_int)floor(ibbox.Min.y / gridBlockSize.y),
+			(ur_int)floor(ibbox.Min.z / gridBlockSize.z));
+		ur_int3 gridMax(
+			(ur_int)ceil(ibbox.Max.x / gridBlockSize.x),
+			(ur_int)ceil(ibbox.Max.y / gridBlockSize.y),
+			(ur_int)ceil(ibbox.Max.z / gridBlockSize.z));
+		gridSize.x = ur_uint(gridMax.x - gridMin.x + 1);
+		gridSize.y = ur_uint(gridMax.y - gridMin.y + 1);
+		gridSize.z = ur_uint(gridMax.z - gridMin.z + 1);
+
+		gridBBox.Min.x = gridBlockSize.x * gridMin.x;
+		gridBBox.Min.y = gridBlockSize.y * gridMin.y;
+		gridBBox.Min.z = gridBlockSize.z * gridMin.z;
+		gridBBox.Max.x = gridBlockSize.x * gridMax.x;
+		gridBBox.Max.y = gridBlockSize.y * gridMax.y;
+		gridBBox.Max.z = gridBlockSize.z * gridMax.z;
+
+		blocks.resize(gridSize.x * gridSize.y * gridSize.z, ur_null);
+
+		this->GatherBlocks(this->GetRoot(), level, blocks, gridBlockSize, gridSize, gridBBox);
+	}
+
+	void Isosurface::AdaptiveVolume::GatherBlocks(AdaptiveVolume::Node *node, const ur_uint level, std::vector<Block*> &blocks,
+		const ur_float3 &blockSize, const ur_uint3 &gridSize, const BoundingBox &gridBBox)
+	{
+		if (node == ur_null ||
+			node->GetBBox().Intersects(gridBBox) == false)
+			return;
+
+		if (node->GetLevel() == level)
+		{
+			ur_uint3 gridPos(
+				(ur_uint)floor((node->GetBBox().Min.x - gridBBox.Min.x) / blockSize.x),
+				(ur_uint)floor((node->GetBBox().Min.y - gridBBox.Min.y) / blockSize.y),
+				(ur_uint)floor((node->GetBBox().Min.z - gridBBox.Min.z) / blockSize.z));
+			blocks[gridPos.x + gridPos.y * gridSize.x + gridPos.z * gridSize.x * gridSize.y] = &node->GetData();
+		}
+		else if (node->HasSubNodes())
+		{
+			for (ur_uint i = 0; i < Node::SubNodesCount; ++i)
+			{
+				this->GatherBlocks(node->GetSubNode(i), level, blocks, blockSize, gridSize, gridBBox);
+			}
+		}
+	}
+
+	Isosurface::Block::ValueType Isosurface::AdaptiveVolume::SampleBlocks(const ur_float3 &point, const std::vector<Block*> &blocks,
+		const ur_uint3 &gridSize, const ur_uint3 &gridBlockSize, const BoundingBox &gridBBox)
+	{
+		Block::ValueType val = (Block::ValueType)0;
+		
+		ur_float3 fpos(
+			(point.x - gridBBox.Min.x) / gridBlockSize.x,
+			(point.y - gridBBox.Min.y) / gridBlockSize.y,
+			(point.z - gridBBox.Min.z) / gridBlockSize.z);
+		ur_int3 bpos(
+			(ur_int)floor(fpos.x),
+			(ur_int)floor(fpos.y),
+			(ur_int)floor(fpos.z));
+		fpos.x -= bpos.x;
+		fpos.y -= bpos.y;
+		fpos.z -= bpos.z;
+		
+		Block *block = blocks[bpos.x + bpos.y * gridSize.x + bpos.z * gridSize.x * gridSize.y];
+		if (block != ur_null && !block->field.empty())
+		{
+			// following sampling algorithm considers that cell center is on the block's corner
+			// (cell size = block size / (resolution - 1))
+			const ur_uint3 &bres = this->GetDesc().BlockResolution;
+			ur_float3 cf(
+				lerp(0.0f, ur_float(bres.x), fpos.x),
+				lerp(0.0f, ur_float(bres.y), fpos.y),
+				lerp(0.0f, ur_float(bres.z), fpos.z));
+			ur_int3 cp(
+				(ur_int)floor(cf.x),
+				(ur_int)floor(cf.y),
+				(ur_int)floor(cf.z));
+			cf.x -= cp.x;
+			cf.y -= cp.y;
+			cf.z -= cp.z;
+			static const ur_int3 cofs[8] = {
+				{ 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 }, { 1, 1, 0 },
+				{ 0, 0, 1 }, { 1, 0, 1 }, { 0, 1, 1 }, { 1, 1, 1 }
+			};
+			const ur_uint3 fres(bres.x + BorderSize * 2, bres.y + BorderSize * 2, bres.z + BorderSize * 2);
+			const ur_uint skipBorderOfs = fres.x * fres.y + fres.x + BorderSize;
+			Block::ValueType cv[8];
+			for (ur_uint i = 0; i < 8; ++i)
+			{
+				cv[i] = block->field[skipBorderOfs +
+					(cp.x + cofs[i].x) + (cp.y + cofs[i].y) * bres.x + (cp.z + cofs[i].z) * bres.x * bres.y];
+			}
+			ur_float v0 = lerp(cv[0], cv[1], cf.x);
+			ur_float v1 = lerp(cv[2], cv[3], cf.x);
+			ur_float v2 = lerp(cv[4], cv[5], cf.x);
+			ur_float v3 = lerp(cv[6], cv[7], cf.x);
+			val = lerp(lerp(v0, v1, cf.y), lerp(v2, v3, cf.y), cf.z);
+		}
+
+		return val;
+	}
+
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Isosurface::Loader
@@ -1035,6 +1185,27 @@ namespace UnlimRealms
 		if (ur_null == tetrahedron)
 			return res;
 
+		res = CombinedResult( this->UpdateLoD(volume, tetrahedron), res );
+
+		res = CombinedResult( this->BuildMesh(volume, tetrahedron), res );
+
+		if (tetrahedron->HasChildren())
+		{
+			for (auto &subTetrahedron : tetrahedron->children)
+			{
+				res = CombinedResult( this->Construct(volume, subTetrahedron.get()), res);
+			}
+		}
+
+		return res;
+	}
+
+	Result Isosurface::HybridTetrahedra::UpdateLoD(AdaptiveVolume &volume, Tetrahedron *tetrahedron)
+	{
+		Result res(Success);
+		if (ur_null == tetrahedron)
+			return res;
+
 		// check whether tetrahedron's longest edge is a termional edge
 		bool isTerminalEdge = true;
 		Tetrahedron **edgeAdj = tetrahedron->edgeAdjacency[tetrahedron->longestEdgeIdx];
@@ -1076,13 +1247,34 @@ namespace UnlimRealms
 			tetrahedron->Merge();
 		}
 
-		if (tetrahedron->HasChildren())
+		return res;
+	}
+
+	Result Isosurface::HybridTetrahedra::BuildMesh(AdaptiveVolume &volume, Tetrahedron *tetrahedron)
+	{
+		Result res(Success);
+		if (ur_null == tetrahedron)
+			return res;
+
+		// gather underlying data blocks into a regular grid for more optimal sampling
+
+		BoundingBox bbox;
+		for (auto &v : tetrahedron->vertices)
 		{
-			for (auto &subTetrahedron : tetrahedron->children)
-			{
-				this->Construct(volume, subTetrahedron.get());
-			}
+			bbox.Min.SetMin(v);
+			bbox.Max.SetMax(v);
 		}
+
+		ur_uint maxLevel = volume.MaxRefinementLevel(bbox);
+		std::vector<Block*> gridBlocks;
+		ur_uint3 gridSize;
+		ur_float3 gridBlockSize;
+		BoundingBox gridBBox;
+		volume.GatherBlocks(maxLevel, bbox, gridBlocks, gridSize, gridBlockSize, gridBBox);
+		if (gridSize.x == 0 || gridSize.y == 0 || gridSize.z == 0)
+			return res; // no intersected data blocks
+
+		// todo: create surface net
 
 		return res;
 	}
