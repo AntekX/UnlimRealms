@@ -282,6 +282,15 @@ namespace UnlimRealms
 
 		private:
 
+			struct UR_DECL Hexahedron
+			{
+				typedef ur_float3 Vertex;
+				static const ur_uint VerticesCount = 8;
+				Vertex vertices[VerticesCount];
+				std::unique_ptr<GfxBuffer> gfxVB;
+				std::unique_ptr<GfxBuffer> gfxIB;
+			};
+
 			struct UR_DECL Tetrahedron
 			{
 				struct UR_DECL Edge
@@ -313,8 +322,7 @@ namespace UnlimRealms
 				Vertex vertices[VerticesCount];
 				ur_byte longestEdgeIdx;
 				Tetrahedron *edgeAdjacency[EdgesCount][6];
-				std::unique_ptr<GfxBuffer> gfxVB;
-				std::unique_ptr<GfxBuffer> gfxIB;
+				Hexahedron hexahedra[4];
 				
 
 				Tetrahedron();
@@ -334,6 +342,7 @@ namespace UnlimRealms
 				inline bool HasChildren() const { return (this->children[0] != ur_null); }
 			};
 
+
 			float SmallestNodeSize(const BoundingBox &bbox, AdaptiveVolume::Node *volumeNode);
 
 			Result Construct(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
@@ -341,6 +350,8 @@ namespace UnlimRealms
 			Result UpdateLoD(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
 
 			Result BuildMesh(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
+
+			Result BuildMesh(AdaptiveVolume &volume, Hexahedron &hexahedron);
 			
 			void DrawTetrahedra(GfxContext &gfxContext, GenericRender &genericRender, Tetrahedron *tetrahedron);
 

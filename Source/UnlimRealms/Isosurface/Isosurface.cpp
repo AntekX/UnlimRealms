@@ -949,6 +949,8 @@ namespace UnlimRealms
 		this->vertices[2] = v2;
 		this->vertices[3] = v3;
 
+		// compute the longest edge
+		
 		float maxLen = 0.0f;
 		for (ur_byte eidx = 0; eidx < EdgesCount; ++eidx)
 		{
@@ -959,6 +961,65 @@ namespace UnlimRealms
 				maxLen = len;
 				this->longestEdgeIdx = eidx;
 			}
+		}
+
+		// init sub hexahedra
+
+		Vertex ve[EdgesCount];
+		for (ur_uint i = 0; i < EdgesCount; ++i)
+		{
+			ve[i] = (this->vertices[Edges[i].vid[0]] + this->vertices[Edges[i].vid[1]]) / 2.0f;
+		}
+		Vertex vf[FacesCount];
+		for (ur_uint i = 0; i < FacesCount; ++i)
+		{
+			vf[i] = (this->vertices[Faces[i].vid[0]] + this->vertices[Faces[i].vid[1]] + this->vertices[Faces[i].vid[2]]) / 3.0f;
+		}
+		Vertex vc = (v0 + v1 + v2 + v3) / 4;
+
+		{
+			Hexahedron &h = this->hexahedra[0];
+			h.vertices[0] = v0;
+			h.vertices[1] = ve[2];
+			h.vertices[2] = ve[0];
+			h.vertices[3] = vf[0];
+			h.vertices[4] = ve[3];
+			h.vertices[5] = vf[3];
+			h.vertices[6] = vf[1];
+			h.vertices[7] = vc;
+		}
+		{
+			Hexahedron &h = this->hexahedra[1];
+			h.vertices[0] = ve[2];
+			h.vertices[1] = v2;
+			h.vertices[2] = vf[0];
+			h.vertices[3] = ve[1];
+			h.vertices[4] = vf[3];
+			h.vertices[5] = ve[5];
+			h.vertices[6] = vc;
+			h.vertices[7] = vf[2];
+		}
+		{
+			Hexahedron &h = this->hexahedra[2];
+			h.vertices[0] = ve[0];
+			h.vertices[1] = vf[0];
+			h.vertices[2] = v1;
+			h.vertices[3] = ve[1];
+			h.vertices[4] = vf[1];
+			h.vertices[5] = vc;
+			h.vertices[6] = ve[4];
+			h.vertices[7] = vf[2];
+		}
+		{
+			Hexahedron &h = this->hexahedra[3];
+			h.vertices[0] = vf[3];
+			h.vertices[1] = ve[5];
+			h.vertices[2] = vc;
+			h.vertices[3] = vf[2];
+			h.vertices[4] = ve[3];
+			h.vertices[5] = v3;
+			h.vertices[6] = vf[1];
+			h.vertices[7] = ve[4];
 		}
 	}
 
@@ -1252,31 +1313,43 @@ namespace UnlimRealms
 
 	Result Isosurface::HybridTetrahedra::BuildMesh(AdaptiveVolume &volume, Tetrahedron *tetrahedron)
 	{
-		Result res(Success);
+		Result res = Result(Success);
 		if (ur_null == tetrahedron)
 			return res;
 
-		// gather underlying data blocks into a regular grid for more optimal sampling
-
-		BoundingBox bbox;
-		for (auto &v : tetrahedron->vertices)
+		for (ur_uint i = 0; i < 4; ++i)
 		{
-			bbox.Min.SetMin(v);
-			bbox.Max.SetMax(v);
+			res = CombinedResult(res, this->BuildMesh(volume, tetrahedron->hexahedra[i]));
 		}
 
-		ur_uint maxLevel = volume.MaxRefinementLevel(bbox);
-		std::vector<Block*> gridBlocks;
-		ur_uint3 gridSize;
-		ur_float3 gridBlockSize;
-		BoundingBox gridBBox;
-		volume.GatherBlocks(maxLevel, bbox, gridBlocks, gridSize, gridBlockSize, gridBBox);
-		if (gridSize.x == 0 || gridSize.y == 0 || gridSize.z == 0)
-			return res; // no intersected data blocks
+		return res;
+	}
+
+	Result Isosurface::HybridTetrahedra::BuildMesh(AdaptiveVolume &volume, Hexahedron &hexahedron)
+	{
+		// gather underlying data blocks into a regular grid for more optimal sampling
+
+		//BoundingBox bbox;
+		//for (auto &v : tetrahedron->vertices)
+		//{
+		//	bbox.Min.SetMin(v);
+		//	bbox.Max.SetMax(v);
+		//}
+
+		//ur_uint maxLevel = volume.MaxRefinementLevel(bbox);
+		//std::vector<Block*> gridBlocks;
+		//ur_uint3 gridSize;
+		//ur_float3 gridBlockSize;
+		//BoundingBox gridBBox;
+		//volume.GatherBlocks(maxLevel, bbox, gridBlocks, gridSize, gridBlockSize, gridBBox);
+		//if (gridSize.x == 0 || gridSize.y == 0 || gridSize.z == 0)
+		//	return res; // no intersected data blocks
+
+		// compute surface data
 
 		// todo: create surface net
 
-		return res;
+		return Result(Success);
 	}
 
 	Result Isosurface::HybridTetrahedra::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
@@ -1317,6 +1390,24 @@ namespace UnlimRealms
 					tetrahedron->vertices[edge.vid[0]],
 					tetrahedron->vertices[edge.vid[1]],
 					s_debugColor);
+			}
+
+			static const ur_float4 s_hexaColor = { 0.0f, 1.0f, 0.0f, 1.0f };
+			for (ur_uint ih = 0; ih < 4; ++ih)
+			{
+				const Hexahedron &h = tetrahedron->hexahedra[ih];
+				genericRender.DrawLine(h.vertices[0], h.vertices[1], s_hexaColor);
+				genericRender.DrawLine(h.vertices[2], h.vertices[3], s_hexaColor);
+				genericRender.DrawLine(h.vertices[4], h.vertices[5], s_hexaColor);
+				genericRender.DrawLine(h.vertices[6], h.vertices[7], s_hexaColor);
+				genericRender.DrawLine(h.vertices[0], h.vertices[2], s_hexaColor);
+				genericRender.DrawLine(h.vertices[1], h.vertices[3], s_hexaColor);
+				genericRender.DrawLine(h.vertices[4], h.vertices[6], s_hexaColor);
+				genericRender.DrawLine(h.vertices[5], h.vertices[7], s_hexaColor);
+				genericRender.DrawLine(h.vertices[0], h.vertices[4], s_hexaColor);
+				genericRender.DrawLine(h.vertices[1], h.vertices[5], s_hexaColor);
+				genericRender.DrawLine(h.vertices[2], h.vertices[6], s_hexaColor);
+				genericRender.DrawLine(h.vertices[3], h.vertices[7], s_hexaColor);
 			}
 		}
 	}
