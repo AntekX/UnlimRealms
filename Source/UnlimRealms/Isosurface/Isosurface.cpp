@@ -148,8 +148,7 @@ namespace UnlimRealms
 		}
 	}
 
-	void Isosurface::AdaptiveVolume::GatherBlocks(const ur_uint level, const BoundingBox &bbox,
-		std::vector<Block*> &blocks, ur_uint3 &gridSize, ur_float3 &gridBlockSize, BoundingBox &gridBBox)
+	void Isosurface::AdaptiveVolume::GatherBlocks(const ur_uint level, const BoundingBox &bbox, BlockArray &blockArray)
 	{		
 		if (0 == this->GetLevelsCount() || ur_null == this->GetRoot())
 			return;
@@ -160,65 +159,65 @@ namespace UnlimRealms
 		if (ibbox.IsInsideOut())
 			return;
 
-		gridBlockSize = this->desc.BlockSize * float(1 << (this->GetLevelsCount() - level));
+		blockArray.blockResolution = this->desc.BlockResolution;
+		blockArray.blockBorder = BorderSize;
+		blockArray.blockSize = this->desc.BlockSize * float(1 << (this->GetLevelsCount() - level));
 		
 		ur_int3 gridMin(
-			(ur_int)floor(ibbox.Min.x / gridBlockSize.x),
-			(ur_int)floor(ibbox.Min.y / gridBlockSize.y),
-			(ur_int)floor(ibbox.Min.z / gridBlockSize.z));
+			(ur_int)floor(ibbox.Min.x / blockArray.blockSize.x),
+			(ur_int)floor(ibbox.Min.y / blockArray.blockSize.y),
+			(ur_int)floor(ibbox.Min.z / blockArray.blockSize.z));
 		ur_int3 gridMax(
-			(ur_int)ceil(ibbox.Max.x / gridBlockSize.x),
-			(ur_int)ceil(ibbox.Max.y / gridBlockSize.y),
-			(ur_int)ceil(ibbox.Max.z / gridBlockSize.z));
-		gridSize.x = ur_uint(gridMax.x - gridMin.x + 1);
-		gridSize.y = ur_uint(gridMax.y - gridMin.y + 1);
-		gridSize.z = ur_uint(gridMax.z - gridMin.z + 1);
+			(ur_int)ceil(ibbox.Max.x / blockArray.blockSize.x),
+			(ur_int)ceil(ibbox.Max.y / blockArray.blockSize.y),
+			(ur_int)ceil(ibbox.Max.z / blockArray.blockSize.z));
+		blockArray.size.x = ur_uint(gridMax.x - gridMin.x + 1);
+		blockArray.size.y = ur_uint(gridMax.y - gridMin.y + 1);
+		blockArray.size.z = ur_uint(gridMax.z - gridMin.z + 1);
 
-		gridBBox.Min.x = gridBlockSize.x * gridMin.x;
-		gridBBox.Min.y = gridBlockSize.y * gridMin.y;
-		gridBBox.Min.z = gridBlockSize.z * gridMin.z;
-		gridBBox.Max.x = gridBlockSize.x * gridMax.x;
-		gridBBox.Max.y = gridBlockSize.y * gridMax.y;
-		gridBBox.Max.z = gridBlockSize.z * gridMax.z;
+		blockArray.bbox.Min.x = blockArray.blockSize.x * gridMin.x;
+		blockArray.bbox.Min.y = blockArray.blockSize.y * gridMin.y;
+		blockArray.bbox.Min.z = blockArray.blockSize.z * gridMin.z;
+		blockArray.bbox.Max.x = blockArray.blockSize.x * gridMax.x;
+		blockArray.bbox.Max.y = blockArray.blockSize.y * gridMax.y;
+		blockArray.bbox.Max.z = blockArray.blockSize.z * gridMax.z;
 
-		blocks.resize(gridSize.x * gridSize.y * gridSize.z, ur_null);
+		blockArray.blocks.resize(blockArray.size.x * blockArray.size.y * blockArray.size.z, ur_null);
 
-		this->GatherBlocks(this->GetRoot(), level, blocks, gridBlockSize, gridSize, gridBBox);
+		this->GatherBlocks(this->GetRoot(), level, blockArray);
 	}
 
-	void Isosurface::AdaptiveVolume::GatherBlocks(AdaptiveVolume::Node *node, const ur_uint level, std::vector<Block*> &blocks,
-		const ur_float3 &blockSize, const ur_uint3 &gridSize, const BoundingBox &gridBBox)
+	void Isosurface::AdaptiveVolume::GatherBlocks(AdaptiveVolume::Node *node, const ur_uint level, BlockArray &blockArray)
 	{
 		if (node == ur_null ||
-			node->GetBBox().Intersects(gridBBox) == false)
+			node->GetBBox().Intersects(blockArray.bbox) == false)
 			return;
 
 		if (node->GetLevel() == level)
 		{
 			ur_uint3 gridPos(
-				(ur_uint)floor((node->GetBBox().Min.x - gridBBox.Min.x) / blockSize.x),
-				(ur_uint)floor((node->GetBBox().Min.y - gridBBox.Min.y) / blockSize.y),
-				(ur_uint)floor((node->GetBBox().Min.z - gridBBox.Min.z) / blockSize.z));
-			blocks[gridPos.x + gridPos.y * gridSize.x + gridPos.z * gridSize.x * gridSize.y] = &node->GetData();
+				(ur_uint)floor((node->GetBBox().Min.x - blockArray.bbox.Min.x) / blockArray.blockSize.x),
+				(ur_uint)floor((node->GetBBox().Min.y - blockArray.bbox.Min.y) / blockArray.blockSize.y),
+				(ur_uint)floor((node->GetBBox().Min.z - blockArray.bbox.Min.z) / blockArray.blockSize.z));
+			blockArray.blocks[gridPos.x + gridPos.y * blockArray.size.x + gridPos.z * blockArray.size.x * blockArray.size.y] = &node->GetData();
 		}
 		else if (node->HasSubNodes())
 		{
 			for (ur_uint i = 0; i < Node::SubNodesCount; ++i)
 			{
-				this->GatherBlocks(node->GetSubNode(i), level, blocks, blockSize, gridSize, gridBBox);
+				this->GatherBlocks(node->GetSubNode(i), level, blockArray);
 			}
 		}
 	}
 
-	Isosurface::Block::ValueType Isosurface::AdaptiveVolume::SampleBlocks(const ur_float3 &point, const std::vector<Block*> &blocks,
-		const ur_uint3 &gridSize, const ur_uint3 &gridBlockSize, const BoundingBox &gridBBox)
+	Isosurface::Block::ValueType Isosurface::BlockArray::Sample(const ur_float3 &point)
 	{
 		Block::ValueType val = (Block::ValueType)0;
 		
 		ur_float3 fpos(
-			(point.x - gridBBox.Min.x) / gridBlockSize.x,
-			(point.y - gridBBox.Min.y) / gridBlockSize.y,
-			(point.z - gridBBox.Min.z) / gridBlockSize.z);
+			(point.x - this->bbox.Min.x) / this->blockSize.x,
+			(point.y - this->bbox.Min.y) / this->blockSize.y,
+			(point.z - this->bbox.Min.z) / this->blockSize.z);
 		ur_int3 bpos(
 			(ur_int)floor(fpos.x),
 			(ur_int)floor(fpos.y),
@@ -227,12 +226,12 @@ namespace UnlimRealms
 		fpos.y -= bpos.y;
 		fpos.z -= bpos.z;
 		
-		Block *block = blocks[bpos.x + bpos.y * gridSize.x + bpos.z * gridSize.x * gridSize.y];
+		Block *block = blocks[bpos.x + bpos.y * this->size.x + bpos.z * this->size.x * this->size.y];
 		if (block != ur_null && !block->field.empty())
 		{
 			// following sampling algorithm considers that cell center is on the block's corner
 			// (cell size = block size / (resolution - 1))
-			const ur_uint3 &bres = this->GetDesc().BlockResolution;
+			const ur_uint3 &bres = this->blockResolution;
 			ur_float3 cf(
 				lerp(0.0f, ur_float(bres.x), fpos.x),
 				lerp(0.0f, ur_float(bres.y), fpos.y),
@@ -248,8 +247,8 @@ namespace UnlimRealms
 				{ 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 }, { 1, 1, 0 },
 				{ 0, 0, 1 }, { 1, 0, 1 }, { 0, 1, 1 }, { 1, 1, 1 }
 			};
-			const ur_uint3 fres(bres.x + BorderSize * 2, bres.y + BorderSize * 2, bres.z + BorderSize * 2);
-			const ur_uint skipBorderOfs = fres.x * fres.y + fres.x + BorderSize;
+			const ur_uint3 fres(bres.x + this->blockBorder * 2, bres.y + this->blockBorder * 2, bres.z + this->blockBorder * 2);
+			const ur_uint skipBorderOfs = fres.x * fres.y + fres.x + this->blockBorder;
 			Block::ValueType cv[8];
 			for (ur_uint i = 0; i < 8; ++i)
 			{
@@ -1348,6 +1347,13 @@ namespace UnlimRealms
 		// compute surface data
 
 		// todo: create surface net
+
+		return Result(Success);
+	}
+
+	Result Isosurface::HybridTetrahedra::MarchCubes(Hexahedron &hexahedron, const BlockArray &data)
+	{
+		// todo
 
 		return Result(Success);
 	}

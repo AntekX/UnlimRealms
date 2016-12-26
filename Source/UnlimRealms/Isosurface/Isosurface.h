@@ -55,6 +55,24 @@ namespace UnlimRealms
 
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Blocks 3D array
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		struct UR_DECL BlockArray
+		{
+			BoundingBox bbox;
+			ur_uint3 size;
+			std::vector<Block*> blocks;
+			ur_uint3 blockResolution;
+			ur_uint blockBorder;
+			ur_float3 blockSize;
+
+			BlockArray() : size(0), blockResolution(0), blockBorder(0), blockSize(0.0f) {}
+
+			Block::ValueType Sample(const ur_float3 &point);
+		};
+
+
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Voxel data tree
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		class UR_DECL AdaptiveVolume : public SubSystem, public Octree<Block>
@@ -87,11 +105,7 @@ namespace UnlimRealms
 
 			ur_uint MaxRefinementLevel(const BoundingBox &bbox);
 
-			void GatherBlocks(const ur_uint level, const BoundingBox &bbox,
-				std::vector<Block*> &blocks, ur_uint3 &gridSize, ur_float3 &gridBlockSize, BoundingBox &gridBBox);
-
-			Block::ValueType SampleBlocks(const ur_float3 &point, const std::vector<Block*> &blocks,
-				const ur_uint3 &gridSize, const ur_uint3 &gridBlockSize, const BoundingBox &gridBBox);
+			void GatherBlocks(const ur_uint level, const BoundingBox &bbox, BlockArray &blockArray);
 
 			inline Isosurface& GetIsosurface() { return this->isosurface; }
 
@@ -111,8 +125,7 @@ namespace UnlimRealms
 
 			void MaxRefinementLevel(ur_uint &maxLevel, const BoundingBox &bbox, AdaptiveVolume::Node *node);
 
-			void GatherBlocks(AdaptiveVolume::Node *node, const ur_uint level, std::vector<Block*> &blocks,
-				const ur_float3 &blockSize, const ur_uint3 &gridSize, const BoundingBox &gridBBox);
+			void GatherBlocks(AdaptiveVolume::Node *node, const ur_uint level, BlockArray &blockArray);
 
 			Desc desc;
 			BoundingBox alignedBound;
@@ -263,7 +276,7 @@ namespace UnlimRealms
 
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Hybrid triangulation approach
+		// Hybrid presentation approach
 		// Subdivides volume box in to hierarchy of tetrahedra
 		// Each tetrahedron is then divided into 4 hexahedra
 		// Each hexahedron bounds the lattice used for surface mesh extraction
@@ -352,6 +365,8 @@ namespace UnlimRealms
 			Result BuildMesh(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
 
 			Result BuildMesh(AdaptiveVolume &volume, Hexahedron &hexahedron);
+
+			Result MarchCubes(Hexahedron &hexahedron, const BlockArray &data);
 			
 			void DrawTetrahedra(GfxContext &gfxContext, GenericRender &genericRender, Tetrahedron *tetrahedron);
 
