@@ -34,16 +34,16 @@ namespace UnlimRealms
 
 		Result Init();
 
-		void DrawPrimitives(PrimitiveType primType, ur_uint primCount, const ur_uint *indices,
-			ur_uint pointsCount, const ur_float3 *points, const ur_float4 *colors);
+		void DrawPrimitives(const PrimitiveType primType, const ur_uint primCount, const ur_uint *indices,
+			const ur_uint pointsCount, const ur_float3 *points, const ur_float4 *colors);
 
-		void DrawLine(ur_float3 from, ur_float3 to, ur_float4 color);
+		void DrawLine(const ur_float3 &from, const ur_float3 &to, const ur_float4 &color);
 
-		void DrawPolyline(ur_uint pointsCount, const ur_float3 *points, ur_float4 color);
+		void DrawPolyline(const ur_uint pointsCount, const ur_float3 *points, const ur_float4 &color);
 
-		void DrawConvexPolygon(ur_uint pointsCount, ur_float3 *points, ur_float4 color);
+		void DrawConvexPolygon(const ur_uint pointsCount, const ur_float3 *points, const ur_float4 &color);
 
-		void DrawBox(ur_float3 bmin, ur_float3 bmax, ur_float4 color);
+		void DrawBox(const ur_float3 &bmin, const ur_float3 &bmax, const ur_float4 &color);
 
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
@@ -80,6 +80,20 @@ namespace UnlimRealms
 			PrimitiveType primitiveType;
 			std::vector<Vertex> vertices;
 			std::vector<Index> indices;
+			ur_uint verticesCount;
+			ur_uint indicesCount;
+
+			inline void reserveVertices(ur_uint size)
+			{
+				if ((ur_uint)this->vertices.size() < verticesCount + size) this->vertices.resize(verticesCount + size);
+				verticesCount += size;
+			}
+
+			inline void reserveIndices(ur_uint size)
+			{
+				if ((ur_uint)this->indices.size() < indicesCount + size) this->indices.resize(indicesCount + size);
+				indicesCount += size;
+			}
 		};
 
 	protected:

@@ -153,15 +153,19 @@ namespace UnlimRealms
 		if (0 == this->GetLevelsCount() || ur_null == this->GetRoot())
 			return;
 
-		BoundingBox ibbox = this->GetRoot()->GetBBox();
+		const BoundingBox &rbbox = this->GetRoot()->GetBBox();
+		BoundingBox ibbox = rbbox;
 		ibbox.Min.SetMax(bbox.Min);
 		ibbox.Max.SetMin(bbox.Max);
 		if (ibbox.IsInsideOut())
 			return;
+		
+		ibbox.Min -= rbbox.Min;
+		ibbox.Max -= rbbox.Min;
 
 		blockArray.blockResolution = this->desc.BlockResolution;
 		blockArray.blockBorder = BorderSize;
-		blockArray.blockSize = this->desc.BlockSize * float(1 << (this->GetLevelsCount() - level));
+		blockArray.blockSize = this->desc.BlockSize * float(1 << (this->GetLevelsCount() - level - 1));
 		
 		ur_int3 gridMin(
 			(ur_int)floor(ibbox.Min.x / blockArray.blockSize.x),
@@ -171,16 +175,16 @@ namespace UnlimRealms
 			(ur_int)ceil(ibbox.Max.x / blockArray.blockSize.x),
 			(ur_int)ceil(ibbox.Max.y / blockArray.blockSize.y),
 			(ur_int)ceil(ibbox.Max.z / blockArray.blockSize.z));
-		blockArray.size.x = ur_uint(gridMax.x - gridMin.x + 1);
-		blockArray.size.y = ur_uint(gridMax.y - gridMin.y + 1);
-		blockArray.size.z = ur_uint(gridMax.z - gridMin.z + 1);
+		blockArray.size.x = ur_uint(gridMax.x - gridMin.x);
+		blockArray.size.y = ur_uint(gridMax.y - gridMin.y);
+		blockArray.size.z = ur_uint(gridMax.z - gridMin.z);
 
-		blockArray.bbox.Min.x = blockArray.blockSize.x * gridMin.x;
-		blockArray.bbox.Min.y = blockArray.blockSize.y * gridMin.y;
-		blockArray.bbox.Min.z = blockArray.blockSize.z * gridMin.z;
-		blockArray.bbox.Max.x = blockArray.blockSize.x * gridMax.x;
-		blockArray.bbox.Max.y = blockArray.blockSize.y * gridMax.y;
-		blockArray.bbox.Max.z = blockArray.blockSize.z * gridMax.z;
+		blockArray.bbox.Min.x = blockArray.blockSize.x * gridMin.x + rbbox.Min.x;
+		blockArray.bbox.Min.y = blockArray.blockSize.y * gridMin.y + rbbox.Min.y;
+		blockArray.bbox.Min.z = blockArray.blockSize.z * gridMin.z + rbbox.Min.z;
+		blockArray.bbox.Max.x = blockArray.blockSize.x * gridMax.x + rbbox.Min.x;
+		blockArray.bbox.Max.y = blockArray.blockSize.y * gridMax.y + rbbox.Min.y;
+		blockArray.bbox.Max.z = blockArray.blockSize.z * gridMax.z + rbbox.Min.z;
 
 		blockArray.blocks.resize(blockArray.size.x * blockArray.size.y * blockArray.size.z, ur_null);
 
@@ -199,7 +203,10 @@ namespace UnlimRealms
 				(ur_uint)floor((node->GetBBox().Min.x - blockArray.bbox.Min.x) / blockArray.blockSize.x),
 				(ur_uint)floor((node->GetBBox().Min.y - blockArray.bbox.Min.y) / blockArray.blockSize.y),
 				(ur_uint)floor((node->GetBBox().Min.z - blockArray.bbox.Min.z) / blockArray.blockSize.z));
-			blockArray.blocks[gridPos.x + gridPos.y * blockArray.size.x + gridPos.z * blockArray.size.x * blockArray.size.y] = &node->GetData();
+			if (gridPos.x < blockArray.size.x && gridPos.y < blockArray.size.y && gridPos.z < blockArray.size.z)
+			{
+				blockArray.blocks[gridPos.x + gridPos.y * blockArray.size.x + gridPos.z * blockArray.size.x * blockArray.size.y] = &node->GetData();
+			}
 		}
 		else if (node->HasSubNodes())
 		{
@@ -915,11 +922,11 @@ namespace UnlimRealms
 	// Isosurface::HybridTetrahedra
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	const Isosurface::HybridTetrahedra::Tetrahedron::Edge Isosurface::HybridTetrahedra::Tetrahedron::Edges[EdgesCount] = {
+	const Isosurface::HybridTetrahedra::Edge Isosurface::HybridTetrahedra::Tetrahedron::Edges[EdgesCount] = {
 		{ 0, 1 }, { 1, 2 }, { 2, 0 }, { 0, 3 }, { 1, 3 }, { 2, 3 }
 	};
 
-	const Isosurface::HybridTetrahedra::Tetrahedron::Face Isosurface::HybridTetrahedra::Tetrahedron::Faces[FacesCount] = {
+	const Isosurface::HybridTetrahedra::Face Isosurface::HybridTetrahedra::Tetrahedron::Faces[FacesCount] = {
 		{ { 0, 1, 2 }, { 0, 1, 2 } },
 		{ { 0, 3, 1 }, { 0, 3, 4 } },
 		{ { 1, 3, 2 }, { 1, 4, 5 } },
@@ -1316,43 +1323,98 @@ namespace UnlimRealms
 		if (ur_null == tetrahedron)
 			return res;
 
+		// temp: check this way, whether a mesh is already built
+		if (!tetrahedron->hexahedra[0].lattice.empty() &&
+			!tetrahedron->hexahedra[1].lattice.empty() &&
+			!tetrahedron->hexahedra[0].lattice.empty() &&
+			!tetrahedron->hexahedra[0].lattice.empty())
+			return Result(Success);
+
+		// gather underlying data blocks into a regular grid for more optimal sampling
+
+		BoundingBox bbox;
+		for (auto &v : tetrahedron->vertices)
+		{
+			bbox.Min.SetMin(v);
+			bbox.Max.SetMax(v);
+		}
+
+		ur_uint maxLevel = volume.MaxRefinementLevel(bbox);
+		BlockArray data;
+		volume.GatherBlocks(maxLevel, bbox, data);
+		if (data.size.x  * data.size.y * data.size.z == 0)
+			return res; // no intersected data blocks
+
 		for (ur_uint i = 0; i < 4; ++i)
 		{
-			res = CombinedResult(res, this->BuildMesh(volume, tetrahedron->hexahedra[i]));
+			res = CombinedResult(res, this->MarchCubes(tetrahedron->hexahedra[i], data));
 		}
 
 		return res;
 	}
 
-	Result Isosurface::HybridTetrahedra::BuildMesh(AdaptiveVolume &volume, Hexahedron &hexahedron)
-	{
-		// gather underlying data blocks into a regular grid for more optimal sampling
-
-		//BoundingBox bbox;
-		//for (auto &v : tetrahedron->vertices)
-		//{
-		//	bbox.Min.SetMin(v);
-		//	bbox.Max.SetMax(v);
-		//}
-
-		//ur_uint maxLevel = volume.MaxRefinementLevel(bbox);
-		//std::vector<Block*> gridBlocks;
-		//ur_uint3 gridSize;
-		//ur_float3 gridBlockSize;
-		//BoundingBox gridBBox;
-		//volume.GatherBlocks(maxLevel, bbox, gridBlocks, gridSize, gridBlockSize, gridBBox);
-		//if (gridSize.x == 0 || gridSize.y == 0 || gridSize.z == 0)
-		//	return res; // no intersected data blocks
-
-		// compute surface data
-
-		// todo: create surface net
-
-		return Result(Success);
-	}
-
 	Result Isosurface::HybridTetrahedra::MarchCubes(Hexahedron &hexahedron, const BlockArray &data)
 	{
+		// compute hexahedron lattice points
+		
+		auto computeLinePoints = [](ur_float3 *points, const ur_uint count, const ur_uint step, const ur_float3 &p0, const ur_float3 &p1) {
+			ur_float s = ur_float(count - 1);
+			for (ur_uint i = 0; i < count; ++i)
+			{
+				*points = ur_float3::Lerp(p0, p1, ur_float(i) / s);
+				points += step;
+			}
+		};
+
+		ur_uint rowOfs = data.blockResolution.x;
+		ur_uint lastRowOfs = rowOfs * (data.blockResolution.y - 1);
+		ur_uint sliceOfs = rowOfs * data.blockResolution.y;
+		ur_uint lastSliceOfs = sliceOfs * (data.blockResolution.z - 1);
+		ur_uint latticeSize = sliceOfs * data.blockResolution.z;
+		//std::vector<ur_float3> lattice;
+		std::vector<ur_float3> &lattice = hexahedron.lattice;
+		lattice.resize(latticeSize);
+		
+		computeLinePoints(lattice.data(), data.blockResolution.x, 1, hexahedron.vertices[0], hexahedron.vertices[1]);
+		computeLinePoints(lattice.data() + lastRowOfs, data.blockResolution.x, 1, hexahedron.vertices[2], hexahedron.vertices[3]);
+		computeLinePoints(lattice.data() + lastSliceOfs, data.blockResolution.x, 1, hexahedron.vertices[4], hexahedron.vertices[5]);
+		computeLinePoints(lattice.data() + lastRowOfs + lastSliceOfs, data.blockResolution.x, 1, hexahedron.vertices[6], hexahedron.vertices[7]);
+		ur_float3 *p_col0 = lattice.data();
+		ur_float3 *p_col1 = lattice.data() + lastSliceOfs;
+		for (ur_uint ix = 0; ix < data.blockResolution.x; ++ix, ++p_col0, ++p_col1)
+		{
+			computeLinePoints(p_col0, data.blockResolution.y, rowOfs, *p_col0, *(p_col0 + lastRowOfs));
+			computeLinePoints(p_col1, data.blockResolution.y, rowOfs, *p_col1, *(p_col1 + lastRowOfs));
+		}
+
+		ur_float3 *p_row0 = lattice.data();
+		ur_float3 *p_row1 = lattice.data() + lastSliceOfs;
+		for (ur_uint iy = 0; iy < data.blockResolution.y; ++iy)
+		{
+			p_col0 = p_row0;
+			p_col1 = p_row1;
+			for (ur_uint ix = 0; ix < data.blockResolution.x; ++ix, ++p_col0, ++p_col1)
+			{
+				computeLinePoints(p_col0, data.blockResolution.z, sliceOfs, *p_col0, *p_col1);
+			}
+			p_row0 += rowOfs;
+			p_row1 += rowOfs;
+		}
+
+		// march
+
+		ur_uint3 cellsCount = data.blockResolution - 1;
+		for (ur_uint iz = 0; iz < cellsCount.z; ++iz)
+		{
+			for (ur_uint iy = 0; iy < cellsCount.y; ++iy)
+			{
+				for (ur_uint ix = 0; ix < cellsCount.x; ++ix)
+				{
+
+				}
+			}
+		}
+
 		// todo
 
 		return Result(Success);
@@ -1414,6 +1476,25 @@ namespace UnlimRealms
 				genericRender.DrawLine(h.vertices[1], h.vertices[5], s_hexaColor);
 				genericRender.DrawLine(h.vertices[2], h.vertices[6], s_hexaColor);
 				genericRender.DrawLine(h.vertices[3], h.vertices[7], s_hexaColor);
+
+				// temp: lattice debug render
+				/*static const ur_float4 s_latticeColor = { 0.6f, 0.6f, 0.6f, 1.0f };
+				ur_uint sliceOfs = 4 * 4;
+				for (ur_uint iz = 0; iz < 3; ++iz)
+				{
+					const ur_float3 *pr = h.lattice.data() + sliceOfs * iz;
+					for (ur_uint iy = 0; iy < 4; ++iy)
+					{
+						const ur_float3 *pc = pr;
+						for (ur_uint ix = 0; ix < 4; ++ix, ++pc)
+						{
+							genericRender.DrawLine(*pc, *(pc + sliceOfs), s_latticeColor);
+						}
+						pr += 4;
+					}
+				}*/
+				genericRender.DrawPrimitives(GenericRender::PrimitiveType::Point,
+					(ur_uint)h.lattice.size(), ur_null, (ur_uint)h.lattice.size(), h.lattice.data(), ur_null);
 			}
 		}
 	}

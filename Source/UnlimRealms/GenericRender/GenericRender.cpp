@@ -21,6 +21,8 @@ namespace UnlimRealms
 		for (ur_uint ip = 0; ip < (ur_uint)PrimitiveType::Count; ++ip)
 		{
 			this->batches[ip].primitiveType = PrimitiveType(ip);
+			this->batches[ip].verticesCount = 0;
+			this->batches[ip].indicesCount = 0;
 		}
 	}
 
@@ -186,8 +188,8 @@ namespace UnlimRealms
 		return batch;
 	}
 
-	void GenericRender::DrawPrimitives(PrimitiveType primType, ur_uint primCount, const ur_uint *indices,
-		ur_uint pointsCount, const ur_float3 *points, const ur_float4 *colors)
+	void GenericRender::DrawPrimitives(const PrimitiveType primType, const ur_uint primCount, const ur_uint *indices,
+		const ur_uint pointsCount, const ur_float3 *points, const ur_float4 *colors)
 	{
 		ur_uint icount = 0;
 		switch (primType)
@@ -197,7 +199,7 @@ namespace UnlimRealms
 		case PrimitiveType::Triangle: icount = primCount * 3;  break;
 		default: return;
 		}
-		if (0 == icount || ur_null == indices ||
+		if (0 == icount || (ur_null == indices && primType != PrimitiveType::Point) ||
 			0 == pointsCount || ur_null == points)
 			return;
 
@@ -205,8 +207,8 @@ namespace UnlimRealms
 		if (ur_null == batch)
 			return;
 
-		ur_size vofs = batch->vertices.size();
-		batch->vertices.resize(vofs + pointsCount);
+		ur_uint vofs = batch->verticesCount;
+		batch->reserveVertices(pointsCount);
 		Vertex *pv = batch->vertices.data() + vofs;
 		static const ur_uint32 defaultColor = 0xffffffff;
 		for (ur_uint i = 0; i < pointsCount; ++i, ++pv)
@@ -216,23 +218,23 @@ namespace UnlimRealms
 			pv->tex = 0;
 		}
 
-		ur_size iofs = batch->indices.size();
-		batch->indices.resize(iofs + icount);
+		ur_size iofs = batch->indicesCount;
+		batch->reserveIndices(icount);
 		Index *pi = batch->indices.data() + iofs;
 		for (ur_uint i = 0; i < icount; ++i, ++pi)
 		{
-			*pi = Index(indices[i] + vofs);
+			*pi = Index((indices ? indices[i] : i) + vofs);
 		}
 	}
 
-	void GenericRender::DrawLine(ur_float3 from, ur_float3 to, ur_float4 color)
+	void GenericRender::DrawLine(const ur_float3 &from, const ur_float3 &to, const ur_float4 &color)
 	{
 		Batch *batch = FindBatch(PrimitiveType::Line);
 		if (ur_null == batch)
 			return;
 
-		ur_size vofs = batch->vertices.size();
-		batch->vertices.resize(vofs + 2);
+		ur_size vofs = batch->verticesCount;
+		batch->reserveVertices(2);
 		Vertex *pv = batch->vertices.data() + vofs;
 		ur_uint32 colorUint32 = Vector4ToRGBA32(color);
 		pv->pos = from;
@@ -244,14 +246,14 @@ namespace UnlimRealms
 		pv->tex = 0;
 		pv++;
 
-		ur_size iofs = batch->indices.size();
-		batch->indices.resize(iofs + 2);
+		ur_size iofs = batch->indicesCount;
+		batch->reserveIndices(2);
 		Index *pi = batch->indices.data() + iofs;
 		*pi++ = Index(vofs);
 		*pi++ = Index(vofs + 1);
 	}
 
-	void GenericRender::DrawPolyline(ur_uint pointsCount, const ur_float3 *points, ur_float4 color)
+	void GenericRender::DrawPolyline(const ur_uint pointsCount, const ur_float3 *points, const ur_float4 &color)
 	{
 		Batch *batch = FindBatch(PrimitiveType::Line);
 		if (ur_null == batch)
@@ -261,8 +263,8 @@ namespace UnlimRealms
 		if (0 == primCount)
 			return;
 
-		ur_size vofs = batch->vertices.size();
-		batch->vertices.resize(vofs + pointsCount);
+		ur_size vofs = batch->verticesCount;
+		batch->reserveVertices(pointsCount);
 		Vertex *pv = batch->vertices.data() + vofs;
 		ur_uint32 colorUint32 = Vector4ToRGBA32(color);
 		for (ur_uint iv = 0; iv < pointsCount; ++iv, ++pv)
@@ -272,8 +274,8 @@ namespace UnlimRealms
 			pv->tex = 0;
 		}
 
-		ur_size iofs = batch->indices.size();
-		batch->indices.resize(iofs + primCount * 2);
+		ur_size iofs = batch->indicesCount;
+		batch->reserveIndices(primCount * 2);
 		Index *pi = batch->indices.data() + iofs;
 		for (ur_uint ip = 0; ip < primCount; ++ip)
 		{
@@ -282,7 +284,7 @@ namespace UnlimRealms
 		}
 	}
 
-	void GenericRender::DrawConvexPolygon(ur_uint pointsCount, ur_float3 *points, ur_float4 color)
+	void GenericRender::DrawConvexPolygon(const ur_uint pointsCount, const ur_float3 *points, const ur_float4 &color)
 	{
 		Batch *batch = FindBatch(PrimitiveType::Triangle);
 		if (ur_null == batch)
@@ -292,8 +294,8 @@ namespace UnlimRealms
 		if (0 == primCount)
 			return;
 
-		ur_size vofs = batch->vertices.size();
-		batch->vertices.resize(vofs + pointsCount);
+		ur_size vofs = batch->verticesCount;
+		batch->reserveVertices(pointsCount);
 		Vertex *pv = batch->vertices.data() + vofs;
 		ur_uint32 colorUint32 = Vector4ToRGBA32(color);
 		for (ur_uint iv = 0; iv < pointsCount; ++iv, ++pv)
@@ -303,8 +305,8 @@ namespace UnlimRealms
 			pv->tex = 0;
 		}
 
-		ur_size iofs = batch->indices.size();
-		batch->indices.resize(iofs + primCount * 3);
+		ur_size iofs = batch->indicesCount;
+		batch->reserveIndices(primCount * 3);
 		Index *pi = batch->indices.data() + iofs;
 		for (ur_uint ip = 0; ip < primCount; ++ip)
 		{
@@ -314,7 +316,7 @@ namespace UnlimRealms
 		}
 	}
 
-	void GenericRender::DrawBox(ur_float3 bmin, ur_float3 bmax, ur_float4 color)
+	void GenericRender::DrawBox(const ur_float3 &bmin, const ur_float3 &bmax, const ur_float4 &color)
 	{
 		Batch *batch = FindBatch(PrimitiveType::Line);
 		if (ur_null == batch)
@@ -340,8 +342,8 @@ namespace UnlimRealms
 			0,4, 1,5, 2,6, 3,7
 		};
 
-		ur_size vofs = batch->vertices.size();
-		batch->vertices.resize(vofs + pointsCount);
+		ur_size vofs = batch->verticesCount;
+		batch->reserveVertices(pointsCount);
 		Vertex *pv = batch->vertices.data() + vofs;
 		ur_uint32 colorUint32 = Vector4ToRGBA32(color);
 		for (ur_uint iv = 0; iv < pointsCount; ++iv, ++pv)
@@ -350,8 +352,9 @@ namespace UnlimRealms
 			pv->col = colorUint32;
 			pv->tex = 0;
 		}
-		ur_size iofs = batch->indices.size();
-		batch->indices.resize(iofs + indicesCount);
+		
+		ur_size iofs = batch->indicesCount;
+		batch->reserveIndices(indicesCount);
 		Index *pi = batch->indices.data() + iofs;
 		for (ur_uint i = 0; i < indicesCount; ++i, ++pi)
 		{
@@ -371,8 +374,8 @@ namespace UnlimRealms
 		ur_uint totalIndices = 0;
 		for (ur_uint i = 0; i < (ur_uint)PrimitiveType::Count; ++i)
 		{
-			totalVertices += (ur_uint)this->batches[i].vertices.size();
-			totalIndices += (ur_uint)this->batches[i].indices.size();
+			totalVertices += this->batches[i].verticesCount;
+			totalIndices += this->batches[i].indicesCount;
 		}
 
 		// prepare VB
@@ -389,10 +392,10 @@ namespace UnlimRealms
 		{
 			if (ur_null == dstData)
 				return Result(InvalidArgs);
-			Vertex *pdst = (Vertex*)dstData->Ptr;
+			ur_byte *pdst = (ur_byte*)dstData->Ptr;
 			for (ur_uint i = 0; i < (ur_uint)PrimitiveType::Count; ++i)
 			{
-				ur_size batchSize = this->batches[i].vertices.size() * sizeof(Vertex);
+				ur_size batchSize = this->batches[i].verticesCount * sizeof(Vertex);
 				memcpy(pdst, this->batches[i].vertices.data(), batchSize);
 				pdst += batchSize;
 			}
@@ -414,10 +417,10 @@ namespace UnlimRealms
 		{
 			if (ur_null == dstData)
 				return Result(InvalidArgs);
-			Index *pdst = (Index*)dstData->Ptr;
+			ur_byte *pdst = (ur_byte*)dstData->Ptr;
 			for (ur_uint i = 0; i < (ur_uint)PrimitiveType::Count; ++i)
 			{
-				ur_size batchSize = this->batches[i].indices.size() * sizeof(Index);
+				ur_size batchSize = this->batches[i].indicesCount * sizeof(Index);
 				memcpy(pdst, this->batches[i].indices.data(), batchSize);
 				pdst += batchSize;
 			}
@@ -443,16 +446,16 @@ namespace UnlimRealms
 		for (ur_uint i = 0; i < (ur_uint)PrimitiveType::Count; ++i)
 		{
 			gfxContext.SetPipelineState(this->gfxObjects->pipelineState[i].get());
-			gfxContext.DrawIndexed((ur_uint)this->batches[i].indices.size(), ibOfs, vbOfs, 0, 0);
-			vbOfs += (ur_uint)this->batches[i].vertices.size();
-			ibOfs += (ur_uint)this->batches[i].indices.size();
+			gfxContext.DrawIndexed((ur_uint)this->batches[i].indicesCount, ibOfs, vbOfs, 0, 0);
+			vbOfs += (ur_uint)this->batches[i].verticesCount;
+			ibOfs += (ur_uint)this->batches[i].indicesCount;
 		}
 
 		// reset batches
 		for (ur_uint ip = 0; ip < (ur_uint)PrimitiveType::Count; ++ip)
 		{
-			this->batches[ip].vertices.clear();
-			this->batches[ip].indices.clear();
+			this->batches[ip].verticesCount = 0;
+			this->batches[ip].indicesCount = 0;
 		}
 
 		return Result(Success);

@@ -295,36 +295,39 @@ namespace UnlimRealms
 
 		private:
 
+			typedef ur_float3 Vertex;
+
+			struct UR_DECL Edge
+			{
+				ur_byte vid[2];
+			};
+
+			struct UR_DECL Face
+			{
+				ur_byte vid[3];
+				ur_byte eid[3];
+			};
+
 			struct UR_DECL Hexahedron
 			{
-				typedef ur_float3 Vertex;
 				static const ur_uint VerticesCount = 8;
 				Vertex vertices[VerticesCount];
 				std::unique_ptr<GfxBuffer> gfxVB;
 				std::unique_ptr<GfxBuffer> gfxIB;
+				std::vector<ur_float3> lattice; // temp: for debug purpose
 			};
 
 			struct UR_DECL Tetrahedron
 			{
-				struct UR_DECL Edge
-				{
-					ur_byte vid[2];
-				};
+				static const ur_uint VerticesCount = 4;
+
 				static const ur_uint EdgesCount = 6;
 				static const Edge Edges[EdgesCount];
 
-				struct UR_DECL Face
-				{
-					ur_byte vid[3];
-					ur_byte eid[3];
-				};
 				static const ur_uint FacesCount = 4;
 				static const Face Faces[FacesCount];
 				
-				typedef ur_float3 Vertex;
-				static const ur_uint VerticesCount = 4;
 				static const ur_uint ChildrenCount = 2;
-
 				struct UR_DECL SplitInfo
 				{
 					ur_byte subTetrahedra[ChildrenCount][VerticesCount];
@@ -363,8 +366,6 @@ namespace UnlimRealms
 			Result UpdateLoD(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
 
 			Result BuildMesh(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
-
-			Result BuildMesh(AdaptiveVolume &volume, Hexahedron &hexahedron);
 
 			Result MarchCubes(Hexahedron &hexahedron, const BlockArray &data);
 			
