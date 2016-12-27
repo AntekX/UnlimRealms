@@ -87,7 +87,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	{
 		Isosurface::AdaptiveVolume::Desc desc;
 		desc.Bound = BoundingBox(ur_float3(-4.0f, -4.0f, -4.0f), ur_float3(4.0f, 4.0f, 4.0f));
-		desc.BlockSize = 1.0f;// 0.125f;
+		desc.BlockSize = 8.0f;// 0.125f;
 		desc.BlockResolution = 4;// 16;
 		desc.DetailLevelDistance = desc.BlockSize.x * 2.0f;
 		desc.RefinementProgression = 2.0f;

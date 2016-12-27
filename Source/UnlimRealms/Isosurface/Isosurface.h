@@ -314,7 +314,11 @@ namespace UnlimRealms
 				Vertex vertices[VerticesCount];
 				std::unique_ptr<GfxBuffer> gfxVB;
 				std::unique_ptr<GfxBuffer> gfxIB;
-				std::vector<ur_float3> lattice; // temp: for debug purpose
+
+				// temp: debug stuff
+				std::vector<ur_float3> lattice;
+				std::vector<ur_float3> dbgVertices;
+				std::vector<ur_uint> dbgIndices;
 			};
 
 			struct UR_DECL Tetrahedron

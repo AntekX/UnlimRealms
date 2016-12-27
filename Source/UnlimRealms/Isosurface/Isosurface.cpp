@@ -226,9 +226,9 @@ namespace UnlimRealms
 			(point.y - this->bbox.Min.y) / this->blockSize.y,
 			(point.z - this->bbox.Min.z) / this->blockSize.z);
 		ur_int3 bpos(
-			(ur_int)floor(fpos.x),
-			(ur_int)floor(fpos.y),
-			(ur_int)floor(fpos.z));
+			std::min((ur_int)this->size.x - 1, (ur_int)floor(fpos.x)),
+			std::min((ur_int)this->size.y - 1, (ur_int)floor(fpos.y)),
+			std::min((ur_int)this->size.z - 1, (ur_int)floor(fpos.z)));
 		fpos.x -= bpos.x;
 		fpos.y -= bpos.y;
 		fpos.z -= bpos.z;
@@ -1355,6 +1355,12 @@ namespace UnlimRealms
 
 	// Marching cubes lookup tables
 
+	static const ur_uint MCEdgeVertices[12][2] = {
+		{ 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 0 },
+		{ 4, 5 }, { 5, 6 }, { 6, 7 }, { 7, 4 },
+		{ 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 }
+	};
+
 	static const ur_uint MCEdgeTable[256] =
 	{
 		0x000, 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c, 0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
@@ -1685,7 +1691,11 @@ namespace UnlimRealms
 
 		// march
 
+		static const Block::ValueType ScalarFieldSurfaceValue = Block::ValueType(0);
+		ur_float3 *cellPoints[8];
 		Block::ValueType cellValues[8];
+		ur_float3 edgePoints[12];
+		ur_float3 edgeNormals[12];
 		ur_uint3 cellsCount = data.blockResolution - 1;
 		ur_float3 *p_slice = lattice.data();
 		for (ur_uint iz = 0; iz < cellsCount.z; ++iz)
@@ -1696,35 +1706,82 @@ namespace UnlimRealms
 				ur_float3 *p_cell = p_row;
 				for (ur_uint ix = 0; ix < cellsCount.x; ++ix, ++p_cell)
 				{
+					// cell corner vertices
+					cellPoints[0] = &p_cell[0];
+					cellPoints[1] = &p_cell[1];
+					cellPoints[2] = &p_cell[rowOfs + 1];
+					cellPoints[3] = &p_cell[rowOfs];
+					cellPoints[4] = &p_cell[sliceOfs];
+					cellPoints[5] = &p_cell[sliceOfs + 1];
+					cellPoints[6] = &p_cell[sliceOfs + rowOfs + 1];
+					cellPoints[7] = &p_cell[sliceOfs + rowOfs];
+					
 					// sample cell values at it's vertices
-					cellValues[0] = data.Sample(p_cell[0]);
-					cellValues[1] = data.Sample(p_cell[1]);
-					cellValues[2] = data.Sample(p_cell[rowOfs + 1]);
-					cellValues[3] = data.Sample(p_cell[rowOfs]);
-					cellValues[4] = data.Sample(p_cell[sliceOfs]);
-					cellValues[5] = data.Sample(p_cell[sliceOfs + 1]);
-					cellValues[6] = data.Sample(p_cell[sliceOfs + rowOfs + 1]);
-					cellValues[7] = data.Sample(p_cell[sliceOfs + rowOfs]);
-
-					// lookup intersected edges
+					// and lookup intersected edges
 					ur_uint flagIdx = 0;
-					for (ur_uint iv = 0; iv < 8; iv++)
+					for (ur_uint iv = 0; iv < 8; ++iv)
 					{
-						if (cellValues[iv] <= Block::ValueType(0))
-							flagIdx |= (1 << iv);
+						//cellValues[iv] = data.Sample(*cellPoints[iv]);
+						// temp: generate scalar field at run time
+						cellValues[iv] = 4.0f - (*cellPoints[iv]).Length();
+						if (cellValues[iv] <= ScalarFieldSurfaceValue) flagIdx |= (1 << iv);
 					}
-					ur_uint edgeFlags = MCEdgeTable[flagIdx];
+					const ur_uint &edgeFlags = MCEdgeTable[flagIdx];
 					if (edgeFlags == 0)
 						continue; // surface does not intersect any edge
 
 					// todo: build it finally!
+
+					// compute intersection points
+					for (ur_uint ie = 0; ie < 12; ++ie)
+					{
+						if (edgeFlags & (1 << ie))
+						{
+							Block::ValueType &cv0 = cellValues[MCEdgeVertices[ie][0]];
+							Block::ValueType &cv1 = cellValues[MCEdgeVertices[ie][1]];
+							ur_float lfactor = (ur_float)(ScalarFieldSurfaceValue - cv0) / (cv1 - cv0);
+
+							ur_float3 &p0 = *cellPoints[MCEdgeVertices[ie][0]];
+							ur_float3 &p1 = *cellPoints[MCEdgeVertices[ie][1]];
+							edgePoints[ie] = ur_float3::Lerp(p0, p1, lfactor);
+
+							// todo: compute corresponding normal here
+							// as a gradient of adjacent samples
+						}
+					}
+
+					// add triangles
+					for (ur_uint itri = 0; itri < 5; ++itri)
+					{
+						if (MCTriangleTable[flagIdx][itri * 3] < 0)
+							break;
+
+						const ur_int &vi0 = MCTriangleTable[flagIdx][itri * 3 + 0];
+						const ur_int &vi1 = MCTriangleTable[flagIdx][itri * 3 + 1];
+						const ur_int &vi2 = MCTriangleTable[flagIdx][itri * 3 + 2];
+						const ur_float3 &p0 = edgePoints[vi0];
+						const ur_float3 &p1 = edgePoints[vi1];
+						const ur_float3 &p2 = edgePoints[vi2];
+
+						// temp: fill debug buffers
+						ur_uint iofs = (ur_uint)hexahedron.dbgVertices.size();
+						hexahedron.dbgVertices.push_back(p0);
+						hexahedron.dbgVertices.push_back(p1);
+						hexahedron.dbgVertices.push_back(p2);
+						hexahedron.dbgIndices.push_back(iofs + 0);
+						hexahedron.dbgIndices.push_back(iofs + 1);
+						hexahedron.dbgIndices.push_back(iofs + 1);
+						hexahedron.dbgIndices.push_back(iofs + 2);
+						hexahedron.dbgIndices.push_back(iofs + 2);
+						hexahedron.dbgIndices.push_back(iofs + 0);
+					}
 				}
 				p_row += rowOfs;
 			}
 			p_slice += sliceOfs;
 		}
 
-		// todo
+		// todo: fill gfx buffers
 
 		return Result(Success);
 	}
@@ -1787,8 +1844,12 @@ namespace UnlimRealms
 				genericRender.DrawLine(h.vertices[3], h.vertices[7], s_hexaColor);
 
 				// temp: lattice debug render
-				genericRender.DrawPrimitives(GenericRender::PrimitiveType::Point,
-					(ur_uint)h.lattice.size(), ur_null, (ur_uint)h.lattice.size(), h.lattice.data(), ur_null);
+				/*genericRender.DrawPrimitives(GenericRender::PrimitiveType::Point,
+					(ur_uint)h.lattice.size(), ur_null, (ur_uint)h.lattice.size(), h.lattice.data(), ur_null);*/
+
+				// temp: surface debug render
+				genericRender.DrawPrimitives(GenericRender::PrimitiveType::Line,
+					(ur_uint)h.dbgIndices.size() / 6, h.dbgIndices.data(), (ur_uint)h.dbgVertices.size(), h.dbgVertices.data(), ur_null);
 			}
 		}
 	}
