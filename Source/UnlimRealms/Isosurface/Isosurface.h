@@ -68,7 +68,7 @@ namespace UnlimRealms
 
 			BlockArray() : size(0), blockResolution(0), blockBorder(0), blockSize(0.0f) {}
 
-			Block::ValueType Sample(const ur_float3 &point);
+			Block::ValueType Sample(const ur_float3 &point) const;
 		};
 
 
