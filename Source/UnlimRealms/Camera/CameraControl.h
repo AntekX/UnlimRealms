@@ -37,6 +37,8 @@ namespace UnlimRealms
 
 		void Update();
 
+		void ShowImgui();
+
 		inline Camera* GetCamera() const;
 
 		inline void SetWorldUp(const ur_float3 v);

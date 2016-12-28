@@ -429,7 +429,20 @@ namespace UnlimRealms
 				v1.x * v2.y - v1.y * v2.x);
 			return r;
 		}
+
+		static const TVector3<T> I;
+		static const TVector3<T> J;
+		static const TVector3<T> K;
 	};
+
+	template <class T>
+	const TVector3<T> TVector3<T>::I = { 1, 0, 0 };
+
+	template <class T>
+	const TVector3<T> TVector3<T>::J = { 0, 1, 0 };
+
+	template <class T>
+	const TVector3<T> TVector3<T>::K = { 0, 0, 1 };
 
 	float TVector3<float>::Length() const
 	{
@@ -697,34 +710,18 @@ namespace UnlimRealms
 			r[3].x = a + 12; r[3].y = a + 13; r[3].z = a + 14; r[3].w = a + 15;
 		}
 
+		static const TMatrix<T> Zero;
+
+		static const TMatrix<T> Identity;
+
 		void SetZero()
 		{
-			r[0].x = 0; r[0].y = 0; r[0].z = 0; r[0].w = 0;
-			r[1].x = 0; r[1].y = 0; r[1].z = 0; r[1].w = 0;
-			r[2].x = 0; r[2].y = 0; r[2].z = 0; r[2].w = 0;
-			r[3].x = 0; r[3].y = 0; r[3].z = 0; r[3].w = 0;
+			*this = Zero;
 		}
 
 		void SetIdentity()
 		{
-			r[0].x = 1; r[0].y = 0; r[0].z = 0; r[0].w = 0;
-			r[1].x = 0; r[1].y = 1; r[1].z = 0; r[1].w = 0;
-			r[2].x = 0; r[2].y = 0; r[2].z = 1; r[2].w = 0;
-			r[3].x = 0; r[3].y = 0; r[3].z = 0; r[3].w = 1;
-		}
-
-		static TMatrix<T> Zero()
-		{
-			TMatrix<T> m;
-			m.SetZero();
-			return m;
-		}
-
-		static TMatrix<T> Identity()
-		{
-			TMatrix<T> m;
-			m.SetIdentity();
-			return m;
+			*this = Identity;
 		}
 
 		static TMatrix<T> Translation(T x, T y, T z)
@@ -895,6 +892,22 @@ namespace UnlimRealms
 				);
 			return rm;
 		}
+	};
+
+	template <class T>
+	const TMatrix<T> TMatrix<T>::Zero = {
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0
+	};
+
+	template <class T>
+	const TMatrix<T> TMatrix<T>::Identity = {
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1
 	};
 
 #ifdef DIRECTX

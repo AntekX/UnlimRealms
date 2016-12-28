@@ -87,7 +87,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	{
 		Isosurface::AdaptiveVolume::Desc desc;
 		desc.Bound = BoundingBox(ur_float3(-4.0f, -4.0f, -4.0f), ur_float3(4.0f, 4.0f, 4.0f));
-		desc.BlockSize = 8.0f;// 0.125f;
+		desc.BlockSize = 0.125f;
 		desc.BlockResolution = 4;// 16;
 		desc.DetailLevelDistance = desc.BlockSize.x * 2.0f;
 		desc.RefinementProgression = 2.0f;
@@ -134,13 +134,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		imguiRender->NewFrame();
 		cameraControl.Update();
 		camera.SetAspectRatio((float)realm.GetCanvas()->GetBound().Width() / realm.GetCanvas()->GetBound().Height());
-		
+
+		// temp
 		static bool freezeRefinement = false;
 		if (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F))
 			freezeRefinement = !freezeRefinement;
 		if (!freezeRefinement)
 			isosurface->GetVolume()->RefinementByDistance(camera.GetPosition());
 		isosurface->Update();
+
+		// expose demo gui
+
+		ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
+		ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+		ImGui::Begin("DEMO", ur_null, 0);
+		cameraControl.ShowImgui();
+		isosurface->ShowImgui();
+		ImGui::End();
 
 		{ // use context to draw
 			gfxContext->Begin();

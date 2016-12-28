@@ -486,6 +486,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	void Isosurface::Presentation::ShowImgui()
+	{
+
+	}
+
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Isosurface::SurfaceNet
@@ -1127,7 +1132,8 @@ namespace UnlimRealms
 	Isosurface::HybridTetrahedra::HybridTetrahedra(Isosurface &isosurface) :
 		Presentation(isosurface)
 	{
-
+		this->drawTetrahedra = false;
+		this->drawHexahedra = false;
 	}
 
 	Isosurface::HybridTetrahedra::~HybridTetrahedra()
@@ -1155,8 +1161,8 @@ namespace UnlimRealms
 			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
 			th->Init(
 				{ bbox.Min.x, bbox.Min.y, bbox.Min.z },
-				{ bbox.Max.x, bbox.Min.y, bbox.Min.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Min.z },
+				{ bbox.Max.x, bbox.Min.y, bbox.Min.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
 			for (ur_uint i = 0; i < 1; ++i) th->UpdateAdjacency(this->root[i].get());
@@ -1179,8 +1185,8 @@ namespace UnlimRealms
 			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
 			th->Init(
 				{ bbox.Min.x, bbox.Min.y, bbox.Min.z },
-				{ bbox.Min.x, bbox.Max.y, bbox.Min.z },
 				{ bbox.Min.x, bbox.Max.y, bbox.Max.z },
+				{ bbox.Min.x, bbox.Max.y, bbox.Min.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
 			for (ur_uint i = 0; i < 3; ++i) th->UpdateAdjacency(this->root[i].get());
@@ -1203,8 +1209,8 @@ namespace UnlimRealms
 			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
 			th->Init(
 				{ bbox.Min.x, bbox.Min.y, bbox.Min.z },
-				{ bbox.Min.x, bbox.Min.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Min.y, bbox.Max.z },
+				{ bbox.Min.x, bbox.Min.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
 			for (ur_uint i = 0; i < 5; ++i) th->UpdateAdjacency(this->root[i].get());
@@ -1692,19 +1698,24 @@ namespace UnlimRealms
 		// march
 
 		static const Block::ValueType ScalarFieldSurfaceValue = Block::ValueType(0);
+		static const int NoVertexId = -1;
+		std::vector<Isosurface::Vertex> vertexBuffer;
+		std::vector<Isosurface::Index> indexBuffer;
+		std::vector<ur_int3> edgeVertices(latticeSize, NoVertexId);
+		ur_int *cellEdges[12];
 		ur_float3 *cellPoints[8];
 		Block::ValueType cellValues[8];
-		ur_float3 edgePoints[12];
-		ur_float3 edgeNormals[12];
 		ur_uint3 cellsCount = data.blockResolution - 1;
+		ur_float3 dbg_edgePoints[12];
 		ur_float3 *p_slice = lattice.data();
+		ur_uint cell_idx = 0;
 		for (ur_uint iz = 0; iz < cellsCount.z; ++iz)
 		{
 			ur_float3 *p_row = p_slice;
 			for (ur_uint iy = 0; iy < cellsCount.y; ++iy)
 			{
 				ur_float3 *p_cell = p_row;
-				for (ur_uint ix = 0; ix < cellsCount.x; ++ix, ++p_cell)
+				for (ur_uint ix = 0; ix < cellsCount.x; ++ix, ++p_cell, ++cell_idx)
 				{
 					// cell corner vertices
 					cellPoints[0] = &p_cell[0];
@@ -1715,6 +1726,20 @@ namespace UnlimRealms
 					cellPoints[5] = &p_cell[sliceOfs + 1];
 					cellPoints[6] = &p_cell[sliceOfs + rowOfs + 1];
 					cellPoints[7] = &p_cell[sliceOfs + rowOfs];
+
+					// init cell vertices refs
+					cellEdges[0] = &edgeVertices[cell_idx].x;
+					cellEdges[1] = &edgeVertices[cell_idx + 1].y;
+					cellEdges[2] = &edgeVertices[cell_idx + rowOfs].x;
+					cellEdges[3] = &edgeVertices[cell_idx].y;
+					cellEdges[4] = &edgeVertices[cell_idx + sliceOfs].x;
+					cellEdges[5] = &edgeVertices[cell_idx + sliceOfs + 1].y;
+					cellEdges[6] = &edgeVertices[cell_idx + sliceOfs + rowOfs].x;
+					cellEdges[7] = &edgeVertices[cell_idx + sliceOfs].y;
+					cellEdges[8] = &edgeVertices[cell_idx].z;
+					cellEdges[9] = &edgeVertices[cell_idx + 1].z;
+					cellEdges[10] = &edgeVertices[cell_idx + rowOfs + 1].z;
+					cellEdges[11] = &edgeVertices[cell_idx + rowOfs].z;
 					
 					// sample cell values at it's vertices
 					// and lookup intersected edges
@@ -1743,8 +1768,15 @@ namespace UnlimRealms
 
 							ur_float3 &p0 = *cellPoints[MCEdgeVertices[ie][0]];
 							ur_float3 &p1 = *cellPoints[MCEdgeVertices[ie][1]];
-							edgePoints[ie] = ur_float3::Lerp(p0, p1, lfactor);
-
+							ur_float3 p = ur_float3::Lerp(p0, p1, lfactor);
+							dbg_edgePoints[ie] = p;
+								
+							if (NoVertexId == *cellEdges[ie])
+							{
+								// add new vertex
+								*cellEdges[ie] = (ur_int)vertexBuffer.size();
+								//vertexBuffer.push_back({ p, 0xffffffff });
+							}
 							// todo: compute corresponding normal here
 							// as a gradient of adjacent samples
 						}
@@ -1759,11 +1791,14 @@ namespace UnlimRealms
 						const ur_int &vi0 = MCTriangleTable[flagIdx][itri * 3 + 0];
 						const ur_int &vi1 = MCTriangleTable[flagIdx][itri * 3 + 1];
 						const ur_int &vi2 = MCTriangleTable[flagIdx][itri * 3 + 2];
-						const ur_float3 &p0 = edgePoints[vi0];
-						const ur_float3 &p1 = edgePoints[vi1];
-						const ur_float3 &p2 = edgePoints[vi2];
+						/*indexBuffer.push_back(*cellEdges[vi0]);
+						indexBuffer.push_back(*cellEdges[vi1]);
+						indexBuffer.push_back(*cellEdges[vi2]);*/
 
 						// temp: fill debug buffers
+						const ur_float3 &p0 = dbg_edgePoints[vi0];
+						const ur_float3 &p1 = dbg_edgePoints[vi1];
+						const ur_float3 &p2 = dbg_edgePoints[vi2];
 						ur_uint iofs = (ur_uint)hexahedron.dbgVertices.size();
 						hexahedron.dbgVertices.push_back(p0);
 						hexahedron.dbgVertices.push_back(p1);
@@ -1774,6 +1809,14 @@ namespace UnlimRealms
 						hexahedron.dbgIndices.push_back(iofs + 2);
 						hexahedron.dbgIndices.push_back(iofs + 2);
 						hexahedron.dbgIndices.push_back(iofs + 0);
+
+						ur_uint vbofs = (ur_uint)vertexBuffer.size();
+						vertexBuffer.push_back({ p0, 0xffffffff });
+						vertexBuffer.push_back({ p1, 0xffffffff });
+						vertexBuffer.push_back({ p2, 0xffffffff });
+						indexBuffer.push_back(vbofs + 0);
+						indexBuffer.push_back(vbofs + 1);
+						indexBuffer.push_back(vbofs + 2);
 					}
 				}
 				p_row += rowOfs;
@@ -1781,76 +1824,186 @@ namespace UnlimRealms
 			p_slice += sliceOfs;
 		}
 
-		// todo: fill gfx buffers
+		// prepare gfx resources
+
+		if (indexBuffer.size() < 3)
+			return Result(Success); // do not create empty gfx resources
+
+		GfxSystem *gfxSystem = this->isosurface.GetRealm().GetGfxSystem();
+		if (ur_null == gfxSystem)
+			return Result(Failure);
+
+		// create vertex Buffer
+		auto &gfxVB = hexahedron.gfxVB;
+		Result res = gfxSystem->CreateBuffer(gfxVB);
+		if (Succeeded(res))
+		{
+			GfxResourceData gfxRes = { vertexBuffer.data(), (ur_uint)vertexBuffer.size() * sizeof(Isosurface::Vertex), 0 };
+			res = gfxVB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::VertexBuffer, 0, &gfxRes);
+		}
+		if (Failed(res))
+			return Result(Failure);
+
+		// create index buffer
+		auto &gfxIB = hexahedron.gfxIB;
+		res = gfxSystem->CreateBuffer(gfxIB);
+		if (Succeeded(res))
+		{
+			GfxResourceData gfxRes = { indexBuffer.data(), (ur_uint)indexBuffer.size() * sizeof(Isosurface::Index), 0 };
+			res = gfxIB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::IndexBuffer, 0, &gfxRes);
+		}
+		if (Failed(res))
+			return Result(Failure);
 
 		return Result(Success);
 	}
 
 	Result Isosurface::HybridTetrahedra::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
 	{
-		// todo
-
-		// debug render
 		GenericRender *genericRender = this->isosurface.GetRealm().GetComponent<GenericRender>();
-		if (genericRender != ur_null)
+		for (auto &tetrahedron : this->root)
 		{
-			for (auto &tetrahedron : this->root)
+			this->Render(gfxContext, genericRender, viewProj, tetrahedron.get());
+		}
+
+		return Result(Success);
+	}
+
+	Result Isosurface::HybridTetrahedra::Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4x4 &viewProj, Tetrahedron *tetrahedron)
+	{
+		if (ur_null == tetrahedron)
+			return Result(Success);
+
+		if (tetrahedron->HasChildren())
+		{
+			for (auto &child : tetrahedron->children)
 			{
-				DrawTetrahedra(gfxContext, *genericRender, tetrahedron.get());
+				this->Render(gfxContext, genericRender, viewProj, child.get());
+			}
+		}
+		else
+		{
+			for (auto &hexahedron : tetrahedron->hexahedra)
+			{
+				const auto &gfxVB = hexahedron.gfxVB;
+				const auto &gfxIB = hexahedron.gfxIB;
+				const ur_uint indexCount = (gfxIB.get() ? gfxIB->GetDesc().Size / sizeof(Isosurface::Index) : 0);
+				gfxContext.SetVertexBuffer(gfxVB.get(), 0, sizeof(Isosurface::Vertex), 0);
+				gfxContext.SetIndexBuffer(gfxIB.get(), sizeof(Isosurface::Index) * 8, 0);
+				gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
+			}
+
+			if (this->drawTetrahedra)
+			{
+				RenderDebug(gfxContext, genericRender, tetrahedron);
 			}
 		}
 
 		return Result(Success);
 	}
 
-	void Isosurface::HybridTetrahedra::DrawTetrahedra(GfxContext &gfxContext, GenericRender &genericRender, Tetrahedron *tetrahedron)
+	Result Isosurface::HybridTetrahedra::RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Tetrahedron *tetrahedron)
 	{
-		if (ur_null == tetrahedron)
-			return;
+		if (ur_null == genericRender ||
+			ur_null == tetrahedron)
+			return Result(Success);
 
-		if (tetrahedron->HasChildren())
+		static const ur_float4 s_debugColor = { 1.0f, 1.0f, 0.0f, 1.0f };
+		for (const auto &edge : Tetrahedron::Edges)
 		{
-			for (auto &child : tetrahedron->children)
-			{
-				DrawTetrahedra(gfxContext, genericRender, child.get());
-			}
+			genericRender->DrawLine(
+				tetrahedron->vertices[edge.vid[0]],
+				tetrahedron->vertices[edge.vid[1]],
+				s_debugColor);
 		}
-		else
-		{
-			static const ur_float4 s_debugColor = { 1.0f, 1.0f, 0.0f, 1.0f };
-			for (const auto &edge : Tetrahedron::Edges)
-			{
-				genericRender.DrawLine(
-					tetrahedron->vertices[edge.vid[0]],
-					tetrahedron->vertices[edge.vid[1]],
-					s_debugColor);
-			}
 
+		if (this->drawHexahedra)
+		{
 			static const ur_float4 s_hexaColor = { 0.0f, 1.0f, 0.0f, 1.0f };
 			for (ur_uint ih = 0; ih < 4; ++ih)
 			{
 				const Hexahedron &h = tetrahedron->hexahedra[ih];
-				genericRender.DrawLine(h.vertices[0], h.vertices[1], s_hexaColor);
-				genericRender.DrawLine(h.vertices[2], h.vertices[3], s_hexaColor);
-				genericRender.DrawLine(h.vertices[4], h.vertices[5], s_hexaColor);
-				genericRender.DrawLine(h.vertices[6], h.vertices[7], s_hexaColor);
-				genericRender.DrawLine(h.vertices[0], h.vertices[2], s_hexaColor);
-				genericRender.DrawLine(h.vertices[1], h.vertices[3], s_hexaColor);
-				genericRender.DrawLine(h.vertices[4], h.vertices[6], s_hexaColor);
-				genericRender.DrawLine(h.vertices[5], h.vertices[7], s_hexaColor);
-				genericRender.DrawLine(h.vertices[0], h.vertices[4], s_hexaColor);
-				genericRender.DrawLine(h.vertices[1], h.vertices[5], s_hexaColor);
-				genericRender.DrawLine(h.vertices[2], h.vertices[6], s_hexaColor);
-				genericRender.DrawLine(h.vertices[3], h.vertices[7], s_hexaColor);
+				genericRender->DrawLine(h.vertices[0], h.vertices[1], s_hexaColor);
+				genericRender->DrawLine(h.vertices[2], h.vertices[3], s_hexaColor);
+				genericRender->DrawLine(h.vertices[4], h.vertices[5], s_hexaColor);
+				genericRender->DrawLine(h.vertices[6], h.vertices[7], s_hexaColor);
+				genericRender->DrawLine(h.vertices[0], h.vertices[2], s_hexaColor);
+				genericRender->DrawLine(h.vertices[1], h.vertices[3], s_hexaColor);
+				genericRender->DrawLine(h.vertices[4], h.vertices[6], s_hexaColor);
+				genericRender->DrawLine(h.vertices[5], h.vertices[7], s_hexaColor);
+				genericRender->DrawLine(h.vertices[0], h.vertices[4], s_hexaColor);
+				genericRender->DrawLine(h.vertices[1], h.vertices[5], s_hexaColor);
+				genericRender->DrawLine(h.vertices[2], h.vertices[6], s_hexaColor);
+				genericRender->DrawLine(h.vertices[3], h.vertices[7], s_hexaColor);
 
 				// temp: lattice debug render
-				/*genericRender.DrawPrimitives(GenericRender::PrimitiveType::Point,
-					(ur_uint)h.lattice.size(), ur_null, (ur_uint)h.lattice.size(), h.lattice.data(), ur_null);*/
-
-				// temp: surface debug render
-				genericRender.DrawPrimitives(GenericRender::PrimitiveType::Line,
-					(ur_uint)h.dbgIndices.size() / 6, h.dbgIndices.data(), (ur_uint)h.dbgVertices.size(), h.dbgVertices.data(), ur_null);
+				genericRender->DrawPrimitives(GenericRender::PrimitiveType::Point,
+					(ur_uint)h.lattice.size(), ur_null, (ur_uint)h.lattice.size(), h.lattice.data(), ur_null);
 			}
+		}
+
+		// temp: surface debug render
+		for (ur_uint ih = 0; ih < 4; ++ih)
+		{
+			const Hexahedron &h = tetrahedron->hexahedra[ih];
+			genericRender->DrawPrimitives(GenericRender::PrimitiveType::Line,
+				(ur_uint)h.dbgIndices.size() / 2, h.dbgIndices.data(), (ur_uint)h.dbgVertices.size(), h.dbgVertices.data(), ur_null);
+		}
+
+		return Result(Success);
+	}
+
+	void Isosurface::HybridTetrahedra::ShowImgui()
+	{
+		// render debug info
+		/*
+		if (this->GetRealm().GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::B)) this->drawDebugBounds = !this->drawDebugBounds;
+		if (this->GetRealm().GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::M)) this->drawWireframe = !this->drawWireframe;
+
+		if (this->drawDebugBounds)
+		{
+		this->DrawDebugTreeBounds(this->volume->GetRoot());
+		}
+		this->debugRender.Render(gfxContext, viewProj);
+
+		this->GatherStats();
+
+		ImGui::SetNextWindowSize({ 250.0f, 250.0f });
+		ImGui::SetNextWindowPos({ 0.0f, 0.0f });
+		ImGui::Begin("Isosurface", ur_null, ImGuiWindowFlags_NoResize);
+		ImGui::Separator();
+		ImGui::Text("Options:");
+		ImGui::Checkbox("Draw bounds", &this->drawDebugBounds);
+		ImGui::Checkbox("Draw Wireframe", &this->drawWireframe);
+		ImGui::Separator();
+		ImGui::Text("Statistics:");
+		ImGui::Text("Volume Depth: %i", this->volume->GetLevelsCount());
+		ImGui::Text("Volume Nodes: %i", this->stats.volumeNodes);
+		ImGui::Text("Surface Nodes: %i", this->stats.surfaceNodes);
+		ImGui::Text("Primitives: %i", this->stats.primitivesCount);
+		ImGui::Text("Vertices: %i", this->stats.verticesCount);
+		ImGui::Text("VideoMemory: %i", this->stats.videoMemory);
+		ImGui::Text("SysMemory: %i", this->stats.sysMemory);
+		ImGui::End();
+
+		if (this->gfxObjects->pipelineState != ur_null)
+		{
+		const GfxFillMode &gfxFillMode = this->gfxObjects->pipelineState->GetRenderState().RasterizerState.FillMode;
+		if ((this->drawWireframe == true && GfxFillMode::Solid == gfxFillMode) ||
+		(this->drawWireframe == false && GfxFillMode::Wireframe == gfxFillMode))
+		{
+		GfxRenderState gfxRS = this->gfxObjects->pipelineState->GetRenderState();
+		gfxRS.RasterizerState.FillMode = (this->drawWireframe ? GfxFillMode::Wireframe : GfxFillMode::Solid);
+		this->gfxObjects->pipelineState->SetRenderState(gfxRS);
+		}
+		}
+		*/
+		if (ImGui::TreeNode("HybridTetrahedra"))
+		{
+			// todo
+			ImGui::Checkbox("Draw tetrahedra", &this->drawTetrahedra);
+			ImGui::Checkbox("Draw hexahedra", &this->drawHexahedra);
+			ImGui::TreePop();
 		}
 	}
 
@@ -2066,50 +2219,18 @@ namespace UnlimRealms
 			res = this->presentation->Render(gfxContext, viewProj);
 		}
 
-		// render debug info
-		/*
-		if (this->GetRealm().GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::B)) this->drawDebugBounds = !this->drawDebugBounds;
-		if (this->GetRealm().GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::M)) this->drawWireframe = !this->drawWireframe;
-		
-		if (this->drawDebugBounds)
+		return res;
+	}
+
+	void Isosurface::ShowImgui()
+	{
+		if (ImGui::CollapsingHeader("Isosurface"))
 		{
-			this->DrawDebugTreeBounds(this->volume->GetRoot());
-		}
-		this->debugRender.Render(gfxContext, viewProj);
-
-		this->GatherStats();
-
-		ImGui::SetNextWindowSize({ 250.0f, 250.0f });
-		ImGui::SetNextWindowPos({ 0.0f, 0.0f });
-		ImGui::Begin("Isosurface", ur_null, ImGuiWindowFlags_NoResize);
-		ImGui::Separator();
-		ImGui::Text("Options:");
-		ImGui::Checkbox("Draw bounds", &this->drawDebugBounds);
-		ImGui::Checkbox("Draw Wireframe", &this->drawWireframe);
-		ImGui::Separator();
-		ImGui::Text("Statistics:");
-		ImGui::Text("Volume Depth: %i", this->volume->GetLevelsCount());
-		ImGui::Text("Volume Nodes: %i", this->stats.volumeNodes);
-		ImGui::Text("Surface Nodes: %i", this->stats.surfaceNodes);
-		ImGui::Text("Primitives: %i", this->stats.primitivesCount);
-		ImGui::Text("Vertices: %i", this->stats.verticesCount);
-		ImGui::Text("VideoMemory: %i", this->stats.videoMemory);
-		ImGui::Text("SysMemory: %i", this->stats.sysMemory);
-		ImGui::End();
-
-		if (this->gfxObjects->pipelineState != ur_null)
-		{
-			const GfxFillMode &gfxFillMode = this->gfxObjects->pipelineState->GetRenderState().RasterizerState.FillMode;
-			if ((this->drawWireframe == true && GfxFillMode::Solid == gfxFillMode) ||
-				(this->drawWireframe == false && GfxFillMode::Wireframe == gfxFillMode))
+			if (this->presentation.get() != ur_null)
 			{
-				GfxRenderState gfxRS = this->gfxObjects->pipelineState->GetRenderState();
-				gfxRS.RasterizerState.FillMode = (this->drawWireframe ? GfxFillMode::Wireframe : GfxFillMode::Solid);
-				this->gfxObjects->pipelineState->SetRenderState(gfxRS);
+				this->presentation->ShowImgui();
 			}
 		}
-		*/
-		return res;
 	}
 
 } // end namespace UnlimRealms

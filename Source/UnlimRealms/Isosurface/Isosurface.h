@@ -218,6 +218,8 @@ namespace UnlimRealms
 			virtual Result Construct(AdaptiveVolume &volume);
 
 			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
+
+			virtual void ShowImgui();
 		};
 
 
@@ -292,6 +294,8 @@ namespace UnlimRealms
 			virtual Result Construct(AdaptiveVolume &volume);
 
 			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
+
+			virtual void ShowImgui();
 
 		private:
 
@@ -372,11 +376,16 @@ namespace UnlimRealms
 			Result BuildMesh(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
 
 			Result MarchCubes(Hexahedron &hexahedron, const BlockArray &data);
+
+			Result Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4x4 &viewProj, Tetrahedron *tetrahedron);
 			
-			void DrawTetrahedra(GfxContext &gfxContext, GenericRender &genericRender, Tetrahedron *tetrahedron);
+			Result RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Tetrahedron *tetrahedron);
 
 			static const ur_uint RootsCount = 6;
 			std::unique_ptr<Tetrahedron> root[RootsCount];
+			
+			bool drawTetrahedra;
+			bool drawHexahedra;
 		};
 
 
@@ -412,6 +421,8 @@ namespace UnlimRealms
 		Result Update();
 
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
+
+		void ShowImgui();
 
 		inline AdaptiveVolume* GetVolume() const { return this->volume.get(); }
 

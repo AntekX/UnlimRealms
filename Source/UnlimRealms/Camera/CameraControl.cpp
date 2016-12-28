@@ -9,6 +9,7 @@
 
 #include "Camera/CameraControl.h"
 #include "Sys/Input.h"
+#include "ImguiRender/ImguiRender.h"
 
 namespace UnlimRealms
 {
@@ -114,6 +115,40 @@ namespace UnlimRealms
 			if (mouse->GetWheelDelta() != 0)
 			{
 				this->camera->MoveAhead(mouse->GetWheelDelta()*rs);
+			}
+		}
+	}
+
+	void CameraControl::ShowImgui()
+	{
+		if (ur_null == this->camera)
+			return;
+
+		if (ImGui::CollapsingHeader("CameraControl"))
+		{
+			const char* ModeListBoxItems = "Free\0FixedUp\0AroundPoint";
+			static int listbox_item_current = 1;
+			ImGui::Combo("Mode", (int*)&this->mode, ModeListBoxItems);
+			
+			if (ImGui::Button("Reset World Up"))
+			{
+				ur_float4x4 m = this->camera->GetFrame();
+				ur_float3 &m_up = m.r[1];
+				if (ur_float3::Dot(m_up, this->worldUp) > 1.0e-2f)
+				{
+					ur_float3 &m_right = m.r[0];
+					ur_float3 &m_ahead = m.r[2];
+					m_up = this->worldUp;
+					ur_float d = ur_float3::Dot(m_right, m_up);
+					m_right = ur_float3::Normalize(m_right - m_up * d);
+					d = ur_float3::Dot(m_ahead, m_up);
+					m_ahead = ur_float3::Normalize(m_ahead - m_up * d);
+				}
+				else
+				{
+					m = ur_float4x4::Identity;
+				}
+				this->camera->SetFrame(m);
 			}
 		}
 	}
