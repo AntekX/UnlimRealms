@@ -1746,6 +1746,7 @@ namespace UnlimRealms
 					ur_uint flagIdx = 0;
 					for (ur_uint iv = 0; iv < 8; ++iv)
 					{
+						// todo: fix sampling function
 						//cellValues[iv] = data.Sample(*cellPoints[iv]);
 						// temp: generate scalar field at run time
 						cellValues[iv] = 4.0f - (*cellPoints[iv]).Length();
