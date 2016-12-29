@@ -1708,14 +1708,13 @@ namespace UnlimRealms
 		ur_uint3 cellsCount = data.blockResolution - 1;
 		ur_float3 dbg_edgePoints[12];
 		ur_float3 *p_slice = lattice.data();
-		ur_uint cell_idx = 0;
 		for (ur_uint iz = 0; iz < cellsCount.z; ++iz)
 		{
 			ur_float3 *p_row = p_slice;
 			for (ur_uint iy = 0; iy < cellsCount.y; ++iy)
 			{
 				ur_float3 *p_cell = p_row;
-				for (ur_uint ix = 0; ix < cellsCount.x; ++ix, ++p_cell, ++cell_idx)
+				for (ur_uint ix = 0; ix < cellsCount.x; ++ix, ++p_cell)
 				{
 					// cell corner vertices
 					cellPoints[0] = &p_cell[0];
@@ -1726,20 +1725,6 @@ namespace UnlimRealms
 					cellPoints[5] = &p_cell[sliceOfs + 1];
 					cellPoints[6] = &p_cell[sliceOfs + rowOfs + 1];
 					cellPoints[7] = &p_cell[sliceOfs + rowOfs];
-
-					// init cell vertices refs
-					cellEdges[0] = &edgeVertices[cell_idx].x;
-					cellEdges[1] = &edgeVertices[cell_idx + 1].y;
-					cellEdges[2] = &edgeVertices[cell_idx + rowOfs].x;
-					cellEdges[3] = &edgeVertices[cell_idx].y;
-					cellEdges[4] = &edgeVertices[cell_idx + sliceOfs].x;
-					cellEdges[5] = &edgeVertices[cell_idx + sliceOfs + 1].y;
-					cellEdges[6] = &edgeVertices[cell_idx + sliceOfs + rowOfs].x;
-					cellEdges[7] = &edgeVertices[cell_idx + sliceOfs].y;
-					cellEdges[8] = &edgeVertices[cell_idx].z;
-					cellEdges[9] = &edgeVertices[cell_idx + 1].z;
-					cellEdges[10] = &edgeVertices[cell_idx + rowOfs + 1].z;
-					cellEdges[11] = &edgeVertices[cell_idx + rowOfs].z;
 					
 					// sample cell values at it's vertices
 					// and lookup intersected edges
@@ -1756,30 +1741,41 @@ namespace UnlimRealms
 					if (edgeFlags == 0)
 						continue; // surface does not intersect any edge
 
-					// todo: build it finally!
+					// init cell vertices refs
+					ur_int3 *p_cellEdges = edgeVertices.data() + ix + iy * rowOfs + iz * sliceOfs;
+					cellEdges[0] = &p_cellEdges[0].x;
+					cellEdges[1] = &p_cellEdges[1].y;
+					cellEdges[2] = &p_cellEdges[rowOfs].x;
+					cellEdges[3] = &p_cellEdges[0].y;
+					cellEdges[4] = &p_cellEdges[sliceOfs].x;
+					cellEdges[5] = &p_cellEdges[sliceOfs + 1].y;
+					cellEdges[6] = &p_cellEdges[sliceOfs + rowOfs].x;
+					cellEdges[7] = &p_cellEdges[sliceOfs].y;
+					cellEdges[8] = &p_cellEdges[0].z;
+					cellEdges[9] = &p_cellEdges[1].z;
+					cellEdges[10] = &p_cellEdges[rowOfs + 1].z;
+					cellEdges[11] = &p_cellEdges[rowOfs].z;
 
 					// compute intersection points
 					for (ur_uint ie = 0; ie < 12; ++ie)
 					{
 						if (edgeFlags & (1 << ie))
 						{
-							Block::ValueType &cv0 = cellValues[MCEdgeVertices[ie][0]];
-							Block::ValueType &cv1 = cellValues[MCEdgeVertices[ie][1]];
-							ur_float lfactor = (ur_float)(ScalarFieldSurfaceValue - cv0) / (cv1 - cv0);
-
-							ur_float3 &p0 = *cellPoints[MCEdgeVertices[ie][0]];
-							ur_float3 &p1 = *cellPoints[MCEdgeVertices[ie][1]];
-							ur_float3 p = ur_float3::Lerp(p0, p1, lfactor);
-							dbg_edgePoints[ie] = p;
-								
 							if (NoVertexId == *cellEdges[ie])
 							{
-								// add new vertex
+								// compute new vertex
+								Block::ValueType &cv0 = cellValues[MCEdgeVertices[ie][0]];
+								Block::ValueType &cv1 = cellValues[MCEdgeVertices[ie][1]];
+								ur_float lfactor = (ur_float)(ScalarFieldSurfaceValue - cv0) / (cv1 - cv0);
+								ur_float3 &p0 = *cellPoints[MCEdgeVertices[ie][0]];
+								ur_float3 &p1 = *cellPoints[MCEdgeVertices[ie][1]];
+								ur_float3 p = ur_float3::Lerp(p0, p1, lfactor);
 								*cellEdges[ie] = (ur_int)vertexBuffer.size();
-								//vertexBuffer.push_back({ p, 0xffffffff });
+								vertexBuffer.push_back({ p, 0xffffffff });
+								// todo: compute corresponding normal here
+								// as a gradient of adjacent samples
 							}
-							// todo: compute corresponding normal here
-							// as a gradient of adjacent samples
+							dbg_edgePoints[ie] = vertexBuffer[*cellEdges[ie]].pos;
 						}
 					}
 
@@ -1792,9 +1788,9 @@ namespace UnlimRealms
 						const ur_int &vi0 = MCTriangleTable[flagIdx][itri * 3 + 0];
 						const ur_int &vi1 = MCTriangleTable[flagIdx][itri * 3 + 1];
 						const ur_int &vi2 = MCTriangleTable[flagIdx][itri * 3 + 2];
-						/*indexBuffer.push_back(*cellEdges[vi0]);
+						indexBuffer.push_back(*cellEdges[vi0]);
 						indexBuffer.push_back(*cellEdges[vi1]);
-						indexBuffer.push_back(*cellEdges[vi2]);*/
+						indexBuffer.push_back(*cellEdges[vi2]);
 
 						// temp: fill debug buffers
 						const ur_float3 &p0 = dbg_edgePoints[vi0];
@@ -1810,14 +1806,6 @@ namespace UnlimRealms
 						hexahedron.dbgIndices.push_back(iofs + 2);
 						hexahedron.dbgIndices.push_back(iofs + 2);
 						hexahedron.dbgIndices.push_back(iofs + 0);
-
-						ur_uint vbofs = (ur_uint)vertexBuffer.size();
-						vertexBuffer.push_back({ p0, 0xffffffff });
-						vertexBuffer.push_back({ p1, 0xffffffff });
-						vertexBuffer.push_back({ p2, 0xffffffff });
-						indexBuffer.push_back(vbofs + 0);
-						indexBuffer.push_back(vbofs + 1);
-						indexBuffer.push_back(vbofs + 2);
 					}
 				}
 				p_row += rowOfs;
