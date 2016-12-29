@@ -240,13 +240,13 @@ namespace UnlimRealms
 			// (cell size = block size / (resolution - 1))
 			const ur_uint3 &bres = this->blockResolution;
 			ur_float3 cf(
-				lerp(0.0f, ur_float(bres.x), fpos.x),
-				lerp(0.0f, ur_float(bres.y), fpos.y),
-				lerp(0.0f, ur_float(bres.z), fpos.z));
+				lerp(0.0f, ur_float(bres.x - 1), fpos.x),
+				lerp(0.0f, ur_float(bres.y - 1), fpos.y),
+				lerp(0.0f, ur_float(bres.z - 1), fpos.z));
 			ur_int3 cp(
-				(ur_int)floor(cf.x),
-				(ur_int)floor(cf.y),
-				(ur_int)floor(cf.z));
+				std::min((ur_int)bres.x - 1, (ur_int)floor(cf.x)),
+				std::min((ur_int)bres.y - 1, (ur_int)floor(cf.y)),
+				std::min((ur_int)bres.z - 1, (ur_int)floor(cf.z)));
 			cf.x -= cp.x;
 			cf.y -= cp.y;
 			cf.z -= cp.z;
@@ -255,12 +255,12 @@ namespace UnlimRealms
 				{ 0, 0, 1 }, { 1, 0, 1 }, { 0, 1, 1 }, { 1, 1, 1 }
 			};
 			const ur_uint3 fres(bres.x + this->blockBorder * 2, bres.y + this->blockBorder * 2, bres.z + this->blockBorder * 2);
-			const ur_uint skipBorderOfs = fres.x * fres.y + fres.x + this->blockBorder;
+			const ur_uint skipBorderOfs = this->blockBorder * (fres.x * fres.y + fres.x + 1);
 			Block::ValueType cv[8];
 			for (ur_uint i = 0; i < 8; ++i)
 			{
 				cv[i] = block->field[skipBorderOfs +
-					(cp.x + cofs[i].x) + (cp.y + cofs[i].y) * bres.x + (cp.z + cofs[i].z) * bres.x * bres.y];
+					(cp.x + cofs[i].x) + (cp.y + cofs[i].y) * fres.x + (cp.z + cofs[i].z) * fres.x * fres.y];
 			}
 			ur_float v0 = lerp(cv[0], cv[1], cf.x);
 			ur_float v1 = lerp(cv[2], cv[3], cf.x);
@@ -382,11 +382,11 @@ namespace UnlimRealms
 	{
 		const ur_uint3 &blockSize = volume.GetDesc().BlockResolution;
 		const ur_uint3 fieldSize = blockSize + AdaptiveVolume::BorderSize * 2;
-		const ur_float3 halfVoxel(
-			bbox.SizeX() / blockSize.x * 0.5f,
-			bbox.SizeY() / blockSize.y * 0.5f,
-			bbox.SizeZ() / blockSize.z * 0.5f);
-		const BoundingBox bboxEx(bbox.Min - halfVoxel, bbox.Max + halfVoxel);
+		const ur_float3 voxelSize = (
+			bbox.SizeX() / (blockSize.x - 1),
+			bbox.SizeY() / (blockSize.y - 1),
+			bbox.SizeZ() / (blockSize.z - 1));
+		const BoundingBox bboxEx(bbox.Min - voxelSize, bbox.Max + voxelSize);
 		ur_float3 vpos;
 		Block::ValueType *dstValue = block.field.data();
 		for (ur_uint iz = 0; iz < fieldSize.z; ++iz)
