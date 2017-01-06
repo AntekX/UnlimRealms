@@ -21,274 +21,274 @@ namespace UnlimRealms
 	// Isosurface::AdaptiveVolume
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Isosurface::AdaptiveVolume::AdaptiveVolume(Isosurface &isosurface, ur_uint depth, Handler handler) :
-		SubSystem(isosurface),
-		Octree<Isosurface::Block>(depth, handler)
-	{
-	}
+	//Isosurface::AdaptiveVolume::AdaptiveVolume(Isosurface &isosurface, ur_uint depth, Handler handler) :
+	//	SubSystem(isosurface),
+	//	Octree<Isosurface::Block>(depth, handler)
+	//{
+	//}
 
-	Isosurface::AdaptiveVolume::~AdaptiveVolume()
-	{
+	//Isosurface::AdaptiveVolume::~AdaptiveVolume()
+	//{
 
-	}
+	//}
 
-	Result Isosurface::AdaptiveVolume::Init(const Desc &desc)
-	{
-		this->levelInfo.clear();
-		this->desc = desc;
-		this->desc.BlockResolution.SetMax(ur_uint3(1));
-		this->desc.BlockSize.SetMax(ur_float3(0.0f));
+	//Result Isosurface::AdaptiveVolume::Init(const Desc &desc)
+	//{
+	//	this->levelInfo.clear();
+	//	this->desc = desc;
+	//	this->desc.BlockResolution.SetMax(ur_uint3(1));
+	//	this->desc.BlockSize.SetMax(ur_float3(0.0f));
 
-		if (this->desc.Bound.IsInsideOut() ||
-			this->desc.BlockSize.All() == false ||
-			this->desc.DetailLevelDistance <= 0 ||
-			this->desc.RefinementProgression < 1.0f)
-			return Result(InvalidArgs);
+	//	if (this->desc.Bound.IsInsideOut() ||
+	//		this->desc.BlockSize.All() == false ||
+	//		this->desc.DetailLevelDistance <= 0 ||
+	//		this->desc.RefinementProgression < 1.0f)
+	//		return Result(InvalidArgs);
 
-		ur_float blockSizeMax = std::max(std::max(this->desc.BlockSize.x, this->desc.BlockSize.y), this->desc.BlockSize.z);
-		ur_float blockSizeMin = std::min(std::min(this->desc.BlockSize.x, this->desc.BlockSize.y), this->desc.BlockSize.z);
-		ur_float boundSizeMax = std::max(std::max(this->desc.Bound.SizeX(), this->desc.Bound.SizeY()), this->desc.Bound.SizeZ());
-		ur_uint blocksAlongSide = ur_uint(ceil(boundSizeMax / blockSizeMin));
-		this->alignedBound.Min = this->desc.Bound.Min;
-		this->alignedBound.Max = this->alignedBound.Min + blockSizeMin * blocksAlongSide;
+	//	ur_float blockSizeMax = std::max(std::max(this->desc.BlockSize.x, this->desc.BlockSize.y), this->desc.BlockSize.z);
+	//	ur_float blockSizeMin = std::min(std::min(this->desc.BlockSize.x, this->desc.BlockSize.y), this->desc.BlockSize.z);
+	//	ur_float boundSizeMax = std::max(std::max(this->desc.Bound.SizeX(), this->desc.Bound.SizeY()), this->desc.Bound.SizeZ());
+	//	ur_uint blocksAlongSide = ur_uint(ceil(boundSizeMax / blockSizeMin));
+	//	this->alignedBound.Min = this->desc.Bound.Min;
+	//	this->alignedBound.Max = this->alignedBound.Min + blockSizeMin * blocksAlongSide;
 
-		ur_uint levelsCount = ur_uint(log2(blocksAlongSide)) + 1;
-		this->levelInfo.resize(levelsCount);
-		ur_float levelDistance = this->desc.DetailLevelDistance;
-		for (ur_uint i = 0; i < levelsCount; ++i)
-		{
-			LevelInfo &level = this->levelInfo[levelsCount - i - 1];
-			ur_uint blocksInRange = std::max(ur_uint(levelDistance / blockSizeMax + 0.5f), ur_uint(2));
-			levelDistance = std::max(blockSizeMax * blocksInRange, levelDistance);
-			level.Distance = levelDistance;
-			levelDistance *= this->desc.RefinementProgression;
-		}
+	//	ur_uint levelsCount = ur_uint(log2(blocksAlongSide)) + 1;
+	//	this->levelInfo.resize(levelsCount);
+	//	ur_float levelDistance = this->desc.DetailLevelDistance;
+	//	for (ur_uint i = 0; i < levelsCount; ++i)
+	//	{
+	//		LevelInfo &level = this->levelInfo[levelsCount - i - 1];
+	//		ur_uint blocksInRange = std::max(ur_uint(levelDistance / blockSizeMax + 0.5f), ur_uint(2));
+	//		levelDistance = std::max(blockSizeMax * blocksInRange, levelDistance);
+	//		level.Distance = levelDistance;
+	//		levelDistance *= this->desc.RefinementProgression;
+	//	}
 
-		return Octree<Isosurface::Block>::Init(this->alignedBound);
-	}
+	//	return Octree<Isosurface::Block>::Init(this->alignedBound);
+	//}
 
-	void Isosurface::AdaptiveVolume::OnNodeChanged(Node* node, Event e)
-	{
-		if (ur_null == node)
-			return;
+	//void Isosurface::AdaptiveVolume::OnNodeChanged(Node* node, Event e)
+	//{
+	//	if (ur_null == node)
+	//		return;
 
-		AdaptiveVolume& volume = static_cast<AdaptiveVolume&>(node->GetTree());
-		Builder *builder = volume.GetIsosurface().GetBuilder();
-		if (builder != ur_null)
-		{
-			switch (e)
-			{
-			case Event::NodeAdded: builder->AddNode(node); break;
-			case Event::NodeRemoved: builder->RemoveNode(node); break;
-			}
-		}
-	}
+	//	AdaptiveVolume& volume = static_cast<AdaptiveVolume&>(node->GetTree());
+	//	Builder *builder = volume.GetIsosurface().GetBuilder();
+	//	if (builder != ur_null)
+	//	{
+	//		switch (e)
+	//		{
+	//		case Event::NodeAdded: builder->AddNode(node); break;
+	//		case Event::NodeRemoved: builder->RemoveNode(node); break;
+	//		}
+	//	}
+	//}
 
-	void Isosurface::AdaptiveVolume::RefinementByDistance(const ur_float3 &pos)
-	{
-		if (this->levelInfo.empty())
-			return;
+	//void Isosurface::AdaptiveVolume::RefinementByDistance(const ur_float3 &pos)
+	//{
+	//	if (this->levelInfo.empty())
+	//		return;
 
-		this->refinementPoint = pos;
+	//	this->refinementPoint = pos;
 
-		this->RefinementByDistance(pos, this->GetRoot());
-	}
+	//	this->RefinementByDistance(pos, this->GetRoot());
+	//}
 
-	void Isosurface::AdaptiveVolume::RefinementByDistance(const ur_float3 &pos, AdaptiveVolume::Node *node)
-	{
-		if (ur_null == node || (node->GetLevel() + 1) >= this->GetLevelsCount())
-			return;
+	//void Isosurface::AdaptiveVolume::RefinementByDistance(const ur_float3 &pos, AdaptiveVolume::Node *node)
+	//{
+	//	if (ur_null == node || (node->GetLevel() + 1) >= this->GetLevelsCount())
+	//		return;
 
-		if (node->GetBBox().Distance(pos) <= this->levelInfo[node->GetLevel()].Distance)
-		{
-			node->Split();
-			if (node->HasSubNodes())
-			{
-				for (ur_uint i = 0; i < Node::SubNodesCount; ++i)
-				{
-					this->RefinementByDistance(pos, node->GetSubNode(i));
-				}
-			}
-		}
-		else
-		{
-			node->Merge();
-		}
-	}
+	//	if (node->GetBBox().Distance(pos) <= this->levelInfo[node->GetLevel()].Distance)
+	//	{
+	//		node->Split();
+	//		if (node->HasSubNodes())
+	//		{
+	//			for (ur_uint i = 0; i < Node::SubNodesCount; ++i)
+	//			{
+	//				this->RefinementByDistance(pos, node->GetSubNode(i));
+	//			}
+	//		}
+	//	}
+	//	else
+	//	{
+	//		node->Merge();
+	//	}
+	//}
 
-	ur_uint Isosurface::AdaptiveVolume::MaxRefinementLevel(const BoundingBox &bbox)
-	{
-		if (ur_null == this->GetRoot() || !bbox.Intersects(this->GetRoot()->GetBBox()))
-			return 0;
+	//ur_uint Isosurface::AdaptiveVolume::MaxRefinementLevel(const BoundingBox &bbox)
+	//{
+	//	if (ur_null == this->GetRoot() || !bbox.Intersects(this->GetRoot()->GetBBox()))
+	//		return 0;
 
-		ur_uint maxLevel = this->GetLevelsCount();
-		
-		this->MaxRefinementLevel(maxLevel, bbox, this->GetRoot());
-		
-		return maxLevel;
-	}
+	//	ur_uint maxLevel = this->GetLevelsCount();
+	//	
+	//	this->MaxRefinementLevel(maxLevel, bbox, this->GetRoot());
+	//	
+	//	return maxLevel;
+	//}
 
-	void Isosurface::AdaptiveVolume::MaxRefinementLevel(ur_uint &maxLevel, const BoundingBox &bbox, AdaptiveVolume::Node *node)
-	{
-		if (node == ur_null ||
-			node->GetLevel() > maxLevel ||
-			node->GetBBox().Intersects(bbox) == false)
-			return;
+	//void Isosurface::AdaptiveVolume::MaxRefinementLevel(ur_uint &maxLevel, const BoundingBox &bbox, AdaptiveVolume::Node *node)
+	//{
+	//	if (node == ur_null ||
+	//		node->GetLevel() > maxLevel ||
+	//		node->GetBBox().Intersects(bbox) == false)
+	//		return;
 
-		if (node->HasSubNodes())
-		{
-			for (ur_uint i = 0; i < Node::SubNodesCount; ++i)
-			{
-				this->MaxRefinementLevel(maxLevel, bbox, node->GetSubNode(i));
-			}
-		}
-		else
-		{
-			maxLevel = std::min(maxLevel, node->GetLevel());
-		}
-	}
+	//	if (node->HasSubNodes())
+	//	{
+	//		for (ur_uint i = 0; i < Node::SubNodesCount; ++i)
+	//		{
+	//			this->MaxRefinementLevel(maxLevel, bbox, node->GetSubNode(i));
+	//		}
+	//	}
+	//	else
+	//	{
+	//		maxLevel = std::min(maxLevel, node->GetLevel());
+	//	}
+	//}
 
-	void Isosurface::AdaptiveVolume::GatherBlocks(const ur_uint level, const BoundingBox &bbox, BlockArray &blockArray)
-	{		
-		if (0 == this->GetLevelsCount() || ur_null == this->GetRoot())
-			return;
+	//void Isosurface::AdaptiveVolume::GatherBlocks(const ur_uint level, const BoundingBox &bbox, BlockArray &blockArray)
+	//{		
+	//	if (0 == this->GetLevelsCount() || ur_null == this->GetRoot())
+	//		return;
 
-		const BoundingBox &rbbox = this->GetRoot()->GetBBox();
-		BoundingBox ibbox = rbbox;
-		ibbox.Min.SetMax(bbox.Min);
-		ibbox.Max.SetMin(bbox.Max);
-		if (ibbox.IsInsideOut())
-			return;
-		
-		ibbox.Min -= rbbox.Min;
-		ibbox.Max -= rbbox.Min;
+	//	const BoundingBox &rbbox = this->GetRoot()->GetBBox();
+	//	BoundingBox ibbox = rbbox;
+	//	ibbox.Min.SetMax(bbox.Min);
+	//	ibbox.Max.SetMin(bbox.Max);
+	//	if (ibbox.IsInsideOut())
+	//		return;
+	//	
+	//	ibbox.Min -= rbbox.Min;
+	//	ibbox.Max -= rbbox.Min;
 
-		blockArray.blockResolution = this->desc.BlockResolution;
-		blockArray.blockBorder = BorderSize;
-		blockArray.blockSize = this->desc.BlockSize * float(1 << (this->GetLevelsCount() - level - 1));
-		
-		ur_int3 gridMin(
-			(ur_int)floor(ibbox.Min.x / blockArray.blockSize.x),
-			(ur_int)floor(ibbox.Min.y / blockArray.blockSize.y),
-			(ur_int)floor(ibbox.Min.z / blockArray.blockSize.z));
-		ur_int3 gridMax(
-			(ur_int)ceil(ibbox.Max.x / blockArray.blockSize.x),
-			(ur_int)ceil(ibbox.Max.y / blockArray.blockSize.y),
-			(ur_int)ceil(ibbox.Max.z / blockArray.blockSize.z));
-		blockArray.size.x = ur_uint(gridMax.x - gridMin.x);
-		blockArray.size.y = ur_uint(gridMax.y - gridMin.y);
-		blockArray.size.z = ur_uint(gridMax.z - gridMin.z);
+	//	blockArray.blockResolution = this->desc.BlockResolution;
+	//	blockArray.blockBorder = BorderSize;
+	//	blockArray.blockSize = this->desc.BlockSize * float(1 << (this->GetLevelsCount() - level - 1));
+	//	
+	//	ur_int3 gridMin(
+	//		(ur_int)floor(ibbox.Min.x / blockArray.blockSize.x),
+	//		(ur_int)floor(ibbox.Min.y / blockArray.blockSize.y),
+	//		(ur_int)floor(ibbox.Min.z / blockArray.blockSize.z));
+	//	ur_int3 gridMax(
+	//		(ur_int)ceil(ibbox.Max.x / blockArray.blockSize.x),
+	//		(ur_int)ceil(ibbox.Max.y / blockArray.blockSize.y),
+	//		(ur_int)ceil(ibbox.Max.z / blockArray.blockSize.z));
+	//	blockArray.size.x = ur_uint(gridMax.x - gridMin.x);
+	//	blockArray.size.y = ur_uint(gridMax.y - gridMin.y);
+	//	blockArray.size.z = ur_uint(gridMax.z - gridMin.z);
 
-		blockArray.bbox.Min.x = blockArray.blockSize.x * gridMin.x + rbbox.Min.x;
-		blockArray.bbox.Min.y = blockArray.blockSize.y * gridMin.y + rbbox.Min.y;
-		blockArray.bbox.Min.z = blockArray.blockSize.z * gridMin.z + rbbox.Min.z;
-		blockArray.bbox.Max.x = blockArray.blockSize.x * gridMax.x + rbbox.Min.x;
-		blockArray.bbox.Max.y = blockArray.blockSize.y * gridMax.y + rbbox.Min.y;
-		blockArray.bbox.Max.z = blockArray.blockSize.z * gridMax.z + rbbox.Min.z;
+	//	blockArray.bbox.Min.x = blockArray.blockSize.x * gridMin.x + rbbox.Min.x;
+	//	blockArray.bbox.Min.y = blockArray.blockSize.y * gridMin.y + rbbox.Min.y;
+	//	blockArray.bbox.Min.z = blockArray.blockSize.z * gridMin.z + rbbox.Min.z;
+	//	blockArray.bbox.Max.x = blockArray.blockSize.x * gridMax.x + rbbox.Min.x;
+	//	blockArray.bbox.Max.y = blockArray.blockSize.y * gridMax.y + rbbox.Min.y;
+	//	blockArray.bbox.Max.z = blockArray.blockSize.z * gridMax.z + rbbox.Min.z;
 
-		blockArray.blocks.resize(blockArray.size.x * blockArray.size.y * blockArray.size.z, ur_null);
+	//	blockArray.blocks.resize(blockArray.size.x * blockArray.size.y * blockArray.size.z, ur_null);
 
-		this->GatherBlocks(this->GetRoot(), level, blockArray);
-	}
+	//	this->GatherBlocks(this->GetRoot(), level, blockArray);
+	//}
 
-	void Isosurface::AdaptiveVolume::GatherBlocks(AdaptiveVolume::Node *node, const ur_uint level, BlockArray &blockArray)
-	{
-		if (node == ur_null ||
-			node->GetBBox().Intersects(blockArray.bbox) == false)
-			return;
+	//void Isosurface::AdaptiveVolume::GatherBlocks(AdaptiveVolume::Node *node, const ur_uint level, BlockArray &blockArray)
+	//{
+	//	if (node == ur_null ||
+	//		node->GetBBox().Intersects(blockArray.bbox) == false)
+	//		return;
 
-		if (node->GetLevel() == level)
-		{
-			ur_uint3 gridPos(
-				(ur_uint)floor((node->GetBBox().Min.x - blockArray.bbox.Min.x) / blockArray.blockSize.x),
-				(ur_uint)floor((node->GetBBox().Min.y - blockArray.bbox.Min.y) / blockArray.blockSize.y),
-				(ur_uint)floor((node->GetBBox().Min.z - blockArray.bbox.Min.z) / blockArray.blockSize.z));
-			if (gridPos.x < blockArray.size.x && gridPos.y < blockArray.size.y && gridPos.z < blockArray.size.z)
-			{
-				blockArray.blocks[gridPos.x + gridPos.y * blockArray.size.x + gridPos.z * blockArray.size.x * blockArray.size.y] = &node->GetData();
-			}
-		}
-		else if (node->HasSubNodes())
-		{
-			for (ur_uint i = 0; i < Node::SubNodesCount; ++i)
-			{
-				this->GatherBlocks(node->GetSubNode(i), level, blockArray);
-			}
-		}
-	}
+	//	if (node->GetLevel() == level)
+	//	{
+	//		ur_uint3 gridPos(
+	//			(ur_uint)floor((node->GetBBox().Min.x - blockArray.bbox.Min.x) / blockArray.blockSize.x),
+	//			(ur_uint)floor((node->GetBBox().Min.y - blockArray.bbox.Min.y) / blockArray.blockSize.y),
+	//			(ur_uint)floor((node->GetBBox().Min.z - blockArray.bbox.Min.z) / blockArray.blockSize.z));
+	//		if (gridPos.x < blockArray.size.x && gridPos.y < blockArray.size.y && gridPos.z < blockArray.size.z)
+	//		{
+	//			blockArray.blocks[gridPos.x + gridPos.y * blockArray.size.x + gridPos.z * blockArray.size.x * blockArray.size.y] = &node->GetData();
+	//		}
+	//	}
+	//	else if (node->HasSubNodes())
+	//	{
+	//		for (ur_uint i = 0; i < Node::SubNodesCount; ++i)
+	//		{
+	//			this->GatherBlocks(node->GetSubNode(i), level, blockArray);
+	//		}
+	//	}
+	//}
 
-	Isosurface::Block::ValueType Isosurface::BlockArray::Sample(const ur_float3 &point) const
-	{
-		Block::ValueType val = (Block::ValueType)0;
-		
-		ur_float3 fpos(
-			(point.x - this->bbox.Min.x) / this->blockSize.x,
-			(point.y - this->bbox.Min.y) / this->blockSize.y,
-			(point.z - this->bbox.Min.z) / this->blockSize.z);
-		ur_int3 bpos(
-			std::min((ur_int)this->size.x - 1, (ur_int)floor(fpos.x)),
-			std::min((ur_int)this->size.y - 1, (ur_int)floor(fpos.y)),
-			std::min((ur_int)this->size.z - 1, (ur_int)floor(fpos.z)));
-		fpos.x -= bpos.x;
-		fpos.y -= bpos.y;
-		fpos.z -= bpos.z;
-		
-		Block *block = blocks[bpos.x + bpos.y * this->size.x + bpos.z * this->size.x * this->size.y];
-		if (block != ur_null && !block->field.empty())
-		{
-			// following sampling algorithm considers that cell center is on the block's corner
-			// (cell size = block size / (resolution - 1))
-			const ur_uint3 &bres = this->blockResolution;
-			ur_float3 cf(
-				lerp(0.0f, ur_float(bres.x - 1), fpos.x),
-				lerp(0.0f, ur_float(bres.y - 1), fpos.y),
-				lerp(0.0f, ur_float(bres.z - 1), fpos.z));
-			ur_int3 cp(
-				std::min((ur_int)bres.x - 1, (ur_int)floor(cf.x)),
-				std::min((ur_int)bres.y - 1, (ur_int)floor(cf.y)),
-				std::min((ur_int)bres.z - 1, (ur_int)floor(cf.z)));
-			cf.x -= cp.x;
-			cf.y -= cp.y;
-			cf.z -= cp.z;
-			static const ur_int3 cofs[8] = {
-				{ 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 }, { 1, 1, 0 },
-				{ 0, 0, 1 }, { 1, 0, 1 }, { 0, 1, 1 }, { 1, 1, 1 }
-			};
-			const ur_uint3 fres(bres.x + this->blockBorder * 2, bres.y + this->blockBorder * 2, bres.z + this->blockBorder * 2);
-			const ur_uint skipBorderOfs = this->blockBorder * (fres.x * fres.y + fres.x + 1);
-			Block::ValueType cv[8];
-			for (ur_uint i = 0; i < 8; ++i)
-			{
-				cv[i] = block->field[skipBorderOfs +
-					(cp.x + cofs[i].x) + (cp.y + cofs[i].y) * fres.x + (cp.z + cofs[i].z) * fres.x * fres.y];
-			}
-			ur_float v0 = lerp(cv[0], cv[1], cf.x);
-			ur_float v1 = lerp(cv[2], cv[3], cf.x);
-			ur_float v2 = lerp(cv[4], cv[5], cf.x);
-			ur_float v3 = lerp(cv[6], cv[7], cf.x);
-			val = lerp(lerp(v0, v1, cf.y), lerp(v2, v3, cf.y), cf.z);
-		}
+	//Isosurface::Block::ValueType Isosurface::BlockArray::Sample(const ur_float3 &point) const
+	//{
+	//	Block::ValueType val = (Block::ValueType)0;
+	//	
+	//	ur_float3 fpos(
+	//		(point.x - this->bbox.Min.x) / this->blockSize.x,
+	//		(point.y - this->bbox.Min.y) / this->blockSize.y,
+	//		(point.z - this->bbox.Min.z) / this->blockSize.z);
+	//	ur_int3 bpos(
+	//		std::min((ur_int)this->size.x - 1, (ur_int)floor(fpos.x)),
+	//		std::min((ur_int)this->size.y - 1, (ur_int)floor(fpos.y)),
+	//		std::min((ur_int)this->size.z - 1, (ur_int)floor(fpos.z)));
+	//	fpos.x -= bpos.x;
+	//	fpos.y -= bpos.y;
+	//	fpos.z -= bpos.z;
+	//	
+	//	Block *block = blocks[bpos.x + bpos.y * this->size.x + bpos.z * this->size.x * this->size.y];
+	//	if (block != ur_null && !block->field.empty())
+	//	{
+	//		// following sampling algorithm considers that cell center is on the block's corner
+	//		// (cell size = block size / (resolution - 1))
+	//		const ur_uint3 &bres = this->blockResolution;
+	//		ur_float3 cf(
+	//			lerp(0.0f, ur_float(bres.x - 1), fpos.x),
+	//			lerp(0.0f, ur_float(bres.y - 1), fpos.y),
+	//			lerp(0.0f, ur_float(bres.z - 1), fpos.z));
+	//		ur_int3 cp(
+	//			std::min((ur_int)bres.x - 1, (ur_int)floor(cf.x)),
+	//			std::min((ur_int)bres.y - 1, (ur_int)floor(cf.y)),
+	//			std::min((ur_int)bres.z - 1, (ur_int)floor(cf.z)));
+	//		cf.x -= cp.x;
+	//		cf.y -= cp.y;
+	//		cf.z -= cp.z;
+	//		static const ur_int3 cofs[8] = {
+	//			{ 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 }, { 1, 1, 0 },
+	//			{ 0, 0, 1 }, { 1, 0, 1 }, { 0, 1, 1 }, { 1, 1, 1 }
+	//		};
+	//		const ur_uint3 fres(bres.x + this->blockBorder * 2, bres.y + this->blockBorder * 2, bres.z + this->blockBorder * 2);
+	//		const ur_uint skipBorderOfs = this->blockBorder * (fres.x * fres.y + fres.x + 1);
+	//		Block::ValueType cv[8];
+	//		for (ur_uint i = 0; i < 8; ++i)
+	//		{
+	//			cv[i] = block->field[skipBorderOfs +
+	//				(cp.x + cofs[i].x) + (cp.y + cofs[i].y) * fres.x + (cp.z + cofs[i].z) * fres.x * fres.y];
+	//		}
+	//		ur_float v0 = lerp(cv[0], cv[1], cf.x);
+	//		ur_float v1 = lerp(cv[2], cv[3], cf.x);
+	//		ur_float v2 = lerp(cv[4], cv[5], cf.x);
+	//		ur_float v3 = lerp(cv[6], cv[7], cf.x);
+	//		val = lerp(lerp(v0, v1, cf.y), lerp(v2, v3, cf.y), cf.z);
+	//	}
 
-		return val;
-	}
+	//	return val;
+	//}
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Isosurface::Loader
+	// Isosurface::DataVolume
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Isosurface::Loader::Loader(Isosurface &isosurface) : 
+	Isosurface::DataVolume::DataVolume(Isosurface &isosurface) :
 		SubSystem(isosurface)
 	{
 
 	}
 
-	Isosurface::Loader::~Loader()
+	Isosurface::DataVolume::~DataVolume()
 	{
 
 	}
 
-	Result Isosurface::Loader::Load(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox)
+	Result Isosurface::DataVolume::Read(ValueType &value, const ur_float3 &point)
 	{
 		return Result(NotImplemented);
 	}
@@ -299,12 +299,12 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	Isosurface::ProceduralGenerator::ProceduralGenerator(Isosurface &isosurface, const Algorithm &algorithm, const GenerateParams &generateParams) :
-		Loader(isosurface)
+		DataVolume(isosurface)
 	{
+		this->bound = generateParams.bound;
 		this->algorithm = algorithm;
 		switch (this->algorithm)
 		{
-		case Algorithm::Fill: this->generateParams.reset(new FillParams((const FillParams&)generateParams)); break;
 		case Algorithm::SphericalDistanceField: this->generateParams.reset(new SphericalDistanceFieldParams((const SphericalDistanceFieldParams&)generateParams)); break;
 		case Algorithm::SimplexNoise: this->generateParams.reset(new SimplexNoiseParams((const SimplexNoiseParams&)generateParams)); break;
 		}
@@ -315,31 +315,20 @@ namespace UnlimRealms
 
 	}
 
-	Result Isosurface::ProceduralGenerator::Load(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox)
+	Result Isosurface::ProceduralGenerator::Read(ValueType &value, const ur_float3 &point)
 	{
 		Result res = Result(Success);
 
-		// allocate field
-		const ur_uint3 fieldSize = volume.GetDesc().BlockResolution + AdaptiveVolume::BorderSize * 2;
-		block.field.resize(fieldSize.x * fieldSize.y * fieldSize.z);
-
-		// choose algorithm and generate data
+		// choose algorithm and generate a value
 		switch (this->algorithm)
 		{
-			case Algorithm::Fill:
-			{
-				FillParams *params = static_cast<FillParams*>(this->generateParams.get());
-				ProceduralGenerator::Fill(volume, block, bbox, *params);
-			} break;
 			case Algorithm::SphericalDistanceField:
 			{
-				SphericalDistanceFieldParams *params = static_cast<SphericalDistanceFieldParams*>(this->generateParams.get());
-				ProceduralGenerator::GenerateSphericalDistanceField(volume, block, bbox, *params);
+				this->GenerateSphericalDistanceField(value, point);
 			} break;
 			case Algorithm::SimplexNoise:
 			{
-				SimplexNoiseParams *params = static_cast<SimplexNoiseParams*>(this->generateParams.get());
-				ProceduralGenerator::GenerateSimplexNoise(volume, block, bbox, *params);
+				this->GenerateSimplexNoise(value, point);
 			} break;
 			default:
 			{
@@ -350,69 +339,19 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result Isosurface::ProceduralGenerator::Fill(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox, const FillParams &params)
+	Result Isosurface::ProceduralGenerator::GenerateSphericalDistanceField(ValueType &value, const ur_float3 &point)
 	{
-		const ur_uint3 &blockSize = volume.GetDesc().BlockResolution;
-		const ur_uint3 fieldSize = blockSize + AdaptiveVolume::BorderSize * 2;
-		Block::ValueType *dstValue = block.field.data();
-		for (ur_uint iz = 0; iz < fieldSize.z; ++iz)
-		{
-			for (ur_uint iy = 0; iy < fieldSize.y; ++iy)
-			{
-				for (ur_uint ix = 0; ix < fieldSize.x; ++ix)
-				{
-					if (ix < AdaptiveVolume::BorderSize || ix >= blockSize.x + AdaptiveVolume::BorderSize ||
-						iy < AdaptiveVolume::BorderSize || iy >= blockSize.y + AdaptiveVolume::BorderSize ||
-						iz < AdaptiveVolume::BorderSize || iz >= blockSize.z + AdaptiveVolume::BorderSize)
-					{
-						*dstValue++ = params.externalValue;
-					}
-					else
-					{
-						*dstValue++ = params.internalValue;
-					}
-				}
-			}
-		}
-
+		const SphericalDistanceFieldParams &params = static_cast<const SphericalDistanceFieldParams&>(*this->generateParams.get());
+		value = params.radius - (point - params.center).Length();
 		return Result(Success);
 	}
 
-	Result Isosurface::ProceduralGenerator::GenerateSphericalDistanceField(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox, const SphericalDistanceFieldParams &params)
-	{
-		const ur_uint3 &blockSize = volume.GetDesc().BlockResolution;
-		const ur_uint3 fieldSize = blockSize + AdaptiveVolume::BorderSize * 2;
-		const ur_float3 voxelSize = (
-			bbox.SizeX() / (blockSize.x - 1),
-			bbox.SizeY() / (blockSize.y - 1),
-			bbox.SizeZ() / (blockSize.z - 1));
-		const BoundingBox bboxEx(bbox.Min - voxelSize, bbox.Max + voxelSize);
-		ur_float3 vpos;
-		Block::ValueType *dstValue = block.field.data();
-		for (ur_uint iz = 0; iz < fieldSize.z; ++iz)
-		{
-			for (ur_uint iy = 0; iy < fieldSize.y; ++iy)
-			{
-				for (ur_uint ix = 0; ix < fieldSize.x; ++ix)
-				{
-					vpos.x = ur_float(ix) / (fieldSize.x - 1);
-					vpos.y = ur_float(iy) / (fieldSize.y - 1);
-					vpos.z = ur_float(iz) / (fieldSize.z - 1);
-					vpos = ur_float3::Lerp(bboxEx.Min, bboxEx.Max, vpos);
-					*dstValue++ = params.radius - (vpos - params.center).Length();
-				}
-			}
-		}
-
-		return Result(Success);
-	}
-
-	Result Isosurface::ProceduralGenerator::GenerateSimplexNoise(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox, const SimplexNoiseParams &params)
+	Result Isosurface::ProceduralGenerator::GenerateSimplexNoise(ValueType &value, const ur_float3 &point)
 	{
 		// temp: hardcoded generation params
 		PerlinNoise noise;
-		ur_float radius = volume.GetDesc().Bound.SizeX() * 0.4f;
-		ur_float3 center = volume.GetDesc().Bound.Center();
+		ur_float radius = this->GetBound().SizeX() * 0.4f;
+		ur_float3 center = this->GetBound().Center();
 		struct Octave
 		{
 			ur_float scale;
@@ -425,38 +364,15 @@ namespace UnlimRealms
 		};
 		const ur_uint numOctaves = ur_array_size(octaves);
 
-		const ur_uint3 &blockSize = volume.GetDesc().BlockResolution;
-		const ur_uint3 fieldSize = blockSize + AdaptiveVolume::BorderSize * 2;
-		const ur_float3 halfVoxel(
-			bbox.SizeX() / blockSize.x * 0.5f,
-			bbox.SizeY() / blockSize.y * 0.5f,
-			bbox.SizeZ() / blockSize.z * 0.5f);
-		const BoundingBox bboxEx(bbox.Min - halfVoxel, bbox.Max + halfVoxel);
-		ur_float3 vpos;
-		Block::ValueType *dstValue = block.field.data();
-		for (ur_uint iz = 0; iz < fieldSize.z; ++iz)
+		value = radius - (point - center).Length();
+		for (ur_uint io = 0; io < numOctaves; ++io)
 		{
-			for (ur_uint iy = 0; iy < fieldSize.y; ++iy)
-			{
-				for (ur_uint ix = 0; ix < fieldSize.x; ++ix)
-				{
-					vpos.x = ur_float(ix) / (fieldSize.x - 1);
-					vpos.y = ur_float(iy) / (fieldSize.y - 1);
-					vpos.z = ur_float(iz) / (fieldSize.z - 1);
-					vpos = ur_float3::Lerp(bboxEx.Min, bboxEx.Max, vpos);
-					*dstValue = radius - (vpos - center).Length();
-					for (ur_uint io = 0; io < numOctaves; ++io)
-					{
-						*dstValue += (ur_float)noise.Noise(
-							ur_double(vpos.x * octaves[io].freq),
-							ur_double(vpos.y * octaves[io].freq),
-							ur_double(vpos.z * octaves[io].freq)) * octaves[io].scale;
-					}
-					dstValue++;
-				}
-			}
+			value += (ur_float)noise.Noise(
+				ur_double(point.x * octaves[io].freq),
+				ur_double(point.y * octaves[io].freq),
+				ur_double(point.z * octaves[io].freq)) * octaves[io].scale;
 		}
-
+		
 		return Result(Success);
 	}
 
@@ -476,7 +392,7 @@ namespace UnlimRealms
 
 	}
 
-	Result Isosurface::Presentation::Construct(AdaptiveVolume &volume)
+	Result Isosurface::Presentation::Update(const ur_float3 &refinementPoint, const ur_float4x4 &viewProj)
 	{
 		return Result(NotImplemented);
 	}
@@ -493,452 +409,21 @@ namespace UnlimRealms
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Isosurface::SurfaceNet
+	// Isosurface::HybridCubes
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Isosurface::SurfaceNet::SurfaceNet(Isosurface &isosurface) :
-		Presentation(isosurface)
-	{
-	}
-
-	Isosurface::SurfaceNet::~SurfaceNet()
-	{
-
-	}
-
-	Result Isosurface::SurfaceNet::Construct(AdaptiveVolume &volume)
-	{
-		// init tree
-		if (ur_null == this->tree.get())
-		{
-			this->tree.reset(new MeshTree());
-			this->tree->Init(volume.GetDesc().Bound);
-		}
-
-		// update mesh blocks from volume
-		return this->Construct(volume, volume.GetRoot(), this->tree->GetRoot());
-	}
-
-	Result Isosurface::SurfaceNet::Construct(AdaptiveVolume &volume, AdaptiveVolume::Node *volumeNode, MeshTree::Node *meshNode)
-	{
-		Result res = Result(Success);
-
-		if (ur_null == meshNode)
-			return Result(InvalidArgs);
-
-		if (volumeNode != ur_null)
-		{
-			// construct mesh for current data field
-			if (!meshNode->GetData().initialized)
-			{
-				Result buildRes = this->Construct(volume, volumeNode->GetBBox(), volumeNode->GetData(), meshNode->GetData());
-				res = CombinedResult(res, buildRes);
-			}
-
-			if (volumeNode->HasSubNodes())
-			{
-				// build higher detail sub meshes
-				meshNode->Split();
-				for (ur_uint i = 0; i < MeshTree::Node::SubNodesCount; ++i)
-				{
-					this->Construct(volume, volumeNode->GetSubNode(i), meshNode->GetSubNode(i));
-				}
-			}
-			else
-			{
-				meshNode->Merge();
-			}
-		}
-		else
-		{
-			meshNode->Merge();
-		}
-
-		return res;
-	}
-
-	Result Isosurface::SurfaceNet::Construct(AdaptiveVolume &volume, const BoundingBox &bbox, Block &block, MeshBlock &mesh)
-	{
-		mesh.initialized = true;
-
-		// compute surface data
-
-		const ur_uint &blockBorder = AdaptiveVolume::BorderSize;
-		const ur_uint3 &blockSize = volume.GetDesc().BlockResolution;
-		const ur_uint fieldRow = blockSize.x + AdaptiveVolume::BorderSize * 2;
-		const ur_uint fieldSlice = fieldRow * (blockSize.y + AdaptiveVolume::BorderSize * 2);
-		const ur_uint3 gridSize = blockSize + 1;
-		const ur_uint gridRow = gridSize.x;
-		const ur_uint gridSlice = gridRow * gridSize.y;
-		const ur_float3 halfVoxel(
-			bbox.SizeX() / blockSize.x * 0.5f,
-			bbox.SizeY() / blockSize.y * 0.5f,
-			bbox.SizeZ() / blockSize.z * 0.5f);
-
-		static const Index NoIndex = Index(-1);
-		struct SurfaceInfo
-		{
-			Index vidx;
-			ur_byte side; // flags indicating which axes polygons intersect: x = 0x1, y = 0x2, z = 0x4, 0x80 = back face
-		} NoInfo = { NoIndex, 0 };
-		std::vector<SurfaceInfo> surface(gridSize.x * gridSize.y * gridSize.z, NoInfo);
-		std::vector<Vertex> vertices;
-		std::vector<Index> indices;
-
-		const ur_uint CellStride[8] = {
-			0,							// left, bottom, near
-			1,							// right, bottom, near
-			fieldRow,					// left, top, near
-			fieldRow + 1,				// right, top, near
-			fieldSlice,					// left, bottom, far
-			fieldSlice + 1,				// right, bottom, far
-			fieldSlice + fieldRow,		// left, top, far
-			fieldSlice + fieldRow + 1	// right, top, far
-		};
-
-		static const ur_float3 CornerOfs[8] = {
-			{ -1.0f, -1.0f, -1.0f },
-			{ +1.0f, -1.0f, -1.0f },
-			{ -1.0f, +1.0f, -1.0f },
-			{ +1.0f, +1.0f, -1.0f },
-			{ -1.0f, -1.0f, +1.0f },
-			{ +1.0f, -1.0f, +1.0f },
-			{ -1.0f, +1.0f, +1.0f },
-			{ +1.0f, +1.0f, +1.0f }
-		};
-
-		static const ur_uint2 CellEdge[12] = {
-			{ 0, 1 },{ 2, 3 },{ 4, 5 },{ 6, 7 },
-			{ 0, 2 },{ 1, 3 },{ 4, 6 },{ 5, 7 },
-			{ 0, 4 },{ 1, 5 },{ 2, 6 },{ 3, 7 }
-		};
-
-		Vertex vert;
-		Index vidx = 0;
-		ur_bool addVertex;
-		ur_uint scount = 0;
-		ur_float3 vpos, grad;
-		Block::ValueType fcell[8];
-		for (ur_uint iz = 0; iz < gridSize.z; ++iz)
-		{
-			for (ur_uint iy = 0; iy < gridSize.y; ++iy)
-			{
-				for (ur_uint ix = 0; ix < gridSize.x; ++ix)
-				{
-					// build morphological field surface info
-					Block::ValueType *pf = block.field.data() + ix + iy * fieldRow + iz * fieldSlice;
-					SurfaceInfo *ps = surface.data() + ix + iy * gridRow + iz * gridSlice;
-					for (ur_uint i = 0; i < 8; ++i)
-					{
-						fcell[i] = pf[CellStride[i]];
-					}
-					addVertex = false;
-					if (fcell[0] < 0)
-					{
-						if (0 <= fcell[1]) { addVertex = true; ps->side |= 0x1; ++scount; }
-						if (0 <= fcell[2]) { addVertex = true; ps->side |= 0x2; ++scount; }
-						if (0 <= fcell[3]) { addVertex = true; }
-						if (0 <= fcell[4]) { addVertex = true; ps->side |= 0x4; ++scount; }
-						if (0 <= fcell[5]) { addVertex = true; }
-						if (0 <= fcell[6]) { addVertex = true; }
-						if (0 <= fcell[7]) { addVertex = true; }
-					}
-					else
-					{
-						if (0 > fcell[1]) { addVertex = true; ps->side |= (0x1 | 0x80); ++scount; }
-						if (0 > fcell[2]) { addVertex = true; ps->side |= (0x2 | 0x80); ++scount; }
-						if (0 > fcell[3]) { addVertex = true; }
-						if (0 > fcell[4]) { addVertex = true; ps->side |= (0x4 | 0x80); ++scount; }
-						if (0 > fcell[5]) { addVertex = true; }
-						if (0 > fcell[6]) { addVertex = true; }
-						if (0 > fcell[7]) { addVertex = true; }
-					}
-
-					// add vertex
-					if (addVertex)
-					{
-						ps->vidx = vidx++;
-						vpos.x = ur_float(ix) / blockSize.x;
-						vpos.y = ur_float(iy) / blockSize.y;
-						vpos.z = ur_float(iz) / blockSize.z;
-						vpos = ur_float3::Lerp(bbox.Min, bbox.Max, vpos);
-
-						// compute gradient
-						grad.x = ((fcell[1] - fcell[0]) + (fcell[3] - fcell[2]) + (fcell[5] - fcell[4]) + (fcell[7] - fcell[6]));
-						grad.y = ((fcell[2] - fcell[0]) + (fcell[3] - fcell[1]) + (fcell[6] - fcell[4]) + (fcell[7] - fcell[5]));
-						grad.z = ((fcell[4] - fcell[0]) + (fcell[5] - fcell[1]) + (fcell[6] - fcell[2]) + (fcell[7] - fcell[3]));
-						grad = ur_float3::Normalize(grad);
-
-						// compute approximate vertex position on the surface
-						vert.pos = 0.0f;
-						auto edgeIntersected = [&](const ur_uint2 &e) -> ur_bool {
-							return ((fcell[e.x] < 0 && fcell[e.y] >= 0) || (fcell[e.x] >= 0 && fcell[e.y] < 0));
-						};
-						ur_uint vcount = 0;
-						for (ur_uint i = 0; i < 12; ++i)
-						{
-							if (edgeIntersected(CellEdge[i]))
-							{
-								//vert.pos += (vpos + (halfVoxel * CornerOfs[CellEdge[i].x]) + grad * fcell[CellEdge[i].x] * -1.0f);
-								ur_float w = fcell[CellEdge[i].x] / (fcell[CellEdge[i].x] - fcell[CellEdge[i].y]);
-								vert.pos += (vpos + halfVoxel * CornerOfs[CellEdge[i].x]) * (1.0f - w) +
-									(vpos + halfVoxel * CornerOfs[CellEdge[i].y]) * w;
-								++vcount;
-							}
-						}
-						vert.pos /= float(vcount);
-
-						// temp: write surface normal as color
-						vert.col = Vector4ToRGBA32(ur_float4((grad * -1.0f + 1.0) * 0.5f, 1.0f));
-
-						vertices.emplace_back(vert);
-					}
-				}
-			}
-		}
-
-		// triangulate surface
-		auto addTriangle = [](std::vector<Index> &indices, Index *tri, ur_bool isBackFace) -> void {
-			indices.push_back(tri[0]);
-			indices.push_back(isBackFace ? tri[2] : tri[1]);
-			indices.push_back(isBackFace ? tri[1] : tri[2]);
-		};
-		indices.reserve(scount * 6);
-		Index tri[3];
-		for (ur_uint iz = 0; iz < gridSize.z; ++iz)
-		{
-			for (ur_uint iy = 0; iy < gridSize.y; ++iy)
-			{
-				for (ur_uint ix = 0; ix < gridSize.x; ++ix)
-				{
-					SurfaceInfo *ps = surface.data() + ix + iy * gridRow + iz * gridSlice;
-					ur_bool isBackFace = ((ps->side & 0x80) != 0);
-					if (ps->side & 0x1)
-					{
-						if (iy > 0 && iz > 0)
-						{
-							tri[0] = (ps)->vidx;
-							tri[1] = (ps - gridSlice)->vidx;
-							tri[2] = (ps - gridSlice - gridRow)->vidx;
-							addTriangle(indices, tri, isBackFace);
-							tri[0] = (ps - gridSlice - gridRow)->vidx;
-							tri[1] = (ps - gridRow)->vidx;
-							tri[2] = (ps)->vidx;
-							addTriangle(indices, tri, isBackFace);
-						}
-					}
-					if (ps->side & 0x2)
-					{
-						if (ix > 0 && iz > 0)
-						{
-							tri[0] = (ps - 1)->vidx;
-							tri[1] = (ps - gridSlice)->vidx;
-							tri[2] = (ps)->vidx;
-							addTriangle(indices, tri, isBackFace);
-							tri[0] = (ps - gridSlice)->vidx;
-							tri[1] = (ps - 1)->vidx;
-							tri[2] = (ps - gridSlice - 1)->vidx;
-							addTriangle(indices, tri, isBackFace);
-						}
-					}
-					if (ps->side & 0x4)
-					{
-						if (ix > 0 && iy > 0)
-						{
-							tri[0] = (ps - 1)->vidx;
-							tri[1] = (ps)->vidx;
-							tri[2] = (ps - gridRow)->vidx;
-							addTriangle(indices, tri, isBackFace);
-							tri[0] = (ps - gridRow)->vidx;
-							tri[1] = (ps - gridRow - 1)->vidx;
-							tri[2] = (ps - 1)->vidx;
-							addTriangle(indices, tri, isBackFace);
-						}
-					}
-				}
-			}
-		}
-
-		if (indices.size() < 3)
-			return Result(Success); // do not create empty gfx resources
-
-		// prepare gfx resources
-		GfxSystem *gfxSystem = volume.GetIsosurface().GetRealm().GetGfxSystem();
-		if (ur_null == gfxSystem)
-			return Result(Failure);
-
-		// create vertex Buffer
-		auto &gfxVB = mesh.gfxVB;
-		Result res = gfxSystem->CreateBuffer(gfxVB);
-		if (Succeeded(res))
-		{
-			GfxResourceData gfxRes = { vertices.data(), (ur_uint)vertices.size() * sizeof(Vertex), 0 };
-			res = gfxVB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::VertexBuffer, 0, &gfxRes);
-		}
-		if (Failed(res))
-			return Result(Failure);
-
-		// create index buffer
-		auto &gfxIB = mesh.gfxIB;
-		res = gfxSystem->CreateBuffer(gfxIB);
-		if (Succeeded(res))
-		{
-			GfxResourceData gfxRes = { indices.data(), (ur_uint)indices.size() * sizeof(Index), 0 };
-			res = gfxIB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::IndexBuffer, 0, &gfxRes);
-		}
-		if (Failed(res))
-			return Result(Failure);
-
-		return Result(Success);
-	}
-
-	Result Isosurface::SurfaceNet::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
-	{
-		Result res = Result(Success);
-
-		if (this->tree.get() != ur_null)
-		{
-			res = this->Render(gfxContext, this->tree->GetRoot());
-		}
-
-		// temp: alwyas draw debug info
-		DrawStats();
-		if (this->tree.get() != ur_null)
-		{
-			DrawTreeBounds(this->tree->GetRoot());
-		}
-		GenericRender *genericRender = this->isosurface.GetRealm().GetComponent<GenericRender>();
-		if (genericRender != ur_null)
-		{
-			genericRender->Render(gfxContext, viewProj);
-		}
-
-		return res;
-	}
-
-	Result Isosurface::SurfaceNet::Render(GfxContext &gfxContext, MeshTree::Node *meshNode)
-	{
-		if (ur_null == meshNode)
-			return Result(InvalidArgs);
-
-		if (meshNode->HasSubNodes())
-		{
-			for (ur_uint i = 0; i < AdaptiveVolume::Node::SubNodesCount; ++i)
-			{
-				this->Render(gfxContext, meshNode->GetSubNode(i));
-			}
-		}
-		else
-		{
-			const MeshBlock &meshBlock = meshNode->GetData();
-			const ur_uint indexCount = (meshBlock.gfxIB.get() ? meshBlock.gfxIB->GetDesc().Size / sizeof(Index) : 0);
-			gfxContext.SetVertexBuffer(meshBlock.gfxVB.get(), 0, sizeof(Vertex), 0);
-			gfxContext.SetIndexBuffer(meshBlock.gfxIB.get(), sizeof(Index) * 8, 0);
-			gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
-		}
-
-		return Result(Success);
-	}
-
-	void Isosurface::SurfaceNet::DrawTreeBounds(const MeshTree::Node *node)
-	{
-		if (ur_null == node)
-			return;
-
-		if (node->HasSubNodes())
-		{
-			for (ur_uint i = 0; i < MeshTree::Node::SubNodesCount; ++i)
-			{
-				this->DrawTreeBounds(node->GetSubNode(i));
-			}
-		}
-		else
-		{
-			static ur_float4 DebugColor[2] = {
-				{ 0.5f, 0.5f, 0.55f, 1.0f },
-				{ 1.0f, 1.0f, 0.0f, 1.0f }
-			};
-			bool hasSurface = (node->GetData().gfxIB.get() != ur_null && node->GetData().gfxIB->GetDesc().Size > 0);
-			if (hasSurface)
-			{
-				GenericRender *genericRender = this->isosurface.GetRealm().GetComponent<GenericRender>();
-				if (genericRender != ur_null)
-				{
-					genericRender->DrawBox(node->GetBBox().Min, node->GetBBox().Max, DebugColor[1]);
-				}
-			}
-		}
-	}
-
-	void Isosurface::SurfaceNet::DrawStats()
-	{
-		memset(&this->stats, 0, sizeof(this->stats));
-		if (this->tree.get() != ur_null)
-		{
-			this->GatherStats(this->tree->GetRoot());
-		}
-
-		ImGui::SetNextWindowSize({ 250.0f, 250.0f });
-		ImGui::SetNextWindowPos({ 0.0f, 0.0f });
-		ImGui::Begin("Isosurface", ur_null, ImGuiWindowFlags_NoResize);
-		ImGui::Separator();
-		ImGui::Text("Options:");
-		//ImGui::Checkbox("Draw bounds", &this->drawDebugBounds);
-		//ImGui::Checkbox("Draw Wireframe", &this->drawWireframe);
-		ImGui::Separator();
-		ImGui::Text("Statistics:");
-		ImGui::Text("Tree Depth: %i", this->tree.get() ? this->tree->GetDepth(): 0);
-		ImGui::Text("Tree Nodes: %i", this->stats.nodes);
-		ImGui::Text("Primitives: %i", this->stats.primitivesCount);
-		ImGui::Text("Vertices: %i", this->stats.verticesCount);
-		ImGui::Text("VideoMemory: %i", this->stats.videoMemory);
-		ImGui::End();
-	}
-
-	void Isosurface::SurfaceNet::GatherStats(const MeshTree::Node *node)
-	{
-		if (ur_null == node)
-			return;
-
-		this->stats.nodes += 1;
-
-		if (node->GetData().gfxVB.get() != ur_null)
-		{
-			this->stats.videoMemory += node->GetData().gfxVB->GetDesc().Size;
-			this->stats.verticesCount += node->GetData().gfxVB->GetDesc().Size / sizeof(Vertex);
-		}
-		if (node->GetData().gfxIB.get() != ur_null)
-		{
-			this->stats.videoMemory += node->GetData().gfxIB->GetDesc().Size;
-			this->stats.primitivesCount += (node->GetData().gfxIB->GetDesc().Size / sizeof(Index)) / 3;
-		}
-
-		if (node->HasSubNodes())
-		{
-			for (ur_uint i = 0; i < AdaptiveVolume::Node::SubNodesCount; ++i)
-			{
-				this->GatherStats(node->GetSubNode(i));
-			}
-		}
-	}
-
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Isosurface::HybridTetrahedra
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	const Isosurface::HybridTetrahedra::Edge Isosurface::HybridTetrahedra::Tetrahedron::Edges[EdgesCount] = {
+	const Isosurface::HybridCubes::Edge Isosurface::HybridCubes::Tetrahedron::Edges[EdgesCount] = {
 		{ 0, 1 }, { 1, 2 }, { 2, 0 }, { 0, 3 }, { 1, 3 }, { 2, 3 }
 	};
 
-	const Isosurface::HybridTetrahedra::Face Isosurface::HybridTetrahedra::Tetrahedron::Faces[FacesCount] = {
+	const Isosurface::HybridCubes::Face Isosurface::HybridCubes::Tetrahedron::Faces[FacesCount] = {
 		{ { 0, 1, 2 }, { 0, 1, 2 } },
 		{ { 0, 3, 1 }, { 0, 3, 4 } },
 		{ { 1, 3, 2 }, { 1, 4, 5 } },
 		{ { 2, 3, 0 }, { 2, 5, 3 } }
 	};
 
-	const Isosurface::HybridTetrahedra::Tetrahedron::SplitInfo Isosurface::HybridTetrahedra::Tetrahedron::EdgeSplitInfo[EdgesCount] = {
+	const Isosurface::HybridCubes::Tetrahedron::SplitInfo Isosurface::HybridCubes::Tetrahedron::EdgeSplitInfo[EdgesCount] = {
 		{ { { 0, 0xff, 2, 3 }, { 0xff, 1, 2, 3 } } },
 		{ { { 0, 1, 0xff, 3 }, { 0, 0xff, 2, 3 } } },
 		{ { { 0, 1, 0xff, 3 }, { 0xff, 1, 2, 3 } } },
@@ -947,13 +432,13 @@ namespace UnlimRealms
 		{ { { 0, 1, 2, 0xff }, { 0, 1, 0xff, 3 } } }
 	};
 
-	Isosurface::HybridTetrahedra::Tetrahedron::Tetrahedron()
+	Isosurface::HybridCubes::Tetrahedron::Tetrahedron()
 	{
 		memset(this->edgeAdjacency, 0, sizeof(this->edgeAdjacency));
 		this->longestEdgeIdx = 0;
 	}
 
-	void Isosurface::HybridTetrahedra::Tetrahedron::Init(const Vertex &v0, const Vertex &v1, const Vertex &v2, const Vertex &v3)
+	void Isosurface::HybridCubes::Tetrahedron::Init(const Vertex &v0, const Vertex &v1, const Vertex &v2, const Vertex &v3)
 	{
 		this->vertices[0] = v0;
 		this->vertices[1] = v1;
@@ -1034,10 +519,11 @@ namespace UnlimRealms
 		}
 	}
 
-	int Isosurface::HybridTetrahedra::Tetrahedron::UpdateAdjacency(Tetrahedron *th)
+	bool Isosurface::HybridCubes::Tetrahedron::UpdateAdjacency(Tetrahedron *th)
 	{
+		bool hasCommonEdges = false;
 		if (ur_null == th)
-			return -1;
+			return hasCommonEdges;
 
 		// compare edges with each other
 		// edges are equal if they have 2 equal vertices
@@ -1052,15 +538,16 @@ namespace UnlimRealms
 				if ((e0_v0 == e1_v0 && e0_v1 == e1_v1) || (e0_v0 == e1_v1 && e0_v1 == e1_v0))
 				{
 					this->LinkAdjacentTetrahedra(th, e0, e1);
-					return e1;
+					hasCommonEdges = true;
+					break;
 				}
 			}
 		}
 
-		return -1;
+		return hasCommonEdges;
 	}
 
-	void Isosurface::HybridTetrahedra::Tetrahedron::LinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx)
+	void Isosurface::HybridCubes::Tetrahedron::LinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx)
 	{
 		auto insertToAdjList = [](Tetrahedron **list, Tetrahedron *item) -> void
 		{
@@ -1080,7 +567,7 @@ namespace UnlimRealms
 		insertToAdjList(adjEdgeList, this);
 	}
 
-	void Isosurface::HybridTetrahedra::Tetrahedron::UnlinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx)
+	void Isosurface::HybridCubes::Tetrahedron::UnlinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx)
 	{
 		auto removeFromAdjList = [](Tetrahedron **list, Tetrahedron *item) -> void
 		{
@@ -1096,7 +583,7 @@ namespace UnlimRealms
 		removeFromAdjList(adjEdgeList, this);
 	}
 
-	void Isosurface::HybridTetrahedra::Tetrahedron::Split()
+	void Isosurface::HybridCubes::Tetrahedron::Split()
 	{
 		if (this->HasChildren())
 			return;
@@ -1118,7 +605,7 @@ namespace UnlimRealms
 		}
 	}
 
-	void Isosurface::HybridTetrahedra::Tetrahedron::Merge()
+	void Isosurface::HybridCubes::Tetrahedron::Merge()
 	{
 		if (!this->HasChildren())
 			return;
@@ -1129,22 +616,26 @@ namespace UnlimRealms
 		}
 	}
 
-	Isosurface::HybridTetrahedra::HybridTetrahedra(Isosurface &isosurface) :
+	Isosurface::HybridCubes::HybridCubes(Isosurface &isosurface, const Desc &desc) :
 		Presentation(isosurface)
 	{
+		this->desc = desc;
 		this->drawTetrahedra = false;
 		this->drawHexahedra = false;
 	}
 
-	Isosurface::HybridTetrahedra::~HybridTetrahedra()
+	Isosurface::HybridCubes::~HybridCubes()
 	{
 
 	}
 
-	Result Isosurface::HybridTetrahedra::Construct(AdaptiveVolume &volume)
+	Result Isosurface::HybridCubes::Update(const ur_float3 &refinementPoint, const ur_float4x4 &viewProj)
 	{
+		if (ur_null == this->isosurface.GetData())
+			return Result(NotInitialized);
+
 		// init roots
-		const BoundingBox &bbox = volume.GetDesc().Bound;
+		const BoundingBox &bbox = this->isosurface.GetData()->GetBound();
 		if (ur_null == this->root[0].get())
 		{
 			std::unique_ptr<Tetrahedron> th(new Tetrahedron());
@@ -1229,57 +720,40 @@ namespace UnlimRealms
 		Result res(Success);
 		for (auto &tetrahedron : this->root)
 		{
-			res = CombinedResult(res, this->Construct(volume, tetrahedron.get()));
+			res = CombinedResult(res, this->Update(refinementPoint, tetrahedron.get()));
 		}
 
 		return res;
 	}
 
-	float Isosurface::HybridTetrahedra::SmallestNodeSize(const BoundingBox &bbox, AdaptiveVolume::Node *volumeNode)
-	{
-		if (ur_null == volumeNode || !bbox.Intersects(volumeNode->GetBBox()))
-			return bbox.SizeMax();
-
-		float nodeSize = volumeNode->GetBBox().SizeMin();
-		if (volumeNode->HasSubNodes())
-		{
-			for (ur_uint i = 0; i < AdaptiveVolume::Node::SubNodesCount; ++i)
-			{
-				nodeSize = std::min(nodeSize, this->SmallestNodeSize(bbox, volumeNode->GetSubNode(i)));
-			}
-		}
-
-		return nodeSize;
-	}
-
-	Result Isosurface::HybridTetrahedra::Construct(AdaptiveVolume &volume, Tetrahedron *tetrahedron)
+	Result Isosurface::HybridCubes::Update(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron)
 	{
 		Result res(Success);
 		if (ur_null == tetrahedron)
 			return res;
 
-		res = CombinedResult( this->UpdateLoD(volume, tetrahedron), res );
+		res = CombinedResult( this->UpdateLoD(refinementPoint, tetrahedron), res );
 
-		res = CombinedResult( this->BuildMesh(volume, tetrahedron), res );
+		res = CombinedResult( this->BuildMesh(tetrahedron), res );
 
 		if (tetrahedron->HasChildren())
 		{
 			for (auto &subTetrahedron : tetrahedron->children)
 			{
-				res = CombinedResult( this->Construct(volume, subTetrahedron.get()), res);
+				res = CombinedResult( this->Update(refinementPoint, subTetrahedron.get()), res);
 			}
 		}
 
 		return res;
 	}
 
-	Result Isosurface::HybridTetrahedra::UpdateLoD(AdaptiveVolume &volume, Tetrahedron *tetrahedron)
+	Result Isosurface::HybridCubes::UpdateLoD(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron)
 	{
 		Result res(Success);
 		if (ur_null == tetrahedron)
 			return res;
 
-		// check whether tetrahedron's longest edge is a termional edge
+		// check whether tetrahedron's longest edge is a terminal edge
 		bool isTerminalEdge = true;
 		Tetrahedron **edgeAdj = tetrahedron->edgeAdjacency[tetrahedron->longestEdgeIdx];
 		for (int i = 0; i < 6; ++i)
@@ -1287,10 +761,10 @@ namespace UnlimRealms
 			Tetrahedron *adjTetrahedron = edgeAdj[i];
 			if (adjTetrahedron != ur_null)
 			{
-				const ur_float3 &e0_v0 = tetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
-				const ur_float3 &e0_v1 = tetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
-				const ur_float3 &e1_v0 = adjTetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[adjTetrahedron->longestEdgeIdx].vid[0]];
-				const ur_float3 &e1_v1 = adjTetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[adjTetrahedron->longestEdgeIdx].vid[1]];
+				const ur_float3 &e0_v0 = tetrahedron->vertices[HybridCubes::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
+				const ur_float3 &e0_v1 = tetrahedron->vertices[HybridCubes::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
+				const ur_float3 &e1_v0 = adjTetrahedron->vertices[HybridCubes::Tetrahedron::Edges[adjTetrahedron->longestEdgeIdx].vid[0]];
+				const ur_float3 &e1_v1 = adjTetrahedron->vertices[HybridCubes::Tetrahedron::Edges[adjTetrahedron->longestEdgeIdx].vid[1]];
 				bool equalEdges = ((e0_v0 == e1_v0 && e0_v1 == e1_v1) || (e0_v0 == e1_v1 && e0_v1 == e1_v0));
 				isTerminalEdge &= equalEdges;
 				if (!isTerminalEdge) break;
@@ -1300,15 +774,17 @@ namespace UnlimRealms
 
 		if (doSplit)
 		{
+			// todo: rewrite refinement algorithm
+
 			// find smallest node size in the intersected volume
 			// todo: precompute BBox during init step
-			const ur_float3 &ev0 = tetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
-			const ur_float3 &ev1 = tetrahedron->vertices[HybridTetrahedra::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
+			const ur_float3 &ev0 = tetrahedron->vertices[HybridCubes::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
+			const ur_float3 &ev1 = tetrahedron->vertices[HybridCubes::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
 			BoundingBox bbox;
 			bbox.Min.SetMin(ev0); bbox.Min.SetMin(ev1);
 			bbox.Max.SetMax(ev0); bbox.Max.SetMax(ev1);
-			float nodeSize = this->SmallestNodeSize(bbox, volume.GetRoot());
-			doSplit = (nodeSize < bbox.SizeMax() * 0.5f);
+			ur_float dist = bbox.Distance(refinementPoint);
+			doSplit = (dist < bbox.SizeMax());
 		}
 
 		if (doSplit)
@@ -1323,7 +799,7 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result Isosurface::HybridTetrahedra::BuildMesh(AdaptiveVolume &volume, Tetrahedron *tetrahedron)
+	Result Isosurface::HybridCubes::BuildMesh(Tetrahedron *tetrahedron)
 	{
 		Result res = Result(Success);
 		if (ur_null == tetrahedron)
@@ -1336,24 +812,9 @@ namespace UnlimRealms
 			!tetrahedron->hexahedra[0].lattice.empty())
 			return Result(Success);
 
-		// gather underlying data blocks into a regular grid for more optimal sampling
-
-		BoundingBox bbox;
-		for (auto &v : tetrahedron->vertices)
-		{
-			bbox.Min.SetMin(v);
-			bbox.Max.SetMax(v);
-		}
-
-		ur_uint maxLevel = volume.MaxRefinementLevel(bbox);
-		BlockArray data;
-		volume.GatherBlocks(maxLevel, bbox, data);
-		if (data.size.x  * data.size.y * data.size.z == 0)
-			return res; // no intersected data blocks
-
 		for (ur_uint i = 0; i < 4; ++i)
 		{
-			res = CombinedResult(res, this->MarchCubes(tetrahedron->hexahedra[i], data));
+			res = CombinedResult(res, this->MarchCubes(tetrahedron->hexahedra[i]));
 		}
 
 		return res;
@@ -1647,8 +1108,11 @@ namespace UnlimRealms
 		{ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 }
 	};
 
-	Result Isosurface::HybridTetrahedra::MarchCubes(Hexahedron &hexahedron, const BlockArray &data)
+	Result Isosurface::HybridCubes::MarchCubes(Hexahedron &hexahedron)
 	{
+		if (ur_null == this->isosurface.GetData())
+			return Result(NotInitialized);
+
 		// compute hexahedron lattice points
 		
 		auto computeLinePoints = [](ur_float3 *points, const ur_uint count, const ur_uint step, const ur_float3 &p0, const ur_float3 &p1) {
@@ -1660,36 +1124,36 @@ namespace UnlimRealms
 			}
 		};
 
-		ur_uint rowOfs = data.blockResolution.x;
-		ur_uint lastRowOfs = rowOfs * (data.blockResolution.y - 1);
-		ur_uint sliceOfs = rowOfs * data.blockResolution.y;
-		ur_uint lastSliceOfs = sliceOfs * (data.blockResolution.z - 1);
-		ur_uint latticeSize = sliceOfs * data.blockResolution.z;
-		//std::vector<ur_float3> lattice;
+		ur_uint rowOfs = this->desc.LatticeResolution.x;
+		ur_uint lastRowOfs = rowOfs * (this->desc.LatticeResolution.y - 1);
+		ur_uint sliceOfs = rowOfs * this->desc.LatticeResolution.y;
+		ur_uint lastSliceOfs = sliceOfs * (this->desc.LatticeResolution.z - 1);
+		ur_uint latticeSize = sliceOfs * this->desc.LatticeResolution.z;
+		//std::vector<ur_float3> lattice(latticeSize);
 		std::vector<ur_float3> &lattice = hexahedron.lattice;
 		lattice.resize(latticeSize);
 		
-		computeLinePoints(lattice.data(), data.blockResolution.x, 1, hexahedron.vertices[0], hexahedron.vertices[1]);
-		computeLinePoints(lattice.data() + lastRowOfs, data.blockResolution.x, 1, hexahedron.vertices[2], hexahedron.vertices[3]);
-		computeLinePoints(lattice.data() + lastSliceOfs, data.blockResolution.x, 1, hexahedron.vertices[4], hexahedron.vertices[5]);
-		computeLinePoints(lattice.data() + lastRowOfs + lastSliceOfs, data.blockResolution.x, 1, hexahedron.vertices[6], hexahedron.vertices[7]);
+		computeLinePoints(lattice.data(), this->desc.LatticeResolution.x, 1, hexahedron.vertices[0], hexahedron.vertices[1]);
+		computeLinePoints(lattice.data() + lastRowOfs, this->desc.LatticeResolution.x, 1, hexahedron.vertices[2], hexahedron.vertices[3]);
+		computeLinePoints(lattice.data() + lastSliceOfs, this->desc.LatticeResolution.x, 1, hexahedron.vertices[4], hexahedron.vertices[5]);
+		computeLinePoints(lattice.data() + lastRowOfs + lastSliceOfs, this->desc.LatticeResolution.x, 1, hexahedron.vertices[6], hexahedron.vertices[7]);
 		ur_float3 *p_col0 = lattice.data();
 		ur_float3 *p_col1 = lattice.data() + lastSliceOfs;
-		for (ur_uint ix = 0; ix < data.blockResolution.x; ++ix, ++p_col0, ++p_col1)
+		for (ur_uint ix = 0; ix < this->desc.LatticeResolution.x; ++ix, ++p_col0, ++p_col1)
 		{
-			computeLinePoints(p_col0, data.blockResolution.y, rowOfs, *p_col0, *(p_col0 + lastRowOfs));
-			computeLinePoints(p_col1, data.blockResolution.y, rowOfs, *p_col1, *(p_col1 + lastRowOfs));
+			computeLinePoints(p_col0, this->desc.LatticeResolution.y, rowOfs, *p_col0, *(p_col0 + lastRowOfs));
+			computeLinePoints(p_col1, this->desc.LatticeResolution.y, rowOfs, *p_col1, *(p_col1 + lastRowOfs));
 		}
 
 		ur_float3 *p_row0 = lattice.data();
 		ur_float3 *p_row1 = lattice.data() + lastSliceOfs;
-		for (ur_uint iy = 0; iy < data.blockResolution.y; ++iy)
+		for (ur_uint iy = 0; iy < this->desc.LatticeResolution.y; ++iy)
 		{
 			p_col0 = p_row0;
 			p_col1 = p_row1;
-			for (ur_uint ix = 0; ix < data.blockResolution.x; ++ix, ++p_col0, ++p_col1)
+			for (ur_uint ix = 0; ix < this->desc.LatticeResolution.x; ++ix, ++p_col0, ++p_col1)
 			{
-				computeLinePoints(p_col0, data.blockResolution.z, sliceOfs, *p_col0, *p_col1);
+				computeLinePoints(p_col0, this->desc.LatticeResolution.z, sliceOfs, *p_col0, *p_col1);
 			}
 			p_row0 += rowOfs;
 			p_row1 += rowOfs;
@@ -1697,15 +1161,15 @@ namespace UnlimRealms
 
 		// march
 
-		static const Block::ValueType ScalarFieldSurfaceValue = Block::ValueType(0);
+		static const DataVolume::ValueType ScalarFieldSurfaceValue = DataVolume::ValueType(0);
 		static const int NoVertexId = -1;
 		std::vector<Isosurface::Vertex> vertexBuffer;
 		std::vector<Isosurface::Index> indexBuffer;
 		std::vector<ur_int3> edgeVertices(latticeSize, NoVertexId);
 		ur_int *cellEdges[12];
 		ur_float3 *cellPoints[8];
-		Block::ValueType cellValues[8];
-		ur_uint3 cellsCount = data.blockResolution - 1;
+		DataVolume::ValueType cellValues[8];
+		ur_uint3 cellsCount = this->desc.LatticeResolution - 1;
 		ur_float3 dbg_edgePoints[12];
 		ur_float3 *p_slice = lattice.data();
 		for (ur_uint iz = 0; iz < cellsCount.z; ++iz)
@@ -1731,11 +1195,15 @@ namespace UnlimRealms
 					ur_uint flagIdx = 0;
 					for (ur_uint iv = 0; iv < 8; ++iv)
 					{
-						// todo: fix sampling function
-						//cellValues[iv] = data.Sample(*cellPoints[iv]);
-						// temp: generate scalar field at run time
-						cellValues[iv] = 4.0f - (*cellPoints[iv]).Length();
-						if (cellValues[iv] <= ScalarFieldSurfaceValue) flagIdx |= (1 << iv);
+						if (Succeeded(this->isosurface.GetData()->Read(cellValues[iv], *cellPoints[iv])))
+						{
+							if (cellValues[iv] <= ScalarFieldSurfaceValue) flagIdx |= (1 << iv);
+						}
+						else
+						{
+							// data's not ready
+							return NotInitialized;
+						}
 					}
 					const ur_uint &edgeFlags = MCEdgeTable[flagIdx];
 					if (edgeFlags == 0)
@@ -1764,14 +1232,14 @@ namespace UnlimRealms
 							if (NoVertexId == *cellEdges[ie])
 							{
 								// compute new vertex
-								Block::ValueType &cv0 = cellValues[MCEdgeVertices[ie][0]];
-								Block::ValueType &cv1 = cellValues[MCEdgeVertices[ie][1]];
+								DataVolume::ValueType &cv0 = cellValues[MCEdgeVertices[ie][0]];
+								DataVolume::ValueType &cv1 = cellValues[MCEdgeVertices[ie][1]];
 								ur_float lfactor = (ur_float)(ScalarFieldSurfaceValue - cv0) / (cv1 - cv0);
 								ur_float3 &p0 = *cellPoints[MCEdgeVertices[ie][0]];
 								ur_float3 &p1 = *cellPoints[MCEdgeVertices[ie][1]];
 								ur_float3 p = ur_float3::Lerp(p0, p1, lfactor);
 								*cellEdges[ie] = (ur_int)vertexBuffer.size();
-								vertexBuffer.push_back({ p, 0xffffffff });
+								vertexBuffer.push_back({ p, 0.0f, 0xffffffff });
 								// todo: compute corresponding normal here
 								// as a gradient of adjacent samples
 							}
@@ -1813,6 +1281,8 @@ namespace UnlimRealms
 			p_slice += sliceOfs;
 		}
 
+		for (auto &v : vertexBuffer) v.norm.Normalize();
+
 		// prepare gfx resources
 
 		if (indexBuffer.size() < 3)
@@ -1847,7 +1317,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result Isosurface::HybridTetrahedra::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
+	Result Isosurface::HybridCubes::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
 	{
 		GenericRender *genericRender = this->isosurface.GetRealm().GetComponent<GenericRender>();
 		for (auto &tetrahedron : this->root)
@@ -1858,7 +1328,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result Isosurface::HybridTetrahedra::Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4x4 &viewProj, Tetrahedron *tetrahedron)
+	Result Isosurface::HybridCubes::Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4x4 &viewProj, Tetrahedron *tetrahedron)
 	{
 		if (ur_null == tetrahedron)
 			return Result(Success);
@@ -1891,7 +1361,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result Isosurface::HybridTetrahedra::RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Tetrahedron *tetrahedron)
+	Result Isosurface::HybridCubes::RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Tetrahedron *tetrahedron)
 	{
 		if (ur_null == genericRender ||
 			ur_null == tetrahedron)
@@ -1942,7 +1412,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	void Isosurface::HybridTetrahedra::ShowImgui()
+	void Isosurface::HybridCubes::ShowImgui()
 	{
 		// render debug info
 		/*
@@ -1987,68 +1457,13 @@ namespace UnlimRealms
 		}
 		}
 		*/
-		if (ImGui::TreeNode("HybridTetrahedra"))
+		if (ImGui::TreeNode("HybridCubes"))
 		{
 			// todo
 			ImGui::Checkbox("Draw tetrahedra", &this->drawTetrahedra);
 			ImGui::Checkbox("Draw hexahedra", &this->drawHexahedra);
 			ImGui::TreePop();
 		}
-	}
-
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Isosurface::Builder
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	Isosurface::Builder::Builder(Isosurface &isosurface) :
-		SubSystem(isosurface)
-	{
-	}
-
-	Isosurface::Builder::~Builder()
-	{
-
-	}
-
-	void Isosurface::Builder::AddNode(AdaptiveVolume::Node *node)
-	{
-		if (ur_null == node)
-			return;
-
-		this->newNodes.insert(node);
-	}
-
-	void Isosurface::Builder::RemoveNode(AdaptiveVolume::Node *node)
-	{
-		this->newNodes.erase(node);
-	}
-
-	Result Isosurface::Builder::Build()
-	{
-		// acquire sub systems
-		AdaptiveVolume *volume = this->isosurface.GetVolume();
-		Loader *loader = this->isosurface.GetLoader();
-		Presentation *presentation = this->isosurface.GetPresentation();
-		if (ur_null == volume ||
-			ur_null == loader ||
-			ur_null == presentation)
-			return Result(NotInitialized);
-
-		// temp: simple synchronous build process
-		// support: sync/async construction
-
-		// load new volume blocks
-		for (AdaptiveVolume::Node *node : this->newNodes)
-		{
-			loader->Load(*volume, node->GetData(), node->GetBBox());
-		}
-		this->newNodes.clear();
-
-		// update presentation
-		presentation->Construct(*volume);
-
-		return Result(Success);
 	}
 
 	
@@ -2063,26 +1478,14 @@ namespace UnlimRealms
 
 	Isosurface::~Isosurface()
 	{
-		// explicit deinitialization, order matters:
-		// volume calls handler function, which expects builder to be valid or at least null
-		this->volume.reset(ur_null);
-		this->builder.reset(ur_null);
-		this->loader.reset(ur_null);
-		this->presentation.reset(ur_null);
 	}
 
-	Result Isosurface::Init(const AdaptiveVolume::Desc &desc, std::unique_ptr<Loader> loader, std::unique_ptr<Presentation> presentation)
+	Result Isosurface::Init(std::unique_ptr<DataVolume> data, std::unique_ptr<Presentation> presentation)
 	{
 		Result res(Success);
 
-		this->volume.reset(new AdaptiveVolume(*this));
-		this->builder.reset(new Builder(*this));
-		this->loader = std::move(loader);
+		this->data = std::move(data);
 		this->presentation = std::move(presentation);
-		
-		res = this->volume->Init(desc);
-		if (Failed(res))
-			return ResultError(Failure, "Isosurface::Init: failed to initialize volume");
 		
 		res = this->CreateGfxObjects();
 
@@ -2091,11 +1494,14 @@ namespace UnlimRealms
 
 	Result Isosurface::Update()
 	{
-		// build volume nodes
-		if (this->builder.get() != ur_null)
+		// temp: simple synchronous build process
+		// support: sync/async construction
+
+		// update presentation
+		/*if (this->presentation.get() != ur_null)
 		{
-			this->builder->Build();
-		}
+			this->presentation->Update();
+		}*/
 
 		return Result(Success);
 	}
@@ -2150,6 +1556,7 @@ namespace UnlimRealms
 		{
 			GfxInputElement elements[] = {
 				{ GfxSemantic::Position, 0, 0, GfxFormat::R32G32B32, GfxFormatView::Float, 0 },
+				{ GfxSemantic::Normal, 0, 0, GfxFormat::R32G32B32, GfxFormatView::Float, 0 },
 				{ GfxSemantic::Color, 0, 0, GfxFormat::R8G8B8A8, GfxFormatView::Unorm, 0 }
 			};
 			res = this->gfxObjects->inputLayout->Initialize(*this->gfxObjects->VS.get(), elements, ur_array_size(elements));
@@ -2188,8 +1595,6 @@ namespace UnlimRealms
 	Result Isosurface::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
 	{
 		Result res(Success);
-		if (ur_null == this->volume)
-			return res;
 
 		// render isosurface
 

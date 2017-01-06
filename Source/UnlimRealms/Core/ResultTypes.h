@@ -31,6 +31,10 @@ namespace UnlimRealms
 
 		static UID GenerateUID();
 
+		bool operator == (const UID &code) const { return (this->Code == code); }
+
+		bool operator != (const UID &code) const { return (this->Code != code); }
+
 	private:
 
 		static UID lastUID;

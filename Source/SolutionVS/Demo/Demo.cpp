@@ -85,31 +85,28 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	// test isosurface
 	std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
 	{
-		Isosurface::AdaptiveVolume::Desc desc;
-		desc.Bound = BoundingBox(ur_float3(-4.0f, -4.0f, -4.0f), ur_float3(4.0f, 4.0f, 4.0f));
-		desc.BlockSize = 0.125f;
-		desc.BlockResolution = 4;// 16;
-		desc.DetailLevelDistance = desc.BlockSize.x * 2.0f;
-		desc.RefinementProgression = 2.0f;
-
-		/*Isosurface::ProceduralGenerator::FillParams generateParams;
-		generateParams.internalValue = +1.0f;
-		generateParams.externalValue = -1.0f;
-		std::unique_ptr<Isosurface::ProceduralGenerator> loader(new Isosurface::ProceduralGenerator(*isosurface.get(),
-			Isosurface::ProceduralGenerator::Algorithm::Fill, generateParams));*/
+		BoundingBox volumeBound(ur_float3(-4.0f, -4.0f, -4.0f), ur_float3(4.0f, 4.0f, 4.0f));
+#if 0
 		Isosurface::ProceduralGenerator::SphericalDistanceFieldParams generateParams;
-		generateParams.center = desc.Bound.Center();
-		generateParams.radius = desc.Bound.SizeMin() * 0.5f;
-		std::unique_ptr<Isosurface::ProceduralGenerator> loader(new Isosurface::ProceduralGenerator(*isosurface.get(),
+		generateParams.bound = volumeBound;
+		generateParams.center = volumeBound.Center();
+		generateParams.radius = volumeBound.SizeMin() * 0.5f;
+		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),
 			Isosurface::ProceduralGenerator::Algorithm::SphericalDistanceField, generateParams));
-		/*Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
-		std::unique_ptr<Isosurface::ProceduralGenerator> loader(new Isosurface::ProceduralGenerator(*isosurface.get(),
-			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));*/
+#else
+		Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
+		generateParams.bound = volumeBound;
+		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),
+			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));
+#endif
 
-		//std::unique_ptr<Isosurface::SurfaceNet> presentation(new Isosurface::SurfaceNet(*isosurface.get()));
-		std::unique_ptr<Isosurface::HybridTetrahedra> presentation(new Isosurface::HybridTetrahedra(*isosurface.get()));
+		Isosurface::HybridCubes::Desc desc;
+		desc.CellSize = 1.0f;
+		desc.LatticeResolution = 8;
+		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x;
+		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
 
-		isosurface->Init(desc, std::move(loader), std::move(presentation));
+		isosurface->Init(std::move(dataVolume), std::move(presentation));
 	}
 	
     // Main message loop:
@@ -140,7 +137,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		if (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F))
 			freezeRefinement = !freezeRefinement;
 		if (!freezeRefinement)
-			isosurface->GetVolume()->RefinementByDistance(camera.GetPosition());
+			isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
 		isosurface->Update();
 
 		// expose demo gui

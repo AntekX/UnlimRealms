@@ -130,19 +130,17 @@ namespace UnlimRealms
 			static int listbox_item_current = 1;
 			ImGui::Combo("Mode", (int*)&this->mode, ModeListBoxItems);
 			
-			if (ImGui::Button("Reset World Up"))
+			if (ImGui::Button("Reset Roll"))
 			{
 				ur_float4x4 m = this->camera->GetFrame();
-				ur_float3 &m_up = m.r[1];
-				if (ur_float3::Dot(m_up, this->worldUp) > 1.0e-2f)
+				ur_float3 &m_right = m.r[0];
+				ur_float d = ur_float3::Dot(m_right, this->worldUp);
+				if (1.0f - fabs(d) > 1.0e-2f)
 				{
-					ur_float3 &m_right = m.r[0];
+					ur_float3 &m_up = m.r[1];
 					ur_float3 &m_ahead = m.r[2];
-					m_up = this->worldUp;
-					ur_float d = ur_float3::Dot(m_right, m_up);
 					m_right = ur_float3::Normalize(m_right - m_up * d);
-					d = ur_float3::Dot(m_ahead, m_up);
-					m_ahead = ur_float3::Normalize(m_ahead - m_up * d);
+					m_up = ur_float3::Normalize(ur_float3::Cross(m_ahead, m_right));
 				}
 				else
 				{

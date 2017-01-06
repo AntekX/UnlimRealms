@@ -1262,16 +1262,26 @@ namespace UnlimRealms
 	// Intersection test functions
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
 	template <typename T>
-	inline bool IntersectRayPlane(TVector3<T> *result, const TVector3<T> &rayPos, const TVector3<T> &rayDir,
+	inline bool IntersectRayPlaneDistance(T &dist, const TVector3<T> &rayPos, const TVector3<T> &rayDir,
 		const TVector3<T> &planePoint, const TVector3<T> &planeNormal)
 	{
 		T denom = TVector3<T>::Dot(rayDir, planeNormal);
 		if (denom != 0)
 		{
 			T num = TVector3<T>::Dot(planePoint - rayPos, planeNormal);
-			T d = num / denom;
+			dist = num / denom;
+		}
+		return false;
+	}
+
+	template <typename T>
+	inline bool IntersectRayPlane(TVector3<T> *result, const TVector3<T> &rayPos, const TVector3<T> &rayDir,
+		const TVector3<T> &planePoint, const TVector3<T> &planeNormal)
+	{
+		float d;
+		if (IntersectRayPlaneDistance(d, rayPos, rayDir, planePoint, planeNormal))
+		{
 			if (d >= 0)
 			{
 				if (result)

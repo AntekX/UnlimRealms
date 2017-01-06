@@ -45,132 +45,47 @@ namespace UnlimRealms
 
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Isosurface volume data block
+		// Abstract voxel data accessor/mutator
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		struct UR_DECL Block
+		class UR_DECL DataVolume : public SubSystem
 		{
+		public:
+
 			typedef ur_float ValueType;
-			std::vector<ValueType> field;
-		};
 
+			DataVolume(Isosurface &isosurface);
 
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Blocks 3D array
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		struct UR_DECL BlockArray
-		{
-			BoundingBox bbox;
-			ur_uint3 size;
-			std::vector<Block*> blocks;
-			ur_uint3 blockResolution;
-			ur_uint blockBorder;
-			ur_float3 blockSize;
+			~DataVolume();
 
-			BlockArray() : size(0), blockResolution(0), blockBorder(0), blockSize(0.0f) {}
+			virtual Result Read(ValueType &value, const ur_float3 &point);
 
-			Block::ValueType Sample(const ur_float3 &point) const;
-		};
+			// todo: support data modification
+			//virtual Result Write(const ValueType &value);
 
+			inline const BoundingBox& GetBound() const { return this->bound; }
 
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Voxel data tree
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		class UR_DECL AdaptiveVolume : public SubSystem, public Octree<Block>
-		{
-		public:
+		protected:
 
-			struct Desc
-			{
-				BoundingBox Bound; // full volume bound
-				ur_uint3 BlockResolution; // data block field dimensions (min 3x3x3)
-				ur_float3 BlockSize; // most detailed octree node world size
-				ur_float DetailLevelDistance; // distance at which most detailed blocks are expected
-				ur_float RefinementProgression; // per level refinement distance increase factor
-			};
-
-			struct LevelInfo
-			{
-				ur_float Distance;
-			};
-
-			static const ur_uint BorderSize = 1;
-
-			AdaptiveVolume(Isosurface &isosurface, ur_uint depth = DefaultDepth, Handler handeler = OnNodeChanged);
-			
-			~AdaptiveVolume();
-
-			Result Init(const Desc &desc);
-
-			void RefinementByDistance(const ur_float3 &point);
-
-			ur_uint MaxRefinementLevel(const BoundingBox &bbox);
-
-			void GatherBlocks(const ur_uint level, const BoundingBox &bbox, BlockArray &blockArray);
-
-			inline Isosurface& GetIsosurface() { return this->isosurface; }
-
-			inline const Desc& GetDesc() const { return this->desc; }
-
-			inline ur_uint GetLevelsCount() const { return (ur_uint)this->levelInfo.size(); }
-
-			inline const LevelInfo& GetLevelInfo(ur_uint i) const { return this->levelInfo[i]; }
-
-			inline const Vector3& GetRefinementPoint() const { return this->refinementPoint; }
-
-		private:
-
-			static void OnNodeChanged(Node* node, Event e);
-
-			void RefinementByDistance(const ur_float3 &pos, AdaptiveVolume::Node *node);
-
-			void MaxRefinementLevel(ur_uint &maxLevel, const BoundingBox &bbox, AdaptiveVolume::Node *node);
-
-			void GatherBlocks(AdaptiveVolume::Node *node, const ur_uint level, BlockArray &blockArray);
-
-			Desc desc;
-			BoundingBox alignedBound;
-			std::vector<LevelInfo> levelInfo;
-			Vector3 refinementPoint;
-		};
-
-
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Abstract volume data loader
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		class UR_DECL Loader : public SubSystem
-		{
-		public:
-
-			Loader(Isosurface &isosurface);
-
-			~Loader();
-
-			virtual Result Load(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox);
+			BoundingBox bound;
 		};
 
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Procedural volume data generator
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		class UR_DECL ProceduralGenerator : public Loader
+		class UR_DECL ProceduralGenerator : public DataVolume
 		{
 		public:
 
 			enum class UR_DECL Algorithm
 			{
-				Fill,
 				SphericalDistanceField,
 				SimplexNoise
 			};
 
 			struct UR_DECL GenerateParams
 			{
-			};
-
-			struct UR_DECL FillParams : GenerateParams
-			{
-				Block::ValueType internalValue;
-				Block::ValueType externalValue;
+				BoundingBox bound;
 			};
 
 			struct UR_DECL SphericalDistanceFieldParams : GenerateParams
@@ -188,15 +103,13 @@ namespace UnlimRealms
 
 			~ProceduralGenerator();
 
-			virtual Result Load(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox);
+			virtual Result Read(ValueType &value, const ur_float3 &point);
 
 		private:
 
-			static Result Fill(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox, const FillParams &params);
+			Result GenerateSphericalDistanceField(ValueType &value, const ur_float3 &point);
 
-			static Result GenerateSphericalDistanceField(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox, const SphericalDistanceFieldParams &params);
-
-			static Result GenerateSimplexNoise(AdaptiveVolume &volume, Block &block, const BoundingBox &bbox, const SimplexNoiseParams &params);
+			Result GenerateSimplexNoise(ValueType &value, const ur_float3 &point);
 
 
 			Algorithm algorithm;
@@ -215,65 +128,11 @@ namespace UnlimRealms
 
 			~Presentation();
 
-			virtual Result Construct(AdaptiveVolume &volume);
+			virtual Result Update(const ur_float3 &refinementPoint, const ur_float4x4 &viewProj);
 
 			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
 			virtual void ShowImgui();
-		};
-
-
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// "Surface Net" presentation implementation
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		class UR_DECL SurfaceNet : public Presentation
-		{
-		public:
-
-			SurfaceNet(Isosurface &isosurface);
-
-			~SurfaceNet();
-
-			virtual Result Construct(AdaptiveVolume &volume);
-
-			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
-
-		private:
-
-			struct UR_DECL MeshBlock
-			{
-				bool initialized;
-				std::unique_ptr<GfxBuffer> gfxVB;
-				std::unique_ptr<GfxBuffer> gfxIB;
-
-				MeshBlock() : initialized(false) {}
-			};
-
-			typedef Octree<MeshBlock> MeshTree;
-
-			Result Construct(AdaptiveVolume &volume, AdaptiveVolume::Node *volumeNode, MeshTree::Node *meshNode);
-
-			Result Construct(AdaptiveVolume &volume, const BoundingBox &bbox, Block &block, MeshBlock &mesh);
-
-			Result Render(GfxContext &gfxContext, MeshTree::Node *meshNode);
-
-
-			std::unique_ptr<MeshTree> tree;
-
-
-			struct Stat
-			{
-				ur_uint nodes;
-				ur_uint verticesCount;
-				ur_uint primitivesCount;
-				ur_uint videoMemory;
-			} stats;
-
-			void DrawTreeBounds(const MeshTree::Node *node);
-
-			void DrawStats();
-
-			void GatherStats(const MeshTree::Node *node);
 		};
 
 
@@ -283,15 +142,22 @@ namespace UnlimRealms
 		// Each tetrahedron is then divided into 4 hexahedra
 		// Each hexahedron bounds the lattice used for surface mesh extraction
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		class UR_DECL HybridTetrahedra : public Presentation
+		class UR_DECL HybridCubes : public Presentation
 		{
 		public:
 
-			HybridTetrahedra(Isosurface &isosurface);
+			struct Desc
+			{
+				ur_float CellSize; // expected lattice cell size at the highest LoD
+				ur_uint3 LatticeResolution; // hexahedron lattice dimensions (min 2x2x2)
+				ur_float DetailLevelDistance; // distance at which most detailed lattice is expected
+			};
 
-			~HybridTetrahedra();
+			HybridCubes(Isosurface &isosurface, const Desc &desc);
 
-			virtual Result Construct(AdaptiveVolume &volume);
+			~HybridCubes();
+
+			virtual Result Update(const ur_float3 &refinementPoint, const ur_float4x4 &viewProj);
 
 			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
@@ -353,7 +219,7 @@ namespace UnlimRealms
 
 				void Init(const Vertex &v0, const Vertex &v1, const Vertex &v2, const Vertex &v3);
 
-				int UpdateAdjacency(Tetrahedron *th);
+				bool UpdateAdjacency(Tetrahedron *th);
 
 				void LinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx);
 				
@@ -367,20 +233,20 @@ namespace UnlimRealms
 			};
 
 
-			float SmallestNodeSize(const BoundingBox &bbox, AdaptiveVolume::Node *volumeNode);
+			Result Update(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron);
 
-			Result Construct(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
+			Result UpdateLoD(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron);
 
-			Result UpdateLoD(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
+			Result BuildMesh(Tetrahedron *tetrahedron);
 
-			Result BuildMesh(AdaptiveVolume &volume, Tetrahedron *tetrahedron);
-
-			Result MarchCubes(Hexahedron &hexahedron, const BlockArray &data);
+			Result MarchCubes(Hexahedron &hexahedron);
 
 			Result Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4x4 &viewProj, Tetrahedron *tetrahedron);
 			
 			Result RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Tetrahedron *tetrahedron);
 
+
+			Desc desc;
 			static const ur_uint RootsCount = 6;
 			std::unique_ptr<Tetrahedron> root[RootsCount];
 			
@@ -389,34 +255,11 @@ namespace UnlimRealms
 		};
 
 
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Isosurface build process managing class
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		class UR_DECL Builder : public SubSystem
-		{
-		public:
-
-			Builder(Isosurface &isosurface);
-
-			~Builder();
-
-			void AddNode(AdaptiveVolume::Node *node);
-
-			void RemoveNode(AdaptiveVolume::Node *node);
-
-			virtual Result Build();
-
-		private:
-
-			std::set<AdaptiveVolume::Node*> newNodes;
-		};
-
-
 		Isosurface(Realm &realm);
 
 		virtual ~Isosurface();
 
-		Result Init(const AdaptiveVolume::Desc &desc, std::unique_ptr<Loader> loader, std::unique_ptr<Presentation> presentation);
+		Result Init(std::unique_ptr<DataVolume> data, std::unique_ptr<Presentation> presentation);
 
 		Result Update();
 
@@ -424,13 +267,9 @@ namespace UnlimRealms
 
 		void ShowImgui();
 
-		inline AdaptiveVolume* GetVolume() const { return this->volume.get(); }
-
-		inline Loader* GetLoader() const { return this->loader.get(); }
+		inline DataVolume* GetData() const { return this->data.get(); }
 
 		inline Presentation* GetPresentation() const { return this->presentation.get(); }
-
-		inline Builder* GetBuilder() const { return this->builder.get(); }
 	
 	protected:
 
@@ -453,26 +292,15 @@ namespace UnlimRealms
 		struct Vertex
 		{
 			ur_float3 pos;
+			ur_float3 norm;
 			ur_uint32 col;
 		};
 
 		typedef ur_uint32 Index;
 
-		std::unique_ptr<AdaptiveVolume> volume;
-		std::unique_ptr<Loader> loader;
+		std::unique_ptr<DataVolume> data;
 		std::unique_ptr<Presentation> presentation;
-		std::unique_ptr<Builder> builder;
 		std::unique_ptr<GfxObjects> gfxObjects;
-
-		/*struct Stat
-		{
-			ur_uint volumeNodes;
-			ur_uint surfaceNodes;
-			ur_uint verticesCount;
-			ur_uint primitivesCount;
-			ur_uint videoMemory;
-			ur_uint sysMemory;
-		} stats;*/
 	};
 
 } // end namespace UnlimRealms
