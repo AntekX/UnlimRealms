@@ -349,7 +349,7 @@ namespace UnlimRealms
 	Result Isosurface::ProceduralGenerator::GenerateSimplexNoise(ValueType &value, const ur_float3 &point)
 	{
 		// temp: hardcoded generation params
-		PerlinNoise noise;
+		SimplexNoise noise;
 		ur_float radius = this->GetBound().SizeX() * 0.4f;
 		ur_float3 center = this->GetBound().Center();
 		struct Octave
@@ -359,7 +359,7 @@ namespace UnlimRealms
 		};
 		Octave octaves[] = {
 			{ -1.00f, 0.50f },
-			{ -0.5f, 1.00f },
+			{ -1.00f, 1.00f },
 			//{ 0.05f, 8.00f },
 		};
 		const ur_uint numOctaves = ur_array_size(octaves);
@@ -774,17 +774,20 @@ namespace UnlimRealms
 
 		if (doSplit)
 		{
-			// todo: rewrite refinement algorithm
-
-			// find smallest node size in the intersected volume
+			// todo: improve split algorithm (produces cracks sometimes because non terminal edges are split)
 			// todo: precompute BBox during init step
 			const ur_float3 &ev0 = tetrahedron->vertices[HybridCubes::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
 			const ur_float3 &ev1 = tetrahedron->vertices[HybridCubes::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
-			BoundingBox bbox;
-			bbox.Min.SetMin(ev0); bbox.Min.SetMin(ev1);
-			bbox.Max.SetMax(ev0); bbox.Max.SetMax(ev1);
-			ur_float dist = bbox.Distance(refinementPoint);
-			doSplit = (dist < bbox.SizeMax());
+			doSplit = ((ev1 - ev0).Length() / (this->desc.LatticeResolution.GetMaxValue() * 2) > this->desc.CellSize);
+			if (doSplit)
+			{
+				BoundingBox bbox;
+				const Vertex *pv = tetrahedron->vertices;
+				bbox.Min.SetMin(ev0); bbox.Min.SetMin(ev1);
+				bbox.Max.SetMax(ev0); bbox.Max.SetMax(ev1);
+				ur_float dist = bbox.Distance(refinementPoint);
+				doSplit = (dist < bbox.SizeMax());
+			}
 		}
 
 		if (doSplit)

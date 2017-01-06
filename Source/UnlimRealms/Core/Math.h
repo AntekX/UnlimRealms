@@ -375,6 +375,16 @@ namespace UnlimRealms
 			return r;
 		}
 
+		T GetMaxValue()
+		{
+			return std::max(std::max(this->x, this->y), this->z);
+		}
+
+		T GetMinValue()
+		{
+			return std::min(std::min(this->x, this->y), this->z);
+		}
+
 		T Length() const
 		{
 			return 0;
@@ -649,6 +659,16 @@ namespace UnlimRealms
 			TVector4<T> r = v1;
 			r.SetMax(v2);
 			return r;
+		}
+
+		T GetMaxValue()
+		{
+			return std::max(std::max(std::max(this->x, this->y), this->z), this->w);
+		}
+
+		T GetMinValue()
+		{
+			return std::min(std::min(std::min(this->x, this->y), this->z), this->w);
 		}
 
 		void SetQuaternion(const TVector3<T> &axis, const T &angle)
