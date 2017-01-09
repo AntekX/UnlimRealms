@@ -416,6 +416,10 @@ namespace UnlimRealms
 		{ 0, 1 }, { 1, 2 }, { 2, 0 }, { 0, 3 }, { 1, 3 }, { 2, 3 }
 	};
 
+	const ur_byte Isosurface::HybridCubes::Tetrahedron::EdgeOppositeId[EdgesCount] = {
+		5, 3, 4, 1, 2, 0
+	};
+
 	const Isosurface::HybridCubes::Face Isosurface::HybridCubes::Tetrahedron::Faces[FacesCount] = {
 		{ { 0, 1, 2 }, { 0, 1, 2 } },
 		{ { 0, 3, 1 }, { 0, 3, 4 } },
@@ -434,8 +438,13 @@ namespace UnlimRealms
 
 	Isosurface::HybridCubes::Tetrahedron::Tetrahedron()
 	{
-		memset(this->edgeAdjacency, 0, sizeof(this->edgeAdjacency));
+		this->initialized = false;
+		this->level = 0;
 		this->longestEdgeIdx = 0;
+	}
+
+	Isosurface::HybridCubes::Tetrahedron::~Tetrahedron()
+	{
 	}
 
 	void Isosurface::HybridCubes::Tetrahedron::Init(const Vertex &v0, const Vertex &v1, const Vertex &v2, const Vertex &v3)
@@ -458,6 +467,12 @@ namespace UnlimRealms
 				this->longestEdgeIdx = eidx;
 			}
 		}
+
+		// compute bbox
+
+		this->bbox = BoundingBox();
+		this->bbox.Min.SetMin(v0); this->bbox.Min.SetMin(v1); this->bbox.Min.SetMin(v2); this->bbox.Min.SetMin(v3);
+		this->bbox.Max.SetMax(v0); this->bbox.Max.SetMax(v1); this->bbox.Max.SetMax(v2); this->bbox.Max.SetMax(v3);
 
 		// init sub hexahedra
 
@@ -519,70 +534,6 @@ namespace UnlimRealms
 		}
 	}
 
-	bool Isosurface::HybridCubes::Tetrahedron::UpdateAdjacency(Tetrahedron *th)
-	{
-		bool hasCommonEdges = false;
-		if (ur_null == th)
-			return hasCommonEdges;
-
-		// compare edges with each other
-		// edges are equal if they have 2 equal vertices
-		for (ur_uint e0 = 0; e0 < EdgesCount; ++e0)
-		{
-			for (ur_uint e1 = 0; e1 < EdgesCount; ++e1)
-			{
-				const ur_float3 &e0_v0 = this->vertices[Edges[e0].vid[0]];
-				const ur_float3 &e0_v1 = this->vertices[Edges[e0].vid[1]];
-				const ur_float3 &e1_v0 = th->vertices[Edges[e1].vid[0]];
-				const ur_float3 &e1_v1 = th->vertices[Edges[e1].vid[1]];
-				if ((e0_v0 == e1_v0 && e0_v1 == e1_v1) || (e0_v0 == e1_v1 && e0_v1 == e1_v0))
-				{
-					this->LinkAdjacentTetrahedra(th, e0, e1);
-					hasCommonEdges = true;
-					break;
-				}
-			}
-		}
-
-		return hasCommonEdges;
-	}
-
-	void Isosurface::HybridCubes::Tetrahedron::LinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx)
-	{
-		auto insertToAdjList = [](Tetrahedron **list, Tetrahedron *item) -> void
-		{
-			int insertPos = -1;
-			for (int i = 5; i >= 0; --i)
-			{
-				if (list[i] == ur_null) insertPos = i;
-				else if (list[i] == item) return;
-			}
-			assert(insertPos >= 0);
-			list[insertPos] = item;
-		};
-
-		Tetrahedron **myEdgeList = this->edgeAdjacency[myEdgeIdx];
-		Tetrahedron **adjEdgeList = th->edgeAdjacency[adjEdgeIdx];
-		insertToAdjList(myEdgeList, th);
-		insertToAdjList(adjEdgeList, this);
-	}
-
-	void Isosurface::HybridCubes::Tetrahedron::UnlinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx)
-	{
-		auto removeFromAdjList = [](Tetrahedron **list, Tetrahedron *item) -> void
-		{
-			for (int i = 5; i >= 0; --i)
-			{
-				if (list[i] == item) list[i] = ur_null;
-			}
-		};
-
-		Tetrahedron **myEdgeList = this->edgeAdjacency[myEdgeIdx];
-		Tetrahedron **adjEdgeList = th->edgeAdjacency[adjEdgeIdx];
-		removeFromAdjList(myEdgeList, th);
-		removeFromAdjList(adjEdgeList, this);
-	}
-
 	void Isosurface::HybridCubes::Tetrahedron::Split()
 	{
 		if (this->HasChildren())
@@ -595,6 +546,7 @@ namespace UnlimRealms
 		for (ur_uint subIdx = 0; subIdx < ChildrenCount; ++subIdx)
 		{
 			std::unique_ptr<Tetrahedron> subTetrahedron(new Tetrahedron());
+			subTetrahedron->level = this->level + 1;
 			const ur_byte *vid = splitInfo.subTetrahedra[subIdx];
 			subTetrahedron->Init(
 				(vid[0] != 0xff ? this->vertices[vid[0]] : ecp),
@@ -610,9 +562,9 @@ namespace UnlimRealms
 		if (!this->HasChildren())
 			return;
 
-		for (ur_size i = 0; i < ChildrenCount; ++i)
+		for (auto &child : this->children)
 		{
-			this->children[i].reset(ur_null);
+			child.reset(ur_null);
 		}
 	}
 
@@ -622,6 +574,7 @@ namespace UnlimRealms
 		this->desc = desc;
 		this->drawTetrahedra = false;
 		this->drawHexahedra = false;
+		this->drawRefinementTree = false;
 	}
 
 	Isosurface::HybridCubes::~HybridCubes()
@@ -656,7 +609,6 @@ namespace UnlimRealms
 				{ bbox.Max.x, bbox.Min.y, bbox.Min.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			for (ur_uint i = 0; i < 1; ++i) th->UpdateAdjacency(this->root[i].get());
 			this->root[1] = std::move(th);
 		}
 		if (ur_null == this->root[2].get())
@@ -668,7 +620,6 @@ namespace UnlimRealms
 				{ bbox.Max.x, bbox.Min.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			for (ur_uint i = 0; i < 2; ++i) th->UpdateAdjacency(this->root[i].get());
 			this->root[2] = std::move(th);
 		}
 		if (ur_null == this->root[3].get())
@@ -680,7 +631,6 @@ namespace UnlimRealms
 				{ bbox.Min.x, bbox.Max.y, bbox.Min.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			for (ur_uint i = 0; i < 3; ++i) th->UpdateAdjacency(this->root[i].get());
 			this->root[3] = std::move(th);
 		}
 		if (ur_null == this->root[4].get())
@@ -692,7 +642,6 @@ namespace UnlimRealms
 				{ bbox.Min.x, bbox.Max.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			for (ur_uint i = 0; i < 4; ++i) th->UpdateAdjacency(this->root[i].get());
 			this->root[4] = std::move(th);
 		}
 		if (ur_null == this->root[5].get())
@@ -704,10 +653,9 @@ namespace UnlimRealms
 				{ bbox.Min.x, bbox.Min.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			for (ur_uint i = 0; i < 5; ++i) th->UpdateAdjacency(this->root[i].get());
 			this->root[5] = std::move(th);
 		}
-			
+
 		// temp
 		static bool freeze = false;
 		Input *input = this->isosurface.GetRealm().GetInput();
@@ -716,14 +664,75 @@ namespace UnlimRealms
 		if (freeze)
 			return Success;
 
+		// update refinement tree
+		if (ur_null == this->refinementTree.GetRoot())
+		{
+			this->refinementTree.Init(bbox);
+		}
+		this->UpdateRefinementTree(refinementPoint, this->refinementTree.GetRoot());
+
 		// update hierarchy
 		Result res(Success);
 		for (auto &tetrahedron : this->root)
 		{
-			res = CombinedResult(res, this->Update(refinementPoint, tetrahedron.get()));
+			res &= this->Update(refinementPoint, tetrahedron.get());
 		}
 
 		return res;
+	}
+
+	void Isosurface::HybridCubes::UpdateRefinementTree(const ur_float3 &refinementPoint, EmptyOctree::Node *node)
+	{
+		if (ur_null == node)
+			return;
+
+		ur_float nodeSize = (node->GetBBox().Max - node->GetBBox().Min).Length();
+		bool doSplit = (nodeSize / (this->desc.LatticeResolution.GetMaxValue() * 2) > this->desc.CellSize);
+		if (doSplit)
+		{
+			ur_float refinementDistance = (node->GetBBox().Max - node->GetBBox().Min).Length() * 0.5f;
+			doSplit = (node->GetBBox().Distance(refinementPoint) < refinementDistance);
+		}
+
+		if (doSplit)
+		{
+			node->Split();
+			if (node->HasSubNodes())
+			{
+				for (ur_uint i = 0; i < EmptyOctree::Node::SubNodesCount; ++i)
+				{
+					this->UpdateRefinementTree(refinementPoint, node->GetSubNode(i));
+				}
+			}
+		}
+		else
+		{
+			node->Merge();
+		}
+	}
+
+	bool Isosurface::HybridCubes::CheckRefinementTree(const BoundingBox &bbox, EmptyOctree::Node *node)
+	{
+		if (ur_null == node || !bbox.Intersects(node->GetBBox()))
+			return false;
+
+		//if (bbox.Contains(node->GetBBox()))
+		{
+			//ur_float nodeSize = (node->GetBBox().Max - node->GetBBox().Min).Length();
+			//ur_float bboxSize = bbox.SizeMax();
+			ur_float nodeSize = node->GetBBox().SizeMin();
+			ur_float bboxSize = bbox.SizeMax();
+			if (bboxSize > nodeSize)
+				return true;
+		}
+		
+		for (ur_uint i = 0; i < EmptyOctree::Node::SubNodesCount; ++i)
+		{
+			if (this->CheckRefinementTree(bbox, node->GetSubNode(i)))
+				return true;
+		}
+			
+		return false;
 	}
 
 	Result Isosurface::HybridCubes::Update(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron)
@@ -732,15 +741,15 @@ namespace UnlimRealms
 		if (ur_null == tetrahedron)
 			return res;
 
-		res = CombinedResult( this->UpdateLoD(refinementPoint, tetrahedron), res );
+		res &= this->UpdateLoD(refinementPoint, tetrahedron);
 
-		res = CombinedResult( this->BuildMesh(tetrahedron), res );
+		res &= this->BuildMesh(tetrahedron);
 
 		if (tetrahedron->HasChildren())
 		{
 			for (auto &subTetrahedron : tetrahedron->children)
 			{
-				res = CombinedResult( this->Update(refinementPoint, subTetrahedron.get()), res);
+				res &= this->Update(refinementPoint, subTetrahedron.get());
 			}
 		}
 
@@ -753,42 +762,16 @@ namespace UnlimRealms
 		if (ur_null == tetrahedron)
 			return res;
 
-		// check whether tetrahedron's longest edge is a terminal edge
-		bool isTerminalEdge = true;
-		Tetrahedron **edgeAdj = tetrahedron->edgeAdjacency[tetrahedron->longestEdgeIdx];
-		for (int i = 0; i < 6; ++i)
-		{
-			Tetrahedron *adjTetrahedron = edgeAdj[i];
-			if (adjTetrahedron != ur_null)
-			{
-				const ur_float3 &e0_v0 = tetrahedron->vertices[HybridCubes::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
-				const ur_float3 &e0_v1 = tetrahedron->vertices[HybridCubes::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
-				const ur_float3 &e1_v0 = adjTetrahedron->vertices[HybridCubes::Tetrahedron::Edges[adjTetrahedron->longestEdgeIdx].vid[0]];
-				const ur_float3 &e1_v1 = adjTetrahedron->vertices[HybridCubes::Tetrahedron::Edges[adjTetrahedron->longestEdgeIdx].vid[1]];
-				bool equalEdges = ((e0_v0 == e1_v0 && e0_v1 == e1_v1) || (e0_v0 == e1_v1 && e0_v1 == e1_v0));
-				isTerminalEdge &= equalEdges;
-				if (!isTerminalEdge) break;
-			}
-		}
-		bool doSplit = isTerminalEdge;
+		// update LoD by traversing refinement octree
+		// current approach produces seamless partition, but due to it's conservative nature, the resulting mesh is overdetailed
+		// todo: try doing proper LEB implementation, based on "dimonds" hierarchy or "terminal edge" bisection
+		bool doSplit = this->CheckRefinementTree(tetrahedron->bbox, this->refinementTree.GetRoot());
 
-		if (doSplit)
-		{
-			// todo: improve split algorithm (produces cracks sometimes because non terminal edges are split)
-			// todo: precompute BBox during init step
-			const ur_float3 &ev0 = tetrahedron->vertices[HybridCubes::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
-			const ur_float3 &ev1 = tetrahedron->vertices[HybridCubes::Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
-			doSplit = ((ev1 - ev0).Length() / (this->desc.LatticeResolution.GetMaxValue() * 2) > this->desc.CellSize);
-			if (doSplit)
-			{
-				BoundingBox bbox;
-				const Vertex *pv = tetrahedron->vertices;
-				bbox.Min.SetMin(ev0); bbox.Min.SetMin(ev1);
-				bbox.Max.SetMax(ev0); bbox.Max.SetMax(ev1);
-				ur_float dist = bbox.Distance(refinementPoint);
-				doSplit = (dist < bbox.SizeMax());
-			}
-		}
+		/*bool doSplit = false;
+		const ur_float3 &ev0 = tetrahedron->vertices[Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
+		const ur_float3 &ev1 = tetrahedron->vertices[Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
+		ur_float3 evc = (ev0 + ev1) * 0.5f;
+		doSplit = (evc - refinementPoint).Length() < (ev0 - ev1).Length();*/
 
 		if (doSplit)
 		{
@@ -805,20 +788,15 @@ namespace UnlimRealms
 	Result Isosurface::HybridCubes::BuildMesh(Tetrahedron *tetrahedron)
 	{
 		Result res = Result(Success);
-		if (ur_null == tetrahedron)
+		if (ur_null == tetrahedron || tetrahedron->initialized)
 			return res;
 
-		// temp: check this way, whether a mesh is already built
-		if (!tetrahedron->hexahedra[0].lattice.empty() &&
-			!tetrahedron->hexahedra[1].lattice.empty() &&
-			!tetrahedron->hexahedra[0].lattice.empty() &&
-			!tetrahedron->hexahedra[0].lattice.empty())
-			return Result(Success);
-
-		for (ur_uint i = 0; i < 4; ++i)
+		for (auto &hexahedron : tetrahedron->hexahedra)
 		{
-			res = CombinedResult(res, this->MarchCubes(tetrahedron->hexahedra[i]));
+			res &= this->MarchCubes(hexahedron);
 		}
+
+		tetrahedron->initialized = Succeeded(res);
 
 		return res;
 	}
@@ -1132,9 +1110,7 @@ namespace UnlimRealms
 		ur_uint sliceOfs = rowOfs * this->desc.LatticeResolution.y;
 		ur_uint lastSliceOfs = sliceOfs * (this->desc.LatticeResolution.z - 1);
 		ur_uint latticeSize = sliceOfs * this->desc.LatticeResolution.z;
-		//std::vector<ur_float3> lattice(latticeSize);
-		std::vector<ur_float3> &lattice = hexahedron.lattice;
-		lattice.resize(latticeSize);
+		std::vector<ur_float3> lattice(latticeSize);
 		
 		computeLinePoints(lattice.data(), this->desc.LatticeResolution.x, 1, hexahedron.vertices[0], hexahedron.vertices[1]);
 		computeLinePoints(lattice.data() + lastRowOfs, this->desc.LatticeResolution.x, 1, hexahedron.vertices[2], hexahedron.vertices[3]);
@@ -1162,18 +1138,37 @@ namespace UnlimRealms
 			p_row1 += rowOfs;
 		}
 
-		// march
+		// sample and cache values at lattice points
 
 		static const DataVolume::ValueType ScalarFieldSurfaceValue = DataVolume::ValueType(0);
+		std::vector<DataVolume::ValueType> samples(latticeSize);
+		DataVolume::ValueType *p_sample = samples.data();
+		p_col0 = lattice.data();
+		bool hasPositiveSamples = false;
+		bool hasNegativeSamples = false;
+		for (ur_size i = 0; i < lattice.size(); ++i, ++p_col0, ++p_sample)
+		{
+			if (Failed(this->isosurface.GetData()->Read(*p_sample, *p_col0)))
+			{
+				return NotInitialized; // data's not ready
+			}
+			hasPositiveSamples |= (*p_sample >= ScalarFieldSurfaceValue);
+			hasNegativeSamples |= (*p_sample < ScalarFieldSurfaceValue);
+		}
+
+		if (!(hasPositiveSamples && hasNegativeSamples))
+			return Success; // does not intersect isosurface, nothing ti extract here
+
+		// march
+
 		static const int NoVertexId = -1;
 		std::vector<Isosurface::Vertex> vertexBuffer;
 		std::vector<Isosurface::Index> indexBuffer;
 		std::vector<ur_int3> edgeVertices(latticeSize, NoVertexId);
 		ur_int *cellEdges[12];
 		ur_float3 *cellPoints[8];
-		DataVolume::ValueType cellValues[8];
+		DataVolume::ValueType *cellValues[8];
 		ur_uint3 cellsCount = this->desc.LatticeResolution - 1;
-		ur_float3 dbg_edgePoints[12];
 		ur_float3 *p_slice = lattice.data();
 		for (ur_uint iz = 0; iz < cellsCount.z; ++iz)
 		{
@@ -1192,21 +1187,23 @@ namespace UnlimRealms
 					cellPoints[5] = &p_cell[sliceOfs + 1];
 					cellPoints[6] = &p_cell[sliceOfs + rowOfs + 1];
 					cellPoints[7] = &p_cell[sliceOfs + rowOfs];
+
+					// cell corner samples
+					p_sample = samples.data() + ix + iy * rowOfs + iz * sliceOfs;
+					cellValues[0] = &p_sample[0];
+					cellValues[1] = &p_sample[1];
+					cellValues[2] = &p_sample[rowOfs + 1];
+					cellValues[3] = &p_sample[rowOfs];
+					cellValues[4] = &p_sample[sliceOfs];
+					cellValues[5] = &p_sample[sliceOfs + 1];
+					cellValues[6] = &p_sample[sliceOfs + rowOfs + 1];
+					cellValues[7] = &p_sample[sliceOfs + rowOfs];
 					
-					// sample cell values at it's vertices
-					// and lookup intersected edges
+					// lookup intersected edges
 					ur_uint flagIdx = 0;
 					for (ur_uint iv = 0; iv < 8; ++iv)
 					{
-						if (Succeeded(this->isosurface.GetData()->Read(cellValues[iv], *cellPoints[iv])))
-						{
-							if (cellValues[iv] <= ScalarFieldSurfaceValue) flagIdx |= (1 << iv);
-						}
-						else
-						{
-							// data's not ready
-							return NotInitialized;
-						}
+						if (*cellValues[iv] <= ScalarFieldSurfaceValue) flagIdx |= (1 << iv);
 					}
 					const ur_uint &edgeFlags = MCEdgeTable[flagIdx];
 					if (edgeFlags == 0)
@@ -1230,23 +1227,20 @@ namespace UnlimRealms
 					// compute intersection points
 					for (ur_uint ie = 0; ie < 12; ++ie)
 					{
-						if (edgeFlags & (1 << ie))
+						if ((edgeFlags & (1 << ie)) &&
+							(NoVertexId == *cellEdges[ie]))
 						{
-							if (NoVertexId == *cellEdges[ie])
-							{
-								// compute new vertex
-								DataVolume::ValueType &cv0 = cellValues[MCEdgeVertices[ie][0]];
-								DataVolume::ValueType &cv1 = cellValues[MCEdgeVertices[ie][1]];
-								ur_float lfactor = (ur_float)(ScalarFieldSurfaceValue - cv0) / (cv1 - cv0);
-								ur_float3 &p0 = *cellPoints[MCEdgeVertices[ie][0]];
-								ur_float3 &p1 = *cellPoints[MCEdgeVertices[ie][1]];
-								ur_float3 p = ur_float3::Lerp(p0, p1, lfactor);
-								*cellEdges[ie] = (ur_int)vertexBuffer.size();
-								vertexBuffer.push_back({ p, 0.0f, 0xffffffff });
-								// todo: compute corresponding normal here
-								// as a gradient of adjacent samples
-							}
-							dbg_edgePoints[ie] = vertexBuffer[*cellEdges[ie]].pos;
+							// compute new vertex
+							DataVolume::ValueType &cv0 = *cellValues[MCEdgeVertices[ie][0]];
+							DataVolume::ValueType &cv1 = *cellValues[MCEdgeVertices[ie][1]];
+							ur_float lfactor = (ur_float)(ScalarFieldSurfaceValue - cv0) / (cv1 - cv0);
+							ur_float3 &p0 = *cellPoints[MCEdgeVertices[ie][0]];
+							ur_float3 &p1 = *cellPoints[MCEdgeVertices[ie][1]];
+							ur_float3 p = ur_float3::Lerp(p0, p1, lfactor);
+							*cellEdges[ie] = (ur_int)vertexBuffer.size();
+							vertexBuffer.push_back({ p, 0.0f, 0xffffffff });
+							// todo: compute corresponding normal here
+							// as a gradient of adjacent samples
 						}
 					}
 
@@ -1262,21 +1256,6 @@ namespace UnlimRealms
 						indexBuffer.push_back(*cellEdges[vi0]);
 						indexBuffer.push_back(*cellEdges[vi1]);
 						indexBuffer.push_back(*cellEdges[vi2]);
-
-						// temp: fill debug buffers
-						const ur_float3 &p0 = dbg_edgePoints[vi0];
-						const ur_float3 &p1 = dbg_edgePoints[vi1];
-						const ur_float3 &p2 = dbg_edgePoints[vi2];
-						ur_uint iofs = (ur_uint)hexahedron.dbgVertices.size();
-						hexahedron.dbgVertices.push_back(p0);
-						hexahedron.dbgVertices.push_back(p1);
-						hexahedron.dbgVertices.push_back(p2);
-						hexahedron.dbgIndices.push_back(iofs + 0);
-						hexahedron.dbgIndices.push_back(iofs + 1);
-						hexahedron.dbgIndices.push_back(iofs + 1);
-						hexahedron.dbgIndices.push_back(iofs + 2);
-						hexahedron.dbgIndices.push_back(iofs + 2);
-						hexahedron.dbgIndices.push_back(iofs + 0);
 					}
 				}
 				p_row += rowOfs;
@@ -1296,7 +1275,7 @@ namespace UnlimRealms
 			return Result(Failure);
 
 		// create vertex Buffer
-		auto &gfxVB = hexahedron.gfxVB;
+		auto &gfxVB = hexahedron.gfxMesh.VB;
 		Result res = gfxSystem->CreateBuffer(gfxVB);
 		if (Succeeded(res))
 		{
@@ -1307,7 +1286,7 @@ namespace UnlimRealms
 			return Result(Failure);
 
 		// create index buffer
-		auto &gfxIB = hexahedron.gfxIB;
+		auto &gfxIB = hexahedron.gfxMesh.IB;
 		res = gfxSystem->CreateBuffer(gfxIB);
 		if (Succeeded(res))
 		{
@@ -1326,6 +1305,11 @@ namespace UnlimRealms
 		for (auto &tetrahedron : this->root)
 		{
 			this->Render(gfxContext, genericRender, viewProj, tetrahedron.get());
+		}
+
+		if (this->drawRefinementTree)
+		{
+			this->RenderOctree(gfxContext, genericRender, this->refinementTree.GetRoot());
 		}
 
 		return Result(Success);
@@ -1347,8 +1331,8 @@ namespace UnlimRealms
 		{
 			for (auto &hexahedron : tetrahedron->hexahedra)
 			{
-				const auto &gfxVB = hexahedron.gfxVB;
-				const auto &gfxIB = hexahedron.gfxIB;
+				const auto &gfxVB = hexahedron.gfxMesh.VB;
+				const auto &gfxIB = hexahedron.gfxMesh.IB;
 				const ur_uint indexCount = (gfxIB.get() ? gfxIB->GetDesc().Size / sizeof(Isosurface::Index) : 0);
 				gfxContext.SetVertexBuffer(gfxVB.get(), 0, sizeof(Isosurface::Vertex), 0);
 				gfxContext.SetIndexBuffer(gfxIB.get(), sizeof(Isosurface::Index) * 8, 0);
@@ -1397,19 +1381,27 @@ namespace UnlimRealms
 				genericRender->DrawLine(h.vertices[1], h.vertices[5], s_hexaColor);
 				genericRender->DrawLine(h.vertices[2], h.vertices[6], s_hexaColor);
 				genericRender->DrawLine(h.vertices[3], h.vertices[7], s_hexaColor);
-
-				// temp: lattice debug render
-				genericRender->DrawPrimitives(GenericRender::PrimitiveType::Point,
-					(ur_uint)h.lattice.size(), ur_null, (ur_uint)h.lattice.size(), h.lattice.data(), ur_null);
 			}
 		}
 
-		// temp: surface debug render
-		for (ur_uint ih = 0; ih < 4; ++ih)
+		return Result(Success);
+	}
+
+	Result Isosurface::HybridCubes::RenderOctree(GfxContext &gfxContext, GenericRender *genericRender, EmptyOctree::Node *node)
+	{
+		if (ur_null == genericRender ||
+			ur_null == node)
+			return Result(Success);
+
+		static const ur_float4 boxColor(0.0f, 0.0f, 1.0f, 1.0f);
+		genericRender->DrawBox(node->GetBBox().Min, node->GetBBox().Max, boxColor);
+
+		if (node->HasSubNodes())
 		{
-			const Hexahedron &h = tetrahedron->hexahedra[ih];
-			genericRender->DrawPrimitives(GenericRender::PrimitiveType::Line,
-				(ur_uint)h.dbgIndices.size() / 2, h.dbgIndices.data(), (ur_uint)h.dbgVertices.size(), h.dbgVertices.data(), ur_null);
+			for (ur_uint i = 0; i < EmptyOctree::Node::SubNodesCount; ++i)
+			{
+				this->RenderOctree(gfxContext, genericRender, node->GetSubNode(i));
+			}
 		}
 
 		return Result(Success);
@@ -1462,9 +1454,9 @@ namespace UnlimRealms
 		*/
 		if (ImGui::TreeNode("HybridCubes"))
 		{
-			// todo
 			ImGui::Checkbox("Draw tetrahedra", &this->drawTetrahedra);
 			ImGui::Checkbox("Draw hexahedra", &this->drawHexahedra);
+			ImGui::Checkbox("Draw refinement tree", &this->drawRefinementTree);
 			ImGui::TreePop();
 		}
 	}
@@ -1477,6 +1469,7 @@ namespace UnlimRealms
 	Isosurface::Isosurface(Realm &realm) :
 		RealmEntity(realm)
 	{
+		this->drawWireframe = false;
 	}
 
 	Isosurface::~Isosurface()
@@ -1553,6 +1546,25 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "Isosurface::CreateGfxObjects: failed to initialize PS");
 
+		// PSDbg
+		{
+			std::unique_ptr<File> file;
+			res = this->GetRealm().GetStorage().Open("IsosurfaceDbg_ps.cso", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary), file);
+			if (Succeeded(res))
+			{
+				ur_size sizeInBytes = file->GetSize();
+				std::unique_ptr<ur_byte[]> bytecode(new ur_byte[sizeInBytes]);
+				file->Read(sizeInBytes, bytecode.get());
+				res = this->GetRealm().GetGfxSystem()->CreatePixelShader(this->gfxObjects->PSDbg);
+				if (Succeeded(res))
+				{
+					res = this->gfxObjects->PSDbg->Initialize(std::move(bytecode), sizeInBytes);
+				}
+			}
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Isosurface::CreateGfxObjects: failed to initialize PSDbg");
+
 		// Input Layout
 		res = this->GetRealm().GetGfxSystem()->CreateInputLayout(this->gfxObjects->inputLayout);
 		if (Succeeded(res))
@@ -1581,6 +1593,19 @@ namespace UnlimRealms
 		}
 		if (Failed(res))
 			return ResultError(Failure, "Isosurface::CreateGfxObjects: failed to initialize pipeline state");
+
+		res = this->GetRealm().GetGfxSystem()->CreatePipelineState(this->gfxObjects->wireframeState);
+		if (Succeeded(res))
+		{
+			this->gfxObjects->wireframeState->InputLayout = this->gfxObjects->pipelineState->InputLayout;
+			this->gfxObjects->wireframeState->VertexShader = this->gfxObjects->pipelineState->VertexShader;
+			this->gfxObjects->wireframeState->PixelShader = this->gfxObjects->PSDbg.get();
+			GfxRenderState gfxRS = this->gfxObjects->pipelineState->GetRenderState();
+			gfxRS.RasterizerState.FillMode = GfxFillMode::Wireframe;
+			res = this->gfxObjects->wireframeState->SetRenderState(gfxRS);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Isosurface::CreateGfxObjects: failed to initialize wireframe state");
 
 		// Constant Buffer
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects->CB);
@@ -1611,7 +1636,7 @@ namespace UnlimRealms
 			GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
 			gfxContext.SetViewPort(&viewPort);
 			gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
-			gfxContext.SetPipelineState(this->gfxObjects->pipelineState.get());
+			gfxContext.SetPipelineState(this->drawWireframe ? this->gfxObjects->wireframeState.get() : this->gfxObjects->pipelineState.get());
 
 			res = this->presentation->Render(gfxContext, viewProj);
 		}
@@ -1623,6 +1648,7 @@ namespace UnlimRealms
 	{
 		if (ImGui::CollapsingHeader("Isosurface"))
 		{
+			ImGui::Checkbox("Draw wireframe", &this->drawWireframe);
 			if (this->presentation.get() != ur_null)
 			{
 				this->presentation->ShowImgui();

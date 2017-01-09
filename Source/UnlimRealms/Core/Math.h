@@ -1057,7 +1057,7 @@ namespace UnlimRealms
 			return (this->Min / 2 + this->Max / 2);
 		}
 
-		bool Intersects(const TVector3<T> v) const
+		bool Intersects(const TVector3<T> &v) const
 		{
 			bool isOutside =
 				v.x < this->Min.x || v.x > this->Max.x ||
@@ -1066,7 +1066,7 @@ namespace UnlimRealms
 			return !isOutside;
 		}
 
-		bool Intersects(const TBoundingBox<T> bb) const
+		bool Intersects(const TBoundingBox<T> &bb) const
 		{
 			bool isOutside =
 				bb.Max.x < this->Min.x || bb.Min.x > this->Max.x ||
@@ -1075,12 +1075,11 @@ namespace UnlimRealms
 			return !isOutside;
 		}
 
-		bool Inside(const TBoundingBox<T> bb) const
+		bool Contains(const TBoundingBox<T> &bb) const
 		{
-			return !(
-				this->Min.x < bb.Min.x || this->Min.x > bb.Max.x || this->Max.x < bb.Min.x || this->Max.x >bb.Max.x ||
-				this->Min.y < bb.Min.y || this->Min.y > bb.Max.y || this->Max.y < bb.Min.y || this->Max.x >bb.Max.y ||
-				this->Min.z < bb.Min.z || this->Min.z > bb.Max.z || this->Max.z < bb.Min.z || this->Max.x >bb.Max.z);
+			return (
+				bb.Min.x >= this->Min.x && bb.Min.y >= this->Min.y && bb.Min.z >= this->Min.z &&
+				bb.Max.x <= this->Max.x && bb.Max.y <= this->Max.y && bb.Max.z <= this->Max.z);
 		}
 
 		void ToPointArray(TVector3<T> *pa) const

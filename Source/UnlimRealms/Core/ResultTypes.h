@@ -35,6 +35,8 @@ namespace UnlimRealms
 
 		bool operator != (const UID &code) const { return (this->Code != code); }
 
+		Result operator &= (const Result &r) const;
+
 	private:
 
 		static UID lastUID;

@@ -86,7 +86,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
 	{
 		BoundingBox volumeBound(ur_float3(-4.0f, -4.0f, -4.0f), ur_float3(4.0f, 4.0f, 4.0f));
-#if 1
+#if 0
 		Isosurface::ProceduralGenerator::SphericalDistanceFieldParams generateParams;
 		generateParams.bound = volumeBound;
 		generateParams.center = volumeBound.Center();

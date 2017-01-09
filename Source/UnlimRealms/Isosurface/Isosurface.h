@@ -178,17 +178,17 @@ namespace UnlimRealms
 				ur_byte eid[3];
 			};
 
+			struct UR_DECL GfxMesh
+			{
+				std::unique_ptr<GfxBuffer> VB;
+				std::unique_ptr<GfxBuffer> IB;
+			};
+
 			struct UR_DECL Hexahedron
 			{
 				static const ur_uint VerticesCount = 8;
 				Vertex vertices[VerticesCount];
-				std::unique_ptr<GfxBuffer> gfxVB;
-				std::unique_ptr<GfxBuffer> gfxIB;
-
-				// temp: debug stuff
-				std::vector<ur_float3> lattice;
-				std::vector<ur_float3> dbgVertices;
-				std::vector<ur_uint> dbgIndices;
+				GfxMesh gfxMesh;
 			};
 
 			struct UR_DECL Tetrahedron
@@ -197,6 +197,7 @@ namespace UnlimRealms
 
 				static const ur_uint EdgesCount = 6;
 				static const Edge Edges[EdgesCount];
+				static const ur_byte EdgeOppositeId[EdgesCount];
 
 				static const ur_uint FacesCount = 4;
 				static const Face Faces[FacesCount];
@@ -208,22 +209,19 @@ namespace UnlimRealms
 				};
 				static const SplitInfo EdgeSplitInfo[EdgesCount];
 
+				ur_uint level;
 				std::unique_ptr<Tetrahedron> children[ChildrenCount];
 				Vertex vertices[VerticesCount];
 				ur_byte longestEdgeIdx;
-				Tetrahedron *edgeAdjacency[EdgesCount][6];
+				BoundingBox bbox;
 				Hexahedron hexahedra[4];
-				
+				bool initialized;
 
 				Tetrahedron();
 
+				~Tetrahedron();
+
 				void Init(const Vertex &v0, const Vertex &v1, const Vertex &v2, const Vertex &v3);
-
-				bool UpdateAdjacency(Tetrahedron *th);
-
-				void LinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx);
-				
-				void UnlinkAdjacentTetrahedra(Tetrahedron *th, ur_uint myEdgeIdx, ur_uint adjEdgeIdx);
 
 				void Split();
 
@@ -232,6 +230,9 @@ namespace UnlimRealms
 				inline bool HasChildren() const { return (this->children[0] != ur_null); }
 			};
 
+			void UpdateRefinementTree(const ur_float3 &refinementPoint, EmptyOctree::Node *node);
+
+			bool CheckRefinementTree(const BoundingBox &bbox, EmptyOctree::Node *node);
 
 			Result Update(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron);
 
@@ -245,13 +246,17 @@ namespace UnlimRealms
 			
 			Result RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Tetrahedron *tetrahedron);
 
+			Result RenderOctree(GfxContext &gfxContext, GenericRender *genericRender, EmptyOctree::Node *node);
+
 
 			Desc desc;
 			static const ur_uint RootsCount = 6;
 			std::unique_ptr<Tetrahedron> root[RootsCount];
+			EmptyOctree refinementTree;
 			
 			bool drawTetrahedra;
 			bool drawHexahedra;
+			bool drawRefinementTree;
 		};
 
 
@@ -279,9 +284,11 @@ namespace UnlimRealms
 		{
 			std::unique_ptr<GfxVertexShader> VS;
 			std::unique_ptr<GfxPixelShader> PS;
+			std::unique_ptr<GfxPixelShader> PSDbg;
 			std::unique_ptr<GfxInputLayout> inputLayout;
-			std::unique_ptr<GfxPipelineState> pipelineState;
 			std::unique_ptr<GfxBuffer> CB;
+			std::unique_ptr<GfxPipelineState> pipelineState;
+			std::unique_ptr<GfxPipelineState> wireframeState;
 		};
 
 		struct CommonCB
@@ -301,6 +308,7 @@ namespace UnlimRealms
 		std::unique_ptr<DataVolume> data;
 		std::unique_ptr<Presentation> presentation;
 		std::unique_ptr<GfxObjects> gfxObjects;
+		bool drawWireframe;
 	};
 
 } // end namespace UnlimRealms

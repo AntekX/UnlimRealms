@@ -258,5 +258,8 @@
     <FxCompile Include="..\..\UnlimRealms\Isosurface\Isosurface_vs.hlsl">
       <Filter>Isosurface</Filter>
     </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Isosurface\IsosurfaceDbg_ps.hlsl">
+      <Filter>Isosurface</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

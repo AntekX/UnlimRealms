@@ -54,5 +54,9 @@ namespace UnlimRealms
 		return lastUID++;
 	}
 
+	Result Result::operator &= (const Result &r) const
+	{
+		return CombinedResult(*this, r);
+	}
 
 } // end namespace UnlimRealms
