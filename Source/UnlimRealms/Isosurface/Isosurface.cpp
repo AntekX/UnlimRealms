@@ -357,10 +357,11 @@ namespace UnlimRealms
 			ur_float scale;
 			ur_float freq;
 		};
+		ur_float maxDist = this->GetBound().SizeX() * 0.5f - radius;
 		Octave octaves[] = {
-			{ -1.00f, 0.50f },
-			{ -1.00f, 1.00f },
-			//{ 0.05f, 8.00f },
+			{ maxDist * 0.75f, 0.50f },
+			{ maxDist * 0.20f, 2.00f },
+			{ maxDist * 0.05f, 8.00f },
 		};
 		const ur_uint numOctaves = ur_array_size(octaves);
 
@@ -572,9 +573,11 @@ namespace UnlimRealms
 		Presentation(isosurface)
 	{
 		this->desc = desc;
+		this->freezeUpdate = false;
 		this->drawTetrahedra = false;
 		this->drawHexahedra = false;
 		this->drawRefinementTree = false;
+		memset(&this->stats, 0, sizeof(this->stats));
 	}
 
 	Isosurface::HybridCubes::~HybridCubes()
@@ -655,20 +658,17 @@ namespace UnlimRealms
 			);
 			this->root[5] = std::move(th);
 		}
-
-		// temp
-		static bool freeze = false;
-		Input *input = this->isosurface.GetRealm().GetInput();
-		if (input && input->GetKeyboard() && input->GetKeyboard()->IsKeyReleased(Input::VKey::P))
-			freeze = !freeze;
-		if (freeze)
-			return Success;
-
-		// update refinement tree
 		if (ur_null == this->refinementTree.GetRoot())
 		{
 			this->refinementTree.Init(bbox);
 		}
+
+		if (this->freezeUpdate)
+			return Success;
+
+		memset(&this->stats, 0, sizeof(this->stats));
+
+		// update refinement tree
 		this->UpdateRefinementTree(refinementPoint, this->refinementTree.GetRoot());
 
 		// update hierarchy
@@ -753,6 +753,19 @@ namespace UnlimRealms
 			}
 		}
 
+		// update stats
+		this->stats.tetrahedraCount += 1;
+		this->stats.treeMemory += sizeof(Tetrahedron);
+		this->stats.treeMemory += sizeof(tetrahedron->hexahedra);
+		if (tetrahedron->initialized)
+		{
+			for (const auto &h : tetrahedron->hexahedra)
+			{
+				if (h.gfxMesh.VB) this->stats.meshVideoMemory += h.gfxMesh.VB->GetDesc().Size;
+				if (h.gfxMesh.IB) this->stats.meshVideoMemory += h.gfxMesh.IB->GetDesc().Size;
+			}
+		}
+
 		return res;
 	}
 
@@ -765,13 +778,18 @@ namespace UnlimRealms
 		// update LoD by traversing refinement octree
 		// current approach produces seamless partition, but due to it's conservative nature, the resulting mesh is overdetailed
 		// todo: try doing proper LEB implementation, based on "dimonds" hierarchy or "terminal edge" bisection
-		bool doSplit = this->CheckRefinementTree(tetrahedron->bbox, this->refinementTree.GetRoot());
+		//bool doSplit = this->CheckRefinementTree(tetrahedron->bbox, this->refinementTree.GetRoot());
 
-		/*bool doSplit = false;
+		bool doSplit = false;
 		const ur_float3 &ev0 = tetrahedron->vertices[Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
 		const ur_float3 &ev1 = tetrahedron->vertices[Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
-		ur_float3 evc = (ev0 + ev1) * 0.5f;
-		doSplit = (evc - refinementPoint).Length() < (ev0 - ev1).Length();*/
+		ur_float edgeLen = (ev0 - ev1).Length();
+		doSplit = (edgeLen / (this->desc.LatticeResolution.GetMaxValue() * 2) > this->desc.CellSize);
+		if (doSplit)
+		{
+			ur_float3 evc = (ev0 + ev1) * 0.5f;
+			doSplit = (evc - refinementPoint).Length() < edgeLen;
+		}
 
 		if (doSplit)
 		{
@@ -1454,9 +1472,17 @@ namespace UnlimRealms
 		*/
 		if (ImGui::TreeNode("HybridCubes"))
 		{
+			ImGui::Checkbox("Freeze update", &this->freezeUpdate);
 			ImGui::Checkbox("Draw tetrahedra", &this->drawTetrahedra);
 			ImGui::Checkbox("Draw hexahedra", &this->drawHexahedra);
 			ImGui::Checkbox("Draw refinement tree", &this->drawRefinementTree);
+			if (ImGui::TreeNode("Stats"))
+			{
+				ImGui::Text("tetrahedraCount: %i", (int)this->stats.tetrahedraCount);
+				ImGui::Text("treeMemory: %i", (int)this->stats.treeMemory);
+				ImGui::Text("meshVideoMemory: %i", (int)this->stats.meshVideoMemory);
+				ImGui::TreePop();
+			}
 			ImGui::TreePop();
 		}
 	}

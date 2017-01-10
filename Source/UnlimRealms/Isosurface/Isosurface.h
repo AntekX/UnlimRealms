@@ -254,9 +254,17 @@ namespace UnlimRealms
 			std::unique_ptr<Tetrahedron> root[RootsCount];
 			EmptyOctree refinementTree;
 			
+			// debug info
+			bool freezeUpdate;
 			bool drawTetrahedra;
 			bool drawHexahedra;
 			bool drawRefinementTree;
+			struct Stats
+			{
+				ur_uint tetrahedraCount;
+				ur_uint treeMemory;
+				ur_uint meshVideoMemory;
+			} stats;
 		};
 
 

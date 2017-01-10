@@ -82,7 +82,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	camera.SetPosition(ur_float3(0.0f, 0.0f, -10.0f));
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
 
-	// test isosurface
+	// demo isosurface
 	std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
 	{
 		BoundingBox volumeBound(ur_float3(-4.0f, -4.0f, -4.0f), ur_float3(4.0f, 4.0f, 4.0f));
@@ -101,7 +101,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 #endif
 
 		Isosurface::HybridCubes::Desc desc;
-		desc.CellSize = 0.1f;
+		desc.CellSize = 0.01f;
 		desc.LatticeResolution = 8;
 		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x;
 		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
@@ -132,12 +132,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		cameraControl.Update();
 		camera.SetAspectRatio((float)realm.GetCanvas()->GetBound().Width() / realm.GetCanvas()->GetBound().Height());
 
-		// temp
-		static bool freezeRefinement = false;
-		if (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F))
-			freezeRefinement = !freezeRefinement;
-		if (!freezeRefinement)
-			isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
+		// update isosurface
+
+		isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
 		isosurface->Update();
 
 		// expose demo gui
