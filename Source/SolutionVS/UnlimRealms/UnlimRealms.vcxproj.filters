@@ -262,4 +262,9 @@
       <Filter>Isosurface</Filter>
     </FxCompile>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli">
+      <Filter>Isosurface</Filter>
+    </None>
+  </ItemGroup>
 </Project>

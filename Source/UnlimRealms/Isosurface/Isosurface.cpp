@@ -359,9 +359,9 @@ namespace UnlimRealms
 		};
 		ur_float maxDist = this->GetBound().SizeX() * 0.5f - radius;
 		Octave octaves[] = {
-			{ maxDist * 0.75f, 0.50f },
-			{ maxDist * 0.20f, 2.00f },
-			{ maxDist * 0.05f, 8.00f },
+			{ -maxDist * 0.75f, 0.50f },
+			{ -maxDist * 0.20f, 2.00f },
+			{ -maxDist * 0.05f, 8.00f },
 		};
 		const ur_uint numOctaves = ur_array_size(octaves);
 
@@ -778,9 +778,9 @@ namespace UnlimRealms
 		// update LoD by traversing refinement octree
 		// current approach produces seamless partition, but due to it's conservative nature, the resulting mesh is overdetailed
 		// todo: try doing proper LEB implementation, based on "dimonds" hierarchy or "terminal edge" bisection
-		//bool doSplit = this->CheckRefinementTree(tetrahedron->bbox, this->refinementTree.GetRoot());
+		bool doSplit = this->CheckRefinementTree(tetrahedron->bbox, this->refinementTree.GetRoot());
 
-		bool doSplit = false;
+		/*bool doSplit = false;
 		const ur_float3 &ev0 = tetrahedron->vertices[Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
 		const ur_float3 &ev1 = tetrahedron->vertices[Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
 		ur_float edgeLen = (ev0 - ev1).Length();
@@ -789,7 +789,7 @@ namespace UnlimRealms
 		{
 			ur_float3 evc = (ev0 + ev1) * 0.5f;
 			doSplit = (evc - refinementPoint).Length() < edgeLen;
-		}
+		}*/
 
 		if (doSplit)
 		{
