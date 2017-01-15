@@ -535,11 +535,8 @@ namespace UnlimRealms
 		}
 	}
 
-	void Isosurface::HybridCubes::Tetrahedron::Split()
+	void Isosurface::HybridCubes::Tetrahedron::Split(std::array<std::unique_ptr<Tetrahedron>, ChildrenCount> &subTetrahedra)
 	{
-		if (this->HasChildren())
-			return;
-
 		// create sub tetrahedra
 		const ur_byte *ev = this->Edges[this->longestEdgeIdx].vid;
 		Vector3 ecp = this->vertices[ev[0]] * 0.5f + this->vertices[ev[1]] * 0.5f;
@@ -554,11 +551,58 @@ namespace UnlimRealms
 				(vid[1] != 0xff ? this->vertices[vid[1]] : ecp),
 				(vid[2] != 0xff ? this->vertices[vid[2]] : ecp),
 				(vid[3] != 0xff ? this->vertices[vid[3]] : ecp));
-			this->children[subIdx] = std::move(subTetrahedron);
+			subTetrahedra[subIdx] = std::move(subTetrahedron);
 		}
 	}
 
-	void Isosurface::HybridCubes::Tetrahedron::Merge()
+	Isosurface::HybridCubes::Node::Node()
+	{
+	}
+
+	Isosurface::HybridCubes::Node::Node(std::unique_ptr<Tetrahedron> tetrahedron)
+	{
+		this->tetrahedron = std::move(tetrahedron);
+	}
+
+	Isosurface::HybridCubes::Node::~Node()
+	{
+	}
+
+	void Isosurface::HybridCubes::Node::Split(Node *cachedNode)
+	{
+		if (this->HasChildren() ||
+			this->tetrahedron.get() == ur_null)
+			return;
+
+		// get cached sub tetrahedra or compute new ones
+		std::array<std::shared_ptr<Tetrahedron>, Tetrahedron::ChildrenCount> subTetrahedra;
+		if (cachedNode && cachedNode->HasChildren())
+		{
+			for (ur_uint subIdx = 0; subIdx < Tetrahedron::ChildrenCount; ++subIdx)
+			{
+				subTetrahedra[subIdx] = cachedNode->children[subIdx]->tetrahedron;
+			}
+		}
+		else
+		{
+			std::array<std::unique_ptr<Tetrahedron>, Tetrahedron::ChildrenCount> newTetrahedra;
+			this->tetrahedron->Split(newTetrahedra);
+			for (ur_uint subIdx = 0; subIdx < Tetrahedron::ChildrenCount; ++subIdx)
+			{
+				subTetrahedra[subIdx] = std::move(newTetrahedra[subIdx]);
+			}
+		}
+		
+		// create sub nodes
+		for (ur_uint subIdx = 0; subIdx < Tetrahedron::ChildrenCount; ++subIdx)
+		{
+			std::unique_ptr<Node> subNode(new Node());
+			subNode->tetrahedron = std::move(subTetrahedra[subIdx]);
+			this->children[subIdx] = std::move(subNode);
+		}
+	}
+
+	void Isosurface::HybridCubes::Node::Merge()
 	{
 		if (!this->HasChildren())
 			return;
@@ -605,7 +649,7 @@ namespace UnlimRealms
 				{ bbox.Max.x, bbox.Max.y, bbox.Min.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			this->root[0] = std::move(th);
+			this->root[0].reset(new Node(std::move(th)));
 		}
 		if (ur_null == this->root[1].get())
 		{
@@ -616,7 +660,7 @@ namespace UnlimRealms
 				{ bbox.Max.x, bbox.Min.y, bbox.Min.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			this->root[1] = std::move(th);
+			this->root[1].reset(new Node(std::move(th)));
 		}
 		if (ur_null == this->root[2].get())
 		{
@@ -627,7 +671,7 @@ namespace UnlimRealms
 				{ bbox.Max.x, bbox.Min.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			this->root[2] = std::move(th);
+			this->root[2].reset(new Node(std::move(th)));
 		}
 		if (ur_null == this->root[3].get())
 		{
@@ -638,7 +682,7 @@ namespace UnlimRealms
 				{ bbox.Min.x, bbox.Max.y, bbox.Min.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			this->root[3] = std::move(th);
+			this->root[3].reset(new Node(std::move(th)));
 		}
 		if (ur_null == this->root[4].get())
 		{
@@ -649,7 +693,7 @@ namespace UnlimRealms
 				{ bbox.Min.x, bbox.Max.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			this->root[4] = std::move(th);
+			this->root[4].reset(new Node(std::move(th)));
 		}
 		if (ur_null == this->root[5].get())
 		{
@@ -660,7 +704,7 @@ namespace UnlimRealms
 				{ bbox.Min.x, bbox.Min.y, bbox.Max.z },
 				{ bbox.Max.x, bbox.Max.y, bbox.Max.z }
 			);
-			this->root[5] = std::move(th);
+			this->root[5].reset(new Node(std::move(th)));
 		}
 		if (ur_null == this->refinementTree.GetRoot())
 		{
@@ -732,7 +776,7 @@ namespace UnlimRealms
 				// update hierarchy
 				for (ur_uint i = 0; i < HybridCubes::RootsCount; ++i)
 				{
-					presentation->updateResult &= presentation->Update(presentation->updatePoint, presentation->rootBack[i].get(), &presentation->root[i]);
+					presentation->updateResult &= presentation->Update(presentation->updatePoint, presentation->rootBack[i].get(), presentation->root[i].get());
 				}
 			}
 
@@ -795,31 +839,39 @@ namespace UnlimRealms
 		return false;
 	}
 
-	Result Isosurface::HybridCubes::Update(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron, std::shared_ptr<Tetrahedron> *cachedData)
+	Result Isosurface::HybridCubes::Update(const ur_float3 &refinementPoint, Node *node, Node *cachedNode)
 	{
 		Result res(Success);
-		if (ur_null == tetrahedron)
+		if (ur_null == node ||
+			ur_null == node->tetrahedron)
 			return res;
 
-		res &= this->UpdateLoD(refinementPoint, tetrahedron, cachedData);
-
-		res &= this->BuildMesh(tetrahedron);
-
-		if (tetrahedron->HasChildren())
+		// temp: fake coarse level by level update
+		// todo: fully update tree and meanwhile gather build list items,
+		// build list further can be processed in any way (synchronously, asynchronously, fully or partially)
+		if (node->tetrahedron->initialized)
 		{
-			for (auto &subTetrahedron : tetrahedron->children)
+			res &= this->UpdateLoD(refinementPoint, node, cachedNode);
+		}
+
+		res &= this->BuildMesh(node->tetrahedron.get());
+
+		if (node->HasChildren())
+		{
+			for (ur_uint subIdx = 0; subIdx < Tetrahedron::ChildrenCount; ++subIdx)
 			{
-				res &= this->Update(refinementPoint, subTetrahedron.get());
+				res &= this->Update(refinementPoint, node->children[subIdx].get(),
+					(cachedNode ? cachedNode->children[subIdx].get() : ur_null));
 			}
 		}
 
 		// update stats
 		this->stats.tetrahedraCount += 1;
 		this->stats.treeMemory += sizeof(Tetrahedron);
-		this->stats.treeMemory += sizeof(tetrahedron->hexahedra);
-		if (tetrahedron->initialized)
+		this->stats.treeMemory += sizeof(node->tetrahedron->hexahedra);
+		if (node->tetrahedron->initialized)
 		{
-			for (const auto &h : tetrahedron->hexahedra)
+			for (const auto &h : node->tetrahedron->hexahedra)
 			{
 				if (h.gfxMesh.VB) this->stats.meshVideoMemory += h.gfxMesh.VB->GetDesc().Size;
 				if (h.gfxMesh.IB) this->stats.meshVideoMemory += h.gfxMesh.IB->GetDesc().Size;
@@ -829,16 +881,17 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result Isosurface::HybridCubes::UpdateLoD(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron, std::shared_ptr<Tetrahedron> *cachedData)
+	Result Isosurface::HybridCubes::UpdateLoD(const ur_float3 &refinementPoint, Node *node, Node *cachedNode)
 	{
 		Result res(Success);
-		if (ur_null == tetrahedron)
+		if (ur_null == node ||
+			ur_null == node->tetrahedron)
 			return res;
 
 		// update LoD by traversing refinement octree
 		// current approach produces seamless partition, but due to it's conservative nature, the resulting mesh is overdetailed
 		// todo: try doing proper LEB implementation, based on "dimonds" hierarchy or "terminal edge" bisection
-		bool doSplit = this->CheckRefinementTree(tetrahedron->bbox, this->refinementTree.GetRoot());
+		bool doSplit = this->CheckRefinementTree(node->tetrahedron->bbox, this->refinementTree.GetRoot());
 
 		/*bool doSplit = false;
 		const ur_float3 &ev0 = tetrahedron->vertices[Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
@@ -853,11 +906,11 @@ namespace UnlimRealms
 
 		if (doSplit)
 		{
-			tetrahedron->Split();
+			node->Split(cachedNode);
 		}
 		else
 		{
-			tetrahedron->Merge();
+			node->Merge();
 		}
 
 		return res;
@@ -1380,9 +1433,9 @@ namespace UnlimRealms
 	Result Isosurface::HybridCubes::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
 	{
 		GenericRender *genericRender = this->isosurface.GetRealm().GetComponent<GenericRender>();
-		for (auto &tetrahedron : this->root)
+		for (auto &node : this->root)
 		{
-			this->Render(gfxContext, genericRender, viewProj, tetrahedron.get());
+			this->Render(gfxContext, genericRender, viewProj, node.get());
 		}
 
 		if (this->drawRefinementTree)
@@ -1393,21 +1446,22 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result Isosurface::HybridCubes::Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4x4 &viewProj, Tetrahedron *tetrahedron)
+	Result Isosurface::HybridCubes::Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4x4 &viewProj, Node *node)
 	{
-		if (ur_null == tetrahedron)
+		if (ur_null == node ||
+			ur_null == node->tetrahedron.get())
 			return Result(Success);
 
-		if (tetrahedron->HasChildren())
+		if (node->HasChildren())
 		{
-			for (auto &child : tetrahedron->children)
+			for (auto &child : node->children)
 			{
 				this->Render(gfxContext, genericRender, viewProj, child.get());
 			}
 		}
 		else
 		{
-			for (auto &hexahedron : tetrahedron->hexahedra)
+			for (auto &hexahedron : node->tetrahedron->hexahedra)
 			{
 				const auto &gfxVB = hexahedron.gfxMesh.VB;
 				const auto &gfxIB = hexahedron.gfxMesh.IB;
@@ -1419,25 +1473,26 @@ namespace UnlimRealms
 
 			if (this->drawTetrahedra)
 			{
-				RenderDebug(gfxContext, genericRender, tetrahedron);
+				RenderDebug(gfxContext, genericRender, node);
 			}
 		}
 
 		return Result(Success);
 	}
 
-	Result Isosurface::HybridCubes::RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Tetrahedron *tetrahedron)
+	Result Isosurface::HybridCubes::RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Node *node)
 	{
 		if (ur_null == genericRender ||
-			ur_null == tetrahedron)
+			ur_null == node ||
+			ur_null == node->tetrahedron.get())
 			return Result(Success);
 
 		static const ur_float4 s_debugColor = { 1.0f, 1.0f, 0.0f, 1.0f };
 		for (const auto &edge : Tetrahedron::Edges)
 		{
 			genericRender->DrawLine(
-				tetrahedron->vertices[edge.vid[0]],
-				tetrahedron->vertices[edge.vid[1]],
+				node->tetrahedron->vertices[edge.vid[0]],
+				node->tetrahedron->vertices[edge.vid[1]],
 				s_debugColor);
 		}
 
@@ -1446,7 +1501,7 @@ namespace UnlimRealms
 			static const ur_float4 s_hexaColor = { 0.0f, 1.0f, 0.0f, 1.0f };
 			for (ur_uint ih = 0; ih < 4; ++ih)
 			{
-				const Hexahedron &h = tetrahedron->hexahedra[ih];
+				const Hexahedron &h = node->tetrahedron->hexahedra[ih];
 				genericRender->DrawLine(h.vertices[0], h.vertices[1], s_hexaColor);
 				genericRender->DrawLine(h.vertices[2], h.vertices[3], s_hexaColor);
 				genericRender->DrawLine(h.vertices[4], h.vertices[5], s_hexaColor);

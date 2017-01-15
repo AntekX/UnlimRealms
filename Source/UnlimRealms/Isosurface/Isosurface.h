@@ -210,7 +210,6 @@ namespace UnlimRealms
 				static const SplitInfo EdgeSplitInfo[EdgesCount];
 
 				ur_uint level;
-				std::shared_ptr<Tetrahedron> children[ChildrenCount];
 				Vertex vertices[VerticesCount];
 				ur_byte longestEdgeIdx;
 				BoundingBox bbox;
@@ -223,7 +222,21 @@ namespace UnlimRealms
 
 				void Init(const Vertex &v0, const Vertex &v1, const Vertex &v2, const Vertex &v3);
 
-				void Split();
+				void Split(std::array<std::unique_ptr<Tetrahedron>, ChildrenCount> &subTetrahedra);
+			};
+
+			struct UR_DECL Node
+			{
+				std::shared_ptr<Tetrahedron> tetrahedron;
+				std::unique_ptr<Node> children[Tetrahedron::ChildrenCount];
+
+				Node();
+
+				Node(std::unique_ptr<Tetrahedron> tetrahedron);
+
+				~Node();
+
+				void Split(Node *cachedNode);
 
 				void Merge();
 
@@ -234,17 +247,17 @@ namespace UnlimRealms
 
 			bool CheckRefinementTree(const BoundingBox &bbox, EmptyOctree::Node *node);
 
-			Result Update(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron, std::shared_ptr<Tetrahedron> *cachedData = ur_null);
+			Result Update(const ur_float3 &refinementPoint, Node *node, Node *cachedNode = ur_null);
 
-			Result UpdateLoD(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron, std::shared_ptr<Tetrahedron> *cachedData = ur_null);
+			Result UpdateLoD(const ur_float3 &refinementPoint, Node *node, Node *cachedNode = ur_null);
 
 			Result BuildMesh(Tetrahedron *tetrahedron);
 
 			Result MarchCubes(Hexahedron &hexahedron);
 
-			Result Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4x4 &viewProj, Tetrahedron *tetrahedron);
+			Result Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4x4 &viewProj, Node *node);
 			
-			Result RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Tetrahedron *tetrahedron);
+			Result RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Node *node);
 
 			Result RenderOctree(GfxContext &gfxContext, GenericRender *genericRender, EmptyOctree::Node *node);
 
@@ -253,8 +266,8 @@ namespace UnlimRealms
 
 			Desc desc;
 			static const ur_uint RootsCount = 6;
-			std::shared_ptr<Tetrahedron> root[RootsCount];
-			std::shared_ptr<Tetrahedron> rootBack[RootsCount];
+			std::unique_ptr<Node> root[RootsCount];
+			std::unique_ptr<Node> rootBack[RootsCount];
 			EmptyOctree refinementTree;
 			ur_float3 updatePoint;
 			std::unique_ptr<std::thread> updateThread; // temp: until multitasking system implementation
