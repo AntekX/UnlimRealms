@@ -565,7 +565,7 @@ namespace UnlimRealms
 
 		for (auto &child : this->children)
 		{
-			child.reset(ur_null);
+			child = ur_null;
 		}
 	}
 
@@ -582,7 +582,11 @@ namespace UnlimRealms
 
 	Isosurface::HybridCubes::~HybridCubes()
 	{
-
+		if (this->updateThread.get() != ur_null)
+		{
+			this->updateActive = false;
+			this->updateThread->join();
+		}
 	}
 
 	Result Isosurface::HybridCubes::Update(const ur_float3 &refinementPoint, const ur_float4x4 &viewProj)
@@ -666,19 +670,75 @@ namespace UnlimRealms
 		if (this->freezeUpdate)
 			return Success;
 
-		memset(&this->stats, 0, sizeof(this->stats));
-
-		// update refinement tree
-		this->UpdateRefinementTree(refinementPoint, this->refinementTree.GetRoot());
-
-		// update hierarchy
 		Result res(Success);
-		for (auto &tetrahedron : this->root)
+		bool updateSync = false;
+		if (updateSync)
 		{
-			res &= this->Update(refinementPoint, tetrahedron.get());
+			memset(&this->stats, 0, sizeof(this->stats));
+
+			// update refinement tree
+			this->UpdateRefinementTree(refinementPoint, this->refinementTree.GetRoot());
+
+			// update hierarchy
+			for (auto &tetrahedron : this->root)
+			{
+				res &= this->Update(refinementPoint, tetrahedron.get());
+			}
+		}
+		else
+		{
+			if (ur_null == this->updateThread.get())
+			{
+				this->updateActive = true;
+				this->updateComplete = true;
+				this->updateResult = Failure;
+				this->updateThread.reset(new std::thread(UpdateAsync, this));
+			}
+
+			if (this->updateComplete)
+			{
+				if (Succeeded(this->updateResult))
+				{
+					// swap back and front data
+					std::lock_guard<std::mutex> lock(this->updateLock);
+					for (ur_uint ir = 0; ir < HybridCubes::RootsCount; ++ir)
+					{
+						this->root[ir].swap(this->rootBack[ir]);
+					}
+				}
+
+				this->updatePoint = refinementPoint;
+				this->updateComplete = false;
+			}
 		}
 
 		return res;
+	}
+
+	void Isosurface::HybridCubes::UpdateAsync(HybridCubes *presentation)
+	{
+		while (presentation && presentation->updateActive)
+		{
+			if (presentation->updateComplete)
+				continue;
+			
+			// do all the job
+			{
+				presentation->updateResult = Success;
+
+				// update refinement tree
+				presentation->UpdateRefinementTree(presentation->updatePoint, presentation->refinementTree.GetRoot());
+
+				// update hierarchy
+				for (ur_uint i = 0; i < HybridCubes::RootsCount; ++i)
+				{
+					presentation->updateResult &= presentation->Update(presentation->updatePoint, presentation->rootBack[i].get(), &presentation->root[i]);
+				}
+			}
+
+			// notify we are done
+			presentation->updateComplete = true;
+		}
 	}
 
 	void Isosurface::HybridCubes::UpdateRefinementTree(const ur_float3 &refinementPoint, EmptyOctree::Node *node)
@@ -735,13 +795,13 @@ namespace UnlimRealms
 		return false;
 	}
 
-	Result Isosurface::HybridCubes::Update(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron)
+	Result Isosurface::HybridCubes::Update(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron, std::shared_ptr<Tetrahedron> *cachedData)
 	{
 		Result res(Success);
 		if (ur_null == tetrahedron)
 			return res;
 
-		res &= this->UpdateLoD(refinementPoint, tetrahedron);
+		res &= this->UpdateLoD(refinementPoint, tetrahedron, cachedData);
 
 		res &= this->BuildMesh(tetrahedron);
 
@@ -769,7 +829,7 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result Isosurface::HybridCubes::UpdateLoD(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron)
+	Result Isosurface::HybridCubes::UpdateLoD(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron, std::shared_ptr<Tetrahedron> *cachedData)
 	{
 		Result res(Success);
 		if (ur_null == tetrahedron)

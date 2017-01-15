@@ -210,7 +210,7 @@ namespace UnlimRealms
 				static const SplitInfo EdgeSplitInfo[EdgesCount];
 
 				ur_uint level;
-				std::unique_ptr<Tetrahedron> children[ChildrenCount];
+				std::shared_ptr<Tetrahedron> children[ChildrenCount];
 				Vertex vertices[VerticesCount];
 				ur_byte longestEdgeIdx;
 				BoundingBox bbox;
@@ -234,9 +234,9 @@ namespace UnlimRealms
 
 			bool CheckRefinementTree(const BoundingBox &bbox, EmptyOctree::Node *node);
 
-			Result Update(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron);
+			Result Update(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron, std::shared_ptr<Tetrahedron> *cachedData = ur_null);
 
-			Result UpdateLoD(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron);
+			Result UpdateLoD(const ur_float3 &refinementPoint, Tetrahedron *tetrahedron, std::shared_ptr<Tetrahedron> *cachedData = ur_null);
 
 			Result BuildMesh(Tetrahedron *tetrahedron);
 
@@ -248,11 +248,20 @@ namespace UnlimRealms
 
 			Result RenderOctree(GfxContext &gfxContext, GenericRender *genericRender, EmptyOctree::Node *node);
 
+			static void UpdateAsync(HybridCubes *presentation);
+
 
 			Desc desc;
 			static const ur_uint RootsCount = 6;
-			std::unique_ptr<Tetrahedron> root[RootsCount];
+			std::shared_ptr<Tetrahedron> root[RootsCount];
+			std::shared_ptr<Tetrahedron> rootBack[RootsCount];
 			EmptyOctree refinementTree;
+			ur_float3 updatePoint;
+			std::unique_ptr<std::thread> updateThread; // temp: until multitasking system implementation
+			bool updateActive;
+			std::mutex updateLock;
+			std::atomic<ur_bool> updateComplete;
+			Result updateResult;
 			
 			// debug info
 			bool freezeUpdate;
@@ -264,7 +273,7 @@ namespace UnlimRealms
 				ur_uint tetrahedraCount;
 				ur_uint treeMemory;
 				ur_uint meshVideoMemory;
-			} stats;
+			} stats, statsBack;
 		};
 
 
