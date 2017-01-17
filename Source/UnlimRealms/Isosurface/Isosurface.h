@@ -59,6 +59,8 @@ namespace UnlimRealms
 
 			virtual Result Read(ValueType &value, const ur_float3 &point);
 
+			virtual Result Read(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox);
+
 			// todo: support data modification
 			//virtual Result Write(const ValueType &value);
 
@@ -104,6 +106,8 @@ namespace UnlimRealms
 			~ProceduralGenerator();
 
 			virtual Result Read(ValueType &value, const ur_float3 &point);
+
+			virtual Result Read(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox);
 
 		private:
 
@@ -243,15 +247,22 @@ namespace UnlimRealms
 				inline bool HasChildren() const { return (this->children[0] != ur_null); }
 			};
 
+			struct Stats
+			{
+				ur_uint tetrahedraCount;
+				ur_uint treeMemory;
+				ur_uint meshVideoMemory;
+			};
+
 			void UpdateRefinementTree(const ur_float3 &refinementPoint, EmptyOctree::Node *node);
 
 			bool CheckRefinementTree(const BoundingBox &bbox, EmptyOctree::Node *node);
 
-			Result Update(const ur_float3 &refinementPoint, Node *node, Node *cachedNode = ur_null);
+			Result Update(const ur_float3 &refinementPoint, Node *node, Node *cachedNode = ur_null, Stats *stats = ur_null);
 
 			Result UpdateLoD(const ur_float3 &refinementPoint, Node *node, Node *cachedNode = ur_null);
 
-			Result BuildMesh(Tetrahedron *tetrahedron);
+			Result BuildMesh(Tetrahedron *tetrahedron, Stats *stats = ur_null);
 
 			Result MarchCubes(Hexahedron &hexahedron);
 
@@ -267,26 +278,26 @@ namespace UnlimRealms
 			Desc desc;
 			static const ur_uint RootsCount = 6;
 			std::unique_ptr<Node> root[RootsCount];
-			std::unique_ptr<Node> rootBack[RootsCount];
 			EmptyOctree refinementTree;
+			std::multimap<ur_uint, Tetrahedron*> buildQueue;
+			
+			// async generation data
 			ur_float3 updatePoint;
 			std::unique_ptr<std::thread> updateThread; // temp: until multitasking system implementation
 			bool updateActive;
 			std::mutex updateLock;
 			std::atomic<ur_bool> updateComplete;
 			Result updateResult;
+			std::unique_ptr<Node> rootBack[RootsCount];
+			Stats statsBack;
 			
 			// debug info
 			bool freezeUpdate;
 			bool drawTetrahedra;
+			bool hideEmptyTetrahedra;
 			bool drawHexahedra;
 			bool drawRefinementTree;
-			struct Stats
-			{
-				ur_uint tetrahedraCount;
-				ur_uint treeMemory;
-				ur_uint meshVideoMemory;
-			} stats, statsBack;
+			Stats stats;
 		};
 
 

@@ -293,6 +293,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result Isosurface::DataVolume::Read(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox)
+	{
+		return Result(NotImplemented);
+	}
+
 	
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Isosurface::ProceduralGenerator
@@ -337,6 +342,13 @@ namespace UnlimRealms
 		}
 
 		return res;
+	}
+
+	Result Isosurface::ProceduralGenerator::Read(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox)
+	{
+		// todo: implement optimized sampling
+		// do early exit (return NotFound result) if we it is obious that isosurface does not intersect bbox
+		return Result(NotImplemented);
 	}
 
 	Result Isosurface::ProceduralGenerator::GenerateSphericalDistanceField(ValueType &value, const ur_float3 &point)
@@ -619,6 +631,7 @@ namespace UnlimRealms
 		this->desc = desc;
 		this->freezeUpdate = false;
 		this->drawTetrahedra = false;
+		this->hideEmptyTetrahedra = false;
 		this->drawHexahedra = false;
 		this->drawRefinementTree = false;
 		memset(&this->stats, 0, sizeof(this->stats));
@@ -726,8 +739,15 @@ namespace UnlimRealms
 			// update hierarchy
 			for (auto &tetrahedron : this->root)
 			{
-				res &= this->Update(refinementPoint, tetrahedron.get());
+				res &= this->Update(refinementPoint, tetrahedron.get(), ur_null, &this->stats);
 			}
+
+			// build meshes
+			for (auto &entry : this->buildQueue)
+			{
+				res &= this->BuildMesh(entry.second, &this->stats);
+			}
+			this->buildQueue.clear();
 		}
 		else
 		{
@@ -749,6 +769,7 @@ namespace UnlimRealms
 					{
 						this->root[ir].swap(this->rootBack[ir]);
 					}
+					memcpy(&this->stats, &this->statsBack, sizeof(this->stats));
 				}
 
 				this->updatePoint = refinementPoint;
@@ -768,7 +789,10 @@ namespace UnlimRealms
 			
 			// do all the job
 			{
+				// reset presentation
 				presentation->updateResult = Success;
+				presentation->buildQueue.clear();
+				memset(&presentation->statsBack, 0, sizeof(presentation->statsBack));
 
 				// update refinement tree
 				presentation->UpdateRefinementTree(presentation->updatePoint, presentation->refinementTree.GetRoot());
@@ -776,7 +800,20 @@ namespace UnlimRealms
 				// update hierarchy
 				for (ur_uint i = 0; i < HybridCubes::RootsCount; ++i)
 				{
-					presentation->updateResult &= presentation->Update(presentation->updatePoint, presentation->rootBack[i].get(), presentation->root[i].get());
+					presentation->updateResult &= presentation->Update(
+						presentation->updatePoint, presentation->rootBack[i].get(), presentation->root[i].get(),
+						&presentation->statsBack);
+				}
+
+				// build meshes
+				// (one level at a time)
+				if (!presentation->buildQueue.empty())
+				{
+					ur_uint level = presentation->buildQueue.begin()->second->level;
+					for (auto &entry : presentation->buildQueue)
+					{
+						presentation->BuildMesh(entry.second, &presentation->statsBack);
+					}
 				}
 			}
 
@@ -839,42 +876,42 @@ namespace UnlimRealms
 		return false;
 	}
 
-	Result Isosurface::HybridCubes::Update(const ur_float3 &refinementPoint, Node *node, Node *cachedNode)
+	Result Isosurface::HybridCubes::Update(const ur_float3 &refinementPoint, Node *node, Node *cachedNode, Stats *stats)
 	{
 		Result res(Success);
 		if (ur_null == node ||
 			ur_null == node->tetrahedron)
 			return res;
 
-		// temp: fake coarse level by level update
-		// todo: fully update tree and meanwhile gather build list items,
-		// build list further can be processed in any way (synchronously, asynchronously, fully or partially)
-		if (node->tetrahedron->initialized)
-		{
-			res &= this->UpdateLoD(refinementPoint, node, cachedNode);
-		}
+		res &= this->UpdateLoD(refinementPoint, node, cachedNode);
 
-		res &= this->BuildMesh(node->tetrahedron.get());
+		if (!node->tetrahedron->initialized)
+		{
+			this->buildQueue.insert(std::pair<ur_uint, Tetrahedron*>(node->tetrahedron->level, node->tetrahedron.get()));
+		}
 
 		if (node->HasChildren())
 		{
 			for (ur_uint subIdx = 0; subIdx < Tetrahedron::ChildrenCount; ++subIdx)
 			{
 				res &= this->Update(refinementPoint, node->children[subIdx].get(),
-					(cachedNode ? cachedNode->children[subIdx].get() : ur_null));
+					(cachedNode ? cachedNode->children[subIdx].get() : ur_null), stats);
 			}
 		}
 
 		// update stats
-		this->stats.tetrahedraCount += 1;
-		this->stats.treeMemory += sizeof(Tetrahedron);
-		this->stats.treeMemory += sizeof(node->tetrahedron->hexahedra);
-		if (node->tetrahedron->initialized)
+		if (stats != ur_null)
 		{
-			for (const auto &h : node->tetrahedron->hexahedra)
+			stats->tetrahedraCount += 1;
+			stats->treeMemory += sizeof(Tetrahedron);
+			stats->treeMemory += sizeof(node->tetrahedron->hexahedra);
+			if (node->tetrahedron->initialized)
 			{
-				if (h.gfxMesh.VB) this->stats.meshVideoMemory += h.gfxMesh.VB->GetDesc().Size;
-				if (h.gfxMesh.IB) this->stats.meshVideoMemory += h.gfxMesh.IB->GetDesc().Size;
+				for (const auto &h : node->tetrahedron->hexahedra)
+				{
+					if (h.gfxMesh.VB) stats->meshVideoMemory += h.gfxMesh.VB->GetDesc().Size;
+					if (h.gfxMesh.IB) stats->meshVideoMemory += h.gfxMesh.IB->GetDesc().Size;
+				}
 			}
 		}
 
@@ -891,18 +928,20 @@ namespace UnlimRealms
 		// update LoD by traversing refinement octree
 		// current approach produces seamless partition, but due to it's conservative nature, the resulting mesh is overdetailed
 		// todo: try doing proper LEB implementation, based on "dimonds" hierarchy or "terminal edge" bisection
+#if 1
 		bool doSplit = this->CheckRefinementTree(node->tetrahedron->bbox, this->refinementTree.GetRoot());
-
-		/*bool doSplit = false;
-		const ur_float3 &ev0 = tetrahedron->vertices[Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[0]];
-		const ur_float3 &ev1 = tetrahedron->vertices[Tetrahedron::Edges[tetrahedron->longestEdgeIdx].vid[1]];
+#else
+		bool doSplit = false;
+		const ur_float3 &ev0 = node->tetrahedron->vertices[Tetrahedron::Edges[node->tetrahedron->longestEdgeIdx].vid[0]];
+		const ur_float3 &ev1 = node->tetrahedron->vertices[Tetrahedron::Edges[node->tetrahedron->longestEdgeIdx].vid[1]];
 		ur_float edgeLen = (ev0 - ev1).Length();
 		doSplit = (edgeLen / (this->desc.LatticeResolution.GetMaxValue() * 2) > this->desc.CellSize);
 		if (doSplit)
 		{
 			ur_float3 evc = (ev0 + ev1) * 0.5f;
 			doSplit = (evc - refinementPoint).Length() < edgeLen;
-		}*/
+		}
+#endif
 
 		if (doSplit)
 		{
@@ -916,10 +955,10 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result Isosurface::HybridCubes::BuildMesh(Tetrahedron *tetrahedron)
+	Result Isosurface::HybridCubes::BuildMesh(Tetrahedron *tetrahedron, Stats *stats)
 	{
 		Result res = Result(Success);
-		if (ur_null == tetrahedron || tetrahedron->initialized)
+		if (ur_null == tetrahedron)
 			return res;
 
 		for (auto &hexahedron : tetrahedron->hexahedra)
@@ -928,6 +967,16 @@ namespace UnlimRealms
 		}
 
 		tetrahedron->initialized = Succeeded(res);
+
+		// update stats
+		if (stats != ur_null && tetrahedron->initialized)
+		{
+			for (const auto &h : tetrahedron->hexahedra)
+			{
+				if (h.gfxMesh.VB) stats->meshVideoMemory += h.gfxMesh.VB->GetDesc().Size;
+				if (h.gfxMesh.IB) stats->meshVideoMemory += h.gfxMesh.IB->GetDesc().Size;
+			}
+		}
 
 		return res;
 	}
@@ -1288,7 +1337,7 @@ namespace UnlimRealms
 		}
 
 		if (!(hasPositiveSamples && hasNegativeSamples))
-			return Success; // does not intersect isosurface, nothing ti extract here
+			return Success; // does not intersect isosurface, nothing to extract here
 
 		// march
 
@@ -1473,7 +1522,14 @@ namespace UnlimRealms
 
 			if (this->drawTetrahedra)
 			{
-				RenderDebug(gfxContext, genericRender, node);
+				if (!this->hideEmptyTetrahedra || node->tetrahedron->initialized && (
+					node->tetrahedron->hexahedra[0].gfxMesh.VB != ur_null ||
+					node->tetrahedron->hexahedra[1].gfxMesh.VB != ur_null ||
+					node->tetrahedron->hexahedra[2].gfxMesh.VB != ur_null ||
+					node->tetrahedron->hexahedra[3].gfxMesh.VB != ur_null))
+				{
+					RenderDebug(gfxContext, genericRender, node);
+				}
 			}
 		}
 
@@ -1589,6 +1645,7 @@ namespace UnlimRealms
 		{
 			ImGui::Checkbox("Freeze update", &this->freezeUpdate);
 			ImGui::Checkbox("Draw tetrahedra", &this->drawTetrahedra);
+			ImGui::Checkbox("Hide empty tetrahedra", &this->hideEmptyTetrahedra);
 			ImGui::Checkbox("Draw hexahedra", &this->drawHexahedra);
 			ImGui::Checkbox("Draw refinement tree", &this->drawRefinementTree);
 			if (ImGui::TreeNode("Stats"))
