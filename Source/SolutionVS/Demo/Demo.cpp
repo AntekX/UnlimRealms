@@ -86,7 +86,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
 	{
 		BoundingBox volumeBound(ur_float3(-4.0f, -4.0f, -4.0f), ur_float3(4.0f, 4.0f, 4.0f));
-#if 0
+#if 1
 		Isosurface::ProceduralGenerator::SphericalDistanceFieldParams generateParams;
 		generateParams.bound = volumeBound;
 		generateParams.center = volumeBound.Center();
@@ -102,7 +102,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 		Isosurface::HybridCubes::Desc desc;
 		desc.CellSize = 0.05f;
-		desc.LatticeResolution = 8;
+		desc.LatticeResolution = 16;
 		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x;
 		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
 

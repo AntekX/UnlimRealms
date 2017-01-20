@@ -194,11 +194,16 @@ namespace UnlimRealms
 			return r;
 		}
 
+		static void Lerp(TVector2<T> &output, const TVector2<T> &v0, const TVector2<T> &v1, T s)
+		{
+			output.x = v0.x * (T(1) - s) + v1.x * s;
+			output.y = v0.y * (T(1) - s) + v1.y * s;
+		}
+
 		static TVector2<T> Lerp(const TVector2<T> &v0, const TVector2<T> &v1, T s)
 		{
 			TVector2<T> r;
-			r.x = v0.x * (T(1) - s) + v1.x * s;
-			r.y = v0.y * (T(1) - s) + v1.y * s;
+			Lerp(r, v0, v1, s);
 			return r;
 		}
 	};
@@ -408,21 +413,31 @@ namespace UnlimRealms
 			return r;
 		}
 
+		static void Lerp(TVector3<T> &output, const TVector3<T> &v0, const TVector3<T> &v1, T s)
+		{
+			output.x = v0.x * (T(1) - s) + v1.x * s;
+			output.y = v0.y * (T(1) - s) + v1.y * s;
+			output.z = v0.z * (T(1) - s) + v1.z * s;
+		}
+
+		static void Lerp(TVector3<T> &output, const TVector3<T> &v0, const TVector3<T> &v1, const TVector3<T> &s)
+		{
+			output.x = v0.x * (T(1) - s) + v1.x * s.x;
+			output.y = v0.y * (T(1) - s) + v1.y * s.y;
+			output.z = v0.z * (T(1) - s) + v1.z * s.z;
+		}
+
 		static TVector3<T> Lerp(const TVector3<T> &v0, const TVector3<T> &v1, T s)
 		{
 			TVector3<T> r;
-			r.x = v0.x * (T(1) - s) + v1.x * s;
-			r.y = v0.y * (T(1) - s) + v1.y * s;
-			r.z = v0.z * (T(1) - s) + v1.z * s;
+			Lerp(r, v0, v1, s);
 			return r;
 		}
 
 		static TVector3<T> Lerp(const TVector3<T> &v0, const TVector3<T> &v1, const TVector3<T> &s)
 		{
 			TVector3<T> r;
-			r.x = v0.x * (T(1) - s.x) + v1.x * s.x;
-			r.y = v0.y * (T(1) - s.y) + v1.y * s.y;
-			r.z = v0.z * (T(1) - s.z) + v1.z * s.z;
+			Lerp(r, v0, v1, s);
 			return r;
 		}
 
@@ -431,12 +446,17 @@ namespace UnlimRealms
 			return (v1.x * v2.x + v1.y * v2.y + v1.z * v2.z);
 		}
 
+		static void Cross(TVector3<T> &output, const TVector3<T> &v1, const TVector3<T> &v2)
+		{
+			output.x = v1.y * v2.z - v1.z * v2.y;
+			output.y = v1.z * v2.x - v1.x * v2.z;
+			output.z = v1.x * v2.y - v1.y * v2.x;
+		}
+
 		static TVector3<T> Cross(const TVector3<T> &v1, const TVector3<T> &v2)
 		{
-			TVector3<T> r(
-				v1.y * v2.z - v1.z * v2.y,
-				v1.z * v2.x - v1.x * v2.z,
-				v1.x * v2.y - v1.y * v2.x);
+			TVector3<T> r;
+			Cross(r, v1, v2);
 			return r;
 		}
 
@@ -621,13 +641,18 @@ namespace UnlimRealms
 			return *(TVector3<T>*)this;
 		}
 
+		static TVector4<T> Lerp(TVector4<T> &output, const TVector4<T> &v0, const TVector4<T> &v1, T s)
+		{
+			output.x = v0.x * (T(1) - s) + v1.x * s;
+			output.y = v0.y * (T(1) - s) + v1.y * s;
+			output.z = v0.z * (T(1) - s) + v1.z * s;
+			output.w = v0.w * (T(1) - s) + v1.w * s;
+		}
+
 		static TVector4<T> Lerp(const TVector4<T> &v0, const TVector4<T> &v1, T s)
 		{
 			TVector4<T> r;
-			r.x = v0.x * (T(1) - s) + v1.x * s;
-			r.y = v0.y * (T(1) - s) + v1.y * s;
-			r.z = v0.z * (T(1) - s) + v1.z * s;
-			r.w = v0.w * (T(1) - s) + v1.w * s;
+			Lerp(r, v0, v1, s);
 			return r;
 		}
 

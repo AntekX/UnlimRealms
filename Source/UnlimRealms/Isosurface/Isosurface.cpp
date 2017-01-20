@@ -815,6 +815,7 @@ namespace UnlimRealms
 						presentation->BuildMesh(entry.second, &presentation->statsBack);
 					}
 				}
+				presentation->statsBack.buildQueue = (ur_uint)presentation->buildQueue.size();
 			}
 
 			// notify we are done
@@ -1280,7 +1281,7 @@ namespace UnlimRealms
 			ur_float s = ur_float(count - 1);
 			for (ur_uint i = 0; i < count; ++i)
 			{
-				*points = ur_float3::Lerp(p0, p1, ur_float(i) / s);
+				ur_float3::Lerp(*points, p0, p1, ur_float(i) / s);
 				points += step;
 			}
 		};
@@ -1326,7 +1327,7 @@ namespace UnlimRealms
 		p_col0 = lattice.data();
 		bool hasPositiveSamples = false;
 		bool hasNegativeSamples = false;
-		for (ur_size i = 0; i < lattice.size(); ++i, ++p_col0, ++p_sample)
+		for (ur_uint i = 0; i < latticeSize; ++i, ++p_col0, ++p_sample)
 		{
 			if (Failed(this->isosurface.GetData()->Read(*p_sample, *p_col0)))
 			{
@@ -1350,13 +1351,16 @@ namespace UnlimRealms
 		DataVolume::ValueType *cellValues[8];
 		ur_uint3 cellsCount = this->desc.LatticeResolution - 1;
 		ur_float3 *p_slice = lattice.data();
+		DataVolume::ValueType *p_sample_slice = samples.data();
 		for (ur_uint iz = 0; iz < cellsCount.z; ++iz)
 		{
 			ur_float3 *p_row = p_slice;
+			DataVolume::ValueType *p_sample_row = p_sample_slice;
 			for (ur_uint iy = 0; iy < cellsCount.y; ++iy)
 			{
 				ur_float3 *p_cell = p_row;
-				for (ur_uint ix = 0; ix < cellsCount.x; ++ix, ++p_cell)
+				DataVolume::ValueType *p_sample = p_sample_row;
+				for (ur_uint ix = 0; ix < cellsCount.x; ++ix, ++p_cell, ++p_sample)
 				{
 					// cell corner vertices
 					cellPoints[0] = &p_cell[0];
@@ -1369,7 +1373,6 @@ namespace UnlimRealms
 					cellPoints[7] = &p_cell[sliceOfs + rowOfs];
 
 					// cell corner samples
-					p_sample = samples.data() + ix + iy * rowOfs + iz * sliceOfs;
 					cellValues[0] = &p_sample[0];
 					cellValues[1] = &p_sample[1];
 					cellValues[2] = &p_sample[rowOfs + 1];
@@ -1439,11 +1442,11 @@ namespace UnlimRealms
 					}
 				}
 				p_row += rowOfs;
+				p_sample_row += rowOfs;
 			}
 			p_slice += sliceOfs;
+			p_sample_slice += sliceOfs;
 		}
-
-		for (auto &v : vertexBuffer) v.norm.Normalize();
 
 		// prepare gfx resources
 
@@ -1514,10 +1517,13 @@ namespace UnlimRealms
 			{
 				const auto &gfxVB = hexahedron.gfxMesh.VB;
 				const auto &gfxIB = hexahedron.gfxMesh.IB;
-				const ur_uint indexCount = (gfxIB.get() ? gfxIB->GetDesc().Size / sizeof(Isosurface::Index) : 0);
-				gfxContext.SetVertexBuffer(gfxVB.get(), 0, sizeof(Isosurface::Vertex), 0);
-				gfxContext.SetIndexBuffer(gfxIB.get(), sizeof(Isosurface::Index) * 8, 0);
-				gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
+				if (gfxVB != ur_null && gfxIB != ur_null)
+				{
+					const ur_uint indexCount = (gfxIB.get() ? gfxIB->GetDesc().Size / sizeof(Isosurface::Index) : 0);
+					gfxContext.SetVertexBuffer(gfxVB.get(), 0, sizeof(Isosurface::Vertex), 0);
+					gfxContext.SetIndexBuffer(gfxIB.get(), sizeof(Isosurface::Index) * 8, 0);
+					gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
+				}
 			}
 
 			if (this->drawTetrahedra)
@@ -1650,9 +1656,10 @@ namespace UnlimRealms
 			ImGui::Checkbox("Draw refinement tree", &this->drawRefinementTree);
 			if (ImGui::TreeNode("Stats"))
 			{
-				ImGui::Text("tetrahedraCount: %i", (int)this->stats.tetrahedraCount);
-				ImGui::Text("treeMemory: %i", (int)this->stats.treeMemory);
-				ImGui::Text("meshVideoMemory: %i", (int)this->stats.meshVideoMemory);
+				ImGui::Text("tetrahedraCount:	%i", (int)this->stats.tetrahedraCount);
+				ImGui::Text("treeMemory:		%i", (int)this->stats.treeMemory);
+				ImGui::Text("meshVideoMemory:	%i", (int)this->stats.meshVideoMemory);
+				ImGui::Text("buildQueue:		%i", (int)this->stats.buildQueue);
 				ImGui::TreePop();
 			}
 			ImGui::TreePop();

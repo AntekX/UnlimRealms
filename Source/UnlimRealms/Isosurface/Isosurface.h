@@ -252,6 +252,7 @@ namespace UnlimRealms
 				ur_uint tetrahedraCount;
 				ur_uint treeMemory;
 				ur_uint meshVideoMemory;
+				ur_uint buildQueue;
 			};
 
 			void UpdateRefinementTree(const ur_float3 &refinementPoint, EmptyOctree::Node *node);
