@@ -172,6 +172,11 @@ namespace UnlimRealms
 			return r;
 		}
 
+		T LengthSquared() const
+		{
+			return 0;
+		}
+
 		T Length() const
 		{
 			return 0;
@@ -208,14 +213,24 @@ namespace UnlimRealms
 		}
 	};
 
+	float TVector2<float>::LengthSquared() const
+	{
+		return (this->x * this->x + this->y * this->y);
+	}
+
+	double TVector2<double>::LengthSquared() const
+	{
+		return (this->x * this->x + this->y * this->y);
+	}
+
 	float TVector2<float>::Length() const
 	{
-		return sqrtf(this->x * this->x + this->y * this->y);
+		return sqrtf(this->LengthSquared());
 	}
 
 	double TVector2<double>::Length() const
 	{
-		return sqrt(this->x * this->x + this->y * this->y);
+		return sqrt(this->LengthSquared());
 	}
 
 
@@ -390,6 +405,11 @@ namespace UnlimRealms
 			return std::min(std::min(this->x, this->y), this->z);
 		}
 
+		T LengthSquared() const
+		{
+			return 0;
+		}
+
 		T Length() const
 		{
 			return 0;
@@ -474,14 +494,24 @@ namespace UnlimRealms
 	template <class T>
 	const TVector3<T> TVector3<T>::K = { 0, 0, 1 };
 
+	float TVector3<float>::LengthSquared() const
+	{
+		return (this->x * this->x + this->y * this->y + this->z * this->z);
+	}
+
+	double TVector3<double>::LengthSquared() const
+	{
+		return (this->x * this->x + this->y * this->y + this->z * this->z);
+	}
+
 	float TVector3<float>::Length() const
 	{
-		return sqrtf(this->x * this->x + this->y * this->y + this->z * this->z);
+		return sqrtf(this->LengthSquared());
 	}
 
 	double TVector3<double>::Length() const
 	{
-		return sqrt(this->x * this->x + this->y * this->y + this->z * this->z);
+		return sqrt(this->LengthSquared());
 	}
 
 
@@ -1129,6 +1159,12 @@ namespace UnlimRealms
 			d.y = std::max(std::max(this->Min.y - v.y, v.y - this->Max.y), (T)0);
 			d.z = std::max(std::max(this->Min.z - v.z, v.z - this->Max.z), (T)0);
 			return d.Length();
+		}
+
+		void Expand(const TVector3<T> &v)
+		{
+			this->Min.SetMin(v);
+			this->Max.SetMax(v);
 		}
 
 		void Merge(const TBoundingBox<T> &bb)

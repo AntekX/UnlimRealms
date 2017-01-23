@@ -348,13 +348,56 @@ namespace UnlimRealms
 	{
 		// todo: implement optimized sampling
 		// do early exit (return NotFound result) if we it is obious that isosurface does not intersect bbox
-		return Result(NotImplemented);
+
+		Result res = Result(Success);
+
+		// choose algorithm and generate a value
+		switch (this->algorithm)
+		{
+		case Algorithm::SphericalDistanceField:
+		{
+			res = this->GenerateSphericalDistanceField(values, points, count, bbox);
+		} break;
+		case Algorithm::SimplexNoise:
+		{
+			return Result(NotImplemented);
+		} break;
+		default:
+		{
+			res = Result(NotImplemented);
+		}
+		}
+
+		return res;
 	}
 
 	Result Isosurface::ProceduralGenerator::GenerateSphericalDistanceField(ValueType &value, const ur_float3 &point)
 	{
 		const SphericalDistanceFieldParams &params = static_cast<const SphericalDistanceFieldParams&>(*this->generateParams.get());
 		value = params.radius - (point - params.center).Length();
+		return Result(Success);
+	}
+
+	Result Isosurface::ProceduralGenerator::GenerateSphericalDistanceField(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox)
+	{
+		const SphericalDistanceFieldParams &params = static_cast<const SphericalDistanceFieldParams&>(*this->generateParams.get());
+		ur_float radius = params.radius;
+		ur_float brad = (bbox.Max - bbox.Min).Length() * 0.5f;
+		ur_float dist = (bbox.Center() - params.center).Length();
+		if (dist + brad < radius ||
+			dist - brad > radius)
+			return Result(NotFound); // does not intersect isosurface
+
+		if (ur_null == values || ur_null == points || 0 == count)
+			return Result(InvalidArgs);
+
+		ValueType *p_value = values;
+		const ur_float3 *p_point = points;
+		for (ur_uint i = 0; i < count; ++i, ++p_value, ++p_point)
+		{
+			*p_value = params.radius - (*p_point - params.center).Length();
+		}
+
 		return Result(Success);
 	}
 
@@ -1275,6 +1318,15 @@ namespace UnlimRealms
 		if (ur_null == this->isosurface.GetData())
 			return Result(NotInitialized);
 
+		// early isosurface intersection test
+
+		BoundingBox bbox;
+		for (auto &v : hexahedron.vertices) { bbox.Expand(v); }
+
+		if (this->isosurface.GetData()->Read(ur_null, ur_null, 0, bbox) == NotFound)
+			return Result(Success); // does not intersect isosurface, nothing to extract here
+		// todo: check early exit works fine
+
 		// compute hexahedron lattice points
 		
 		auto computeLinePoints = [](ur_float3 *points, const ur_uint count, const ur_uint step, const ur_float3 &p0, const ur_float3 &p1) {
@@ -1323,22 +1375,23 @@ namespace UnlimRealms
 
 		static const DataVolume::ValueType ScalarFieldSurfaceValue = DataVolume::ValueType(0);
 		std::vector<DataVolume::ValueType> samples(latticeSize);
-		DataVolume::ValueType *p_sample = samples.data();
-		p_col0 = lattice.data();
-		bool hasPositiveSamples = false;
-		bool hasNegativeSamples = false;
-		for (ur_uint i = 0; i < latticeSize; ++i, ++p_col0, ++p_sample)
-		{
-			if (Failed(this->isosurface.GetData()->Read(*p_sample, *p_col0)))
-			{
-				return NotInitialized; // data's not ready
-			}
-			hasPositiveSamples |= (*p_sample >= ScalarFieldSurfaceValue);
-			hasNegativeSamples |= (*p_sample < ScalarFieldSurfaceValue);
-		}
+		this->isosurface.GetData()->Read(samples.data(), lattice.data(), latticeSize, bbox);
+		//DataVolume::ValueType *p_sample = samples.data();
+		//p_col0 = lattice.data();
+		//bool hasPositiveSamples = false;
+		//bool hasNegativeSamples = false;
+		//for (ur_uint i = 0; i < latticeSize; ++i, ++p_col0, ++p_sample)
+		//{
+		//	if (Failed(this->isosurface.GetData()->Read(*p_sample, *p_col0)))
+		//	{
+		//		return NotInitialized; // data's not ready
+		//	}
+		//	hasPositiveSamples |= (*p_sample >= ScalarFieldSurfaceValue);
+		//	hasNegativeSamples |= (*p_sample < ScalarFieldSurfaceValue);
+		//}
 
-		if (!(hasPositiveSamples && hasNegativeSamples))
-			return Success; // does not intersect isosurface, nothing to extract here
+		//if (!(hasPositiveSamples && hasNegativeSamples))
+		//	return Success; // does not intersect isosurface, nothing to extract here
 
 		// march
 

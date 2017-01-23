@@ -115,6 +115,8 @@ namespace UnlimRealms
 
 			Result GenerateSimplexNoise(ValueType &value, const ur_float3 &point);
 
+			Result GenerateSphericalDistanceField(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox);
+
 
 			Algorithm algorithm;
 			std::unique_ptr<GenerateParams> generateParams;
