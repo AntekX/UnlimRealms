@@ -108,6 +108,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 		isosurface->Init(std::move(dataVolume), std::move(presentation));
 	}
+
+	ur_float4x4 m;
+	ur_float4 v[6];
+	m.FrustumPlanes(v, true);
+	BoundingBox bb;
+	bb.Intersects(v);
 	
     // Main message loop:
 	realm.GetLog().WriteLine("Entering main message loop");

@@ -602,7 +602,7 @@ namespace UnlimRealms
 
 		TVector4<T> operator/ (const TVector4<T> v) const
 		{
-			TVector r;
+			TVector4<T> r;
 			r.x = x / v.x;
 			r.y = y / v.y;
 			r.z = z / v.z;
@@ -799,9 +799,8 @@ namespace UnlimRealms
 			*this = Identity;
 		}
 
-		static TMatrix<T> Translation(T x, T y, T z)
+		static TMatrix<T>& Translation(TMatrix<T> &m, T x, T y, T z)
 		{
-			TMatrix<T> m;
 			m.r[0].x = 1; m.r[0].y = 0; m.r[0].z = 0; m.r[0].w = 0;
 			m.r[1].x = 0; m.r[1].y = 1; m.r[1].z = 0; m.r[1].w = 0;
 			m.r[2].x = 0; m.r[2].y = 0; m.r[2].z = 1; m.r[2].w = 0;
@@ -809,9 +808,15 @@ namespace UnlimRealms
 			return m;
 		}
 
-		static TMatrix<T> Scaling(T x, T y, T z)
+		static TMatrix<T> Translation(T x, T y, T z)
 		{
 			TMatrix<T> m;
+			TMatrix<T>::Translation(m, x, y, z);
+			return m;
+		}
+
+		static TMatrix<T>& Scaling(TMatrix<T> &m, T x, T y, T z)
+		{
 			m.r[0].x = x; m.r[0].y = 0; m.r[0].z = 0; m.r[0].w = 0;
 			m.r[1].x = 0; m.r[1].y = y; m.r[1].z = 0; m.r[1].w = 0;
 			m.r[2].x = 0; m.r[2].y = 0; m.r[2].z = z; m.r[2].w = 0;
@@ -819,9 +824,15 @@ namespace UnlimRealms
 			return m;
 		}
 
-		static TMatrix<T> RotationAxis(const TVector3<T> &axis, const T &angle)
+		static TMatrix<T> Scaling(T x, T y, T z)
 		{
 			TMatrix<T> m;
+			TMatrix<T>::Scaling(m, x, y, z);
+			return m;
+		}
+
+		static TMatrix<T>& RotationAxis(TMatrix<T> &m, const TVector3<T> &axis, const T &angle)
+		{
 			const TVector3<T> &r = axis;
 			const T &a = angle;
 			T c = cos(a);
@@ -846,9 +857,15 @@ namespace UnlimRealms
 			return m;
 		}
 
-		static TMatrix<T> RotationQuaternion(const TVector4<T> &q)
+		static TMatrix<T> RotationAxis(const TVector3<T> &axis, const T &angle)
 		{
 			TMatrix<T> m;
+			TMatrix<T>::RotationAxis(m, axis, angle);
+			return m;
+		}
+
+		static TMatrix<T>& RotationQuaternion(TMatrix<T> &m, const TVector4<T> &q)
+		{
 			T s, xs, ys, zs, wx, wy, wz, xx, xy, xz, yy, yz, zz;
 			s = 2 / (q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w);
 			xs = s*q.x;		ys = s*q.y;		zs = s*q.z;
@@ -874,35 +891,52 @@ namespace UnlimRealms
 			return m;
 		}
 
-		static TMatrix<T> Multiply(const TMatrix<T> &m1, const TMatrix<T> &m2)
+		static TMatrix<T> RotationQuaternion(const TVector4<T> &q)
 		{
-			TMatrix<T> rm;
-			TVector4<T> r = m1.r[0];
-			rm.r[0].x = m2.r[0].x*r.x + m2.r[1].x*r.y + m2.r[2].x*r.z + m2.r[3].x*r.w;
-			rm.r[0].y = m2.r[0].y*r.x + m2.r[1].y*r.y + m2.r[2].y*r.z + m2.r[3].y*r.w;
-			rm.r[0].z = m2.r[0].z*r.x + m2.r[1].z*r.y + m2.r[2].z*r.z + m2.r[3].z*r.w;
-			rm.r[0].w = m2.r[0].w*r.x + m2.r[1].w*r.y + m2.r[2].w*r.z + m2.r[3].w*r.w;
-			r = m1.r[1];
-			rm.r[1].x = m2.r[0].x*r.x + m2.r[1].x*r.y + m2.r[2].x*r.z + m2.r[3].x*r.w;
-			rm.r[1].y = m2.r[0].y*r.x + m2.r[1].y*r.y + m2.r[2].y*r.z + m2.r[3].y*r.w;
-			rm.r[1].z = m2.r[0].z*r.x + m2.r[1].z*r.y + m2.r[2].z*r.z + m2.r[3].z*r.w;
-			rm.r[1].w = m2.r[0].w*r.x + m2.r[1].w*r.y + m2.r[2].w*r.z + m2.r[3].w*r.w;
-			r = m1.r[2];
-			rm.r[2].x = m2.r[0].x*r.x + m2.r[1].x*r.y + m2.r[2].x*r.z + m2.r[3].x*r.w;
-			rm.r[2].y = m2.r[0].y*r.x + m2.r[1].y*r.y + m2.r[2].y*r.z + m2.r[3].y*r.w;
-			rm.r[2].z = m2.r[0].z*r.x + m2.r[1].z*r.y + m2.r[2].z*r.z + m2.r[3].z*r.w;
-			rm.r[2].w = m2.r[0].w*r.x + m2.r[1].w*r.y + m2.r[2].w*r.z + m2.r[3].w*r.w;
-			r = m1.r[3];
-			rm.r[3].x = m2.r[0].x*r.x + m2.r[1].x*r.y + m2.r[2].x*r.z + m2.r[3].x*r.w;
-			rm.r[3].y = m2.r[0].y*r.x + m2.r[1].y*r.y + m2.r[2].y*r.z + m2.r[3].y*r.w;
-			rm.r[3].z = m2.r[0].z*r.x + m2.r[1].z*r.y + m2.r[2].z*r.z + m2.r[3].z*r.w;
-			rm.r[3].w = m2.r[0].w*r.x + m2.r[1].w*r.y + m2.r[2].w*r.z + m2.r[3].w*r.w;
+			TMatrix<T> m;
+			TMatrix<T>::RotationQuaternion(m, q);
+			return m;
+		}
+
+		static TMatrix<T>& Multiply(TMatrix<T> &rm, const TMatrix<T> &m1, const TMatrix<T> &m2)
+		{
+			rm.r[0].x = m2.r[0].x*m1.r[0].x + m2.r[1].x*m1.r[0].y + m2.r[2].x*m1.r[0].z + m2.r[3].x*m1.r[0].w;
+			rm.r[0].y = m2.r[0].y*m1.r[0].x + m2.r[1].y*m1.r[0].y + m2.r[2].y*m1.r[0].z + m2.r[3].y*m1.r[0].w;
+			rm.r[0].z = m2.r[0].z*m1.r[0].x + m2.r[1].z*m1.r[0].y + m2.r[2].z*m1.r[0].z + m2.r[3].z*m1.r[0].w;
+			rm.r[0].w = m2.r[0].w*m1.r[0].x + m2.r[1].w*m1.r[0].y + m2.r[2].w*m1.r[0].z + m2.r[3].w*m1.r[0].w;
+			
+			rm.r[1].x = m2.r[0].x*m1.r[1].x + m2.r[1].x*m1.r[1].y + m2.r[2].x*m1.r[1].z + m2.r[3].x*m1.r[1].w;
+			rm.r[1].y = m2.r[0].y*m1.r[1].x + m2.r[1].y*m1.r[1].y + m2.r[2].y*m1.r[1].z + m2.r[3].y*m1.r[1].w;
+			rm.r[1].z = m2.r[0].z*m1.r[1].x + m2.r[1].z*m1.r[1].y + m2.r[2].z*m1.r[1].z + m2.r[3].z*m1.r[1].w;
+			rm.r[1].w = m2.r[0].w*m1.r[1].x + m2.r[1].w*m1.r[1].y + m2.r[2].w*m1.r[1].z + m2.r[3].w*m1.r[1].w;
+			
+			rm.r[2].x = m2.r[0].x*m1.r[2].x + m2.r[1].x*m1.r[2].y + m2.r[2].x*m1.r[2].z + m2.r[3].x*m1.r[2].w;
+			rm.r[2].y = m2.r[0].y*m1.r[2].x + m2.r[1].y*m1.r[2].y + m2.r[2].y*m1.r[2].z + m2.r[3].y*m1.r[2].w;
+			rm.r[2].z = m2.r[0].z*m1.r[2].x + m2.r[1].z*m1.r[2].y + m2.r[2].z*m1.r[2].z + m2.r[3].z*m1.r[2].w;
+			rm.r[2].w = m2.r[0].w*m1.r[2].x + m2.r[1].w*m1.r[2].y + m2.r[2].w*m1.r[2].z + m2.r[3].w*m1.r[2].w;
+			
+			rm.r[3].x = m2.r[0].x*m1.r[3].x + m2.r[1].x*m1.r[3].y + m2.r[2].x*m1.r[3].z + m2.r[3].x*m1.r[3].w;
+			rm.r[3].y = m2.r[0].y*m1.r[3].x + m2.r[1].y*m1.r[3].y + m2.r[2].y*m1.r[3].z + m2.r[3].y*m1.r[3].w;
+			rm.r[3].z = m2.r[0].z*m1.r[3].x + m2.r[1].z*m1.r[3].y + m2.r[2].z*m1.r[3].z + m2.r[3].z*m1.r[3].w;
+			rm.r[3].w = m2.r[0].w*m1.r[3].x + m2.r[1].w*m1.r[3].y + m2.r[2].w*m1.r[3].z + m2.r[3].w*m1.r[3].w;
+
 			return rm;
 		}
 
-		static TVector4<T> Multiply(const TMatrix<T> &m, const TVector4<T> &v)
+		static TMatrix<T> Multiply(const TMatrix<T> &m1, const TMatrix<T> &m2)
 		{
-			TVector4<T> rv;
+			TMatrix<T> m;
+			TMatrix<T>::Multiply(m, m1, m2);
+			return m;
+		}
+
+		TMatrix<T>& Multiply(const TMatrix<T> &m)
+		{
+			return TMatrix<T>::Multiply(*this, *this, m);
+		}
+
+		static TVector4<T>& Multiply(TVector4<T> &rv, const TMatrix<T> &m, const TVector4<T> &v)
+		{
 			rv.x = m.r[0].x * v.x + m.r[1].x * v.y + m.r[2].x * v.z + m.r[3].x * v.w;
 			rv.y = m.r[0].y * v.x + m.r[1].y * v.y + m.r[2].y * v.z + m.r[3].y * v.w;
 			rv.z = m.r[0].z * v.x + m.r[1].z * v.y + m.r[2].z * v.z + m.r[3].z * v.w;
@@ -910,13 +944,36 @@ namespace UnlimRealms
 			return rv;
 		}
 
-		static TVector3<T> TransformCoord(const TMatrix<T> &m, const TVector3<T> &c)
+		static TVector4<T> Multiply(const TMatrix<T> &m, const TVector4<T> &v)
 		{
-			TVector3<T> rc;
+			TVector4<T> rv;
+			TMatrix<T>::Multiply(rv, m, v);
+			return rv;
+		}
+
+		TVector4<T> Multiply(const TVector4<T> &v) const
+		{
+			return TMatrix<T>::Multiply(*this, v);
+		}
+
+		static TVector3<T>& TransformCoord(TVector3<T>& rc, const TMatrix<T> &m, const TVector3<T> &c)
+		{
 			rc.x = m.r[0].x * c.x + m.r[1].x * c.y + m.r[2].x * c.z + m.r[3].x;
 			rc.y = m.r[0].y * c.x + m.r[1].y * c.y + m.r[2].y * c.z + m.r[3].y;
 			rc.z = m.r[0].z * c.x + m.r[1].z * c.y + m.r[2].z * c.z + m.r[3].z;
 			return rc;
+		}
+
+		static TVector3<T> TransformCoord(const TMatrix<T> &m, const TVector3<T> &c)
+		{
+			TVector3<T> rc;
+			TMatrix<T>::TransformCoord(rc, m, c);
+			return rc;
+		}
+
+		TVector3<T> TransformCoord(const TVector3<T> &c) const
+		{
+			return TMatrix<T>::TransformCoord(*this, c);
 		}
 
 		static TMatrix<T> View(const TVector3<T> &eye, const TVector3<T> &right, const TVector3<T> &up, const TVector3<T> &ahead)
@@ -966,6 +1023,30 @@ namespace UnlimRealms
 				0, 0, nearPlane * farPlane / (nearPlane - farPlane), 0
 				);
 			return rm;
+		}
+
+		static void FrustumPlanes(const TMatrix<T> &m, TVector4<T> (&planes)[6], bool normalize)
+		{
+			planes[0].x = m.r[0][3] + m.r[0][0]; planes[0].y = m.r[1][3] + m.r[1][0]; planes[0].z = m.r[2][3] + m.r[2][0]; planes[0].w = m.r[3][3] + m.r[3][0];
+			planes[1].x = m.r[0][3] - m.r[0][0]; planes[1].y = m.r[1][3] - m.r[1][0]; planes[1].z = m.r[2][3] - m.r[2][0]; planes[1].w = m.r[3][3] - m.r[3][0];
+			planes[2].x = m.r[0][3] - m.r[0][1]; planes[2].y = m.r[1][3] - m.r[1][1]; planes[2].z = m.r[2][3] - m.r[2][1]; planes[2].w = m.r[3][3] - m.r[3][1];
+			planes[3].x = m.r[0][3] + m.r[0][1]; planes[3].y = m.r[1][3] + m.r[1][1]; planes[3].z = m.r[2][3] + m.r[2][1]; planes[3].w = m.r[3][3] + m.r[3][1];
+			planes[4].x = m.r[0][2];  planes[4].y = m.r[1][2]; planes[4].z = m.r[2][2]; planes[4].w = m.r[3][2];
+			planes[5].x = m.r[0][3] - m.r[0][2]; planes[5].y = m.r[1][3] - m.r[1][2]; planes[5].z = m.r[2][3] - m.r[2][2]; planes[5].w = m.r[3][3] - m.r[3][2];
+
+			if (normalize)
+			{
+				for (int i = 0; i < 6; ++i)
+				{
+					float mag = sqrtf(planes[i].x * planes[i].x + planes[i].y * planes[i].y + planes[i].z * planes[i].z);
+					planes[i] = planes[i] / mag;
+				}
+			}
+		}
+
+		void FrustumPlanes(TVector4<T>(&planes)[6], bool normalize) const
+		{
+			this->FrustumPlanes(*this, planes, normalize);
 		}
 	};
 
@@ -1063,6 +1144,56 @@ namespace UnlimRealms
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//	Axis aligned rectangle template class
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	template <typename T>
+	struct TRect
+	{
+		TVector2<T> Min;
+		TVector2<T> Max;
+
+		TRect() : Min(std::numeric_limits<T>::max()), Max(-std::numeric_limits<T>::max()) {}
+
+		TRect(const TRect<T> &r) : Min(r.Min), Max(r.Max) {}
+
+		TRect(const TVector2<T> &_min, const TVector2<T> &_max) : Min(_min), Max(_max) {}
+
+		TRect(const T _minX, const T _minY, const T _maxX, const T _maxY) : Min(_minX, _minY), Max(_maxX, _maxY) {}
+
+		T Width() const
+		{
+			return (Max.x - Min.x);
+		}
+
+		T Height() const
+		{
+			return (Max.y - Min.y);
+		}
+
+		bool IsInsideOut() const
+		{
+			return (this->Width() < 0 || this->Height() < 0);
+		}
+
+		void Move(T x, T y)
+		{
+			int dx = x - Min.x;
+			int dy = y - Min.y;
+			Min.x += dx;
+			Min.y += dy;
+			Max.x += dx;
+			Max.y += dy;
+		}
+
+		void Resize(T width, T height)
+		{
+			Max.x = Min.x + width;
+			Max.y = Min.y + height;
+		}
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//	Axis aligned bounding box template class
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	template <typename T>
@@ -1130,6 +1261,25 @@ namespace UnlimRealms
 			return !isOutside;
 		}
 
+		bool Intersects(const TVector4<T>(&frustumPlanes)[6]) const
+		{
+			bool culled = false;
+			for (const Vector4 &plane : frustumPlanes)
+			{
+				culled |= (
+					(plane.x * this->Min.x + plane.y * this->Min.y + plane.z * this->Min.z + plane.w < 0) &&
+					(plane.x * this->Max.x + plane.y * this->Min.y + plane.z * this->Min.z + plane.w < 0) &&
+					(plane.x * this->Min.x + plane.y * this->Min.y + plane.z * this->Max.z + plane.w < 0) &&
+					(plane.x * this->Max.x + plane.y * this->Min.y + plane.z * this->Max.z + plane.w < 0) &&
+					(plane.x * this->Min.x + plane.y * this->Max.y + plane.z * this->Min.z + plane.w < 0) &&
+					(plane.x * this->Max.x + plane.y * this->Max.y + plane.z * this->Min.z + plane.w < 0) &&
+					(plane.x * this->Min.x + plane.y * this->Max.y + plane.z * this->Max.z + plane.w < 0) &&
+					(plane.x * this->Max.x + plane.y * this->Max.y + plane.z * this->Max.z + plane.w < 0));
+				if (culled) break;
+			}
+			return !culled;
+		}
+
 		bool Contains(const TBoundingBox<T> &bb) const
 		{
 			return (
@@ -1180,59 +1330,39 @@ namespace UnlimRealms
 			return r;
 		}
 
+		void CalculateProjRect(const TMatrix<T> & viewProjection, TRect<T> &projRect) const
+		{
+			projRect.Min = std::numeric_limits<T>::max();
+			projRect.Max = -std::numeric_limits<T>::max();
+
+			TVector4<T> wpos(0.0f, 0.0f, 0.0f, 1.0f);
+			TVector4<T> ppos;
+			auto projectPoint = [&](const ur_float &x, const ur_float &y, const ur_float &z) -> void {
+				wpos.x = x; wpos.y = y; wpos.z = z;
+				TMatrix<T>::Multiply(ppos, viewProjection, wpos);
+				ppos.x = ppos.x / ppos.w;
+				ppos.y = ppos.y / ppos.w;
+				projRect.Min.x = min(projRect.Min.x, ppos.x);
+				projRect.Min.y = min(projRect.Min.y, ppos.y);
+				projRect.Max.x = max(projRect.Max.x, ppos.x);
+				projRect.Max.y = max(projRect.Max.y, ppos.y);
+			};
+
+			projectPoint(this->Min.x, this->Min.y, this->Min.z);
+			projectPoint(this->Max.x, this->Min.y, this->Min.z);
+			projectPoint(this->Min.x, this->Min.y, this->Max.z);
+			projectPoint(this->Max.x, this->Min.y, this->Max.z);
+			projectPoint(this->Min.x, this->Max.y, this->Min.z);
+			projectPoint(this->Max.x, this->Max.y, this->Min.z);
+			projectPoint(this->Min.x, this->Max.y, this->Max.z);
+			projectPoint(this->Max.x, this->Max.y, this->Max.z);
+
+			return projRect;
+		}
+
 		bool operator== (const TBoundingBox<T> &v) const
 		{
 			return !(this->Min != v.Min || this->Max != v.Max);
-		}
-	};
-
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//	Axis aligned rectangle template class
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	template <typename T>
-	struct TRect
-	{
-		TVector2<T> Min;
-		TVector2<T> Max;
-
-		TRect() : Min(0, 0), Max(0, 0) {}
-
-		TRect(const TRect<T> &r) : Min(r.Min), Max(r.Max) {}
-
-		TRect(const TVector2<T> &_min, const TVector2<T> &_max) : Min(_min), Max(_max) {}
-
-		TRect(const T _minX, const T _minY, const T _maxX, const T _maxY) : Min(_minX, _minY), Max(_maxX, _maxY) {}
-
-		T Width() const
-		{
-			return (Max.x - Min.x);
-		}
-
-		T Height() const
-		{
-			return (Max.y - Min.y);
-		}
-
-		bool IsInsideOut() const
-		{
-			return (this->Width() < 0 || this->Height() < 0);
-		}
-
-		void Move(T x, T y)
-		{
-			int dx = x - Min.x;
-			int dy = y - Min.y;
-			Min.x += dx;
-			Min.y += dy;
-			Max.x += dx;
-			Max.y += dy;
-		}
-
-		void Resize(T width, T height)
-		{
-			Max.x = Min.x + width;
-			Max.y = Min.y + height;
 		}
 	};
 
