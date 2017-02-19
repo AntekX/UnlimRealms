@@ -10,6 +10,7 @@
 #include "Realm/Realm.h"
 #include "Sys/Std/StdStorage.h"
 #include "Sys/Log.h"
+#include "Sys/Std/StdTaskManager.h"
 #include "Sys/Input.h"
 #include "Sys/Canvas.h"
 #include "Gfx/GfxSystem.h"
@@ -49,6 +50,12 @@ namespace UnlimRealms
 		this->log = std::move(defaultLog);
 	}
 
+	void Realm::CreateDefaultTaskManager()
+	{
+		std::unique_ptr<StdTaskManager> defaultTaskManager(new StdTaskManager(*this));
+		this->taskManager = std::move(defaultTaskManager);
+	}
+
 	Storage& Realm::GetStorage()
 	{
 		return *this->storage.get();
@@ -57,6 +64,11 @@ namespace UnlimRealms
 	Log& Realm::GetLog()
 	{
 		return *this->log.get();
+	}
+
+	TaskManager& Realm::GetTaskManager()
+	{
+		return *this->taskManager.get();
 	}
 
 	Input* Realm::GetInput() const

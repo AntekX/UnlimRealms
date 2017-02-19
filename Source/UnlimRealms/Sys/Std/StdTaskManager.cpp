@@ -7,17 +7,25 @@
 
 #pragma once
 
+#include "Sys/Std/StdTaskManager.h"
+
 namespace UnlimRealms
 {
 
-	inline void Task::Terminate()
+	StdTaskManager::StdTaskManager(Realm &realm) :
+		TaskManager(realm)
 	{
-		this->terminate = true;
+
 	}
 
-	inline const Result& Task::GetResult() const
+	StdTaskManager::~StdTaskManager()
 	{
-		return this->result;
+		// TODO: terminate all tasks and stop all threads
+	}
+
+	void StdTaskManager::Execute()
+	{
+		// TODO: update
 	}
 
 } // end namespace UnlimRealms

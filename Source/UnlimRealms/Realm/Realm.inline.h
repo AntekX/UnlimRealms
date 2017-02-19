@@ -24,6 +24,13 @@ namespace UnlimRealms
 		this->log = std::move(log);
 	}
 
+	template <class TTaskManager>
+	void Realm::SetTaskManager(std::unique_ptr<TTaskManager> taskManager)
+	{
+		static_assert(std::is_base_of<TaskManager, TTaskManager>(), "Realm::SetTaskManager: invalid implementation class type");
+		this->taskManager = std::move(taskManager);
+	}
+
 	template <class TInput>
 	void Realm::SetInput(std::unique_ptr<TInput> input)
 	{

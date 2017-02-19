@@ -16,6 +16,7 @@ namespace UnlimRealms
 	class Storage;
 	class Input;
 	class Log;
+	class TaskManager;
 	class Canvas;
 	class GfxSystem;
 
@@ -42,6 +43,9 @@ namespace UnlimRealms
 		template <class TInput>
 		void SetInput(std::unique_ptr<TInput> input);
 
+		template <class TTaskManager>
+		void SetTaskManager(std::unique_ptr<TTaskManager> taskManager);
+
 		template <class TCanvas>
 		void SetCanvas(std::unique_ptr<TCanvas> canvas);
 
@@ -53,6 +57,8 @@ namespace UnlimRealms
 		inline Storage& GetStorage();
 
 		inline Log& GetLog();
+
+		inline TaskManager& GetTaskManager();
 
 		inline Input* GetInput() const;
 
@@ -66,8 +72,11 @@ namespace UnlimRealms
 
 		void CreateDefaultLog();
 
+		void CreateDefaultTaskManager();
+
 		std::unique_ptr<Log> log;
 		std::unique_ptr<Storage> storage;
+		std::unique_ptr<TaskManager> taskManager;
 	};
 
 

@@ -126,6 +126,9 @@
     <ClInclude Include="..\..\UnlimRealms\Core\Composite.inline.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Std\StdTaskManager.h">
+      <Filter>Sys\Std</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -199,6 +202,9 @@
     </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\Core\Composite.cpp">
       <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Sys\Std\StdTaskManager.cpp">
+      <Filter>Sys\Std</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
