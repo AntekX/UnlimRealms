@@ -10,7 +10,7 @@
 #include "Realm/Realm.h"
 #include "Sys/Std/StdStorage.h"
 #include "Sys/Log.h"
-#include "Sys/Std/StdTaskManager.h"
+#include "Sys/Std/StdJobSystem.h"
 #include "Sys/Input.h"
 #include "Sys/Canvas.h"
 #include "Gfx/GfxSystem.h"
@@ -31,29 +31,30 @@ namespace UnlimRealms
 
 	Result Realm::Initialize()
 	{
-		CreateDefaultStorage();
-		CreateDefaultLog();
+		this->SetStorage( this->CreateDefaultStorage() );
+		this->SetLog( this->CreateDefaultLog() );
+		this->SetJobSystem( this->CreateDefaultJobSystem() );
 		this->GetLog().WriteLine("Realm: initialized");
 		return Result(Success);
 	}
 
-	void Realm::CreateDefaultStorage()
+	std::unique_ptr<Storage> Realm::CreateDefaultStorage()
 	{
 		std::unique_ptr<StdStorage> defaultStorage(new StdStorage(*this));
-		this->storage = std::move(defaultStorage);
+		return std::move(defaultStorage);
 	}
 
-	void Realm::CreateDefaultLog()
+	std::unique_ptr<Log> Realm::CreateDefaultLog()
 	{
 		std::unique_ptr<Log> defaultLog(new Log(*this, "unlim_log.txt"));
 		defaultLog->SetPriority(Log::Note);
-		this->log = std::move(defaultLog);
+		return std::move(defaultLog);
 	}
 
-	void Realm::CreateDefaultTaskManager()
+	std::unique_ptr<JobSystem> Realm::CreateDefaultJobSystem()
 	{
-		std::unique_ptr<StdTaskManager> defaultTaskManager(new StdTaskManager(*this));
-		this->taskManager = std::move(defaultTaskManager);
+		std::unique_ptr<StdJobSystem> defaultJobSystem(new StdJobSystem(*this));
+		return std::move(defaultJobSystem);
 	}
 
 	Storage& Realm::GetStorage()
@@ -66,9 +67,9 @@ namespace UnlimRealms
 		return *this->log.get();
 	}
 
-	TaskManager& Realm::GetTaskManager()
+	JobSystem& Realm::GetJobSystem()
 	{
-		return *this->taskManager.get();
+		return *this->jobSystem.get();
 	}
 
 	Input* Realm::GetInput() const

@@ -183,11 +183,11 @@
     <ClInclude Include="..\..\UnlimRealms\Sys\Input.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Log.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Std\StdStorage.h" />
-    <ClInclude Include="..\..\UnlimRealms\Sys\Std\StdTaskManager.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\Std\StdJobSystem.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Storage.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Storage.inline.h" />
-    <ClInclude Include="..\..\UnlimRealms\Sys\TaskManager.h" />
-    <ClInclude Include="..\..\UnlimRealms\Sys\TaskManager.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\JobSystem.h" />
+    <ClInclude Include="..\..\UnlimRealms\Sys\JobSystem.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinCanvas.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinCanvas.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinInput.h" />
@@ -214,9 +214,9 @@
     <ClCompile Include="..\..\UnlimRealms\Sys\Input.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Log.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Std\StdStorage.cpp" />
-    <ClCompile Include="..\..\UnlimRealms\Sys\Std\StdTaskManager.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Sys\Std\StdJobSystem.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Storage.cpp" />
-    <ClCompile Include="..\..\UnlimRealms\Sys\TaskManager.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Sys\JobSystem.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Windows\WinCanvas.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Windows\WinInput.cpp" />
   </ItemGroup>

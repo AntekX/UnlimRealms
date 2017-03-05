@@ -7,27 +7,34 @@
 
 #pragma once
 
-#include "Sys/TaskManager.h"
+#include "Sys/JobSystem.h"
 
 namespace UnlimRealms
 {
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Standard library based TaskManager implemntation
+	// Standard library based JobSystem implemntation
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
-	class UR_DECL StdTaskManager : public TaskManager
+	class UR_DECL StdJobSystem : public JobSystem
 	{
 	public:
 
-		StdTaskManager(Realm &realm);
+		StdJobSystem(Realm &realm);
 
-		virtual ~StdTaskManager();
-
-		virtual void Execute() override;
+		virtual ~StdJobSystem();
 
 	private:
 
-		// TODO
+		virtual void OnJobAdded();
+
+		static void ThreadFunction(StdJobSystem *jobSystem);
+
+		std::vector<std::unique_ptr<std::thread>> threads;
+		size_t jobCount;
+		std::condition_variable jobCountCondition;
+		std::mutex jobCountMutex;
+
+		bool shutdown;
 	};
 
 } // end namespace UnlimRealms

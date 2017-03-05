@@ -16,7 +16,7 @@ namespace UnlimRealms
 	class Storage;
 	class Input;
 	class Log;
-	class TaskManager;
+	class JobSystem;
 	class Canvas;
 	class GfxSystem;
 
@@ -43,8 +43,8 @@ namespace UnlimRealms
 		template <class TInput>
 		void SetInput(std::unique_ptr<TInput> input);
 
-		template <class TTaskManager>
-		void SetTaskManager(std::unique_ptr<TTaskManager> taskManager);
+		template <class TJobSystem>
+		void SetJobSystem(std::unique_ptr<TJobSystem> jobSystem);
 
 		template <class TCanvas>
 		void SetCanvas(std::unique_ptr<TCanvas> canvas);
@@ -58,7 +58,7 @@ namespace UnlimRealms
 
 		inline Log& GetLog();
 
-		inline TaskManager& GetTaskManager();
+		inline JobSystem& GetJobSystem();
 
 		inline Input* GetInput() const;
 
@@ -66,17 +66,19 @@ namespace UnlimRealms
 
 		inline GfxSystem* GetGfxSystem() const;
 	
+	protected:
+
+		virtual std::unique_ptr<Storage> CreateDefaultStorage();
+
+		virtual std::unique_ptr<Log> CreateDefaultLog();
+
+		virtual std::unique_ptr<JobSystem> CreateDefaultJobSystem();
+
 	private:
-
-		void CreateDefaultStorage();
-
-		void CreateDefaultLog();
-
-		void CreateDefaultTaskManager();
 
 		std::unique_ptr<Log> log;
 		std::unique_ptr<Storage> storage;
-		std::unique_ptr<TaskManager> taskManager;
+		std::unique_ptr<JobSystem> jobSystem;
 	};
 
 

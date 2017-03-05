@@ -15,12 +15,6 @@
     <ClInclude Include="..\..\UnlimRealms\Gfx\GfxSystem.inline.h">
       <Filter>Gfx</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\UnlimRealms\Sys\TaskManager.h">
-      <Filter>Sys</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\UnlimRealms\Sys\TaskManager.inline.h">
-      <Filter>Sys</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinCanvas.h">
       <Filter>Sys\Windows</Filter>
     </ClInclude>
@@ -126,7 +120,13 @@
     <ClInclude Include="..\..\UnlimRealms\Core\Composite.inline.h">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\UnlimRealms\Sys\Std\StdTaskManager.h">
+    <ClInclude Include="..\..\UnlimRealms\Sys\JobSystem.h">
+      <Filter>Sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\JobSystem.inline.h">
+      <Filter>Sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Std\StdJobSystem.h">
       <Filter>Sys\Std</Filter>
     </ClInclude>
   </ItemGroup>
@@ -136,9 +136,6 @@
     </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\Gfx\GfxSystem.cpp">
       <Filter>Gfx</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\UnlimRealms\Sys\TaskManager.cpp">
-      <Filter>Sys</Filter>
     </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\Sys\Windows\WinCanvas.cpp">
       <Filter>Sys\Windows</Filter>
@@ -203,7 +200,10 @@
     <ClCompile Include="..\..\UnlimRealms\Core\Composite.cpp">
       <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\UnlimRealms\Sys\Std\StdTaskManager.cpp">
+    <ClCompile Include="..\..\UnlimRealms\Sys\JobSystem.cpp">
+      <Filter>Sys</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Sys\Std\StdJobSystem.cpp">
       <Filter>Sys\Std</Filter>
     </ClCompile>
   </ItemGroup>

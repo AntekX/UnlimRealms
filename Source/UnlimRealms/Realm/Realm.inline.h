@@ -24,11 +24,11 @@ namespace UnlimRealms
 		this->log = std::move(log);
 	}
 
-	template <class TTaskManager>
-	void Realm::SetTaskManager(std::unique_ptr<TTaskManager> taskManager)
+	template <class TJobSystem>
+	void Realm::SetJobSystem(std::unique_ptr<TJobSystem> jobSystem)
 	{
-		static_assert(std::is_base_of<TaskManager, TTaskManager>(), "Realm::SetTaskManager: invalid implementation class type");
-		this->taskManager = std::move(taskManager);
+		static_assert(std::is_base_of<JobSystem, TJobSystem>(), "Realm::SetJobSystem: invalid implementation class type");
+		this->jobSystem = std::move(jobSystem);
 	}
 
 	template <class TInput>

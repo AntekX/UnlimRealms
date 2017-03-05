@@ -1,0 +1,93 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+//	UnlimRealms
+//	Author: Anatole Kuzub
+//
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#pragma once
+
+#include "Realm/Realm.h"
+
+namespace UnlimRealms
+{
+
+	// forward declarations
+	class JobSystem;
+	class Job;
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Job
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL Job
+	{
+	public:
+
+		typedef std::function<void(Job&)> Callback;
+		typedef void* DataPtr;
+
+		Job(JobSystem &jobSystem, Callback callback, DataPtr data);
+
+		~Job();
+
+		void Execute();
+
+		inline DataPtr GetData() const;
+
+		inline void Terminate();
+
+		inline bool Terminate() const;
+
+		inline bool Finished() const;
+
+		inline void SetProgress(float progress);
+
+		inline float GetProgress() const;
+		
+		inline void SetResultCode(Result::UID resultCode);
+
+		inline Result::UID GetResultCode() const;
+
+	private:
+
+		JobSystem &jobSystem;
+		Callback callback;
+		DataPtr data;
+		bool terminate;
+		bool finished;
+		std::atomic<float> progress;
+		std::atomic<Result::UID> resultCode;
+	};
+
+	
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class JobPriority
+	{
+		Low,
+		Normal,
+		High
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Base Job System
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL JobSystem : public RealmEntity
+	{
+	public:
+
+		JobSystem(Realm &realm);
+
+		virtual ~JobSystem();
+
+		//void Do(Job::Callback jobCallback, Job::DataPtr jobData, JobPriority = JobPriority::Normal);
+
+	private:
+
+
+	};
+
+} // end namespace UnlimRealms
+
+#include "Sys/JobSystem.inline.h"
