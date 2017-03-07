@@ -44,6 +44,14 @@ namespace UnlimRealms
 		this->jobCountCondition.notify_all();
 	}
 
+	void StdJobSystem::OnJobRemoved()
+	{
+		{ // update jobs counter
+			std::lock_guard<std::mutex> lock(this->jobCountMutex);
+			this->jobCount -= 1;
+		}
+	}
+
 	void StdJobSystem::ThreadFunction(StdJobSystem *jobSystem)
 	{
 		if (jobSystem != ur_null)
@@ -56,7 +64,11 @@ namespace UnlimRealms
 				jobSystem->jobCountCondition.wait(jobCountLock, [&jobCount] { return (jobCount > 0); });
 
 				// fetch a job and do it
-				// todo:
+				std::shared_ptr<Job> job = jobSystem->FetchJob();
+				if (job != nullptr)
+				{
+					job->Execute();
+				}
 			}
 		}
 	}

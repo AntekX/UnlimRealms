@@ -27,6 +27,8 @@ namespace UnlimRealms
 
 		virtual void OnJobAdded();
 
+		virtual void OnJobRemoved();
+
 		static void ThreadFunction(StdJobSystem *jobSystem);
 
 		std::vector<std::unique_ptr<std::thread>> threads;
@@ -34,7 +36,7 @@ namespace UnlimRealms
 		std::condition_variable jobCountCondition;
 		std::mutex jobCountMutex;
 
-		bool shutdown;
+		ur_bool shutdown;
 	};
 
 } // end namespace UnlimRealms

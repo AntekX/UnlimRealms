@@ -18,14 +18,61 @@ namespace UnlimRealms
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Job
+	// Job System Entity
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	class UR_DECL Job
+	class UR_DECL JobSystemEntity
 	{
 	public:
 
-		typedef std::function<void(Job&)> Callback;
+		friend class JobSystem;
+
+		explicit JobSystemEntity(JobSystem &jobSystem) : jobSystem(jobSystem) {}
+
+	protected:
+
+		JobSystem &jobSystem;
+
+	private:
+	
+		struct QueueHandle
+		{
+			void* listPtr;
+			void* iterPtr;
+			QueueHandle() : listPtr(ur_null), iterPtr(ur_null) {}
+		} systemHandle;
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Job
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL Job : public JobSystemEntity
+	{
+	public:
+
+		enum class UR_DECL State
+		{
+			Pending,
+			InProgress,
+			Finished
+		};
+
 		typedef void* DataPtr;
+
+		struct UR_DECL Context
+		{
+			DataPtr data;
+			ur_bool &interrupt;
+			std::atomic<ur_float> &progress;
+			std::atomic<Result::UID> &resultCode;
+
+			Context(DataPtr &data, ur_bool &interrupt, std::atomic<ur_float> &progress, std::atomic<Result::UID> &resultCode) :
+				data(data), interrupt(interrupt), progress(progress), resultCode(resultCode)
+			{
+			}
+		};
+
+		typedef std::function<void(Job::Context&)> Callback;
 
 		Job(JobSystem &jobSystem, Callback callback, DataPtr data);
 
@@ -33,30 +80,27 @@ namespace UnlimRealms
 
 		void Execute();
 
-		inline DataPtr GetData() const;
+		void Interrupt();
 
-		inline void Terminate();
+		inline ur_float GetProgress() const;
 
-		inline bool Terminate() const;
+		inline State GetState() const;
 
-		inline bool Finished() const;
+		inline ur_bool InProgress() const;
 
-		inline void SetProgress(float progress);
+		inline ur_bool Finished() const;
 
-		inline float GetProgress() const;
+		inline ur_bool Interrupted() const;
 		
-		inline void SetResultCode(Result::UID resultCode);
-
 		inline Result::UID GetResultCode() const;
 
 	private:
 
-		JobSystem &jobSystem;
 		Callback callback;
 		DataPtr data;
-		bool terminate;
-		bool finished;
-		std::atomic<float> progress;
+		ur_bool interrupt;
+		std::atomic<State> state;
+		std::atomic<ur_float> progress;
 		std::atomic<Result::UID> resultCode;
 	};
 
@@ -64,9 +108,10 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class JobPriority
 	{
-		Low,
+		High,
 		Normal,
-		High
+		Low,
+		Count
 	};
 
 
@@ -81,11 +126,30 @@ namespace UnlimRealms
 
 		virtual ~JobSystem();
 
-		//void Do(Job::Callback jobCallback, Job::DataPtr jobData, JobPriority = JobPriority::Normal);
+		ur_bool Add(Job::Callback jobCallback, Job::DataPtr jobData, JobPriority priority = JobPriority::Normal);
+
+		ur_bool Add(std::shared_ptr<Job> job, JobPriority = JobPriority::Normal);
+
+		ur_bool Remove(Job &job);
+
+		void Interrupt(Job &job);
+
+	protected:
+
+		std::shared_ptr<Job> FetchJob();
+
+		virtual void OnJobAdded();
+
+		virtual void OnJobRemoved();
 
 	private:
 
-
+		struct JobQueue
+		{
+			std::list<std::shared_ptr<Job>> jobs;
+		};
+		JobQueue priorityQueue[(ur_int)JobPriority::Count];
+		std::mutex queueMutex;
 	};
 
 } // end namespace UnlimRealms
