@@ -58,8 +58,6 @@ namespace UnlimRealms
 
 			~DataVolume();
 
-			virtual Result Read(ValueType &value, const ur_float3 &point);
-
 			virtual Result Read(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox);
 
 			// todo: support data modification
@@ -106,15 +104,9 @@ namespace UnlimRealms
 
 			~ProceduralGenerator();
 
-			virtual Result Read(ValueType &value, const ur_float3 &point);
-
 			virtual Result Read(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox);
 
 		private:
-
-			Result GenerateSphericalDistanceField(ValueType &value, const ur_float3 &point);
-
-			Result GenerateSimplexNoise(ValueType &value, const ur_float3 &point);
 
 			Result GenerateSphericalDistanceField(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox);
 
@@ -287,10 +279,6 @@ namespace UnlimRealms
 			EmptyOctree refinementTree;
 			std::multimap<ur_uint, Tetrahedron*> buildQueue;
 			
-			// brute force async generation data
-			std::unique_ptr<std::thread> updateThread; // temp: until multitasking system implementation
-			
-
 			// job(s) data
 			std::shared_ptr<Job> jobUpdate;
 			ur_float3 updatePoint;

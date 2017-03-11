@@ -288,11 +288,6 @@ namespace UnlimRealms
 
 	}
 
-	Result Isosurface::DataVolume::Read(ValueType &value, const ur_float3 &point)
-	{
-		return Result(NotImplemented);
-	}
-
 	Result Isosurface::DataVolume::Read(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox)
 	{
 		return Result(NotImplemented);
@@ -318,30 +313,6 @@ namespace UnlimRealms
 	Isosurface::ProceduralGenerator::~ProceduralGenerator()
 	{
 
-	}
-
-	Result Isosurface::ProceduralGenerator::Read(ValueType &value, const ur_float3 &point)
-	{
-		Result res = Result(Success);
-
-		// choose algorithm and generate a value
-		switch (this->algorithm)
-		{
-			case Algorithm::SphericalDistanceField:
-			{
-				this->GenerateSphericalDistanceField(value, point);
-			} break;
-			case Algorithm::SimplexNoise:
-			{
-				this->GenerateSimplexNoise(value, point);
-			} break;
-			default:
-			{
-				res = Result(NotImplemented);
-			}
-		}
-
-		return res;
 	}
 
 	Result Isosurface::ProceduralGenerator::Read(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox)
@@ -371,13 +342,6 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result Isosurface::ProceduralGenerator::GenerateSphericalDistanceField(ValueType &value, const ur_float3 &point)
-	{
-		const SphericalDistanceFieldParams &params = static_cast<const SphericalDistanceFieldParams&>(*this->generateParams.get());
-		value = params.radius - (point - params.center).Length();
-		return Result(Success);
-	}
-
 	Result Isosurface::ProceduralGenerator::GenerateSphericalDistanceField(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox)
 	{
 		const SphericalDistanceFieldParams &params = static_cast<const SphericalDistanceFieldParams&>(*this->generateParams.get());
@@ -398,37 +362,6 @@ namespace UnlimRealms
 			*p_value = params.radius - (*p_point - params.center).Length();
 		}
 
-		return Result(Success);
-	}
-
-	Result Isosurface::ProceduralGenerator::GenerateSimplexNoise(ValueType &value, const ur_float3 &point)
-	{
-		// temp: hardcoded generation params
-		SimplexNoise noise;
-		ur_float radius = this->GetBound().SizeX() * 0.4f;
-		ur_float3 center = this->GetBound().Center();
-		struct Octave
-		{
-			ur_float scale;
-			ur_float freq;
-		};
-		ur_float maxDist = this->GetBound().SizeX() * 0.5f - radius;
-		Octave octaves[] = {
-			{ -maxDist * 0.75f, 0.50f },
-			{ -maxDist * 0.20f, 2.00f },
-			{ -maxDist * 0.05f, 8.00f },
-		};
-		const ur_uint numOctaves = ur_array_size(octaves);
-
-		value = radius - (point - center).Length();
-		for (ur_uint io = 0; io < numOctaves; ++io)
-		{
-			value += (ur_float)noise.Noise(
-				ur_double(point.x * octaves[io].freq),
-				ur_double(point.y * octaves[io].freq),
-				ur_double(point.z * octaves[io].freq)) * octaves[io].scale;
-		}
-		
 		return Result(Success);
 	}
 
@@ -845,6 +778,7 @@ namespace UnlimRealms
 					memcpy(&this->stats, &this->statsBack, sizeof(this->stats));
 				}
 				
+				// prepare update context
 				this->updatePoint = refinementPoint;
 
 				// start a new update
@@ -875,6 +809,8 @@ namespace UnlimRealms
 						ur_uint level = presentation->buildQueue.begin()->second->level;
 						for (auto &entry : presentation->buildQueue)
 						{
+							/*if (entry.first != level)
+								break;*/
 							presentation->BuildMesh(entry.second, &presentation->statsBack);
 						}
 					}
