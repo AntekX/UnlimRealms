@@ -809,8 +809,8 @@ namespace UnlimRealms
 						ur_uint level = presentation->buildQueue.begin()->second->level;
 						for (auto &entry : presentation->buildQueue)
 						{
-							/*if (entry.first != level)
-								break;*/
+							if (entry.first != level)
+								break;
 							presentation->BuildMesh(entry.second, &presentation->statsBack);
 						}
 					}
@@ -1515,7 +1515,9 @@ namespace UnlimRealms
 			ur_null == node->tetrahedron.get())
 			return Result(Success);
 
-		if (node->HasChildren())
+		if (node->HasChildren() &&
+			node->children[0]->tetrahedron->initialized &&
+			node->children[1]->tetrahedron->initialized)
 		{
 			for (auto &child : node->children)
 			{

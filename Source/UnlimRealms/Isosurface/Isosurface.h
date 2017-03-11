@@ -281,6 +281,7 @@ namespace UnlimRealms
 			
 			// job(s) data
 			std::shared_ptr<Job> jobUpdate;
+			std::shared_ptr<Job> jobBuild;
 			ur_float3 updatePoint;
 			std::unique_ptr<Node> rootBack[RootsCount];
 			Stats statsBack;
