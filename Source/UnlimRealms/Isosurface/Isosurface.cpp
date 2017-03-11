@@ -360,7 +360,7 @@ namespace UnlimRealms
 		} break;
 		case Algorithm::SimplexNoise:
 		{
-			return Result(NotImplemented);
+			res = this->GenerateSimplexNoise(values, points, count, bbox);
 		} break;
 		default:
 		{
@@ -429,6 +429,42 @@ namespace UnlimRealms
 				ur_double(point.z * octaves[io].freq)) * octaves[io].scale;
 		}
 		
+		return Result(Success);
+	}
+
+	Result Isosurface::ProceduralGenerator::GenerateSimplexNoise(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox)
+	{
+		// temp: hardcoded generation params
+		SimplexNoise noise;
+		ur_float radius = this->GetBound().SizeX() * 0.4f;
+		ur_float3 center = this->GetBound().Center();
+		struct Octave
+		{
+			ur_float scale;
+			ur_float freq;
+		};
+		ur_float maxDist = this->GetBound().SizeX() * 0.5f - radius;
+		Octave octaves[] = {
+			{ -maxDist * 0.75f, 0.50f },
+			{ -maxDist * 0.20f, 2.00f },
+			{ -maxDist * 0.05f, 8.00f },
+		};
+		const ur_uint numOctaves = ur_array_size(octaves);
+
+		ValueType *p_value = values;
+		const ur_float3 *p_point = points;
+		for (ur_uint i = 0; i < count; ++i, ++p_value, ++p_point)
+		{
+			*p_value = radius - (*p_point - center).Length();
+			for (ur_uint io = 0; io < numOctaves; ++io)
+			{
+				*p_value += (ur_float)noise.Noise(
+					ur_double(p_point->x * octaves[io].freq),
+					ur_double(p_point->y * octaves[io].freq),
+					ur_double(p_point->z * octaves[io].freq)) * octaves[io].scale;
+			}
+		}
+
 		return Result(Success);
 	}
 
@@ -682,10 +718,10 @@ namespace UnlimRealms
 
 	Isosurface::HybridCubes::~HybridCubes()
 	{
-		if (this->updateThread.get() != ur_null)
+		if (this->jobUpdate != ur_null)
 		{
-			this->updateActive = false;
-			this->updateThread->join();
+			this->jobUpdate->Interrupt();
+			this->jobUpdate->Wait();
 		}
 	}
 
@@ -794,76 +830,62 @@ namespace UnlimRealms
 		}
 		else
 		{
-			if (ur_null == this->updateThread.get())
+			// do update job
+			auto &jobSystem = this->isosurface.GetRealm().GetJobSystem();
+			if (this->jobUpdate == ur_null || this->jobUpdate->Finished())
 			{
-				this->updateActive = true;
-				this->updateComplete = true;
-				this->updateResult = Failure;
-				this->updateThread.reset(new std::thread(UpdateAsync, this));
-			}
-
-			if (this->updateComplete)
-			{
-				if (Succeeded(this->updateResult))
+				// swap back and front data
+				if (this->jobUpdate != ur_null &&
+					this->jobUpdate->FinishedSuccessfully())
 				{
-					// swap back and front data
-					std::lock_guard<std::mutex> lock(this->updateLock);
 					for (ur_uint ir = 0; ir < HybridCubes::RootsCount; ++ir)
 					{
 						this->root[ir].swap(this->rootBack[ir]);
 					}
 					memcpy(&this->stats, &this->statsBack, sizeof(this->stats));
 				}
-
+				
 				this->updatePoint = refinementPoint;
-				this->updateComplete = false;
+
+				// start a new update
+				this->jobUpdate = jobSystem.Add(Job::DataPtr(this), [](Job::Context& ctx) -> void {
+
+					Result result = Success;
+					
+					// reset presentation
+					HybridCubes *presentation = reinterpret_cast<HybridCubes*>(ctx.data);
+					presentation->buildQueue.clear();
+					memset(&presentation->statsBack, 0, sizeof(presentation->statsBack));
+
+					// update refinement tree
+					presentation->UpdateRefinementTree(presentation->updatePoint, presentation->refinementTree.GetRoot());
+
+					// update hierarchy
+					for (ur_uint i = 0; i < HybridCubes::RootsCount; ++i)
+					{
+						result &= presentation->Update(
+							presentation->updatePoint, presentation->rootBack[i].get(), presentation->root[i].get(),
+							&presentation->statsBack);
+					}
+
+					// build meshes
+					// (one level at a time)
+					if (!presentation->buildQueue.empty())
+					{
+						ur_uint level = presentation->buildQueue.begin()->second->level;
+						for (auto &entry : presentation->buildQueue)
+						{
+							presentation->BuildMesh(entry.second, &presentation->statsBack);
+						}
+					}
+					presentation->statsBack.buildQueue = (ur_uint)presentation->buildQueue.size();
+
+					ctx.resultCode = result.Code;
+				});
 			}
 		}
 
 		return res;
-	}
-
-	void Isosurface::HybridCubes::UpdateAsync(HybridCubes *presentation)
-	{
-		while (presentation && presentation->updateActive)
-		{
-			if (presentation->updateComplete)
-				continue;
-			
-			// do all the job
-			{
-				// reset presentation
-				presentation->updateResult = Success;
-				presentation->buildQueue.clear();
-				memset(&presentation->statsBack, 0, sizeof(presentation->statsBack));
-
-				// update refinement tree
-				presentation->UpdateRefinementTree(presentation->updatePoint, presentation->refinementTree.GetRoot());
-
-				// update hierarchy
-				for (ur_uint i = 0; i < HybridCubes::RootsCount; ++i)
-				{
-					presentation->updateResult &= presentation->Update(
-						presentation->updatePoint, presentation->rootBack[i].get(), presentation->root[i].get(),
-						&presentation->statsBack);
-				}
-
-				// build meshes
-				// (one level at a time)
-				if (!presentation->buildQueue.empty())
-				{
-					ur_uint level = presentation->buildQueue.begin()->second->level;
-					for (auto &entry : presentation->buildQueue)
-					{
-						presentation->BuildMesh(entry.second, &presentation->statsBack);
-					}
-				}
-				presentation->statsBack.buildQueue = (ur_uint)presentation->buildQueue.size();
-			}
-
-			// notify we are done
-			presentation->updateComplete = true;
-		}
 	}
 
 	void Isosurface::HybridCubes::UpdateRefinementTree(const ur_float3 &refinementPoint, EmptyOctree::Node *node)

@@ -16,10 +16,10 @@ namespace UnlimRealms
 	// Job
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
 	
-	Job::Job(JobSystem &jobSystem, Callback callback, DataPtr data) :
+	Job::Job(JobSystem &jobSystem, DataPtr data, Callback callback) :
 		JobSystemEntity(jobSystem),
-		callback(callback),
-		data(data)
+		data(data),
+		callback(callback)
 	{
 		this->interrupt = false;
 		this->state = State::Pending;
@@ -55,6 +55,11 @@ namespace UnlimRealms
 		}
 	}
 
+	void Job::Wait()
+	{
+		while (!this->Finished()) {};
+	}
+
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// JobSystem
@@ -71,9 +76,19 @@ namespace UnlimRealms
 
 	}
 
-	ur_bool JobSystem::Add(Job::Callback jobCallback, Job::DataPtr jobData, JobPriority priority)
+	std::shared_ptr<Job> JobSystem::Add(Job::DataPtr jobData, Job::Callback jobCallback)
 	{
-		return this->Add( std::make_shared<Job>(*this, jobCallback, jobData), priority );
+		return this->Add(JobPriority::Normal, jobData, jobCallback);
+	}
+
+	std::shared_ptr<Job> JobSystem::Add(JobPriority priority, Job::DataPtr jobData, Job::Callback jobCallback)
+	{
+		auto &job = std::make_shared<Job>(*this, jobData, jobCallback);
+		if (!this->Add(job, priority))
+		{
+			job = ur_null;
+		}
+		return job;
 	}
 
 	ur_bool JobSystem::Add(std::shared_ptr<Job> job, JobPriority priority)
@@ -150,6 +165,9 @@ namespace UnlimRealms
 
 	void JobSystem::OnJobAdded()
 	{
+		// base implementation: synchronous execution
+		auto &job = this->FetchJob();
+		job->Execute();
 	}
 
 	void JobSystem::OnJobRemoved()

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "Realm/Realm.h"
+#include "Sys/JobSystem.h"
 #include "Gfx/GfxSystem.h"
 #include "GenericRender/GenericRender.h"
 
@@ -116,6 +117,8 @@ namespace UnlimRealms
 			Result GenerateSimplexNoise(ValueType &value, const ur_float3 &point);
 
 			Result GenerateSphericalDistanceField(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox);
+
+			Result GenerateSimplexNoise(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox);
 
 
 			Algorithm algorithm;
@@ -284,13 +287,13 @@ namespace UnlimRealms
 			EmptyOctree refinementTree;
 			std::multimap<ur_uint, Tetrahedron*> buildQueue;
 			
-			// async generation data
-			ur_float3 updatePoint;
+			// brute force async generation data
 			std::unique_ptr<std::thread> updateThread; // temp: until multitasking system implementation
-			bool updateActive;
-			std::mutex updateLock;
-			std::atomic<ur_bool> updateComplete;
-			Result updateResult;
+			
+
+			// job(s) data
+			std::shared_ptr<Job> jobUpdate;
+			ur_float3 updatePoint;
 			std::unique_ptr<Node> rootBack[RootsCount];
 			Stats statsBack;
 			

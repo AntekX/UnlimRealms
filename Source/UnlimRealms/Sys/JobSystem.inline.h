@@ -40,4 +40,9 @@ namespace UnlimRealms
 		return this->resultCode;
 	}
 
+	inline ur_bool Job::FinishedSuccessfully() const
+	{
+		return (this->Finished() && (Success == this->GetResultCode()));
+	}
+
 } // end namespace UnlimRealms

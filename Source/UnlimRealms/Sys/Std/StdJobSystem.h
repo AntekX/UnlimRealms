@@ -25,9 +25,9 @@ namespace UnlimRealms
 
 	private:
 
-		virtual void OnJobAdded();
+		virtual void OnJobAdded() override;
 
-		virtual void OnJobRemoved();
+		virtual void OnJobRemoved() override;
 
 		static void ThreadFunction(StdJobSystem *jobSystem);
 

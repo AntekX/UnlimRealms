@@ -74,13 +74,15 @@ namespace UnlimRealms
 
 		typedef std::function<void(Job::Context&)> Callback;
 
-		Job(JobSystem &jobSystem, Callback callback, DataPtr data);
+		Job(JobSystem &jobSystem, DataPtr data, Callback callback);
 
 		~Job();
 
 		void Execute();
 
 		void Interrupt();
+
+		void Wait();
 
 		inline ur_float GetProgress() const;
 
@@ -93,6 +95,8 @@ namespace UnlimRealms
 		inline ur_bool Interrupted() const;
 		
 		inline Result::UID GetResultCode() const;
+
+		inline ur_bool FinishedSuccessfully() const;
 
 	private:
 
@@ -126,9 +130,11 @@ namespace UnlimRealms
 
 		virtual ~JobSystem();
 
-		ur_bool Add(Job::Callback jobCallback, Job::DataPtr jobData, JobPriority priority = JobPriority::Normal);
+		std::shared_ptr<Job> Add(Job::DataPtr jobData, Job::Callback jobCallback);
 
-		ur_bool Add(std::shared_ptr<Job> job, JobPriority = JobPriority::Normal);
+		std::shared_ptr<Job> Add(JobPriority priority, Job::DataPtr jobData, Job::Callback jobCallback);
+
+		ur_bool Add(std::shared_ptr<Job> job, JobPriority priority = JobPriority::Normal);
 
 		ur_bool Remove(Job &job);
 
