@@ -99,9 +99,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		generateParams.radiusMin = volumeBound.SizeX() * 0.45f;
 		generateParams.radiusMax = volumeBound.SizeX() * 0.50f;
 		generateParams.octaves.assign({
-			{ 0.70f, 0.50f, -1.0f, 0.5f },
-			{ 0.275f, 1.75f, -1.0f, 0.0f },
-			{ 0.025f, 8.00f, -1.0f, 0.5f },
+			{ 0.875f, 0.50f, -0.5f, 0.5f },
+			{ 0.345f, 2.00f, -1.0f, 0.0f },
+			{ 0.035f, 8.00f, -1.0f, 0.25f },
 		});
 
 		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),

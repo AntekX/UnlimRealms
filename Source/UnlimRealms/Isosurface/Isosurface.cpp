@@ -368,17 +368,19 @@ namespace UnlimRealms
 	Result Isosurface::ProceduralGenerator::GenerateSimplexNoise(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox)
 	{
 		const SimplexNoiseParams &params = static_cast<const SimplexNoiseParams&>(*this->generateParams.get());
-		SimplexNoise noise;
-		
 		ur_float3 center = params.bound.Center();
-		ur_float radius = (params.radiusMax + params.radiusMin) * 0.5f;
-		ur_float distMax = params.radiusMax - radius;
 		ur_float brad = (bbox.Max - bbox.Min).Length() * 0.5f;
 		ur_float dist = (bbox.Center() - center).Length();
 		if (dist + brad < params.radiusMin ||
 			dist - brad > params.radiusMax)
 			return Result(NotFound); // does not intersect isosurface
 
+		if (ur_null == values || ur_null == points || 0 == count)
+			return Result(InvalidArgs);
+
+		SimplexNoise noise;
+		ur_float radius = (params.radiusMax + params.radiusMin) * 0.5f;
+		ur_float distMax = params.radiusMax - radius;
 		ValueType *p_value = values;
 		const ur_float3 *p_point = points;
 		for (ur_uint i = 0; i < count; ++i, ++p_value, ++p_point)
@@ -393,7 +395,7 @@ namespace UnlimRealms
 				val *= 2.0f;
 				val = std::max(octave.clamp_min, val);
 				val = std::min(octave.clamp_max, val);
-				val *= octave.scale;
+				val *= octave.scale * distMax;
 				*p_value += val;
 			}
 		}
