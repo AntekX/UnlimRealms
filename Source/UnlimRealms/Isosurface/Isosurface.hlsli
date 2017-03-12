@@ -15,5 +15,5 @@ struct PS_INPUT
 	float4 pos	: SV_POSITION;
 	float3 norm : NORMAL;
 	float4 col	: COLOR0;
-	float3 wpos : TEXCOORD0;
+	float4 wpos : TEXCOORD0;
 };

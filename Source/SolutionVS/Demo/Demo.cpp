@@ -79,13 +79,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	// demo camera
 	Camera camera(realm);
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
-	camera.SetPosition(ur_float3(0.0f, 0.0f, -10.0f));
+	camera.SetPosition(ur_float3(0.0f, 0.0f, -32.0f));
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
 
 	// demo isosurface
 	std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
 	{
-		BoundingBox volumeBound(ur_float3(-4.0f, -4.0f, -4.0f), ur_float3(4.0f, 4.0f, 4.0f));
+		BoundingBox volumeBound(ur_float3(-16.0f, -16.0f, -16.0f), ur_float3(16.0f, 16.0f, 16.0f));
 #if 0
 		Isosurface::ProceduralGenerator::SphericalDistanceFieldParams generateParams;
 		generateParams.bound = volumeBound;
@@ -137,6 +137,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 		isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
 		isosurface->Update();
+		
+		// update camera control speed depending on the distance to isosurface
+		ur_float surfRadius = isosurface->GetData()->GetBound().SizeX() * 0.5;
+		ur_float surfDist = (camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length();
+		cameraControl.SetSpeed(std::max(0.25f, (surfDist - surfRadius) / surfRadius));
 
 		// expose demo gui
 

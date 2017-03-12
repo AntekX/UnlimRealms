@@ -369,18 +369,20 @@ namespace UnlimRealms
 	{
 		// temp: hardcoded generation params
 		SimplexNoise noise;
-		ur_float radius = this->GetBound().SizeX() * 0.4f;
+		ur_float radius = this->GetBound().SizeX() * 0.475f;
 		ur_float3 center = this->GetBound().Center();
 		struct Octave
 		{
 			ur_float scale;
 			ur_float freq;
+			ur_float clamp_min;
+			ur_float clamp_max;
 		};
 		ur_float maxDist = this->GetBound().SizeX() * 0.5f - radius;
 		Octave octaves[] = {
-			{ -maxDist * 0.75f, 0.50f },
-			{ -maxDist * 0.20f, 2.00f },
-			{ -maxDist * 0.05f, 8.00f },
+			{ maxDist * 0.70f, 0.50f, -1.0f, 0.5f },
+			{ maxDist * 0.275f, 1.75f, -1.0f, 0.0f },
+			{ maxDist * 0.025f, 8.00f, -1.0f, 0.5f },
 		};
 		const ur_uint numOctaves = ur_array_size(octaves);
 
@@ -391,10 +393,15 @@ namespace UnlimRealms
 			*p_value = radius - (*p_point - center).Length();
 			for (ur_uint io = 0; io < numOctaves; ++io)
 			{
-				*p_value += (ur_float)noise.Noise(
+				ur_float val = (ur_float)noise.Noise(
 					ur_double(p_point->x * octaves[io].freq),
 					ur_double(p_point->y * octaves[io].freq),
-					ur_double(p_point->z * octaves[io].freq)) * octaves[io].scale;
+					ur_double(p_point->z * octaves[io].freq));
+				val *= 2.0f;
+				val = std::max(octaves[io].clamp_min, val);
+				val = std::min(octaves[io].clamp_max, val);
+				val *= octaves[io].scale;
+				*p_value += val;
 			}
 		}
 
@@ -647,6 +654,8 @@ namespace UnlimRealms
 		this->drawHexahedra = false;
 		this->drawRefinementTree = false;
 		memset(&this->stats, 0, sizeof(this->stats));
+		this->jobBuildCounter = 0;
+		this->jobBuildRequested = 0;
 	}
 
 	Isosurface::HybridCubes::~HybridCubes()
@@ -655,6 +664,11 @@ namespace UnlimRealms
 		{
 			this->jobUpdate->Interrupt();
 			this->jobUpdate->Wait();
+		}
+		for (auto &job : this->jobBuild)
+		{
+			job->Interrupt();
+			job->Wait();
 		}
 	}
 
@@ -763,10 +777,50 @@ namespace UnlimRealms
 		}
 		else
 		{
-			// do update job
 			auto &jobSystem = this->isosurface.GetRealm().GetJobSystem();
-			if (this->jobUpdate == ur_null || this->jobUpdate->Finished())
+
+			// build job(s) stage
+			if (this->jobUpdate != ur_null && this->jobUpdate->Finished() && !this->buildQueue.empty())
 			{
+				// build meshes
+				ur_uint level = this->buildQueue.begin()->second->level;
+				for (auto &entry : this->buildQueue)
+				{
+					if (entry.first != level)
+						break; // of one level per update iteration (to avoid seams)
+
+					this->jobBuildRequested += 1;
+					this->jobBuildCtx.push_back(std::pair<HybridCubes*, Tetrahedron*>(this, entry.second));
+					auto &buildCtx = this->jobBuildCtx.back();
+
+					this->jobBuild.push_back( jobSystem.Add(Job::DataPtr(&buildCtx), [](Job::Context& ctx) -> void {
+							
+						Result result = Success;
+							
+						std::pair<HybridCubes*, Tetrahedron*> *jobData = reinterpret_cast<decltype(jobData)>(ctx.data);
+						HybridCubes *presentation = jobData->first;
+						Tetrahedron *tetrahedron = jobData->second;
+							
+						result &= presentation->BuildMesh(tetrahedron, &presentation->statsBack);
+
+						ctx.resultCode = result.Code;
+
+						presentation->jobBuildCounter += 1;
+					}));
+				}
+				this->buildQueue.clear();
+				this->stats.buildQueue = this->jobBuildRequested;
+			}
+
+			// update job stage
+			if ((this->jobUpdate == ur_null || this->jobUpdate->Finished()) &&
+				(this->jobBuildCounter >= this->jobBuildRequested))
+			{
+				// reset previous build job(s) data
+				this->jobBuildCounter = 0;
+				this->jobBuildRequested = 0;
+				this->jobBuild.clear();
+
 				// swap back and front data
 				if (this->jobUpdate != ur_null &&
 					this->jobUpdate->FinishedSuccessfully())
@@ -801,20 +855,6 @@ namespace UnlimRealms
 							presentation->updatePoint, presentation->rootBack[i].get(), presentation->root[i].get(),
 							&presentation->statsBack);
 					}
-
-					// build meshes
-					// (one level at a time)
-					if (!presentation->buildQueue.empty())
-					{
-						ur_uint level = presentation->buildQueue.begin()->second->level;
-						for (auto &entry : presentation->buildQueue)
-						{
-							if (entry.first != level)
-								break;
-							presentation->BuildMesh(entry.second, &presentation->statsBack);
-						}
-					}
-					presentation->statsBack.buildQueue = (ur_uint)presentation->buildQueue.size();
 
 					ctx.resultCode = result.Code;
 				});

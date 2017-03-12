@@ -2,16 +2,42 @@
 
 float4 main(PS_INPUT input) : SV_Target
 {
+	float4 color = float4(0, 0, 0, 1);
+
 #if 1
-	float3 wpos_dx = ddx(input.wpos);
-	float3 wpos_dy = ddy(input.wpos);
+	float3 wpos_dx = ddx(input.wpos.xyz);
+	float3 wpos_dy = ddy(input.wpos.xyz);
 	float3 n = normalize(cross(wpos_dx, wpos_dy));
-	n.xyz = n.xzy;
 #else
 	float3 n = input.norm;
 #endif
-	float4 color = float4((n + 1.0) * 0.5, 1.0f);
+	
 	const float3 sunDir = float3(1, 0, 0);
-	color *= (dot(-sunDir, n) + 1.0) * 0.5;
+#if 0
+	color.xyz = (n + 1.0) * 0.5;
+	color.xyz *= (dot(-sunDir, n) + 1.0) * 0.5;
+#else
+	const float3 sphereN = normalize(input.wpos.xyz);
+	const float slope = max(0.0, dot(n, sphereN));
+	const float3 surfColor = lerp(float3(0.7, 0.5, 0.3)*0.75, float3(0.7, 0.8, 0.4), slope);
+	const float3 sunLight = float3(1.0, 1.0, 0.8);
+	const float3 ambientLight = float3(0.2, 0.2, 0.3);
+	const float sunLightWrap = 0.5;
+	const float sunNdotL = max(0.0, (dot(-sunDir, n) + sunLightWrap) / (1.0 + sunLightWrap));
+	color.xyz = surfColor * lerp(ambientLight, sunLight, sunNdotL);
+
+	const float3 fogColorMax = float3(0.6, 0.8, 1.0);
+	const float3 fogColorMin = float3(0.1, 0.1, 0.15);
+	const float fogColorWrap = 0.5;
+	const float fogNdotL = max(0.0, (dot(-sunDir, sphereN) + fogColorWrap) / (1.0 + fogColorWrap));
+	const float3 fogColor = lerp(fogColorMin, fogColorMax, fogNdotL);
+	const float fogBegin = 0.0f;
+	const float fogRange = 5.0f;
+	const float fogDensityMax = 0.75;
+	float fogDensity = clamp((input.wpos.w - fogBegin) / fogRange, 0.0, fogDensityMax);
+	
+	color.xyz = lerp(color.xyz, fogColor, fogDensity);
+#endif
+
 	return color;
 }

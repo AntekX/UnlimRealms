@@ -280,11 +280,14 @@ namespace UnlimRealms
 			std::multimap<ur_uint, Tetrahedron*> buildQueue;
 			
 			// job(s) data
-			std::shared_ptr<Job> jobUpdate;
-			std::shared_ptr<Job> jobBuild;
 			ur_float3 updatePoint;
 			std::unique_ptr<Node> rootBack[RootsCount];
 			Stats statsBack;
+			std::shared_ptr<Job> jobUpdate;
+			std::list<std::shared_ptr<Job>> jobBuild;
+			std::list<std::pair<HybridCubes*, Tetrahedron*>> jobBuildCtx;
+			std::atomic<ur_uint> jobBuildCounter;
+			ur_uint jobBuildRequested;
 			
 			// debug info
 			bool freezeUpdate;
