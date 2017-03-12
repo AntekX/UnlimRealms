@@ -96,13 +96,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 #else
 		Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
 		generateParams.bound = volumeBound;
+		generateParams.radiusMin = volumeBound.SizeX() * 0.45f;
+		generateParams.radiusMax = volumeBound.SizeX() * 0.50f;
+		generateParams.octaves.assign({
+			{ 0.70f, 0.50f, -1.0f, 0.5f },
+			{ 0.275f, 1.75f, -1.0f, 0.0f },
+			{ 0.025f, 8.00f, -1.0f, 0.5f },
+		});
+
 		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),
 			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));
 #endif
 
 		Isosurface::HybridCubes::Desc desc;
-		desc.CellSize = 0.05f;
-		desc.LatticeResolution = 16;
+		desc.CellSize = 0.025f;
+		desc.LatticeResolution = 10;
 		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x;
 		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
 
@@ -139,7 +147,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		isosurface->Update();
 		
 		// update camera control speed depending on the distance to isosurface
-		ur_float surfRadius = isosurface->GetData()->GetBound().SizeX() * 0.5;
+		ur_float surfRadius = isosurface->GetData()->GetBound().SizeX() * 0.5f;
 		ur_float surfDist = (camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length();
 		cameraControl.SetSpeed(std::max(0.25f, (surfDist - surfRadius) / surfRadius));
 

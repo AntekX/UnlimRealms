@@ -97,6 +97,16 @@ namespace UnlimRealms
 
 			struct UR_DECL SimplexNoiseParams : GenerateParams
 			{
+				struct Octave
+				{
+					ur_float scale;
+					ur_float freq;
+					ur_float clamp_min;
+					ur_float clamp_max;
+				};
+				ur_float radiusMin;
+				ur_float radiusMax;
+				std::vector<Octave> octaves;
 			};
 
 			

@@ -24,7 +24,8 @@ float4 main(PS_INPUT input) : SV_Target
 	const float3 ambientLight = float3(0.2, 0.2, 0.3);
 	const float sunLightWrap = 0.5;
 	const float sunNdotL = max(0.0, (dot(-sunDir, n) + sunLightWrap) / (1.0 + sunLightWrap));
-	color.xyz = surfColor * lerp(ambientLight, sunLight, sunNdotL);
+	const float globalSelfShadow = max(0.0, (dot(+sunDir, sphereN) + sunLightWrap) / (1.0 + sunLightWrap));
+	color.xyz = surfColor * (ambientLight + sunLight * max(0.0, sunNdotL - globalSelfShadow));
 
 	const float3 fogColorMax = float3(0.6, 0.8, 1.0);
 	const float3 fogColorMin = float3(0.1, 0.1, 0.15);

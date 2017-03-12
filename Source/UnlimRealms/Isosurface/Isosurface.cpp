@@ -367,40 +367,33 @@ namespace UnlimRealms
 
 	Result Isosurface::ProceduralGenerator::GenerateSimplexNoise(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox)
 	{
-		// temp: hardcoded generation params
+		const SimplexNoiseParams &params = static_cast<const SimplexNoiseParams&>(*this->generateParams.get());
 		SimplexNoise noise;
-		ur_float radius = this->GetBound().SizeX() * 0.475f;
-		ur_float3 center = this->GetBound().Center();
-		struct Octave
-		{
-			ur_float scale;
-			ur_float freq;
-			ur_float clamp_min;
-			ur_float clamp_max;
-		};
-		ur_float maxDist = this->GetBound().SizeX() * 0.5f - radius;
-		Octave octaves[] = {
-			{ maxDist * 0.70f, 0.50f, -1.0f, 0.5f },
-			{ maxDist * 0.275f, 1.75f, -1.0f, 0.0f },
-			{ maxDist * 0.025f, 8.00f, -1.0f, 0.5f },
-		};
-		const ur_uint numOctaves = ur_array_size(octaves);
+		
+		ur_float3 center = params.bound.Center();
+		ur_float radius = (params.radiusMax + params.radiusMin) * 0.5f;
+		ur_float distMax = params.radiusMax - radius;
+		ur_float brad = (bbox.Max - bbox.Min).Length() * 0.5f;
+		ur_float dist = (bbox.Center() - center).Length();
+		if (dist + brad < params.radiusMin ||
+			dist - brad > params.radiusMax)
+			return Result(NotFound); // does not intersect isosurface
 
 		ValueType *p_value = values;
 		const ur_float3 *p_point = points;
 		for (ur_uint i = 0; i < count; ++i, ++p_value, ++p_point)
 		{
 			*p_value = radius - (*p_point - center).Length();
-			for (ur_uint io = 0; io < numOctaves; ++io)
+			for (auto &octave : params.octaves)
 			{
 				ur_float val = (ur_float)noise.Noise(
-					ur_double(p_point->x * octaves[io].freq),
-					ur_double(p_point->y * octaves[io].freq),
-					ur_double(p_point->z * octaves[io].freq));
+					ur_double(p_point->x * octave.freq),
+					ur_double(p_point->y * octave.freq),
+					ur_double(p_point->z * octave.freq));
 				val *= 2.0f;
-				val = std::max(octaves[io].clamp_min, val);
-				val = std::min(octaves[io].clamp_max, val);
-				val *= octaves[io].scale;
+				val = std::max(octave.clamp_min, val);
+				val = std::min(octave.clamp_max, val);
+				val *= octave.scale;
 				*p_value += val;
 			}
 		}
