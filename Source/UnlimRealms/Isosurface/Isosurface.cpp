@@ -1871,6 +1871,7 @@ namespace UnlimRealms
 			this->gfxObjects->wireframeState->PixelShader = this->gfxObjects->PSDbg.get();
 			GfxRenderState gfxRS = this->gfxObjects->pipelineState->GetRenderState();
 			gfxRS.RasterizerState.FillMode = GfxFillMode::Wireframe;
+			gfxRS.RasterizerState.DepthBias = -100;
 			res = this->gfxObjects->wireframeState->SetRenderState(gfxRS);
 		}
 		if (Failed(res))
@@ -1905,9 +1906,15 @@ namespace UnlimRealms
 			GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
 			gfxContext.SetViewPort(&viewPort);
 			gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
-			gfxContext.SetPipelineState(this->drawWireframe ? this->gfxObjects->wireframeState.get() : this->gfxObjects->pipelineState.get());
+			gfxContext.SetPipelineState(this->gfxObjects->pipelineState.get());
 
 			res = this->presentation->Render(gfxContext, viewProj);
+
+			if (this->drawWireframe)
+			{
+				gfxContext.SetPipelineState(this->gfxObjects->wireframeState.get());
+				this->presentation->Render(gfxContext, viewProj);
+			}
 		}
 
 		return res;
