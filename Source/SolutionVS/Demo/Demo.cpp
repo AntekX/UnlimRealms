@@ -99,7 +99,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		generateParams.radiusMin = volumeBound.SizeX() * 0.45f;
 		generateParams.radiusMax = volumeBound.SizeX() * 0.50f;
 		generateParams.octaves.assign({
-			{ 0.875f, 0.50f, -0.5f, 0.5f },
+			{ 0.875f, 0.50f, -1.0f, 0.5f },
 			{ 0.345f, 2.00f, -1.0f, 0.0f },
 			{ 0.035f, 8.00f, -1.0f, 0.25f },
 		});
@@ -149,16 +149,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		// update camera control speed depending on the distance to isosurface
 		ur_float surfRadius = isosurface->GetData()->GetBound().SizeX() * 0.5f;
 		ur_float surfDist = (camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length();
-		cameraControl.SetSpeed(std::max(0.25f, (surfDist - surfRadius) / surfRadius));
-
-		// expose demo gui
-
-		ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
-		ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
-		ImGui::Begin("DEMO", ur_null, 0);
-		cameraControl.ShowImgui();
-		isosurface->ShowImgui();
-		ImGui::End();
+		cameraControl.SetSpeed(std::max(0.1f, (surfDist - surfRadius) / surfRadius) * 5.0f);
 
 		{ // use context to draw
 			gfxContext->Begin();
@@ -182,6 +173,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 				genericRender->Render(*gfxContext, camera.GetViewProj());
 			}
+
+			// expose demo gui
+			ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
+			ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+			ImGui::Begin("DEMO", ur_null, 0);
+			cameraControl.ShowImgui();
+			isosurface->ShowImgui();
+			ImGui::End();
 
 			// render some demo UI
 			ImGui::ShowMetricsWindow();

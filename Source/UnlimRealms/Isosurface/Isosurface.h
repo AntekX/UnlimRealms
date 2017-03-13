@@ -225,7 +225,8 @@ namespace UnlimRealms
 				ur_byte longestEdgeIdx;
 				BoundingBox bbox;
 				Hexahedron hexahedra[4];
-				bool initialized;
+				ur_bool initialized;
+				ur_bool visible;
 
 				Tetrahedron();
 
@@ -259,6 +260,7 @@ namespace UnlimRealms
 				ur_uint tetrahedraCount;
 				ur_uint treeMemory;
 				ur_uint meshVideoMemory;
+				ur_uint primitivesRendered;
 				ur_uint buildQueue;
 			};
 
@@ -274,7 +276,7 @@ namespace UnlimRealms
 
 			Result MarchCubes(Hexahedron &hexahedron);
 
-			Result Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4x4 &viewProj, Node *node);
+			Result Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4(&frustumPlanes)[6], Node *node);
 			
 			Result RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Node *node);
 
@@ -297,7 +299,7 @@ namespace UnlimRealms
 			std::list<std::shared_ptr<Job>> jobBuild;
 			std::list<std::pair<HybridCubes*, Tetrahedron*>> jobBuildCtx;
 			std::atomic<ur_uint> jobBuildCounter;
-			ur_uint jobBuildRequested;
+			std::atomic<ur_uint> jobBuildRequested;
 			
 			// debug info
 			bool freezeUpdate;

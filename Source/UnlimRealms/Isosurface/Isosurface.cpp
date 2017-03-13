@@ -466,6 +466,7 @@ namespace UnlimRealms
 	Isosurface::HybridCubes::Tetrahedron::Tetrahedron()
 	{
 		this->initialized = false;
+		this->visible = true;
 		this->level = 0;
 		this->longestEdgeIdx = 0;
 	}
@@ -774,47 +775,21 @@ namespace UnlimRealms
 		{
 			auto &jobSystem = this->isosurface.GetRealm().GetJobSystem();
 
-			// build job(s) stage
-			if (this->jobUpdate != ur_null && this->jobUpdate->Finished() && !this->buildQueue.empty())
-			{
-				// build meshes
-				ur_uint level = this->buildQueue.begin()->second->level;
-				for (auto &entry : this->buildQueue)
-				{
-					if (entry.first != level)
-						break; // of one level per update iteration (to avoid seams)
-
-					this->jobBuildRequested += 1;
-					this->jobBuildCtx.push_back(std::pair<HybridCubes*, Tetrahedron*>(this, entry.second));
-					auto &buildCtx = this->jobBuildCtx.back();
-
-					this->jobBuild.push_back( jobSystem.Add(Job::DataPtr(&buildCtx), [](Job::Context& ctx) -> void {
-							
-						Result result = Success;
-							
-						std::pair<HybridCubes*, Tetrahedron*> *jobData = reinterpret_cast<decltype(jobData)>(ctx.data);
-						HybridCubes *presentation = jobData->first;
-						Tetrahedron *tetrahedron = jobData->second;
-							
-						result &= presentation->BuildMesh(tetrahedron, &presentation->statsBack);
-
-						ctx.resultCode = result.Code;
-
-						presentation->jobBuildCounter += 1;
-					}));
-				}
-				this->buildQueue.clear();
-				this->stats.buildQueue = this->jobBuildRequested;
-			}
-
-			// update job stage
+			// do update/build job(s)
 			if ((this->jobUpdate == ur_null || this->jobUpdate->Finished()) &&
 				(this->jobBuildCounter >= this->jobBuildRequested))
 			{
+				// make visible new meshes
+				for (auto &jobCtx : this->jobBuildCtx)
+				{
+					jobCtx.second->visible = true;
+				}
+
 				// reset previous build job(s) data
 				this->jobBuildCounter = 0;
 				this->jobBuildRequested = 0;
 				this->jobBuild.clear();
+				this->jobBuildCtx.clear();
 
 				// swap back and front data
 				if (this->jobUpdate != ur_null &&
@@ -849,6 +824,40 @@ namespace UnlimRealms
 						result &= presentation->Update(
 							presentation->updatePoint, presentation->rootBack[i].get(), presentation->root[i].get(),
 							&presentation->statsBack);
+					}
+
+					// build meshes
+					if (!presentation->buildQueue.empty())
+					{
+						ur_uint level = presentation->buildQueue.begin()->second->level;
+						for (auto &entry : presentation->buildQueue)
+						{
+							if (entry.first != level)
+								break; // one level per update iteration (to avoid seams)
+
+							presentation->jobBuildRequested += 1;
+							presentation->jobBuildCtx.push_back(std::pair<HybridCubes*, Tetrahedron*>(presentation, entry.second));
+							auto &buildCtx = presentation->jobBuildCtx.back();
+
+							// mesh building job
+							presentation->jobBuild.push_back(ctx.jobSystem.Add(Job::DataPtr(&buildCtx), [](Job::Context& ctx) -> void {
+
+								Result result = Success;
+
+								std::pair<HybridCubes*, Tetrahedron*> *jobData = reinterpret_cast<decltype(jobData)>(ctx.data);
+								HybridCubes *presentation = jobData->first;
+								Tetrahedron *tetrahedron = jobData->second;
+								tetrahedron->visible = false;
+
+								result &= presentation->BuildMesh(tetrahedron, &presentation->statsBack);
+
+								ctx.resultCode = result.Code;
+
+								presentation->jobBuildCounter += 1;
+							}));
+						}
+						presentation->buildQueue.clear();
+						presentation->statsBack.buildQueue = presentation->jobBuildRequested;
 					}
 
 					ctx.resultCode = result.Code;
@@ -1531,9 +1540,13 @@ namespace UnlimRealms
 	Result Isosurface::HybridCubes::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
 	{
 		GenericRender *genericRender = this->isosurface.GetRealm().GetComponent<GenericRender>();
+		ur_float4 frustumPlanes[6];
+		viewProj.FrustumPlanes(frustumPlanes, true);
+		this->stats.primitivesRendered = 0;
+
 		for (auto &node : this->root)
 		{
-			this->Render(gfxContext, genericRender, viewProj, node.get());
+			this->Render(gfxContext, genericRender, frustumPlanes, node.get());
 		}
 
 		if (this->drawRefinementTree)
@@ -1544,19 +1557,20 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result Isosurface::HybridCubes::Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4x4 &viewProj, Node *node)
+	Result Isosurface::HybridCubes::Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4(&frustumPlanes)[6], Node *node)
 	{
 		if (ur_null == node ||
-			ur_null == node->tetrahedron.get())
+			ur_null == node->tetrahedron.get() ||
+			!node->tetrahedron->bbox.Intersects(frustumPlanes))
 			return Result(Success);
 
 		if (node->HasChildren() &&
-			node->children[0]->tetrahedron->initialized &&
-			node->children[1]->tetrahedron->initialized)
+			node->children[0]->tetrahedron->initialized && node->children[0]->tetrahedron->visible &&
+			node->children[1]->tetrahedron->initialized && node->children[1]->tetrahedron->visible)
 		{
 			for (auto &child : node->children)
 			{
-				this->Render(gfxContext, genericRender, viewProj, child.get());
+				this->Render(gfxContext, genericRender, frustumPlanes, child.get());
 			}
 		}
 		else
@@ -1568,6 +1582,7 @@ namespace UnlimRealms
 				if (gfxVB != ur_null && gfxIB != ur_null)
 				{
 					const ur_uint indexCount = (gfxIB.get() ? gfxIB->GetDesc().Size / sizeof(Isosurface::Index) : 0);
+					this->stats.primitivesRendered += indexCount / 3;
 					gfxContext.SetVertexBuffer(gfxVB.get(), 0, sizeof(Isosurface::Vertex), 0);
 					gfxContext.SetIndexBuffer(gfxIB.get(), sizeof(Isosurface::Index) * 8, 0);
 					gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
@@ -1704,10 +1719,11 @@ namespace UnlimRealms
 			ImGui::Checkbox("Draw refinement tree", &this->drawRefinementTree);
 			if (ImGui::TreeNode("Stats"))
 			{
-				ImGui::Text("tetrahedraCount:	%i", (int)this->stats.tetrahedraCount);
-				ImGui::Text("treeMemory:		%i", (int)this->stats.treeMemory);
-				ImGui::Text("meshVideoMemory:	%i", (int)this->stats.meshVideoMemory);
-				ImGui::Text("buildQueue:		%i", (int)this->stats.buildQueue);
+				ImGui::Text("tetrahedraCount:		%i", (int)this->stats.tetrahedraCount);
+				ImGui::Text("treeMemory:			%i", (int)this->stats.treeMemory);
+				ImGui::Text("meshVideoMemory:		%i", (int)this->stats.meshVideoMemory);
+				ImGui::Text("primitivesRendered:	%i", (int)this->stats.primitivesRendered);
+				ImGui::Text("buildQueue:			%i", (int)this->stats.buildQueue);
 				ImGui::TreePop();
 			}
 			ImGui::TreePop();

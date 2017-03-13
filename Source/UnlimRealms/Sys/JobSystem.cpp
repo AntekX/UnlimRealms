@@ -37,7 +37,7 @@ namespace UnlimRealms
 		if (this->callback != ur_null)
 		{
 			this->state = State::InProgress;
-			this->callback( Context(this->data, this->interrupt, this->progress, this->resultCode) );
+			this->callback( Context(this->jobSystem, this->data, this->interrupt, this->progress, this->resultCode) );
 		}
 		else
 		{
