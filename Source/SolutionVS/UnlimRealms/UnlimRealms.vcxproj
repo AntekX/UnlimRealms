@@ -154,6 +154,7 @@
     <ClInclude Include="..\..\3rdParty\imgui\stb_rect_pack.h" />
     <ClInclude Include="..\..\3rdParty\imgui\stb_textedit.h" />
     <ClInclude Include="..\..\3rdParty\imgui\stb_truetype.h" />
+    <ClInclude Include="..\..\UnlimRealms\Atmosphere\Atmosphere.h" />
     <ClInclude Include="..\..\UnlimRealms\Camera\Camera.h" />
     <ClInclude Include="..\..\UnlimRealms\Camera\Camera.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Camera\CameraControl.h" />
@@ -177,6 +178,7 @@
     <ClInclude Include="..\..\UnlimRealms\Isosurface\Isosurface.h" />
     <ClInclude Include="..\..\UnlimRealms\Realm\Realm.h" />
     <ClInclude Include="..\..\UnlimRealms\Realm\Realm.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Resources\Resources.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Canvas.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Canvas.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Input.h" />
@@ -197,6 +199,7 @@
     <ClCompile Include="..\..\3rdParty\imgui\imgui.cpp" />
     <ClCompile Include="..\..\3rdParty\imgui\imgui_demo.cpp" />
     <ClCompile Include="..\..\3rdParty\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Atmosphere\Atmosphere.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Camera\Camera.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Camera\CameraControl.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Core\Algorithms.cpp" />
@@ -210,6 +213,7 @@
     <ClCompile Include="..\..\UnlimRealms\ImguiRender\ImguiRender.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Isosurface\Isosurface.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Realm\Realm.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Resources\Resources.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Canvas.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Input.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Log.cpp" />
@@ -221,6 +225,18 @@
     <ClCompile Include="..\..\UnlimRealms\Sys\Windows\WinInput.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="..\..\UnlimRealms\Atmosphere\Atmosphere_ps.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Atmosphere\Atmosphere_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
     <FxCompile Include="..\..\UnlimRealms\GenericRender\Generic_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
@@ -262,6 +278,7 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\UnlimRealms\Atmosphere\Atmosphere.hlsli" />
     <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

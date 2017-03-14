@@ -12,6 +12,7 @@
 #include "Sys/Log.h"
 #include "Sys/Canvas.h"
 #include "Sys/Input.h"
+#include "Resources/Resources.h"
 #include "ImguiRender/ImguiRender.h"
 
 namespace UnlimRealms
@@ -1698,15 +1699,15 @@ namespace UnlimRealms
 		ImGui::Text("SysMemory: %i", this->stats.sysMemory);
 		ImGui::End();
 
-		if (this->gfxObjects->pipelineState != ur_null)
+		if (this->gfxObjects.pipelineState != ur_null)
 		{
-		const GfxFillMode &gfxFillMode = this->gfxObjects->pipelineState->GetRenderState().RasterizerState.FillMode;
+		const GfxFillMode &gfxFillMode = this->gfxObjects.pipelineState->GetRenderState().RasterizerState.FillMode;
 		if ((this->drawWireframe == true && GfxFillMode::Solid == gfxFillMode) ||
 		(this->drawWireframe == false && GfxFillMode::Wireframe == gfxFillMode))
 		{
-		GfxRenderState gfxRS = this->gfxObjects->pipelineState->GetRenderState();
+		GfxRenderState gfxRS = this->gfxObjects.pipelineState->GetRenderState();
 		gfxRS.RasterizerState.FillMode = (this->drawWireframe ? GfxFillMode::Wireframe : GfxFillMode::Solid);
-		this->gfxObjects->pipelineState->SetRenderState(gfxRS);
+		this->gfxObjects.pipelineState->SetRenderState(gfxRS);
 		}
 		}
 		*/
@@ -1775,67 +1776,25 @@ namespace UnlimRealms
 	{
 		Result res = Result(Success);
 
-		this->gfxObjects.reset(new GfxObjects());
+		this->gfxObjects = GfxObjects(); // reset gfx resources
 
 		// VS
-		{
-			std::unique_ptr<File> file;
-			res = this->GetRealm().GetStorage().Open("Isosurface_vs.cso", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary), file);
-			if (Succeeded(res))
-			{
-				ur_size sizeInBytes = file->GetSize();
-				std::unique_ptr<ur_byte[]> bytecode(new ur_byte[sizeInBytes]);
-				file->Read(sizeInBytes, bytecode.get());
-				res = this->GetRealm().GetGfxSystem()->CreateVertexShader(this->gfxObjects->VS);
-				if (Succeeded(res))
-				{
-					res = this->gfxObjects->VS->Initialize(std::move(bytecode), sizeInBytes);
-				}
-			}
-		}
+		res = CreateVertexShaderFromFile(this->GetRealm(), this->gfxObjects.VS, "Isosurface_vs.cso");
 		if (Failed(res))
 			return ResultError(Failure, "Isosurface::CreateGfxObjects: failed to initialize VS");
 
 		// PS
-		{
-			std::unique_ptr<File> file;
-			res = this->GetRealm().GetStorage().Open("Isosurface_ps.cso", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary), file);
-			if (Succeeded(res))
-			{
-				ur_size sizeInBytes = file->GetSize();
-				std::unique_ptr<ur_byte[]> bytecode(new ur_byte[sizeInBytes]);
-				file->Read(sizeInBytes, bytecode.get());
-				res = this->GetRealm().GetGfxSystem()->CreatePixelShader(this->gfxObjects->PS);
-				if (Succeeded(res))
-				{
-					res = this->gfxObjects->PS->Initialize(std::move(bytecode), sizeInBytes);
-				}
-			}
-		}
+		res = CreatePixelShaderFromFile(this->GetRealm(), this->gfxObjects.PS, "Isosurface_ps.cso");
 		if (Failed(res))
 			return ResultError(Failure, "Isosurface::CreateGfxObjects: failed to initialize PS");
 
 		// PSDbg
-		{
-			std::unique_ptr<File> file;
-			res = this->GetRealm().GetStorage().Open("IsosurfaceDbg_ps.cso", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary), file);
-			if (Succeeded(res))
-			{
-				ur_size sizeInBytes = file->GetSize();
-				std::unique_ptr<ur_byte[]> bytecode(new ur_byte[sizeInBytes]);
-				file->Read(sizeInBytes, bytecode.get());
-				res = this->GetRealm().GetGfxSystem()->CreatePixelShader(this->gfxObjects->PSDbg);
-				if (Succeeded(res))
-				{
-					res = this->gfxObjects->PSDbg->Initialize(std::move(bytecode), sizeInBytes);
-				}
-			}
-		}
+		res = CreatePixelShaderFromFile(this->GetRealm(), this->gfxObjects.PSDbg, "IsosurfaceDbg_ps.cso");
 		if (Failed(res))
 			return ResultError(Failure, "Isosurface::CreateGfxObjects: failed to initialize PSDbg");
 
 		// Input Layout
-		res = this->GetRealm().GetGfxSystem()->CreateInputLayout(this->gfxObjects->inputLayout);
+		res = this->GetRealm().GetGfxSystem()->CreateInputLayout(this->gfxObjects.inputLayout);
 		if (Succeeded(res))
 		{
 			GfxInputElement elements[] = {
@@ -1843,45 +1802,45 @@ namespace UnlimRealms
 				{ GfxSemantic::Normal, 0, 0, GfxFormat::R32G32B32, GfxFormatView::Float, 0 },
 				{ GfxSemantic::Color, 0, 0, GfxFormat::R8G8B8A8, GfxFormatView::Unorm, 0 }
 			};
-			res = this->gfxObjects->inputLayout->Initialize(*this->gfxObjects->VS.get(), elements, ur_array_size(elements));
+			res = this->gfxObjects.inputLayout->Initialize(*this->gfxObjects.VS.get(), elements, ur_array_size(elements));
 		}
 		if (Failed(res))
 			return ResultError(Failure, "Isosurface::CreateGfxObjects: failed to initialize input layout");
 
 		// Pipeline State
-		res = this->GetRealm().GetGfxSystem()->CreatePipelineState(this->gfxObjects->pipelineState);
+		res = this->GetRealm().GetGfxSystem()->CreatePipelineState(this->gfxObjects.pipelineState);
 		if (Succeeded(res))
 		{
-			this->gfxObjects->pipelineState->InputLayout = this->gfxObjects->inputLayout.get();
-			this->gfxObjects->pipelineState->VertexShader = this->gfxObjects->VS.get();
-			this->gfxObjects->pipelineState->PixelShader = this->gfxObjects->PS.get();
+			this->gfxObjects.pipelineState->InputLayout = this->gfxObjects.inputLayout.get();
+			this->gfxObjects.pipelineState->VertexShader = this->gfxObjects.VS.get();
+			this->gfxObjects.pipelineState->PixelShader = this->gfxObjects.PS.get();
 			GfxRenderState gfxRS = GfxRenderState::Default;
 			gfxRS.RasterizerState.CullMode = GfxCullMode::CCW;
 			gfxRS.RasterizerState.FillMode = GfxFillMode::Solid;
-			res = this->gfxObjects->pipelineState->SetRenderState(gfxRS);
+			res = this->gfxObjects.pipelineState->SetRenderState(gfxRS);
 		}
 		if (Failed(res))
 			return ResultError(Failure, "Isosurface::CreateGfxObjects: failed to initialize pipeline state");
 
-		res = this->GetRealm().GetGfxSystem()->CreatePipelineState(this->gfxObjects->wireframeState);
+		res = this->GetRealm().GetGfxSystem()->CreatePipelineState(this->gfxObjects.wireframeState);
 		if (Succeeded(res))
 		{
-			this->gfxObjects->wireframeState->InputLayout = this->gfxObjects->pipelineState->InputLayout;
-			this->gfxObjects->wireframeState->VertexShader = this->gfxObjects->pipelineState->VertexShader;
-			this->gfxObjects->wireframeState->PixelShader = this->gfxObjects->PSDbg.get();
-			GfxRenderState gfxRS = this->gfxObjects->pipelineState->GetRenderState();
+			this->gfxObjects.wireframeState->InputLayout = this->gfxObjects.pipelineState->InputLayout;
+			this->gfxObjects.wireframeState->VertexShader = this->gfxObjects.pipelineState->VertexShader;
+			this->gfxObjects.wireframeState->PixelShader = this->gfxObjects.PSDbg.get();
+			GfxRenderState gfxRS = this->gfxObjects.pipelineState->GetRenderState();
 			gfxRS.RasterizerState.FillMode = GfxFillMode::Wireframe;
 			gfxRS.RasterizerState.DepthBias = -100;
-			res = this->gfxObjects->wireframeState->SetRenderState(gfxRS);
+			res = this->gfxObjects.wireframeState->SetRenderState(gfxRS);
 		}
 		if (Failed(res))
 			return ResultError(Failure, "Isosurface::CreateGfxObjects: failed to initialize wireframe state");
 
 		// Constant Buffer
-		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects->CB);
+		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects.CB);
 		if (Succeeded(res))
 		{
-			res = this->gfxObjects->CB->Initialize(sizeof(CommonCB), GfxUsage::Dynamic,
+			res = this->gfxObjects.CB->Initialize(sizeof(CommonCB), GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
@@ -1901,18 +1860,18 @@ namespace UnlimRealms
 			CommonCB cb;
 			cb.viewProj = viewProj;
 			GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
-			gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+			gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 			const RectI &canvasBound = this->GetRealm().GetCanvas()->GetBound();
 			GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
 			gfxContext.SetViewPort(&viewPort);
-			gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
-			gfxContext.SetPipelineState(this->gfxObjects->pipelineState.get());
+			gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);
+			gfxContext.SetPipelineState(this->gfxObjects.pipelineState.get());
 
 			res = this->presentation->Render(gfxContext, viewProj);
 
 			if (this->drawWireframe)
 			{
-				gfxContext.SetPipelineState(this->gfxObjects->wireframeState.get());
+				gfxContext.SetPipelineState(this->gfxObjects.wireframeState.get());
 				this->presentation->Render(gfxContext, viewProj);
 			}
 		}

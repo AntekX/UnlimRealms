@@ -340,7 +340,7 @@ namespace UnlimRealms
 			std::unique_ptr<GfxBuffer> CB;
 			std::unique_ptr<GfxPipelineState> pipelineState;
 			std::unique_ptr<GfxPipelineState> wireframeState;
-		};
+		} gfxObjects;
 
 		struct CommonCB
 		{
@@ -358,7 +358,6 @@ namespace UnlimRealms
 
 		std::unique_ptr<DataVolume> data;
 		std::unique_ptr<Presentation> presentation;
-		std::unique_ptr<GfxObjects> gfxObjects;
 		bool drawWireframe;
 	};
 

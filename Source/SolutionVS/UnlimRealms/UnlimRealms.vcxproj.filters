@@ -129,6 +129,12 @@
     <ClInclude Include="..\..\UnlimRealms\Sys\Std\StdJobSystem.h">
       <Filter>Sys\Std</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Atmosphere\Atmosphere.h">
+      <Filter>Atmosphere</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Resources\Resources.h">
+      <Filter>Resources</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -206,6 +212,12 @@
     <ClCompile Include="..\..\UnlimRealms\Sys\Std\StdJobSystem.cpp">
       <Filter>Sys\Std</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Atmosphere\Atmosphere.cpp">
+      <Filter>Atmosphere</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Resources\Resources.cpp">
+      <Filter>Resources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Core">
@@ -244,6 +256,12 @@
     <Filter Include="Isosurface">
       <UniqueIdentifier>{055a3b5c-0852-413b-abb4-e13ce7500490}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Atmosphere">
+      <UniqueIdentifier>{190ae49e-a97b-4f8c-b3bd-440a7dbd7634}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources">
+      <UniqueIdentifier>{4afdf8df-8b00-4dc7-b9b9-281c86c3d4b0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\..\UnlimRealms\ImguiRender\Imgui_ps.hlsl">
@@ -267,10 +285,19 @@
     <FxCompile Include="..\..\UnlimRealms\Isosurface\IsosurfaceDbg_ps.hlsl">
       <Filter>Isosurface</Filter>
     </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Atmosphere\Atmosphere_vs.hlsl">
+      <Filter>Atmosphere</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Atmosphere\Atmosphere_ps.hlsl">
+      <Filter>Atmosphere</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli">
       <Filter>Isosurface</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\Atmosphere\Atmosphere.hlsli">
+      <Filter>Atmosphere</Filter>
     </None>
   </ItemGroup>
 </Project>
