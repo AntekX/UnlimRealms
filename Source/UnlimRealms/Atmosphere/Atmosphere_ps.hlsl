@@ -1,4 +1,19 @@
-float4 main() : SV_TARGET
+#include "Atmosphere.hlsli"
+
+cbuffer Common : register(b0)
 {
-	return float4(1.0f, 1.0f, 1.0f, 1.0f);
+	float4x4 ViewProj;
+	float4 CameraPos;
+};
+
+struct PS_INPUT
+{
+	float4 pos	: SV_POSITION;
+	float3 wpos	: TEXCOORD0;
+};
+
+float4 main(PS_INPUT input) : SV_TARGET
+{
+	Scattering scattering = computeScattering(input.wpos.xyz, CameraPos.xyz);
+	return computeScatteringColor(scattering, CameraPos.xyz - input.wpos.xyz);
 }

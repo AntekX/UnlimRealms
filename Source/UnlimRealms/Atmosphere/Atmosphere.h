@@ -24,13 +24,15 @@ namespace UnlimRealms
 
 		virtual ~Atmosphere();
 
-		Result Init();
+		Result Init(ur_float radius);
 
-		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
+		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
 
 	protected:
 
 		Result CreateGfxObjects();
+
+		Result CreateMesh(ur_float radius);
 
 		struct GfxObjects
 		{
@@ -41,12 +43,22 @@ namespace UnlimRealms
 			std::unique_ptr<GfxBuffer> CB;
 			std::unique_ptr<GfxPipelineState> pipelineState;
 			std::unique_ptr<GfxPipelineState> wireframeState;
+			std::unique_ptr<GfxBuffer> VB;
+			std::unique_ptr<GfxBuffer> IB;
 		} gfxObjects;
 
 		struct CommonCB
 		{
 			ur_float4x4 viewProj;
+			ur_float4 cameraPos;
 		};
+
+		struct Vertex
+		{
+			ur_float3 pos;
+		};
+
+		typedef ur_uint16 Index;
 	};
 
 } // end namespace UnlimRealms

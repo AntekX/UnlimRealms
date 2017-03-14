@@ -14,6 +14,7 @@
 #include "GenericRender/GenericRender.h"
 #include "Camera/CameraControl.h"
 #include "Isosurface/Isosurface.h"
+#include "Atmosphere/Atmosphere.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
@@ -117,6 +118,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		isosurface->Init(std::move(dataVolume), std::move(presentation));
 	}
 
+	// demo atmosphere
+	std::unique_ptr<Atmosphere> atmosphere(new Atmosphere(realm));
+	atmosphere->Init(isosurface->GetData()->GetBound().SizeX() * 0.5f * 1.1f);
 
     // Main message loop:
 	realm.GetLog().WriteLine("Entering main message loop");
@@ -156,12 +160,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(),
-				true, {0.1f, 0.1f, 0.15f, 1.0f},
+				true, /*{0.1f, 0.1f, 0.15f, 1.0f}*/{0.0f, 0.0f, 0.0f, 1.0f},
 				true, 1.0f,
 				true, 0);
 
 			// draw isosurface
 			isosurface->Render(*gfxContext, camera.GetViewProj());
+			atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
 
 			// draw generic primitives
 			if (genericRender != ur_null)

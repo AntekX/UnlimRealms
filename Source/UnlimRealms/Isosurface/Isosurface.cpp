@@ -1328,7 +1328,6 @@ namespace UnlimRealms
 
 		if (this->isosurface.GetData()->Read(ur_null, ur_null, 0, bbox) == NotFound)
 			return Result(Success); // does not intersect isosurface, nothing to extract here
-		// todo: check early exit works fine
 
 		// compute hexahedron lattice points
 		
@@ -1379,22 +1378,6 @@ namespace UnlimRealms
 		static const DataVolume::ValueType ScalarFieldSurfaceValue = DataVolume::ValueType(0);
 		std::vector<DataVolume::ValueType> samples(latticeSize);
 		this->isosurface.GetData()->Read(samples.data(), lattice.data(), latticeSize, bbox);
-		//DataVolume::ValueType *p_sample = samples.data();
-		//p_col0 = lattice.data();
-		//bool hasPositiveSamples = false;
-		//bool hasNegativeSamples = false;
-		//for (ur_uint i = 0; i < latticeSize; ++i, ++p_col0, ++p_sample)
-		//{
-		//	if (Failed(this->isosurface.GetData()->Read(*p_sample, *p_col0)))
-		//	{
-		//		return NotInitialized; // data's not ready
-		//	}
-		//	hasPositiveSamples |= (*p_sample >= ScalarFieldSurfaceValue);
-		//	hasNegativeSamples |= (*p_sample < ScalarFieldSurfaceValue);
-		//}
-
-		//if (!(hasPositiveSamples && hasNegativeSamples))
-		//	return Success; // does not intersect isosurface, nothing to extract here
 
 		// march
 
