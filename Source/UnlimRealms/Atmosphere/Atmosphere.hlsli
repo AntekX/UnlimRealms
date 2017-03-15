@@ -170,5 +170,5 @@ float4 atmosphereScatteringGround(float3 vpos, float3 cameraPos)
 	float3 c0 = v3FrontColor * (WavelengthInv * KrESun + KmESun);
 	float3 c1 = v3Attenuate;
 	float3 PlanetColor = float3(0.25, 0.25, 0.25);
-	return float4(c0 + PlanetColor * c1, 1);
+	return float4(c0 * 0.5 + c1 * 0.5, 1);
 }
