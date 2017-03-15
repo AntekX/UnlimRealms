@@ -1,4 +1,5 @@
 #include "Isosurface.hlsli"
+#include "../Atmosphere/Atmosphere.hlsli"
 
 float4 main(PS_INPUT input) : SV_Target
 {
@@ -21,13 +22,13 @@ float4 main(PS_INPUT input) : SV_Target
 	const float slope = max(0.0, dot(n, sphereN));
 	const float3 surfColor = lerp(float3(0.7, 0.5, 0.3)*0.75, float3(0.7, 0.8, 0.4), slope);
 	const float3 sunLight = float3(1.0, 1.0, 0.8);
-	const float3 ambientLight = float3(0.2, 0.2, 0.3);
+	const float3 ambientLight = float3(0.1, 0.1, 0.15);
 	const float sunLightWrap = 0.5;
 	const float sunNdotL = max(0.0, (dot(-sunDir, n) + sunLightWrap) / (1.0 + sunLightWrap));
 	const float globalSelfShadow = max(0.0, (dot(+sunDir, sphereN) + sunLightWrap) / (1.0 + sunLightWrap));
 	color.xyz = surfColor * (ambientLight + sunLight * max(0.0, sunNdotL - globalSelfShadow));
 
-	const float3 fogColorMax = float3(0.6, 0.8, 1.0);
+	/*const float3 fogColorMax = float3(0.6, 0.8, 1.0);
 	const float3 fogColorMin = float3(0.1, 0.1, 0.15);
 	const float fogColorWrap = 0.5;
 	const float fogNdotL = max(0.0, (dot(-sunDir, sphereN) + fogColorWrap) / (1.0 + fogColorWrap));
@@ -37,7 +38,10 @@ float4 main(PS_INPUT input) : SV_Target
 	const float fogDensityMax = 0.75;
 	float fogDensity = clamp((input.wpos.w - fogBegin) / fogRange, 0.0, fogDensityMax);
 	
-	color.xyz = lerp(color.xyz, fogColor, fogDensity);
+	color.xyz = lerp(color.xyz, fogColor, fogDensity);*/
+	
+	float4 atmo = atmosphereScatteringGround(input.wpos.xyz, CameraPos.xyz);
+	color.xyz = lerp(color.xyz, atmo.xyz, max(max(atmo.x, atmo.y), atmo.z));
 #endif
 
 	return color;

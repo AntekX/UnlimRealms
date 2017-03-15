@@ -1832,7 +1832,7 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result Isosurface::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
+	Result Isosurface::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
 	{
 		Result res(Success);
 
@@ -1842,6 +1842,7 @@ namespace UnlimRealms
 		{
 			CommonCB cb;
 			cb.viewProj = viewProj;
+			cb.cameraPos = cameraPos;
 			GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
 			gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 			const RectI &canvasBound = this->GetRealm().GetCanvas()->GetBound();

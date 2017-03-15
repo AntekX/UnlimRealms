@@ -319,7 +319,7 @@ namespace UnlimRealms
 
 		Result Update();
 
-		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
+		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
 
 		void ShowImgui();
 
@@ -345,6 +345,7 @@ namespace UnlimRealms
 		struct CommonCB
 		{
 			ur_float4x4 viewProj;
+			ur_float4 cameraPos;
 		};
 
 		struct Vertex

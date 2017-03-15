@@ -77,28 +77,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		genericRender->Init();
 	}
 
-	// demo camera
-	Camera camera(realm);
-	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
-	camera.SetPosition(ur_float3(0.0f, 0.0f, -32.0f));
-	cameraControl.SetTargetPoint(ur_float3(0.0f));
-
 	// demo isosurface
+	ur_float surfaceRadiusMin = 14.5f;
+	ur_float surfaceRadiusMax = 16.0f;
 	std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
 	{
-		BoundingBox volumeBound(ur_float3(-16.0f, -16.0f, -16.0f), ur_float3(16.0f, 16.0f, 16.0f));
+		ur_float r = surfaceRadiusMax;
+		BoundingBox volumeBound(ur_float3(-r, -r, -r), ur_float3(r, r, r));
 #if 0
 		Isosurface::ProceduralGenerator::SphericalDistanceFieldParams generateParams;
 		generateParams.bound = volumeBound;
 		generateParams.center = volumeBound.Center();
-		generateParams.radius = volumeBound.SizeMin() * 0.5f;
+		generateParams.radius = surfaceRadiusMin;
 		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),
 			Isosurface::ProceduralGenerator::Algorithm::SphericalDistanceField, generateParams));
 #else
 		Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
 		generateParams.bound = volumeBound;
-		generateParams.radiusMin = volumeBound.SizeX() * 0.45f;
-		generateParams.radiusMax = volumeBound.SizeX() * 0.50f;
+		generateParams.radiusMin = surfaceRadiusMin;
+		generateParams.radiusMax = surfaceRadiusMax;
 		generateParams.octaves.assign({
 			{ 0.875f, 0.50f, -1.0f, 0.5f },
 			{ 0.345f, 2.00f, -1.0f, 0.0f },
@@ -120,7 +117,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	// demo atmosphere
 	std::unique_ptr<Atmosphere> atmosphere(new Atmosphere(realm));
-	atmosphere->Init(isosurface->GetData()->GetBound().SizeX() * 0.5f * 1.1f);
+	atmosphere->Init(surfaceRadiusMin + (surfaceRadiusMax - surfaceRadiusMin) * 2.0f);
+
+	// demo camera
+	Camera camera(realm);
+	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
+	camera.SetPosition(ur_float3(0.0f, 0.0f, -surfaceRadiusMax * 2.0f));
+	cameraControl.SetTargetPoint(ur_float3(0.0f));
 
     // Main message loop:
 	realm.GetLog().WriteLine("Entering main message loop");
@@ -151,9 +154,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		isosurface->Update();
 		
 		// update camera control speed depending on the distance to isosurface
-		ur_float surfRadius = isosurface->GetData()->GetBound().SizeX() * 0.5f;
 		ur_float surfDist = (camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length();
-		cameraControl.SetSpeed(std::max(0.1f, (surfDist - surfRadius) / surfRadius) * 5.0f);
+		cameraControl.SetSpeed(std::max(0.1f, (surfDist - surfaceRadiusMin) * 0.1f));
 
 		{ // use context to draw
 			gfxContext->Begin();
@@ -165,7 +167,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 				true, 0);
 
 			// draw isosurface
-			isosurface->Render(*gfxContext, camera.GetViewProj());
+			isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
 			atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
 
 			// draw generic primitives
