@@ -122,7 +122,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	// demo camera
 	Camera camera(realm);
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
-	camera.SetPosition(ur_float3(0.0f, 0.0f, -surfaceRadiusMax * 2.0f));
+	camera.SetPosition(ur_float3(0.0f, 0.0f, -surfaceRadiusMax * 3.0f));
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
 
     // Main message loop:

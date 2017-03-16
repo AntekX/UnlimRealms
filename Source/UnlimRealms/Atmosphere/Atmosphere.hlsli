@@ -8,22 +8,23 @@ static const float3 WavelengthInv = float3(
 static const float Pi = 3.14159;
 
 static const float3 LightPos = float3(-1.0, 0.0, 0.0);
-static const float OuterRadius = 17.0; // OuterRadius must 2.5% bigger then InnerRadius to make computation work properly
+static const float OuterRadius = 18.5; // OuterRadius must 2.5% bigger then InnerRadius to make computation work properly
 static const float InnerRadius = 14.5;
 static const float ScaleDepth = 0.25;
 static const float ScaleDepthInv = 1.0 / ScaleDepth;
 static const float Scale = 1.0 / (OuterRadius - InnerRadius);
 static const float ScaleOverScaleDepth = Scale / ScaleDepth;
-static const float G = -0.98;
+static const float G = -0.9;
 static const float G2 = G*G;// 0.9604;
 static const float Exposure = 1.0;
 static const float Km = 0.0025;
 static const float Kr = 0.0015;
-static const float ESun = 100.0;
-static const float KrESun = Kr * ESun;
-static const float KmESun = Km * ESun;
-static const float Kr4PI = Kr * 4.0 * Pi;
-static const float Km4PI = Km * 4.0 * Pi;
+static const float3 ESunLight = float3(1.000, 0.877, 0.731);
+static const float3 ESun = ESunLight * 188.0;
+static const float3 KrESun = Kr * ESun;
+static const float3 KmESun = Km * ESun;
+static const float3 Kr4PI = Kr * 4.0 * Pi;
+static const float3 Km4PI = Km * 4.0 * Pi;
 
 struct Scattering
 {
@@ -37,7 +38,7 @@ float scale(float fCos)
 	return ScaleDepth * exp(-0.00287 + x*(0.459 + x*(3.83 + x*(-6.80 + x*5.25))));
 }
 
-float4 atmosphereScatteringSky(const float3 vpos, const float3 cameraPos)
+float4 atmosphericScatteringSky(const float3 vpos, const float3 cameraPos)
 {
 	// Get the ray from the camera to the vertex and its length (which is the far point of the ray passing through the atmosphere) 
 	float3 ray = vpos - cameraPos;
@@ -71,8 +72,9 @@ float4 atmosphereScatteringSky(const float3 vpos, const float3 cameraPos)
 		float height = length(samplePoint);
 		float depth = exp(ScaleOverScaleDepth * (InnerRadius - height));
 		float lightAngle = dot(LightPos, samplePoint) / height;
-		float cameraAngle = dot(ray, samplePoint) / height;
-		float scatter = (/*startOffset + */depth * (scale(lightAngle) - scale(cameraAngle)));
+		//float cameraAngle = dot(ray, samplePoint) / height;
+		//float scatter = (startOffset + depth * (scale(lightAngle) - scale(cameraAngle)));
+		float scatter = depth * scale(lightAngle); // simplified scatter
 		float3 attenuate = exp(-scatter * (WavelengthInv * Kr4PI + Km4PI));
 		frontColor += attenuate * (depth * scaledLength);
 		samplePoint += sampleRay;
@@ -88,9 +90,8 @@ float4 atmosphereScatteringSky(const float3 vpos, const float3 cameraPos)
 	float RayleighPhase = 0.75 * (1.0 + fCos*fCos);
 	float MiePhase = 1.5 * ((1.0 - G2) / (2.0 + G2)) * (1.0 + fCos*fCos) / pow(max(0.0, 1.0 + G2 - 2.0*G*fCos), 1.5);
 	output.rgb = 1.0 - exp(-Exposure * (RayleighPhase * color + MiePhase * secondaryColor));
-	output.a = output.b;
-	//output.rgb = RayleighPhase * color + MiePhase * secondaryColor;
 	//output.a = output.b;
+	output.a = max(max(output.r, output.r), output.b);	
 
 	return output;
 }
@@ -123,7 +124,7 @@ float getFarIntersection(float3 v3Pos, float3 v3Ray, float fDistance2, float fRa
 	return 0.5 * (-B + sqrt(fDet));
 }
 
-float4 atmosphereScatteringGround(float3 vpos, float3 cameraPos)
+float4 atmosphericScatteringSurface(float3 vpos, float3 cameraPos, float3 surfLight)
 {
 	float fSamples = 5.0f;
 	float fOuterRadius2 = OuterRadius * OuterRadius;
@@ -131,7 +132,7 @@ float4 atmosphereScatteringGround(float3 vpos, float3 cameraPos)
 	float fCameraHeight = length(cameraPos);  // The camera's current height
 	float fCameraHeight2 = fCameraHeight * fCameraHeight;  // fCameraHeight^2
 
-														   // Get the ray from the camera to the vertex and its length (which is the far point of the ray passing through the atmosphere)
+	// Get the ray from the camera to the vertex and its length (which is the far point of the ray passing through the atmosphere)
 	float3 v3Ray = vpos - cameraPos;
 	vpos = normalize(vpos);
 	float fFar = length(v3Ray);
@@ -142,14 +143,14 @@ float4 atmosphereScatteringGround(float3 vpos, float3 cameraPos)
 	float3 v3Start = cameraPos + v3Ray * fNear;
 	fFar -= fNear;
 	float fDepth = exp((InnerRadius - OuterRadius) * fInvScaleDepth);
-	float fCameraAngle = dot(-v3Ray, vpos);
 	float fLightAngle = dot(LightPos, vpos);
-	float fCameraScale = scale(fCameraAngle);
+	//fLightAngle = (fLightAngle > 0 ? fLightAngle : lerp(0.0, -0.25, cos(Pi*0.5 + fLightAngle * Pi*0.5))); // negative attenuation wrap
+	//float fCameraAngle = dot(-v3Ray, vpos); // simplified: removed camera angle from the equation
+	float fCameraScale = 0.0;// scale(fCameraAngle);
 	float fLightScale = scale(fLightAngle);
-	float fCameraOffset = fDepth*fCameraScale;
+	float fCameraOffset = fDepth * fCameraScale;
 	float fTemp = (fLightScale + fCameraScale);
 	// Initialize the scattering loop variables
-	//gl_FrontColor = vec4(0.0, 0.0, 0.0, 0.0);
 	//float fSampleLength = fFar / fSamples;
 	float fSampleLength = fFar * NumSamplesInv;
 	float fScaledLength = fSampleLength * Scale;
@@ -168,7 +169,6 @@ float4 atmosphereScatteringGround(float3 vpos, float3 cameraPos)
 		v3SamplePoint += v3SampleRay;
 	}
 	float3 c0 = v3FrontColor * (WavelengthInv * KrESun + KmESun);
-	float3 c1 = v3Attenuate;
-	float3 PlanetColor = float3(0.25, 0.25, 0.25);
-	return float4(c0 * 0.5 + c1 * 0.5, 1);
+	float3 c1 = max(ESun * 0.0025, v3Attenuate);
+	return float4(1.0 - exp(-Exposure * (c0 + c1 * surfLight)), 1.0);
 }
