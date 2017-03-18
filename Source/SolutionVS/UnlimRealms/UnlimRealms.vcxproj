@@ -271,6 +271,10 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0_level_9_3</ShaderModel>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </AdditionalIncludeDirectories>
     </FxCompile>
     <FxCompile Include="..\..\UnlimRealms\Isosurface\Isosurface_vs.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
@@ -281,6 +285,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\UnlimRealms\Atmosphere\Atmosphere.hlsli" />
+    <None Include="..\..\UnlimRealms\Atmosphere\AtmosphericScattering.hlsli" />
     <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

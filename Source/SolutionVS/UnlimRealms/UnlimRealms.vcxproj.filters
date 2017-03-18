@@ -299,5 +299,8 @@
     <None Include="..\..\UnlimRealms\Atmosphere\Atmosphere.hlsli">
       <Filter>Atmosphere</Filter>
     </None>
+    <None Include="..\..\UnlimRealms\Atmosphere\AtmosphericScattering.hlsli">
+      <Filter>Atmosphere</Filter>
+    </None>
   </ItemGroup>
 </Project>
