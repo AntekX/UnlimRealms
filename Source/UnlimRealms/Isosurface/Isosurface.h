@@ -289,6 +289,7 @@ namespace UnlimRealms
 			static const ur_uint RootsCount = 6;
 			std::unique_ptr<Node> root[RootsCount];
 			EmptyOctree refinementTree;
+			std::vector<ur_float> refinementDistance;
 			std::multimap<ur_uint, Tetrahedron*> buildQueue;
 			
 			// job(s) data

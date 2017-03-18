@@ -17,15 +17,15 @@ static const float3 SunDirection = float3(1.0, 0.0, 0.0);
 static const float3 WaveLength = float3(0.650, 0.570, 0.475);
 static const float3 WaveLengthInv = 1.0 / pow(WaveLength, 4.0);
 
-static const float OuterRadius = 18.5; // OuterRadius must 2.5% bigger then InnerRadius to make computation work properly
-static const float InnerRadius = 14.5;
+static const float OuterRadius = 1300.0; // OuterRadius must 2.5% bigger then InnerRadius to make computation work properly
+static const float InnerRadius = 1000.0;
 
 static const float Exposure = 1.0;
 static const float ScaleDepth = 0.25;
 static const float ScaleDepthInv = 1.0 / ScaleDepth;
 static const float Scale = 1.0 / (OuterRadius - InnerRadius);
 static const float ScaleOverScaleDepth = Scale / ScaleDepth;
-static const float G = -0.9;
+static const float G = -0.75;
 static const float G2 = G * G;
 static const float Km = 0.0025;
 static const float Kr = 0.0015;
@@ -35,12 +35,8 @@ static const float3 ESun = 100.0 * SunLight / (dot(SunLight, 1.0) / 3.0);
 static const float3 KrESun = Kr * ESun;
 static const float3 KmESun = Km * ESun;
 
+#define LIGHT_WRAP 1
 
-struct Scattering
-{
-	float3 color;
-	float3 secondaryColor;
-};
 
 float scale(float fCos)
 {
@@ -81,7 +77,12 @@ float4 atmosphericScatteringSky(const float3 vpos, const float3 cameraPos)
 	{
 		float height = length(samplePoint);
 		float depth = exp(ScaleOverScaleDepth * (InnerRadius - height));
+		#if LIGHT_WRAP
+		float lightWrap = 2.0;
+		float lightAngle = ((dot(-SunDirection, samplePoint) + lightWrap) / (1.0 + lightWrap)) / height;
+		#else
 		float lightAngle = dot(-SunDirection, samplePoint) / height;
+		#endif
 		//float cameraAngle = dot(ray, samplePoint) / height;
 		//float scatter = (startOffset + depth * (scale(lightAngle) - scale(cameraAngle)));
 		float scatter = depth * scale(lightAngle); // simplified scatter
@@ -155,7 +156,9 @@ float4 atmosphericScatteringSurface(float3 vpos, float3 cameraPos, float3 surfLi
 	fFar -= fNear;
 	float fDepth = exp((InnerRadius - OuterRadius) * fInvScaleDepth);
 	float fLightAngle = dot(-SunDirection, vpos);
-	//fLightAngle = (fLightAngle > 0 ? fLightAngle : lerp(0.0, -0.25, cos(Pi*0.5 + fLightAngle * Pi*0.5))); // negative attenuation wrap
+	#if LIGHT_WRAP
+	fLightAngle = (fLightAngle > 0 ? fLightAngle : lerp(0.0, -0.25, cos(Pi*0.5 + fLightAngle * Pi*0.5))); // negative attenuation wrap
+	#endif
 	//float fCameraAngle = dot(-v3Ray, vpos); // simplified: removed camera angle from the equation
 	float fCameraScale = 0.0;// scale(fCameraAngle);
 	float fLightScale = scale(fLightAngle);

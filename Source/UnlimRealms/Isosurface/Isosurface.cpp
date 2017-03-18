@@ -390,9 +390,9 @@ namespace UnlimRealms
 			for (auto &octave : params.octaves)
 			{
 				ur_float val = (ur_float)noise.Noise(
-					ur_double(p_point->x * octave.freq),
-					ur_double(p_point->y * octave.freq),
-					ur_double(p_point->z * octave.freq));
+					ur_double(p_point->x / radius * octave.freq),
+					ur_double(p_point->y / radius * octave.freq),
+					ur_double(p_point->z / radius * octave.freq));
 				val *= 2.0f;
 				val = std::max(octave.clamp_min, val);
 				val = std::min(octave.clamp_max, val);
@@ -745,6 +745,21 @@ namespace UnlimRealms
 		if (ur_null == this->refinementTree.GetRoot())
 		{
 			this->refinementTree.Init(bbox);
+			ur_float nodeSize = (bbox.Max - bbox.Min).Length();
+			ur_float cellSize = (nodeSize / (this->desc.LatticeResolution.GetMaxValue() * 2));
+			ur_uint levels = 0;
+			while (cellSize > this->desc.CellSize)
+			{
+				cellSize *= 0.5;
+				++levels;
+			}
+			ur_float levelDistance = this->desc.DetailLevelDistance;
+			this->refinementDistance.resize(levels);
+			for (ur_uint i = levels; i > 0; --i)
+			{
+				this->refinementDistance[i - 1] = levelDistance;
+				levelDistance += levelDistance * 2.0f;
+			}
 		}
 
 		if (this->freezeUpdate)
@@ -874,6 +889,7 @@ namespace UnlimRealms
 		if (ur_null == node)
 			return;
 
+#if 1
 		ur_float nodeSize = (node->GetBBox().Max - node->GetBBox().Min).Length();
 		bool doSplit = (nodeSize / (this->desc.LatticeResolution.GetMaxValue() * 2) > this->desc.CellSize);
 		if (doSplit)
@@ -881,6 +897,13 @@ namespace UnlimRealms
 			ur_float refinementDistance = (node->GetBBox().Max - node->GetBBox().Min).Length() * 0.5f;
 			doSplit = (node->GetBBox().Distance(refinementPoint) < refinementDistance);
 		}
+#else
+		bool doSplit = (node->GetLevel() < this->refinementDistance.size());
+		if (doSplit)
+		{
+			doSplit = (node->GetBBox().Distance(refinementPoint) < this->refinementDistance[node->GetLevel()]);
+		}
+#endif
 
 		if (doSplit)
 		{
@@ -1813,7 +1836,7 @@ namespace UnlimRealms
 			this->gfxObjects.wireframeState->PixelShader = this->gfxObjects.PSDbg.get();
 			GfxRenderState gfxRS = this->gfxObjects.pipelineState->GetRenderState();
 			gfxRS.RasterizerState.FillMode = GfxFillMode::Wireframe;
-			gfxRS.RasterizerState.DepthBias = -100;
+			gfxRS.RasterizerState.DepthBias = -10;
 			res = this->gfxObjects.wireframeState->SetRenderState(gfxRS);
 		}
 		if (Failed(res))

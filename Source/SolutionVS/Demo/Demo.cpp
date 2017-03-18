@@ -78,8 +78,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	}
 
 	// demo isosurface
-	ur_float surfaceRadiusMin = 14.5f;
-	ur_float surfaceRadiusMax = 16.0f;
+	ur_float surfaceRadiusMin = 1000.0f;
+	ur_float surfaceRadiusMax = 1100.0f;
 	std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
 	{
 		ur_float r = surfaceRadiusMax;
@@ -97,9 +97,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		generateParams.radiusMin = surfaceRadiusMin;
 		generateParams.radiusMax = surfaceRadiusMax;
 		generateParams.octaves.assign({
-			{ 0.875f, 0.50f, -1.0f, 0.5f },
-			{ 0.345f, 2.00f, -1.0f, 0.0f },
-			{ 0.035f, 8.00f, -1.0f, 0.25f },
+			{ 0.875f, 7.5f, -1.0f, 0.5f },
+			{ 0.345f, 30.0f, -1.0f, 0.1f },
+			{ 0.035f, 120.0f, -1.0f, 1.0f },
 		});
 
 		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),
@@ -107,9 +107,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 #endif
 
 		Isosurface::HybridCubes::Desc desc;
-		desc.CellSize = 0.025f;
+		desc.CellSize = 2.0f;
 		desc.LatticeResolution = 10;
-		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x;
+		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x * 1.0f;
 		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
 
 		isosurface->Init(std::move(dataVolume), std::move(presentation));
@@ -117,7 +117,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	// demo atmosphere
 	std::unique_ptr<Atmosphere> atmosphere(new Atmosphere(realm));
-	atmosphere->Init(surfaceRadiusMin + (surfaceRadiusMax - surfaceRadiusMin) * 2.0f);
+	atmosphere->Init(surfaceRadiusMin + (surfaceRadiusMax - surfaceRadiusMin) * 3.0f);
 
 	// demo camera
 	Camera camera(realm);
@@ -155,7 +155,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		
 		// update camera control speed depending on the distance to isosurface
 		ur_float surfDist = (camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length();
-		cameraControl.SetSpeed(std::max(0.1f, (surfDist - surfaceRadiusMin) * 0.1f));
+		cameraControl.SetSpeed(std::max(0.1f, (surfDist - surfaceRadiusMin) * 0.5f));
 
 		{ // use context to draw
 			gfxContext->Begin();
