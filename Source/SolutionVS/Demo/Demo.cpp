@@ -117,7 +117,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	// demo atmosphere
 	std::unique_ptr<Atmosphere> atmosphere(new Atmosphere(realm));
-	atmosphere->Init(surfaceRadiusMin + (surfaceRadiusMax - surfaceRadiusMin) * 3.0f);
+	{
+		Atmosphere::Desc desc = Atmosphere::Desc::Default;
+		desc.InnerRadius = surfaceRadiusMin;
+		desc.OuterRadius = surfaceRadiusMin + (surfaceRadiusMax - surfaceRadiusMin) * 3.0f;
+		atmosphere->Init(desc);
+	}
 
 	// demo camera
 	Camera camera(realm);
@@ -167,7 +172,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 				true, 0);
 
 			// draw isosurface
-			isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
+			isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
 			atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
 
 			// draw generic primitives

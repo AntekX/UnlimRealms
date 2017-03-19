@@ -20,19 +20,32 @@ namespace UnlimRealms
 	{
 	public:
 
+		struct UR_DECL Desc
+		{
+			ur_float InnerRadius;
+			ur_float OuterRadius;
+			ur_float ScaleDepth;
+			ur_float G;
+			ur_float Km;
+			ur_float Kr;
+			static const Desc Default;
+		};
+
 		Atmosphere(Realm &realm);
 
 		virtual ~Atmosphere();
 
-		Result Init(ur_float radius);
+		Result Init(const Desc &desc);
 
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
+
+		inline const Desc& GetDesc() const { return this->desc; }
 
 	protected:
 
 		Result CreateGfxObjects();
 
-		Result CreateMesh(ur_float radius);
+		Result CreateMesh();
 
 		struct GfxObjects
 		{
@@ -47,10 +60,11 @@ namespace UnlimRealms
 			std::unique_ptr<GfxBuffer> IB;
 		} gfxObjects;
 
-		struct CommonCB
+		struct alignas(16) CommonCB
 		{
-			ur_float4x4 viewProj;
-			ur_float4 cameraPos;
+			ur_float4x4 ViewProj;
+			ur_float4 CameraPos;
+			Desc Params;
 		};
 
 		struct Vertex
@@ -59,6 +73,8 @@ namespace UnlimRealms
 		};
 
 		typedef ur_uint16 Index;
+
+		Desc desc;
 	};
 
 } // end namespace UnlimRealms

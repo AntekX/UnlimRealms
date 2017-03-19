@@ -11,6 +11,9 @@
 #include "Sys/JobSystem.h"
 #include "Gfx/GfxSystem.h"
 #include "GenericRender/GenericRender.h"
+#include "Atmosphere/Atmosphere.h"
+// TEMP: referencing Atmosphere class here for atmosperic scattering rendering test
+// TODO: isosurface shoukd provide basic rendering only, all advance d lighting stuff should be a part of a "VoxelPlanet" class
 
 namespace UnlimRealms
 {
@@ -157,7 +160,7 @@ namespace UnlimRealms
 		{
 		public:
 
-			struct Desc
+			struct UR_DECL Desc
 			{
 				ur_float CellSize; // expected lattice cell size at the highest LoD
 				ur_uint3 LatticeResolution; // hexahedron lattice dimensions (min 2x2x2)
@@ -320,7 +323,7 @@ namespace UnlimRealms
 
 		Result Update();
 
-		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
+		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere);
 
 		void ShowImgui();
 
@@ -343,10 +346,11 @@ namespace UnlimRealms
 			std::unique_ptr<GfxPipelineState> wireframeState;
 		} gfxObjects;
 
-		struct CommonCB
+		struct alignas(16) CommonCB
 		{
-			ur_float4x4 viewProj;
-			ur_float4 cameraPos;
+			ur_float4x4 ViewProj;
+			ur_float4 CameraPos;
+			Atmosphere::Desc AtmoParams;
 		};
 
 		struct Vertex

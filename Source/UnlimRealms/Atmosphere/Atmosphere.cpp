@@ -21,6 +21,15 @@ namespace UnlimRealms
 	// Atmosphere
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	const Atmosphere::Desc Atmosphere::Desc::Default = {
+		1.0f,		// InnerRadius
+		1.025f,		// OuterRadius
+		0.25f,		// ScaleDepth
+		-0.90f,		// G
+		0.0025f,	// Km
+		0.0015f,	// Kr
+	};
+
 	Atmosphere::Atmosphere(Realm &realm) :
 		RealmEntity(realm)
 	{
@@ -30,15 +39,17 @@ namespace UnlimRealms
 	{
 	}
 
-	Result Atmosphere::Init(ur_float radius)
+	Result Atmosphere::Init(const Desc &desc)
 	{
 		Result res(Success);
+
+		this->desc = desc;
 
 		res = this->CreateGfxObjects();
 
 		if (Succeeded(res))
 		{
-			res = this->CreateMesh(radius);
+			res = this->CreateMesh();
 		}
 
 		return res;
@@ -105,7 +116,7 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result Atmosphere::CreateMesh(ur_float radius)
+	Result Atmosphere::CreateMesh()
 	{
 		Result res = Result(Success);
 
@@ -117,11 +128,11 @@ namespace UnlimRealms
 		for (ur_uint iy = 0; iy < gridDetail; ++iy)
 		{
 			ay = ur_float(iy) / (gridDetail - 1) * MathConst<float>::Pi - MathConst<float>::PiHalf;
-			y = radius * sin(ay);
+			y = this->desc.OuterRadius * sin(ay);
 			for (ur_uint ix = 0; ix < gridDetail; ++ix, ++pv)
 			{
 				ax = ur_float(ix) / gridDetail * MathConst<float>::Pi * 2.0f;
-				r = radius * cos(ay);
+				r = this->desc.OuterRadius * cos(ay);
 				pv->pos.y = y;
 				pv->pos.x = cos(ax) * r;
 				pv->pos.z = sin(ax) * r;
@@ -180,8 +191,9 @@ namespace UnlimRealms
 		
 		// constants
 		CommonCB cb;
-		cb.viewProj = viewProj;
-		cb.cameraPos = cameraPos;
+		cb.ViewProj = viewProj;
+		cb.CameraPos = cameraPos;
+		cb.Params = this->desc;
 		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
 		gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 		gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);

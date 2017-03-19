@@ -6,9 +6,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "Atmosphere.hlsli"
-#include "AtmosphericScattering.hlsli"
 
 float4 main(PS_INPUT input) : SV_TARGET
 {
-	return atmosphericScatteringSky(input.wpos.xyz, CameraPos.xyz);
+	return atmosphericScatteringSky(Atmosphere, input.wpos.xyz, CameraPos.xyz);
 }

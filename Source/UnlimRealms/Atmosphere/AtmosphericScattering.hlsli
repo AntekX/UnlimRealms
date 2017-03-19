@@ -9,43 +9,47 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#define LIGHT_WRAP 1
 static const int NumSamples = 4;
 static const float NumSamplesInv = 1.0 / NumSamples;
 static const float Pi = 3.14159;
+static const float SunIntensity = 100.0;
 static const float3 SunLight = float3(1.0, 1.0, 1.0);
 static const float3 SunDirection = float3(1.0, 0.0, 0.0);
 static const float3 WaveLength = float3(0.650, 0.570, 0.475);
 static const float3 WaveLengthInv = 1.0 / pow(WaveLength, 4.0);
-
-static const float OuterRadius = 1300.0; // OuterRadius must 2.5% bigger then InnerRadius to make computation work properly
-static const float InnerRadius = 1000.0;
-
 static const float Exposure = 1.0;
-static const float ScaleDepth = 0.25;
-static const float ScaleDepthInv = 1.0 / ScaleDepth;
-static const float Scale = 1.0 / (OuterRadius - InnerRadius);
-static const float ScaleOverScaleDepth = Scale / ScaleDepth;
-static const float G = -0.75;
-static const float G2 = G * G;
-static const float Km = 0.0025;
-static const float Kr = 0.0015;
-static const float3 Kr4PI = Kr * 4.0 * Pi;
-static const float3 Km4PI = Km * 4.0 * Pi;
-static const float3 ESun = 100.0 * SunLight / (dot(SunLight, 1.0) / 3.0);
-static const float3 KrESun = Kr * ESun;
-static const float3 KmESun = Km * ESun;
 
-#define LIGHT_WRAP 1
+struct AtmosphereDesc
+{
+	float InnerRadius;
+	float OuterRadius;
+	float ScaleDepth;
+	float G;
+	float Km;
+	float Kr;
+};
 
 
-float scale(float fCos)
+float scale(float scaleDepth, float fCos)
 {
 	float x = 1.0 - fCos;
-	return ScaleDepth * exp(-0.00287 + x*(0.459 + x*(3.83 + x*(-6.80 + x*5.25))));
+	return scaleDepth * exp(-0.00287 + x*(0.459 + x*(3.83 + x*(-6.80 + x*5.25))));
 }
 
-float4 atmosphericScatteringSky(const float3 vpos, const float3 cameraPos)
+float4 atmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const float3 cameraPos)
 {
+	// precomputed derivatives
+	const float ScaleDepthInv = 1.0f / a.ScaleDepth;
+	const float Scale = 1.0f / (a.OuterRadius - a.InnerRadius);
+	const float ScaleOverScaleDepth = Scale / a.ScaleDepth;
+	const float G2 = a.G * a.G;
+	const float Kr4PI = a.Kr * Pi * 4.0f;
+	const float Km4PI = a.Km * Pi * 4.0f;
+	const float3 ESun = SunIntensity * SunLight / (dot(SunLight, 1.0) / 3.0);
+	const float3 KrESun = a.Kr * ESun;
+	const float3 KmESun = a.Km * ESun;
+
 	// Get the ray from the camera to the vertex and its length (which is the far point of the ray passing through the atmosphere) 
 	float3 ray = vpos - cameraPos;
 	float farDist = length(ray);
@@ -54,16 +58,16 @@ float4 atmosphericScatteringSky(const float3 vpos, const float3 cameraPos)
 	// Calculate the closest intersection of the ray with the outer atmosphere (which is the near point of the ray passing through the atmosphere)	
 	float cameraHeight = length(cameraPos);
 	float B = 2.0 * dot(cameraPos, ray);
-	float C = cameraHeight * cameraHeight - OuterRadius * OuterRadius;
+	float C = cameraHeight * cameraHeight - a.OuterRadius * a.OuterRadius;
 	float Det = max(0.0, B*B - 4.0 * C);
 	float nearDist = max(0.0, 0.5 * (-B - sqrt(Det)));
 
 	// Calculate the ray's starting position, then calculate its scattering offset	
 	float3 rayStart = cameraPos + ray * nearDist;
 	farDist -= nearDist;
-	float startAngle = dot(ray, rayStart) / OuterRadius;
-	float startDepth = exp(-1.0 / ScaleDepth);
-	float startOffset = startDepth * scale(startAngle);
+	float startAngle = dot(ray, rayStart) / a.OuterRadius;
+	float startDepth = exp(-1.0 / a.ScaleDepth);
+	float startOffset = startDepth * scale(a.ScaleDepth, startAngle);
 
 	// Initialize the scattering loop variables		
 	float sampleLength = farDist * NumSamplesInv;
@@ -76,7 +80,7 @@ float4 atmosphericScatteringSky(const float3 vpos, const float3 cameraPos)
 	[unroll] for (int i = 0; i < NumSamples; ++i)
 	{
 		float height = length(samplePoint);
-		float depth = exp(ScaleOverScaleDepth * (InnerRadius - height));
+		float depth = exp(ScaleOverScaleDepth * (a.InnerRadius - height));
 		#if LIGHT_WRAP
 		float lightWrap = 2.0;
 		float lightAngle = ((dot(-SunDirection, samplePoint) + lightWrap) / (1.0 + lightWrap)) / height;
@@ -85,7 +89,7 @@ float4 atmosphericScatteringSky(const float3 vpos, const float3 cameraPos)
 		#endif
 		//float cameraAngle = dot(ray, samplePoint) / height;
 		//float scatter = (startOffset + depth * (scale(lightAngle) - scale(cameraAngle)));
-		float scatter = depth * scale(lightAngle); // simplified scatter
+		float scatter = depth * scale(a.ScaleDepth, lightAngle); // simplified scatter
 		float3 attenuate = exp(-scatter * (WaveLengthInv * Kr4PI + Km4PI));
 		frontColor += attenuate * (depth * scaledLength);
 		samplePoint += sampleRay;
@@ -99,7 +103,7 @@ float4 atmosphericScatteringSky(const float3 vpos, const float3 cameraPos)
 	float3 vecToCamera = cameraPos - vpos;
 	float fCos = dot(-SunDirection, vecToCamera) / length(vecToCamera);
 	float RayleighPhase = 0.75 * (1.0 + fCos*fCos);
-	float MiePhase = 1.5 * ((1.0 - G2) / (2.0 + G2)) * (1.0 + fCos*fCos) / pow(max(0.0, 1.0 + G2 - 2.0*G*fCos), 1.5);
+	float MiePhase = 1.5 * ((1.0 - G2) / (2.0 + G2)) * (1.0 + fCos*fCos) / pow(max(0.0, 1.0 + G2 - 2.0*a.G*fCos), 1.5);
 	output.rgb = (RayleighPhase * color + MiePhase * secondaryColor);
 	output.rgb = 1.0 - exp(-Exposure * output.rgb);
 	//output.a = output.b;
@@ -136,15 +140,23 @@ float getFarIntersection(float3 v3Pos, float3 v3Ray, float fDistance2, float fRa
 	return 0.5 * (-B + sqrt(fDet));
 }
 
-float4 atmosphericScatteringSurface(float3 vpos, float3 cameraPos, float3 surfLight)
+float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, float3 vpos, float3 cameraPos)
 {
-	float fSamples = 5.0f;
-	float fOuterRadius2 = OuterRadius * OuterRadius;
-	float fInvScaleDepth = 1.0f / ScaleDepth;  // 1 / fScaleDepth
-	float fCameraHeight = length(cameraPos);  // The camera's current height
-	float fCameraHeight2 = fCameraHeight * fCameraHeight;  // fCameraHeight^2
+	// precomputed derivatives
+	const float ScaleDepthInv = 1.0f / a.ScaleDepth;
+	const float Scale = 1.0f / (a.OuterRadius - a.InnerRadius);
+	const float ScaleOverScaleDepth = Scale / a.ScaleDepth;
+	const float G2 = a.G * a.G;
+	const float Kr4PI = a.Kr * Pi * 4.0f;
+	const float Km4PI = a.Km * Pi * 4.0f;
+	const float3 ESun = SunIntensity * SunLight / (dot(SunLight, 1.0) / 3.0);
+	const float3 KrESun = a.Kr * ESun;
+	const float3 KmESun = a.Km * ESun;
+	const float fOuterRadius2 = a.OuterRadius * a.OuterRadius;
+	const float fCameraHeight = length(cameraPos);
+	const float fCameraHeight2 = fCameraHeight * fCameraHeight;
 
-														   // Get the ray from the camera to the vertex and its length (which is the far point of the ray passing through the atmosphere)
+	// Get the ray from the camera to the vertex and its length (which is the far point of the ray passing through the atmosphere)
 	float3 v3Ray = vpos - cameraPos;
 	vpos = normalize(vpos);
 	float fFar = length(v3Ray);
@@ -154,18 +166,17 @@ float4 atmosphericScatteringSurface(float3 vpos, float3 cameraPos, float3 surfLi
 	// Calculate the ray's starting position, then calculate its scattering offset
 	float3 v3Start = cameraPos + v3Ray * fNear;
 	fFar -= fNear;
-	float fDepth = exp((InnerRadius - OuterRadius) * fInvScaleDepth);
+	float fDepth = exp((a.InnerRadius - a.OuterRadius) * ScaleDepthInv);
 	float fLightAngle = dot(-SunDirection, vpos);
 	#if LIGHT_WRAP
 	fLightAngle = (fLightAngle > 0 ? fLightAngle : lerp(0.0, -0.25, cos(Pi*0.5 + fLightAngle * Pi*0.5))); // negative attenuation wrap
 	#endif
 	//float fCameraAngle = dot(-v3Ray, vpos); // simplified: removed camera angle from the equation
 	float fCameraScale = 0.0;// scale(fCameraAngle);
-	float fLightScale = scale(fLightAngle);
+	float fLightScale = scale(a.ScaleDepth, fLightAngle);
 	float fCameraOffset = fDepth * fCameraScale;
 	float fTemp = (fLightScale + fCameraScale);
 	// Initialize the scattering loop variables
-	//float fSampleLength = fFar / fSamples;
 	float fSampleLength = fFar * NumSamplesInv;
 	float fScaledLength = fSampleLength * Scale;
 	float3 v3SampleRay = v3Ray * fSampleLength;
@@ -176,7 +187,7 @@ float4 atmosphericScatteringSurface(float3 vpos, float3 cameraPos, float3 surfLi
 	for (int i = 0; i<NumSamples; i++)
 	{
 		float fHeight = length(v3SamplePoint);
-		float fDepth = exp(ScaleOverScaleDepth * (InnerRadius - fHeight));
+		float fDepth = exp(ScaleOverScaleDepth * (a.InnerRadius - fHeight));
 		float fScatter = fDepth * fTemp - fCameraOffset;
 		v3Attenuate = exp(-fScatter * (WaveLengthInv * Kr4PI + Km4PI));
 		v3FrontColor += v3Attenuate * (fDepth * fScaledLength);

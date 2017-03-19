@@ -6,7 +6,6 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "Isosurface.hlsli"
-#include "../Atmosphere/AtmosphericScattering.hlsli"
 
 float4 main(PS_INPUT input) : SV_Target
 {
@@ -42,7 +41,7 @@ float4 main(PS_INPUT input) : SV_Target
 	float fogDensity = clamp((input.wpos.w - fogBegin) / fogRange, 0.0, fogDensityMax);
 	color.xyz = lerp(color.xyz, fogColor, fogDensity);
 #else
-	color.xyz = atmosphericScatteringSurface(input.wpos.xyz, CameraPos.xyz, color.xyz).xyz;
+	color.xyz = atmosphericScatteringSurface(Atmosphere, color.xyz, input.wpos.xyz, CameraPos.xyz).xyz;
 #endif
 
 	return color;
