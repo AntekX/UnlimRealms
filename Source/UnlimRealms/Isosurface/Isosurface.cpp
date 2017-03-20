@@ -889,7 +889,7 @@ namespace UnlimRealms
 		if (ur_null == node)
 			return;
 
-#if 1
+#if 0
 		ur_float nodeSize = (node->GetBBox().Max - node->GetBBox().Min).Length();
 		bool doSplit = (nodeSize / (this->desc.LatticeResolution.GetMaxValue() * 2) > this->desc.CellSize);
 		if (doSplit)
