@@ -61,15 +61,14 @@ namespace UnlimRealms
 
 		struct UR_DECL Context
 		{
-			JobSystem &jobSystem;
 			DataPtr data;
 			ur_bool &interrupt;
 			std::atomic<ur_float> &progress;
 			std::atomic<Result::UID> &resultCode;
 
-			Context(JobSystem &jobSystem, DataPtr &data,
+			Context(DataPtr &data,
 				ur_bool &interrupt, std::atomic<ur_float> &progress, std::atomic<Result::UID> &resultCode) :
-				jobSystem(jobSystem), data(data), interrupt(interrupt), progress(progress), resultCode(resultCode)
+				data(data), interrupt(interrupt), progress(progress), resultCode(resultCode)
 			{
 			}
 		};

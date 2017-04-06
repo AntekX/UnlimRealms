@@ -825,9 +825,12 @@ namespace UnlimRealms
 				this->jobUpdate = jobSystem.Add(Job::DataPtr(this), [](Job::Context& ctx) -> void {
 
 					Result result = Success;
+
+					// reinterpret data ptr
+					HybridCubes *presentation = reinterpret_cast<HybridCubes*>(ctx.data);
+					auto &jobSystem = presentation->isosurface.GetRealm().GetJobSystem();
 					
 					// reset presentation
-					HybridCubes *presentation = reinterpret_cast<HybridCubes*>(ctx.data);
 					presentation->buildQueue.clear();
 					memset(&presentation->statsBack, 0, sizeof(presentation->statsBack));
 
@@ -856,7 +859,7 @@ namespace UnlimRealms
 							auto &buildCtx = presentation->jobBuildCtx.back();
 
 							// mesh building job
-							presentation->jobBuild.push_back(ctx.jobSystem.Add(Job::DataPtr(&buildCtx), [](Job::Context& ctx) -> void {
+							presentation->jobBuild.push_back(jobSystem.Add(Job::DataPtr(&buildCtx), [](Job::Context& ctx) -> void {
 
 								Result result = Success;
 
@@ -889,7 +892,7 @@ namespace UnlimRealms
 		if (ur_null == node)
 			return;
 
-#if 0
+#if 1
 		ur_float nodeSize = (node->GetBBox().Max - node->GetBBox().Min).Length();
 		bool doSplit = (nodeSize / (this->desc.LatticeResolution.GetMaxValue() * 2) > this->desc.CellSize);
 		if (doSplit)

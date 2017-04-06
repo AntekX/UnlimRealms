@@ -95,8 +95,6 @@ namespace UnlimRealms
 
 		typedef std::unordered_map<Component::UID, std::unique_ptr<Component>> ComponentArray;
 
-		// note: OOD implementation
-		// can be rewriten to DOD if required
 		ComponentArray components;
 	};
 
