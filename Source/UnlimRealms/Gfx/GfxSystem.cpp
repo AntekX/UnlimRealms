@@ -20,6 +20,7 @@ namespace UnlimRealms
 	GfxSystem::GfxSystem(Realm &realm) :
 		RealmEntity(realm)
 	{
+		this->gfxAdapterIdx = 0;
 		LogNote("GfxSystem: created");
 	}
 

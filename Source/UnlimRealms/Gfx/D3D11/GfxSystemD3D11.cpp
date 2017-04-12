@@ -182,7 +182,7 @@ namespace UnlimRealms
 
 		if (ur_null == pAdapter)
 		{
-			this->gfxAdapterIdx = (this->dxgiAdapters.size() > 1 ? 1 : 0);
+			//this->gfxAdapterIdx = (this->dxgiAdapters.size() > 1 ? 1 : 0);
 			pAdapter = *(this->dxgiAdapters.begin() + this->gfxAdapterIdx);
 		}
 
