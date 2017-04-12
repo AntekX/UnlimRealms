@@ -17,7 +17,7 @@ namespace UnlimRealms
 	{
 		this->shutdown = false;
 		this->jobCount = 0;
-		threads.resize(std::thread::hardware_concurrency());
+		threads.resize(std::max(int(std::thread::hardware_concurrency()) - 1, 1));
 		for (auto &thread : this->threads)
 		{
 			thread.reset( new std::thread(ThreadFunction, this) );

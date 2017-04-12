@@ -440,4 +440,20 @@ namespace UnlimRealms
 		ur_uint InstanceStepRate;
 	};
 
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Gfx adapter description
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GfxAdapterDesc
+	{
+		std::wstring description;
+		ur_uint vendorId;
+		ur_uint deviceId;
+		ur_uint subSysId;
+		ur_uint revision;
+		ur_size dedicatedVideoMemory;
+		ur_size dedicatedSystemMemory;
+		ur_size sharedSystemMemory;
+	};
+
 } // end namespace UnlimRealms

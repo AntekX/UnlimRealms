@@ -197,6 +197,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
 			ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
 			ImGui::Begin("DEMO", ur_null, 0);
+			ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().description.c_str());
 			cameraControl.ShowImgui();
 			isosurface->ShowImgui();
 			ImGui::End();

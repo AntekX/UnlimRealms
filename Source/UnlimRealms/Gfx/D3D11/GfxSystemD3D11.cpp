@@ -145,13 +145,16 @@ namespace UnlimRealms
 			return ResultError(Failure, "GfxSystemD3D11: failed to create DXGI factory");
 
 		UINT adapterId = 0;
+		DXGI_ADAPTER_DESC1 dxgiAdapterDesc;
 		do
 		{
 			shared_ref<IDXGIAdapter1> dxgiAdapter;
 			hr = this->dxgiFactory->EnumAdapters1(adapterId++, dxgiAdapter);
 			if (SUCCEEDED(hr))
 			{
+				dxgiAdapter->GetDesc1(&dxgiAdapterDesc);
 				this->dxgiAdapters.push_back(dxgiAdapter);
+				this->gfxAdapters.push_back(DXGIAdapterDescToGfx(dxgiAdapterDesc));
 			}
 		} while (SUCCEEDED(hr));
 
@@ -179,7 +182,8 @@ namespace UnlimRealms
 
 		if (ur_null == pAdapter)
 		{
-			pAdapter = (this->dxgiAdapters.size() == 1 ? *this->dxgiAdapters.begin() : *(this->dxgiAdapters.begin() + 1));
+			this->gfxAdapterIdx = (this->dxgiAdapters.size() > 1 ? 1 : 0);
+			pAdapter = *(this->dxgiAdapters.begin() + this->gfxAdapterIdx);
 		}
 
 		HRESULT hr = D3D11CreateDevice(pAdapter, driverType, ur_null, flags, featureLevels, levelsCount, D3D11_SDK_VERSION,
@@ -192,6 +196,7 @@ namespace UnlimRealms
 
 	void GfxSystemD3D11::ReleaseDXGIObjects()
 	{
+		this->gfxAdapters.clear();
 		this->dxgiAdapters.clear();
 		this->dxgiFactory.reset(ur_null);
 	}
@@ -1409,6 +1414,20 @@ namespace UnlimRealms
 		desc.FrontFace = GfxDepthStencilOpDescToD3D11(state.FrontFace);
 		desc.BackFace = GfxDepthStencilOpDescToD3D11(state.BackFace);
 		return desc;
+	}
+
+	GfxAdapterDesc DXGIAdapterDescToGfx(const DXGI_ADAPTER_DESC1 &desc)
+	{
+		GfxAdapterDesc gfxDesc;
+		gfxDesc.description = desc.Description;
+		gfxDesc.vendorId = (ur_uint)desc.VendorId;
+		gfxDesc.deviceId = (ur_uint)desc.DeviceId;
+		gfxDesc.subSysId = (ur_uint)desc.SubSysId;
+		gfxDesc.revision = (ur_uint)desc.Revision;
+		gfxDesc.dedicatedVideoMemory = (ur_size)desc.DedicatedVideoMemory;
+		gfxDesc.dedicatedSystemMemory = (ur_size)desc.DedicatedSystemMemory;
+		gfxDesc.sharedSystemMemory = (ur_size)desc.SharedSystemMemory;
+		return gfxDesc;
 	}
 
 } // end namespace UnlimRealms

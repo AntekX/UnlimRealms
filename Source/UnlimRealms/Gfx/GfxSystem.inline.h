@@ -9,6 +9,26 @@
 
 namespace UnlimRealms
 {
+	
+	inline const ur_uint GfxSystem::GetAdaptersCount() const
+	{
+		return (ur_uint)this->gfxAdapters.size();
+	}
+
+	inline const GfxAdapterDesc& GfxSystem::GetAdapterDesc(ur_uint idx) const
+	{
+		return this->gfxAdapters[idx];
+	}
+
+	inline const GfxAdapterDesc& GfxSystem::GetActiveAdapterDesc() const
+	{
+		return this->gfxAdapters[this->gfxAdapterIdx];
+	}
+
+	inline ur_uint GfxSystem::GetActiveAdapterIdx() const
+	{
+		return this->gfxAdapterIdx;
+	}
 
 	inline GfxSystem& GfxEntity::GetGfxSystem()
 	{

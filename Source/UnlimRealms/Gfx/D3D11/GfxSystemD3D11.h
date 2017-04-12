@@ -546,6 +546,8 @@ namespace UnlimRealms
 
 	extern UR_DECL D3D11_DEPTH_STENCIL_DESC GfxDepthStencilStateToD3D11(const GfxDepthStencilState &state);
 
+	extern UR_DECL GfxAdapterDesc DXGIAdapterDescToGfx(const DXGI_ADAPTER_DESC1 &desc);
+
 } // end namespace UnlimRealms
 
 #include "Gfx/D3D11/GfxSystemD3D11.inline.h"

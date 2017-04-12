@@ -60,6 +60,19 @@ namespace UnlimRealms
 		virtual Result CreateInputLayout(std::unique_ptr<GfxInputLayout> &gfxInputLayout);
 
 		virtual Result CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState);
+
+		inline const ur_uint GetAdaptersCount() const;
+
+		inline const GfxAdapterDesc& GetAdapterDesc(ur_uint idx) const;
+
+		inline const GfxAdapterDesc& GetActiveAdapterDesc() const;
+
+		inline ur_uint GetActiveAdapterIdx() const;
+
+	protected:
+
+		std::vector<GfxAdapterDesc> gfxAdapters;
+		ur_uint gfxAdapterIdx;
 	};
 
 
