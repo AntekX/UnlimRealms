@@ -15,6 +15,7 @@
 #include "Camera/CameraControl.h"
 #include "Isosurface/Isosurface.h"
 #include "Atmosphere/Atmosphere.h"
+#include "Multiverse/Multiverse.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
@@ -136,6 +137,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
 	camera.SetPosition(ur_float3(0.0f, 0.0f, -surfaceRadiusMax * 3.0f));
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
+
+	// multiverse
+	Multiverse *multiverse = ur_null;
+	if (realm.AddComponent<Multiverse>(realm))
+	{
+		multiverse = realm.GetComponent<Multiverse>();
+		// TODO: add a space here
+	}
 
     // Main message loop:
 	realm.GetLog().WriteLine("Entering main message loop");

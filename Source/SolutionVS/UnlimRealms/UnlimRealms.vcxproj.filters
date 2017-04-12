@@ -135,6 +135,9 @@
     <ClInclude Include="..\..\UnlimRealms\Resources\Resources.h">
       <Filter>Resources</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Multiverse\Multiverse.h">
+      <Filter>Multiverse</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -218,6 +221,9 @@
     <ClCompile Include="..\..\UnlimRealms\Resources\Resources.cpp">
       <Filter>Resources</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Multiverse\Multiverse.cpp">
+      <Filter>Multiverse</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Core">
@@ -261,6 +267,9 @@
     </Filter>
     <Filter Include="Resources">
       <UniqueIdentifier>{4afdf8df-8b00-4dc7-b9b9-281c86c3d4b0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Multiverse">
+      <UniqueIdentifier>{2ddd94e3-bd52-49c4-b6ca-28d3ae13be85}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
