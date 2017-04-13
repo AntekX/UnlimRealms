@@ -120,6 +120,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x * 1.0f;
 		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
 
+		dataVolume->Save("test.isd", desc.CellSize, desc.LatticeResolution);
+
 		isosurface->Init(std::move(dataVolume), std::move(presentation));
 	}
 
@@ -139,12 +141,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
 
 	// multiverse
-	Multiverse *multiverse = ur_null;
-	if (realm.AddComponent<Multiverse>(realm))
-	{
-		multiverse = realm.GetComponent<Multiverse>();
-		// TODO: add a space here
-	}
+	//Multiverse *multiverse = ur_null;
+	//Space *space = ur_null;
+	//if (realm.AddComponent<Multiverse>(realm))
+	//{
+	//	multiverse = realm.GetComponent<Multiverse>();
+	//	// TODO: add a space here
+	//}
 
     // Main message loop:
 	realm.GetLog().WriteLine("Entering main message loop");

@@ -294,6 +294,16 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result Isosurface::DataVolume::Save(const std::string &fileName)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result Isosurface::DataVolume::Save(const std::string &fileName, ur_float cellSize, ur_uint3 blockResolution)
+	{
+		return Result(NotImplemented);
+	}
+
 	
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Isosurface::ProceduralGenerator
@@ -402,6 +412,41 @@ namespace UnlimRealms
 		}
 
 		return Result(Success);
+	}
+
+	Result Isosurface::ProceduralGenerator::Save(const std::string &fileName, ur_float cellSize, ur_uint3 blockResolution)
+	{
+		auto &storage = this->isosurface.GetRealm().GetStorage();
+		std::unique_ptr<File> file;
+		Result res = storage.Open(file, fileName, ur_uint(StorageAccess::Binary) | ur_uint(StorageAccess::Append));
+		if (Failed(res))
+			return LogResult(Failure, isosurface.GetRealm().GetLog(), Log::Error,
+				"Isosurface::ProceduralGenerator::Save: failed to open " + fileName);
+
+		// todo: generate and save to file: from coarse level to most refined, block by block
+		
+		BoundingBox bound = this->GetBound();
+		ur_float3 boundSize = bound.Max - bound.Min;
+
+		ur_uint3 volumeResolution(
+			(ur_uint)ceil(boundSize.x / cellSize),
+			(ur_uint)ceil(boundSize.y / cellSize),
+			(ur_uint)ceil(boundSize.z / cellSize));
+
+		ur_float3 volumeCellSize(
+			boundSize.x / volumeResolution.x,
+			boundSize.y / volumeResolution.y,
+			boundSize.z / volumeResolution.z);
+
+		ur_uint3 blocksCount(
+			(ur_uint)ceil(ur_float(volumeResolution.x) / blockResolution.x),
+			(ur_uint)ceil(ur_float(volumeResolution.y) / blockResolution.y),
+			(ur_uint)ceil(ur_float(volumeResolution.z) / blockResolution.z));
+
+		ur_uint levels = (ur_uint)floor(log2(blocksCount.GetMaxValue()) + 1);
+
+
+		return res;
 	}
 
 

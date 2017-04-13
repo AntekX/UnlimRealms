@@ -24,7 +24,7 @@ namespace UnlimRealms
 			return NotInitialized;
 
 		std::unique_ptr<File> file;
-		Result res = realm.GetStorage().Open(resName, ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary), file);
+		Result res = realm.GetStorage().Open(file, resName, ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
 		if (Succeeded(res))
 		{
 			ur_size sizeInBytes = file->GetSize();
@@ -46,7 +46,7 @@ namespace UnlimRealms
 			return NotInitialized;
 
 		std::unique_ptr<File> file;
-		Result res = realm.GetStorage().Open(resName, ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary), file);
+		Result res = realm.GetStorage().Open(file, resName, ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
 		if (Succeeded(res))
 		{
 			ur_size sizeInBytes = file->GetSize();

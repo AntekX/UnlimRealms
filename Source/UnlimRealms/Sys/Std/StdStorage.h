@@ -23,7 +23,7 @@ namespace UnlimRealms
 
 		virtual ~StdStorage();
 
-		virtual Result Open(const std::string &name, const ur_uint accessFlags, std::unique_ptr<File> &file);
+		virtual Result Open(std::unique_ptr<File> &file, const std::string &name, const ur_uint accessFlags);
 
 	protected:
 

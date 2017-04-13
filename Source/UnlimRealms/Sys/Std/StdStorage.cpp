@@ -31,7 +31,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result StdStorage::Open(const std::string &name, const ur_uint accessFlags, std::unique_ptr<File> &file)
+	Result StdStorage::Open(std::unique_ptr<File> &file, const std::string &name, const ur_uint accessFlags)
 	{
 		std::unique_ptr<StdFile> stdFile(new StdFile(*this, name));
 		Result result = stdFile->Open(accessFlags);

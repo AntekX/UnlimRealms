@@ -66,6 +66,10 @@ namespace UnlimRealms
 			// todo: support data modification
 			//virtual Result Write(const ValueType &value);
 
+			virtual Result Save(const std::string &fileName);
+
+			virtual Result Save(const std::string &fileName, ur_float cellSize, ur_uint3 blockResolution);
+
 			inline const BoundingBox& GetBound() const { return this->bound; }
 
 		protected:
@@ -118,6 +122,8 @@ namespace UnlimRealms
 			~ProceduralGenerator();
 
 			virtual Result Read(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox);
+
+			virtual Result Save(const std::string &fileName, ur_float cellSize, ur_uint3 blockResolution);
 
 		private:
 
@@ -284,8 +290,6 @@ namespace UnlimRealms
 			Result RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Node *node);
 
 			Result RenderOctree(GfxContext &gfxContext, GenericRender *genericRender, EmptyOctree::Node *node);
-
-			static void UpdateAsync(HybridCubes *presentation);
 
 
 			Desc desc;

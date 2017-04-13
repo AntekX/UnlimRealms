@@ -35,7 +35,7 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result Storage::Open(const std::string &name, const ur_uint accessFlags, std::unique_ptr<File> &file)
+	Result Storage::Open(std::unique_ptr<File> &file, const std::string &name, const ur_uint accessFlags)
 	{
 		file.reset(new File(*this, name));
 		return Result(Success);

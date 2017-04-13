@@ -12,6 +12,7 @@
 #include "Sys/Log.h"
 #include "Sys/Input.h"
 #include "Sys/Canvas.h"
+#include "Resources/Resources.h"
 
 namespace UnlimRealms
 {
@@ -55,40 +56,12 @@ namespace UnlimRealms
 		ReleaseGfxObjects();
 
 		// VS
-		{
-			std::unique_ptr<File> file;
-			res = this->GetRealm().GetStorage().Open("Imgui_vs.cso", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary), file);
-			if (Succeeded(res))
-			{
-				ur_size sizeInBytes = file->GetSize();
-				std::unique_ptr<ur_byte[]> bytecode(new ur_byte[sizeInBytes]);
-				file->Read(sizeInBytes, bytecode.get());
-				res = this->GetRealm().GetGfxSystem()->CreateVertexShader(this->gfxVS);
-				if (Succeeded(res))
-				{
-					res = this->gfxVS->Initialize(std::move(bytecode), sizeInBytes);
-				}
-			}
-		}
+		res = CreateVertexShaderFromFile(this->GetRealm(), this->gfxVS, "Imgui_vs.cso");
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to initialize VS");
 
 		// PS
-		{
-			std::unique_ptr<File> file;
-			res = this->GetRealm().GetStorage().Open("Imgui_ps.cso", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary), file);
-			if (Succeeded(res))
-			{
-				ur_size sizeInBytes = file->GetSize();
-				std::unique_ptr<ur_byte[]> bytecode(new ur_byte[sizeInBytes]);
-				file->Read(sizeInBytes, bytecode.get());
-				res = this->GetRealm().GetGfxSystem()->CreatePixelShader(this->gfxPS);
-				if (Succeeded(res))
-				{
-					res = this->gfxPS->Initialize(std::move(bytecode), sizeInBytes);
-				}
-			}
-		}
+		res = CreatePixelShaderFromFile(this->GetRealm(), this->gfxPS, "Imgui_ps.cso");
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to initialize PS");
 

@@ -11,6 +11,7 @@
 #include "Sys/Storage.h"
 #include "Sys/Log.h"
 #include "Sys/Canvas.h"
+#include "Resources/Resources.h"
 
 namespace UnlimRealms
 {
@@ -43,40 +44,12 @@ namespace UnlimRealms
 		this->gfxObjects.reset(new GfxObjects());
 
 		// VS
-		{
-			std::unique_ptr<File> file;
-			res = this->GetRealm().GetStorage().Open("Generic_vs.cso", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary), file);
-			if (Succeeded(res))
-			{
-				ur_size sizeInBytes = file->GetSize();
-				std::unique_ptr<ur_byte[]> bytecode(new ur_byte[sizeInBytes]);
-				file->Read(sizeInBytes, bytecode.get());
-				res = this->GetRealm().GetGfxSystem()->CreateVertexShader(this->gfxObjects->VS);
-				if (Succeeded(res))
-				{
-					res = this->gfxObjects->VS->Initialize(std::move(bytecode), sizeInBytes);
-				}
-			}
-		}
+		res = CreateVertexShaderFromFile(this->GetRealm(), this->gfxObjects->VS, "Generic_vs.cso");
 		if (Failed(res))
 			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize VS");
 
 		// PS
-		{
-			std::unique_ptr<File> file;
-			res = this->GetRealm().GetStorage().Open("Generic_ps.cso", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary), file);
-			if (Succeeded(res))
-			{
-				ur_size sizeInBytes = file->GetSize();
-				std::unique_ptr<ur_byte[]> bytecode(new ur_byte[sizeInBytes]);
-				file->Read(sizeInBytes, bytecode.get());
-				res = this->GetRealm().GetGfxSystem()->CreatePixelShader(this->gfxObjects->PS);
-				if (Succeeded(res))
-				{
-					res = this->gfxObjects->PS->Initialize(std::move(bytecode), sizeInBytes);
-				}
-			}
-		}
+		res = CreatePixelShaderFromFile(this->GetRealm(), this->gfxObjects->PS, "Generic_ps.cso");
 		if (Failed(res))
 			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize PS");
 
