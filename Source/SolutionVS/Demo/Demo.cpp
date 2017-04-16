@@ -32,7 +32,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	realm.Initialize();
 
 	// create system canvas
-	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindow, L"Voxel Planet DEMO"));
+	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindow, L"Voxel Planet Demo"));
 	canvas->Initialize( RectI(0, 0, (ur_uint)GetSystemMetrics(SM_CXSCREEN), (ur_uint)GetSystemMetrics(SM_CYSCREEN)) );
 	realm.SetCanvas( std::move(canvas) );
 
@@ -219,14 +219,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			static const ImVec2 imguiDemoWndSize(300.0f, 400.0f);
 			ImGui::SetNextWindowSize(imguiDemoWndSize, ImGuiSetCond_Once);
 			ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
-			ImGui::Begin("DEMO", ur_null, 0);
-			ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().description.c_str());
+			ImGui::Begin("Control Panel");
+			ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().Description.c_str());
 			cameraControl.ShowImgui();
 			isosurface->ShowImgui();
 			ImGui::End();
 
 			// render some demo UI
-			ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+			ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
 			ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
 			ImGui::ShowMetricsWindow();
 			imguiRender->Render(*gfxContext);

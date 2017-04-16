@@ -1419,14 +1419,14 @@ namespace UnlimRealms
 	GfxAdapterDesc DXGIAdapterDescToGfx(const DXGI_ADAPTER_DESC1 &desc)
 	{
 		GfxAdapterDesc gfxDesc;
-		gfxDesc.description = desc.Description;
-		gfxDesc.vendorId = (ur_uint)desc.VendorId;
-		gfxDesc.deviceId = (ur_uint)desc.DeviceId;
-		gfxDesc.subSysId = (ur_uint)desc.SubSysId;
-		gfxDesc.revision = (ur_uint)desc.Revision;
-		gfxDesc.dedicatedVideoMemory = (ur_size)desc.DedicatedVideoMemory;
-		gfxDesc.dedicatedSystemMemory = (ur_size)desc.DedicatedSystemMemory;
-		gfxDesc.sharedSystemMemory = (ur_size)desc.SharedSystemMemory;
+		gfxDesc.Description = desc.Description;
+		gfxDesc.VendorId = (ur_uint)desc.VendorId;
+		gfxDesc.DeviceId = (ur_uint)desc.DeviceId;
+		gfxDesc.SubSysId = (ur_uint)desc.SubSysId;
+		gfxDesc.Revision = (ur_uint)desc.Revision;
+		gfxDesc.DedicatedVideoMemory = (ur_size)desc.DedicatedVideoMemory;
+		gfxDesc.DedicatedSystemMemory = (ur_size)desc.DedicatedSystemMemory;
+		gfxDesc.SharedSystemMemory = (ur_size)desc.SharedSystemMemory;
 		return gfxDesc;
 	}
 

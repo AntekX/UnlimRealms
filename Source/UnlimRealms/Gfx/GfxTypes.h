@@ -446,14 +446,14 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GfxAdapterDesc
 	{
-		std::wstring description;
-		ur_uint vendorId;
-		ur_uint deviceId;
-		ur_uint subSysId;
-		ur_uint revision;
-		ur_size dedicatedVideoMemory;
-		ur_size dedicatedSystemMemory;
-		ur_size sharedSystemMemory;
+		std::wstring Description;
+		ur_uint VendorId;
+		ur_uint DeviceId;
+		ur_uint SubSysId;
+		ur_uint Revision;
+		ur_size DedicatedVideoMemory;
+		ur_size DedicatedSystemMemory;
+		ur_size SharedSystemMemory;
 	};
 
 } // end namespace UnlimRealms
