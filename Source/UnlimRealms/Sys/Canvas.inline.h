@@ -27,4 +27,9 @@ namespace UnlimRealms
 		return this->bound;
 	}
 
+	inline const RectI& Canvas::GetClientBound() const
+	{
+		return this->clientBound;
+	}
+
 } // end namespace UnlimRealms

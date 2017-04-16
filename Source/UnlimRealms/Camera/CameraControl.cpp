@@ -124,6 +124,7 @@ namespace UnlimRealms
 		if (ur_null == this->camera)
 			return;
 
+		ImGui::SetNextTreeNodeOpen(true);
 		if (ImGui::CollapsingHeader("CameraControl"))
 		{
 			const char* ModeListBoxItems = "Free\0FixedUp\0AroundPoint";

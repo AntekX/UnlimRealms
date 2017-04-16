@@ -32,10 +32,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	realm.Initialize();
 
 	// create system canvas
-	ur_uint screenWidth = (ur_uint)GetSystemMetrics(SM_CXSCREEN);
-	ur_uint screenHeight = (ur_uint)GetSystemMetrics(SM_CYSCREEN);
-	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm));
-	canvas->Initialize( RectI(0, 0, screenWidth, screenHeight) );
+	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindow, L"Voxel Planet DEMO"));
+	canvas->Initialize( RectI(0, 0, (ur_uint)GetSystemMetrics(SM_CXSCREEN), (ur_uint)GetSystemMetrics(SM_CYSCREEN)) );
 	realm.SetCanvas( std::move(canvas) );
 
 	// create input system
@@ -49,10 +47,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	realm.SetGfxSystem( std::move(gfx) );
 
 	// create swap chain
+	ur_uint canvasWidth = realm.GetCanvas()->GetClientBound().Width();
+	ur_uint canvasHeight = realm.GetCanvas()->GetClientBound().Height();
 	std::unique_ptr<GfxSwapChain> gfxSwapChain;
 	if (Succeeded(realm.GetGfxSystem()->CreateSwapChain(gfxSwapChain)))
 	{
-		res = gfxSwapChain->Initialize(screenWidth, screenHeight);
+		res = gfxSwapChain->Initialize(canvasWidth, canvasHeight);
 	}
 
 	// create gfx context
@@ -165,6 +165,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			winInput->ProcessMsg(msg);
 		}
 
+		// update canvas
+		if (canvasWidth != realm.GetCanvas()->GetClientBound().Width() ||
+			canvasHeight != realm.GetCanvas()->GetClientBound().Height())
+		{
+			canvasWidth = realm.GetCanvas()->GetClientBound().Width();
+			canvasHeight = realm.GetCanvas()->GetClientBound().Height();
+			gfxSwapChain->Initialize(canvasWidth, canvasHeight);
+		}
+
+
 		// update sub systems
 
 		realm.GetInput()->Update();
@@ -206,8 +216,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			}
 
 			// expose demo gui
-			ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
-			ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+			static const ImVec2 imguiDemoWndSize(300.0f, 400.0f);
+			ImGui::SetNextWindowSize(imguiDemoWndSize, ImGuiSetCond_Once);
+			ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
 			ImGui::Begin("DEMO", ur_null, 0);
 			ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().description.c_str());
 			cameraControl.ShowImgui();
@@ -215,6 +226,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			ImGui::End();
 
 			// render some demo UI
+			ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+			ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
 			ImGui::ShowMetricsWindow();
 			imguiRender->Render(*gfxContext);
 

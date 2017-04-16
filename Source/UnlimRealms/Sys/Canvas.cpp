@@ -40,6 +40,7 @@ namespace UnlimRealms
 			return ResultWarning(InvalidArgs, "Canvas: can not set inside out bounding rect");
 
 		this->bound = bound;
+		this->clientBound = bound;
 
 		return this->OnSetBound(bound);
 	}

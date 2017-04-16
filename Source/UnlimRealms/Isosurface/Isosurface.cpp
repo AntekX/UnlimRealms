@@ -1722,49 +1722,7 @@ namespace UnlimRealms
 
 	void Isosurface::HybridCubes::ShowImgui()
 	{
-		// render debug info
-		/*
-		if (this->GetRealm().GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::B)) this->drawDebugBounds = !this->drawDebugBounds;
-		if (this->GetRealm().GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::M)) this->drawWireframe = !this->drawWireframe;
-
-		if (this->drawDebugBounds)
-		{
-		this->DrawDebugTreeBounds(this->volume->GetRoot());
-		}
-		this->debugRender.Render(gfxContext, viewProj);
-
-		this->GatherStats();
-
-		ImGui::SetNextWindowSize({ 250.0f, 250.0f });
-		ImGui::SetNextWindowPos({ 0.0f, 0.0f });
-		ImGui::Begin("Isosurface", ur_null, ImGuiWindowFlags_NoResize);
-		ImGui::Separator();
-		ImGui::Text("Options:");
-		ImGui::Checkbox("Draw bounds", &this->drawDebugBounds);
-		ImGui::Checkbox("Draw Wireframe", &this->drawWireframe);
-		ImGui::Separator();
-		ImGui::Text("Statistics:");
-		ImGui::Text("Volume Depth: %i", this->volume->GetLevelsCount());
-		ImGui::Text("Volume Nodes: %i", this->stats.volumeNodes);
-		ImGui::Text("Surface Nodes: %i", this->stats.surfaceNodes);
-		ImGui::Text("Primitives: %i", this->stats.primitivesCount);
-		ImGui::Text("Vertices: %i", this->stats.verticesCount);
-		ImGui::Text("VideoMemory: %i", this->stats.videoMemory);
-		ImGui::Text("SysMemory: %i", this->stats.sysMemory);
-		ImGui::End();
-
-		if (this->gfxObjects.pipelineState != ur_null)
-		{
-		const GfxFillMode &gfxFillMode = this->gfxObjects.pipelineState->GetRenderState().RasterizerState.FillMode;
-		if ((this->drawWireframe == true && GfxFillMode::Solid == gfxFillMode) ||
-		(this->drawWireframe == false && GfxFillMode::Wireframe == gfxFillMode))
-		{
-		GfxRenderState gfxRS = this->gfxObjects.pipelineState->GetRenderState();
-		gfxRS.RasterizerState.FillMode = (this->drawWireframe ? GfxFillMode::Wireframe : GfxFillMode::Solid);
-		this->gfxObjects.pipelineState->SetRenderState(gfxRS);
-		}
-		}
-		*/
+		ImGui::SetNextTreeNodeOpen(true);
 		if (ImGui::TreeNode("HybridCubes"))
 		{
 			ImGui::Checkbox("Freeze update", &this->freezeUpdate);
@@ -1772,6 +1730,8 @@ namespace UnlimRealms
 			ImGui::Checkbox("Hide empty tetrahedra", &this->hideEmptyTetrahedra);
 			ImGui::Checkbox("Draw hexahedra", &this->drawHexahedra);
 			ImGui::Checkbox("Draw refinement tree", &this->drawRefinementTree);
+			
+			ImGui::SetNextTreeNodeOpen(true);
 			if (ImGui::TreeNode("Stats"))
 			{
 				ImGui::Text("tetrahedraCount:		%i", (int)this->stats.tetrahedraCount);
@@ -1781,6 +1741,7 @@ namespace UnlimRealms
 				ImGui::Text("buildQueue:			%i", (int)this->stats.buildQueue);
 				ImGui::TreePop();
 			}
+			
 			ImGui::TreePop();
 		}
 	}
@@ -1937,6 +1898,7 @@ namespace UnlimRealms
 
 	void Isosurface::ShowImgui()
 	{
+		ImGui::SetNextTreeNodeOpen(true);
 		if (ImGui::CollapsingHeader("Isosurface"))
 		{
 			ImGui::Checkbox("Draw wireframe", &this->drawWireframe);

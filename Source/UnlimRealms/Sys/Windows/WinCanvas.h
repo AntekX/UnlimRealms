@@ -19,9 +19,19 @@ namespace UnlimRealms
 	{
 	public:
 
-		WinCanvas(Realm &realm);
+		enum class Style
+		{
+			BorderlessWindow,
+			OverlappedWindow,
+		};
+
+		WinCanvas(Realm &realm,
+			Style style = Style::BorderlessWindow,
+			const wchar_t *title = ur_null);
 
 		virtual ~WinCanvas();
+
+		inline const RectI& GetClientBound() const;
 
 		inline HINSTANCE GetHinstance() const;
 
@@ -35,6 +45,8 @@ namespace UnlimRealms
 
 		static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
+		std::wstring title;
+		Style style;
 		HINSTANCE hinst;
 		HWND hwnd;
 	};

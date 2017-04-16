@@ -33,11 +33,17 @@ namespace UnlimRealms
 
 		inline const RectI& GetBound() const;
 
+		inline const RectI& GetClientBound() const;
+
 	protected:
 		
 		virtual Result OnInitialize(const RectI &bound);
 
 		virtual Result OnSetBound(const RectI &bound);
+
+	protected:
+
+		RectI clientBound;
 
 	private:
 

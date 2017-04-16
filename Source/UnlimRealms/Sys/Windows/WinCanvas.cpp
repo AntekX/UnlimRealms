@@ -13,9 +13,11 @@
 namespace UnlimRealms
 {
 
-	WinCanvas::WinCanvas(Realm &realm) :
+	WinCanvas::WinCanvas(Realm &realm, Style style, const wchar_t *title) :
 		Canvas(realm)
 	{
+		this->title = (title ? title : L"UnlimRealms");
+		this->style = style;
 		this->hinst = NULL;
 		this->hwnd = NULL;
 	}
@@ -27,7 +29,6 @@ namespace UnlimRealms
 	Result WinCanvas::OnInitialize(const RectI &bound)
 	{
 		static const wchar_t WndClassName[] = L"UnlimRealms_WinCanvas_WndClass";
-		static const wchar_t WndTitle[] = L"UnlimRealms";
 
 		// get active process handle
 
@@ -54,13 +55,20 @@ namespace UnlimRealms
 		
 		// create window
 
-		this->hwnd = CreateWindowW(WndClassName, WndTitle, WS_OVERLAPPED | WS_POPUP,
+		DWORD dwStyle = 0;
+		switch (this->style)
+		{
+			case Style::BorderlessWindow: dwStyle = WS_OVERLAPPED | WS_POPUP; break;
+			case Style::OverlappedWindow: dwStyle = WS_OVERLAPPEDWINDOW; break;
+		}
+
+		this->hwnd = CreateWindowW(WndClassName, this->title.c_str(), dwStyle,
 			bound.Min.x, bound.Min.y, bound.Width(), bound.Height(),
 			ur_null, ur_null, this->hinst, this);
 		if (!this->hwnd)
 			ResultError(Failure, "WinCanvas: failed to create window");
 
-		ShowWindow(this->hwnd, SW_SHOWNORMAL);
+		ShowWindow(this->hwnd, SW_SHOWMAXIMIZED);
 		UpdateWindow(this->hwnd);
 
 		return ResultNote(Success, "WinCanvas: initialized");
@@ -72,6 +80,10 @@ namespace UnlimRealms
 			ResultWarning(NotInitialized, "WinCanvas: trying to move uninitialized windows");
 		
 		BOOL res = MoveWindow(this->hwnd, bound.Min.x, bound.Min.y, bound.Width(), bound.Height(), FALSE);
+
+		RECT wndRect;
+		GetClientRect(this->hwnd, &wndRect);
+		this->clientBound = RectI(ur_int(wndRect.left), ur_int(wndRect.top), ur_int(wndRect.right), ur_int(wndRect.bottom));
 
 		return (TRUE == res ? Result(Success) : ResultError(Failure, "WinCanvas: failed to move window"));
 	}
