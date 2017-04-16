@@ -55,6 +55,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		res = gfxSwapChain->Initialize(canvasWidth, canvasHeight);
 	}
 
+	// HDR render target
+	/*std::unique_ptr<GfxRenderTarget> gfxRenderTargetHDR;
+	if (Succeeded(realm.GetGfxSystem()->CreateRenderTarget(gfxRenderTargetHDR)))
+	{
+		GfxTextureDesc desc;
+		desc.Width = canvasWidth;
+		desc.Height = canvasHeight;
+		desc.Levels = 1;
+		desc.Format = GfxFormat::R16G16B16A16;
+		desc.FormatView = GfxFormatView::Float;
+		desc.Usage = GfxUsage::Default;
+		desc.BindFlags = ur_uint(GfxBindFlag::RenderTarget) | ur_uint(GfxBindFlag::ShaderResource);
+		desc.AccessFlags = ur_uint(0);
+		gfxRenderTargetHDR->Initialize(desc, true, GfxFormat::R24G8);
+	}*/
+
 	// create gfx context
 	std::unique_ptr<GfxContext> gfxContext;
 	if (Succeeded(realm.GetGfxSystem()->CreateContext(gfxContext)))
@@ -174,16 +190,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			gfxSwapChain->Initialize(canvasWidth, canvasHeight);
 		}
 
-
 		// update sub systems
-
 		realm.GetInput()->Update();
 		imguiRender->NewFrame();
 		cameraControl.Update();
 		camera.SetAspectRatio((float)realm.GetCanvas()->GetBound().Width() / realm.GetCanvas()->GetBound().Height());
 
 		// update isosurface
-
 		isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
 		isosurface->Update();
 		
@@ -200,9 +213,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 				true, 1.0f,
 				true, 0);
 
+			// TODO: render to HDR buffer and apply tonemapping shader
+			/*gfxContext->SetRenderTarget(gfxRenderTargetHDR.get());
+			gfxContext->ClearTarget(gfxRenderTargetHDR.get(),
+				true, { 0.0f, 0.0f, 0.0f, 0.0f },
+				true, 1.0f,
+				true, 0);*/
+
 			// draw isosurface
 			isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
 			atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
+
+			//gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
+			//gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(),
+			//	true, /*{0.1f, 0.1f, 0.15f, 1.0f}*/{ 0.0f, 0.0f, 0.0f, 1.0f },
+			//	true, 1.0f,
+			//	true, 0);
 
 			// draw generic primitives
 			if (genericRender != ur_null)

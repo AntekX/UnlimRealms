@@ -308,6 +308,7 @@ namespace UnlimRealms
 			GfxTextureDesc dsDesc = desc;
 			dsDesc.BindFlags = ur_uint(GfxBindFlag::DepthStencil) | ur_uint(GfxBindFlag::ShaderResource);
 			dsDesc.Format = dsFormat;
+			dsDesc.FormatView = GfxFormatView::Unorm;
 			
 			res = this->InitializeDepthStencil(newDepthStencilBuffer, dsDesc);
 			if (Failed(res))
