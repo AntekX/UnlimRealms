@@ -474,13 +474,15 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture)
+	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, GfxPixelShader *customPS, GfxBuffer *customCB1)
 	{
 		if (ur_null == this->gfxObjects ||
 			ur_null == this->gfxObjects->quadVB ||
 			ur_null == this->gfxObjects->quadState ||
 			ur_null == this->gfxObjects->CB)
 			return Result(NotInitialized);
+
+		this->gfxObjects->quadState->PixelShader = (customPS != ur_null ? customPS : this->gfxObjects->PS.get());
 
 		CommonCB cb;
 		cb.viewProj = ur_float4x4::Identity;
@@ -491,6 +493,7 @@ namespace UnlimRealms
 		GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
 		gfxContext.SetViewPort(&viewPort);
 		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
+		gfxContext.SetConstantBuffer(customCB1, 1);
 		gfxContext.SetVertexBuffer(this->gfxObjects->quadVB.get(), 0, sizeof(Vertex), 0);
 		gfxContext.SetTexture(texture != ur_null ? texture : this->gfxObjects->atlas.get(), 0);
 		gfxContext.SetPipelineState(this->gfxObjects->quadState.get());
