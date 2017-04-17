@@ -151,6 +151,46 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize index buffer");
 
+		// Quad Vertex Buffer
+		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects->quadVB);
+		if (Succeeded(res))
+		{
+			Vertex quadVertices[] = {
+				{ { -1.0f, +1.0f, 0.0f }, 0xffffffff, { 0.0f, 0.0f } },
+				{ { +1.0f, +1.0f, 0.0f }, 0xffffffff, { 1.0f, 0.0f } },
+				{ { -1.0f, -1.0f, 0.0f }, 0xffffffff, { 0.0f, 1.0f } },
+				{ { +1.0f, -1.0f, 0.0f }, 0xffffffff, { 1.0f, 1.0f } }
+			};
+			GfxResourceData gfxResData = { quadVertices, sizeof(quadVertices), 0 };
+			res = this->gfxObjects->quadVB->Initialize(gfxResData.RowPitch, GfxUsage::Immutable,
+				(ur_uint)GfxBindFlag::VertexBuffer, 0, &gfxResData);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize quad vertex buffer");
+
+		// Quad Pipeline State
+		{
+			std::unique_ptr<GfxPipelineState> gfxPipelineState;
+			res = this->GetRealm().GetGfxSystem()->CreatePipelineState(gfxPipelineState);
+			if (Succeeded(res))
+			{
+				gfxPipelineState->InputLayout = this->gfxObjects->inputLayout.get();
+				gfxPipelineState->VertexShader = this->gfxObjects->VS.get();
+				gfxPipelineState->PixelShader = this->gfxObjects->PS.get();
+
+				GfxRenderState gfxState = GfxRenderState::Default;
+				gfxState.PrimitiveTopology = GfxPrimitiveTopology::TriangleStrip;
+				gfxState.RasterizerState.CullMode = GfxCullMode::None;
+				gfxState.DepthStencilState.DepthEnable = false;
+
+				res = gfxPipelineState->SetRenderState(gfxState);
+
+				this->gfxObjects->quadState = std::move(gfxPipelineState);
+			}
+		}
+		if (Failed(res))
+			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize quad pipeline state");
+
 		return res;
 	}
 
@@ -408,7 +448,7 @@ namespace UnlimRealms
 		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
 		// draw batches
-		const RectI &canvasBound = this->GetRealm().GetCanvas()->GetBound();
+		const RectI &canvasBound = this->GetRealm().GetCanvas()->GetClientBound();
 		GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
 		gfxContext.SetViewPort(&viewPort);
 		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
@@ -430,6 +470,31 @@ namespace UnlimRealms
 			this->batches[ip].verticesCount = 0;
 			this->batches[ip].indicesCount = 0;
 		}
+
+		return Result(Success);
+	}
+
+	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture)
+	{
+		if (ur_null == this->gfxObjects ||
+			ur_null == this->gfxObjects->quadVB ||
+			ur_null == this->gfxObjects->quadState ||
+			ur_null == this->gfxObjects->CB)
+			return Result(NotInitialized);
+
+		CommonCB cb;
+		cb.viewProj = ur_float4x4::Identity;
+		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
+		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+
+		const RectI &canvasBound = this->GetRealm().GetCanvas()->GetClientBound();
+		GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
+		gfxContext.SetViewPort(&viewPort);
+		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
+		gfxContext.SetVertexBuffer(this->gfxObjects->quadVB.get(), 0, sizeof(Vertex), 0);
+		gfxContext.SetTexture(texture != ur_null ? texture : this->gfxObjects->atlas.get(), 0);
+		gfxContext.SetPipelineState(this->gfxObjects->quadState.get());
+		gfxContext.Draw(4, 0, 0, 0);
 
 		return Result(Success);
 	}

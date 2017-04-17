@@ -47,6 +47,8 @@ namespace UnlimRealms
 
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
+		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture);
+
 	protected:
 
 		struct GfxObjects
@@ -59,6 +61,8 @@ namespace UnlimRealms
 			std::unique_ptr<GfxBuffer> VB;
 			std::unique_ptr<GfxBuffer> IB;
 			std::unique_ptr<GfxTexture> atlas;
+			std::unique_ptr<GfxBuffer> quadVB;
+			std::unique_ptr<GfxPipelineState> quadState;
 		};
 
 		struct CommonCB

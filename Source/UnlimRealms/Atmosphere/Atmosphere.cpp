@@ -185,7 +185,7 @@ namespace UnlimRealms
 			return NotInitialized;
 
 		// view port
-		const RectI &canvasBound = this->GetRealm().GetCanvas()->GetBound();
+		const RectI &canvasBound = this->GetRealm().GetCanvas()->GetClientBound();
 		GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
 		gfxContext.SetViewPort(&viewPort);
 		

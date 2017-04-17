@@ -56,7 +56,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	}
 
 	// HDR render target
-	/*std::unique_ptr<GfxRenderTarget> gfxRenderTargetHDR;
+	std::unique_ptr<GfxRenderTarget> gfxRenderTargetHDR;
 	if (Succeeded(realm.GetGfxSystem()->CreateRenderTarget(gfxRenderTargetHDR)))
 	{
 		GfxTextureDesc desc;
@@ -69,7 +69,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		desc.BindFlags = ur_uint(GfxBindFlag::RenderTarget) | ur_uint(GfxBindFlag::ShaderResource);
 		desc.AccessFlags = ur_uint(0);
 		gfxRenderTargetHDR->Initialize(desc, true, GfxFormat::R24G8);
-	}*/
+	}
 
 	// create gfx context
 	std::unique_ptr<GfxContext> gfxContext;
@@ -207,39 +207,27 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		{ // use context to draw
 			gfxContext->Begin();
 
-			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
-			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(),
-				true, /*{0.1f, 0.1f, 0.15f, 1.0f}*/{0.0f, 0.0f, 0.0f, 1.0f},
-				true, 1.0f,
-				true, 0);
-
-			// TODO: render to HDR buffer and apply tonemapping shader
-			/*gfxContext->SetRenderTarget(gfxRenderTargetHDR.get());
+			// render to HDR target
+			gfxContext->SetRenderTarget(gfxRenderTargetHDR.get());
 			gfxContext->ClearTarget(gfxRenderTargetHDR.get(),
 				true, { 0.0f, 0.0f, 0.0f, 0.0f },
 				true, 1.0f,
-				true, 0);*/
+				true, 0);
 
 			// draw isosurface
 			isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
 			atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
 
-			//gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
-			//gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(),
-			//	true, /*{0.1f, 0.1f, 0.15f, 1.0f}*/{ 0.0f, 0.0f, 0.0f, 1.0f },
-			//	true, 1.0f,
-			//	true, 0);
+			// resolve HDR target to back buffer
+			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
+			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(),
+				true, /*{0.1f, 0.1f, 0.15f, 1.0f}*/{ 0.0f, 0.0f, 0.0f, 1.0f },
+				true, 1.0f,
+				true, 0);
+			genericRender->RenderScreenQuad(*gfxContext, gfxRenderTargetHDR->GetTragetBuffer());
 
-			// draw generic primitives
-			if (genericRender != ur_null)
-			{
-				// render some demo primitives
-				genericRender->DrawLine(ur_float3(0.0f, 0.0f, 0.0f), ur_float3(1.0f, 0.0f, 0.0f), ur_float4(1.0f, 0.0f, 0.0f, 1.0f));
-				genericRender->DrawLine(ur_float3(0.0f, 0.0f, 0.0f), ur_float3(0.0f, 1.0f, 0.0f), ur_float4(0.0f, 1.0f, 0.0f, 1.0f));
-				genericRender->DrawLine(ur_float3(0.0f, 0.0f, 0.0f), ur_float3(0.0f, 0.0f, 1.0f), ur_float4(0.0f, 0.0f, 1.0f, 1.0f));
-
-				genericRender->Render(*gfxContext, camera.GetViewProj());
-			}
+			// render batched generic primitives
+			genericRender->Render(*gfxContext, camera.GetViewProj());
 
 			// expose demo gui
 			static const ImVec2 imguiDemoWndSize(300.0f, 400.0f);
@@ -251,7 +239,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			isosurface->ShowImgui();
 			ImGui::End();
 
-			// render some demo UI
+			// Imgui metrics
 			ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
 			ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
 			ImGui::ShowMetricsWindow();
