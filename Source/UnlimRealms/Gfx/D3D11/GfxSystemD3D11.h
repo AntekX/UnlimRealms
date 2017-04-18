@@ -283,6 +283,7 @@ namespace UnlimRealms
 
 	private:
 
+		bool initializedFromD3DTex;
 		shared_ref<ID3D11Texture2D> d3dTexture;
 		shared_ref<ID3D11ShaderResourceView> d3dSRV;
 	};

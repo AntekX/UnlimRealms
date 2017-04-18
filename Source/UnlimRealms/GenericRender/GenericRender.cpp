@@ -448,9 +448,6 @@ namespace UnlimRealms
 		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
 		// draw batches
-		const RectI &canvasBound = this->GetRealm().GetCanvas()->GetClientBound();
-		GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
-		gfxContext.SetViewPort(&viewPort);
 		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
 		gfxContext.SetVertexBuffer(this->gfxObjects->VB.get(), 0, sizeof(Vertex), 0);
 		gfxContext.SetIndexBuffer(this->gfxObjects->IB.get(), sizeof(Index) * 8, 0);
@@ -474,7 +471,8 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, GfxPixelShader *customPS, GfxBuffer *customCB1)
+	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture,
+		const ur_float4x4 *transform, GfxPixelShader *customPS, GfxBuffer *customCB1)
 	{
 		if (ur_null == this->gfxObjects ||
 			ur_null == this->gfxObjects->quadVB ||
@@ -485,13 +483,10 @@ namespace UnlimRealms
 		this->gfxObjects->quadState->PixelShader = (customPS != ur_null ? customPS : this->gfxObjects->PS.get());
 
 		CommonCB cb;
-		cb.viewProj = ur_float4x4::Identity;
+		cb.viewProj = (transform != ur_null ? *transform : ur_float4x4::Identity);
 		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
 		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
-		const RectI &canvasBound = this->GetRealm().GetCanvas()->GetClientBound();
-		GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
-		gfxContext.SetViewPort(&viewPort);
 		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
 		gfxContext.SetConstantBuffer(customCB1, 1);
 		gfxContext.SetVertexBuffer(this->gfxObjects->quadVB.get(), 0, sizeof(Vertex), 0);

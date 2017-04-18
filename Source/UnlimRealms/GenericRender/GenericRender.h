@@ -48,6 +48,7 @@ namespace UnlimRealms
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
 		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture,
+			const ur_float4x4 *transform = ur_null,
 			GfxPixelShader *customPS = ur_null,
 			GfxBuffer *customCB1 = ur_null);
 

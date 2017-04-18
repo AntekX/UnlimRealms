@@ -1878,9 +1878,6 @@ namespace UnlimRealms
 			cb.AtmoParams = (atmosphere != ur_null ? atmosphere->GetDesc() : Atmosphere::Desc::Default);
 			GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
 			gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
-			const RectI &canvasBound = this->GetRealm().GetCanvas()->GetClientBound();
-			GfxViewPort viewPort = { 0.0f, 0.0f, (float)canvasBound.Width(), (float)canvasBound.Height(), 0.0f, 1.0f };
-			gfxContext.SetViewPort(&viewPort);
 			gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);
 			gfxContext.SetPipelineState(this->gfxObjects.pipelineState.get());
 

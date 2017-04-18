@@ -40,7 +40,7 @@ namespace UnlimRealms
 		return this->desc;
 	}
 
-	inline GfxTexture* GfxRenderTarget::GetTragetBuffer() const
+	inline GfxTexture* GfxRenderTarget::GetTargetBuffer() const
 	{
 		return this->targetBuffer.get();
 	}

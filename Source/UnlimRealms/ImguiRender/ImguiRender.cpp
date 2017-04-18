@@ -243,7 +243,7 @@ namespace UnlimRealms
 			}
 		}
 
-		const RectI &canvasBound = this->GetRealm().GetCanvas()->GetBound();
+		const RectI &canvasBound = this->GetRealm().GetCanvas()->GetClientBound();
 		imguiIO.DisplaySize.x = (float)canvasBound.Width();
 		imguiIO.DisplaySize.y = (float)canvasBound.Height();
 
@@ -340,10 +340,6 @@ namespace UnlimRealms
 		};
 		GfxResourceData cbResData = { &cb, sizeof(VertexTransformCB), 0 };
 		gfxContext.UpdateBuffer(this->gfxCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, sizeof(VertexTransformCB));
-
-		// viewport
-		GfxViewPort viewPort = { 0.0f, 0.0f, R, B, 0.0f, 1.0f };
-		gfxContext.SetViewPort(&viewPort);
 
 		// setup pipeline
 		gfxContext.SetPipelineState(this->gfxPipelineState.get());

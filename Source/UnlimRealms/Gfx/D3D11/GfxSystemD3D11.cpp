@@ -273,6 +273,19 @@ namespace UnlimRealms
 			ur_null;
 		this->d3dContext->OMSetRenderTargets(1, rtView, dsView);
 
+		if (rt != ur_null)
+		{
+			GfxTexture *rtTex = rt->GetTargetBuffer();
+			if (ur_null == rtTex) rtTex = rt->GetDepthStencilBuffer();
+			if (rtTex != ur_null)
+			{
+				GfxViewPort gfxViewPort = {
+					0.0f, 0.0f, (ur_float)rtTex->GetDesc().Width, (ur_float)rtTex->GetDesc().Height, 0.0f, 1.0f
+				};
+				this->SetViewPort(&gfxViewPort);
+			}
+		}
+
 		return Result(Success);
 	}
 
@@ -537,8 +550,10 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
 	
 	GfxTextureD3D11::GfxTextureD3D11(GfxSystem &gfxSystem) :
-		GfxTexture(gfxSystem)
+		GfxTexture(gfxSystem),
+		initializedFromD3DTex(false)
 	{
+
 	}
 
 	GfxTextureD3D11::~GfxTextureD3D11()
@@ -547,6 +562,10 @@ namespace UnlimRealms
 
 	Result GfxTextureD3D11::Initialize(const GfxTextureDesc &desc, shared_ref<ID3D11Texture2D> &d3dTexture)
 	{
+		this->initializedFromD3DTex = true; // setting this flag to skip OnInitialize
+		GfxTexture::Initialize(desc, ur_null); // store desc in the base class, 
+		this->initializedFromD3DTex = false;
+
 		this->d3dTexture.reset(ur_null);
 		this->d3dSRV.reset(ur_null);
 
@@ -577,6 +596,11 @@ namespace UnlimRealms
 
 	Result GfxTextureD3D11::OnInitialize(const GfxResourceData *data)
 	{
+		// if texture is being initialized from d3d object - all the stuff is done in GfxTextureD3D11::Initialize
+		// so skip this function as its results will be overriden anyway
+		if (this->initializedFromD3DTex)
+			return Result(Success);
+
 		this->d3dTexture.reset(ur_null);
 		this->d3dSRV.reset(ur_null);
 
@@ -641,10 +665,10 @@ namespace UnlimRealms
 		GfxSystemD3D11 &d3dSystem = static_cast<GfxSystemD3D11&>(this->GetGfxSystem());
 		ID3D11Device *d3dDevice = d3dSystem.GetDevice();
 
-		GfxTextureD3D11 *d3dTargetBuffer = static_cast<GfxTextureD3D11*>(this->GetTragetBuffer());
+		GfxTextureD3D11 *d3dTargetBuffer = static_cast<GfxTextureD3D11*>(this->GetTargetBuffer());
 		if (d3dTargetBuffer != ur_null)
 		{
-			const GfxTextureDesc &bufferDesc = this->GetTragetBuffer()->GetDesc();
+			const GfxTextureDesc &bufferDesc = this->GetTargetBuffer()->GetDesc();
 			D3D11_RENDER_TARGET_VIEW_DESC d3dRTViewDesc;
 			d3dRTViewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 			d3dRTViewDesc.Format = GfxFormatToDXGI(bufferDesc.Format, bufferDesc.FormatView);

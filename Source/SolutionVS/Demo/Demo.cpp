@@ -71,6 +71,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		gfxRenderTargetHDR->Initialize(desc, true, GfxFormat::R24G8);
 	}
 
+	// Luminance render target
+	std::unique_ptr<GfxRenderTarget> gfxLuminanceTarget;
+	if (Succeeded(realm.GetGfxSystem()->CreateRenderTarget(gfxLuminanceTarget)))
+	{
+		GfxTextureDesc desc;
+		desc.Width = canvasWidth/32;
+		desc.Height = canvasHeight/32;
+		desc.Levels = 1;
+		desc.Format = GfxFormat::R16G16B16A16;
+		desc.FormatView = GfxFormatView::Float;
+		desc.Usage = GfxUsage::Default;
+		desc.BindFlags = ur_uint(GfxBindFlag::RenderTarget) | ur_uint(GfxBindFlag::ShaderResource);
+		desc.AccessFlags = ur_uint(0);
+		gfxLuminanceTarget->Initialize(desc, false, GfxFormat::Unknown);
+	}
+
 	// create gfx context
 	std::unique_ptr<GfxContext> gfxContext;
 	if (Succeeded(realm.GetGfxSystem()->CreateContext(gfxContext)))
@@ -194,7 +210,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		realm.GetInput()->Update();
 		imguiRender->NewFrame();
 		cameraControl.Update();
-		camera.SetAspectRatio((float)realm.GetCanvas()->GetBound().Width() / realm.GetCanvas()->GetBound().Height());
+		camera.SetAspectRatio((float)canvasWidth / canvasHeight);
 
 		// update isosurface
 		isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
@@ -218,13 +234,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
 			atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
 
+			// render luminance texture
+			gfxContext->SetRenderTarget(gfxLuminanceTarget.get());
+			genericRender->RenderScreenQuad(*gfxContext, gfxRenderTargetHDR->GetTargetBuffer());
+
 			// resolve HDR target to back buffer
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
-			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(),
-				true, /*{0.1f, 0.1f, 0.15f, 1.0f}*/{ 0.0f, 0.0f, 0.0f, 1.0f },
-				true, 1.0f,
-				true, 0);
-			genericRender->RenderScreenQuad(*gfxContext, gfxRenderTargetHDR->GetTragetBuffer());
+			genericRender->RenderScreenQuad(*gfxContext, gfxRenderTargetHDR->GetTargetBuffer());
+			genericRender->RenderScreenQuad(*gfxContext, gfxLuminanceTarget->GetTargetBuffer(),
+				&Matrix::Multiply(Matrix::Scaling(0.2f, 0.2f, 1.0f), Matrix::Translation(-0.8f, -0.8f, 1.0f)));
 
 			// render batched generic primitives
 			genericRender->Render(*gfxContext, camera.GetViewProj());

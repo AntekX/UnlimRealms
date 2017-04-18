@@ -202,7 +202,7 @@ namespace UnlimRealms
 			GfxFormat format = GfxFormat::R8G8B8A8,
 			bool hasDepthStencil = true, GfxFormat dsFormat = GfxFormat::R24G8);
 
-		inline GfxTexture* GetTragetBuffer() const;
+		inline GfxTexture* GetTargetBuffer() const;
 
 		inline GfxTexture* GetDepthStencilBuffer() const;
 
