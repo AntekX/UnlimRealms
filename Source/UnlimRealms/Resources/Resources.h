@@ -17,8 +17,8 @@ namespace UnlimRealms
 	// Utilities
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Result CreateVertexShaderFromFile(Realm &realm, std::unique_ptr<GfxVertexShader> &resOutput, const std::string &resName);
+	Result UR_DECL CreateVertexShaderFromFile(Realm &realm, std::unique_ptr<GfxVertexShader> &resOutput, const std::string &resName);
 
-	Result CreatePixelShaderFromFile(Realm &realm, std::unique_ptr<GfxPixelShader> &resOutput, const std::string &resName);
+	Result UR_DECL CreatePixelShaderFromFile(Realm &realm, std::unique_ptr<GfxPixelShader> &resOutput, const std::string &resName);
 
 } // end namespace UnlimRealms

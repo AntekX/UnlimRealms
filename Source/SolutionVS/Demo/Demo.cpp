@@ -12,6 +12,7 @@
 #include "Gfx/D3D11/GfxSystemD3D11.h"
 #include "ImguiRender/ImguiRender.h"
 #include "GenericRender/GenericRender.h"
+#include "Resources/Resources.h"
 #include "Camera/CameraControl.h"
 #include "Isosurface/Isosurface.h"
 #include "Atmosphere/Atmosphere.h"
@@ -86,6 +87,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		desc.AccessFlags = ur_uint(0);
 		gfxLuminanceTarget->Initialize(desc, false, GfxFormat::Unknown);
 	}
+
+	// temp: sample
+	std::unique_ptr<GfxPixelShader> gfxSamplePS;
+	CreatePixelShaderFromFile(realm, gfxSamplePS, "sample_ps.cso");
 
 	// create gfx context
 	std::unique_ptr<GfxContext> gfxContext;
@@ -243,11 +248,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			genericRender->RenderScreenQuad(*gfxContext, gfxRenderTargetHDR->GetTargetBuffer());
 			
 			{ // render target debug output example
-				ur_float sh = canvasHeight / 4;
-				ur_float w = gfxLuminanceTarget->GetTargetBuffer()->GetDesc().Width;
-				ur_float h = gfxLuminanceTarget->GetTargetBuffer()->GetDesc().Height;
+				ur_float sh = (ur_float)canvasHeight / 4;
+				ur_float w = (ur_float)gfxLuminanceTarget->GetTargetBuffer()->GetDesc().Width;
+				ur_float h = (ur_float)gfxLuminanceTarget->GetTargetBuffer()->GetDesc().Height;
 				genericRender->RenderScreenQuad(*gfxContext, gfxLuminanceTarget->GetTargetBuffer(),
-					RectF(0.0f, canvasHeight - sh, sh * w / h, canvasHeight));
+					RectF(0.0f, canvasHeight - sh, sh * w / h, (ur_float)canvasHeight), gfxSamplePS.get());
 			}
 
 			// render batched generic primitives
