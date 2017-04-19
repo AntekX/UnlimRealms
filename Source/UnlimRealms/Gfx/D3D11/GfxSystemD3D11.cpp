@@ -300,6 +300,22 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GfxContextD3D11::GetViewPort(GfxViewPort &viewPort)
+	{
+		if (this->d3dContext.empty())
+			return ResultError(Failure, "GfxContextD3D11::GetViewPort: failed, device context is not ready");
+		
+		UINT numViewports = 1;
+		D3D11_VIEWPORT d3dViewports[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+		this->d3dContext->RSGetViewports(&numViewports, d3dViewports);
+		if (0 == numViewports)
+			return Result(NotInitialized);
+		
+		viewPort = GfxViewPortFromD3D11(d3dViewports[0]);
+
+		return Result(Success);
+	}
+
 	Result GfxContextD3D11::SetScissorRect(const RectI *rect)
 	{
 		if (this->d3dContext.empty())
@@ -1175,6 +1191,18 @@ namespace UnlimRealms
 		d3dViewPort.MinDepth = viewPort.DepthMin;
 		d3dViewPort.MaxDepth = viewPort.DepthMax;
 		return d3dViewPort;
+	}
+
+	GfxViewPort GfxViewPortFromD3D11(const D3D11_VIEWPORT &viewPort)
+	{
+		GfxViewPort gfxViewPort;
+		gfxViewPort.X = viewPort.TopLeftX;
+		gfxViewPort.Y = viewPort.TopLeftY;
+		gfxViewPort.Width = viewPort.Width;
+		gfxViewPort.Height = viewPort.Height;
+		gfxViewPort.DepthMin = viewPort.MinDepth;
+		gfxViewPort.DepthMax = viewPort.MaxDepth;
+		return gfxViewPort;
 	}
 
 	D3D11_RECT RectIToD3D11(const RectI &rect)

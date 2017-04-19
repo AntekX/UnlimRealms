@@ -227,6 +227,8 @@ namespace UnlimRealms
 
 		virtual Result SetViewPort(const GfxViewPort *viewPort);
 
+		virtual Result GetViewPort(GfxViewPort &viewPort);
+
 		virtual Result SetScissorRect(const RectI *rect);
 
 		virtual Result ClearTarget(GfxRenderTarget *rt,
@@ -508,6 +510,8 @@ namespace UnlimRealms
 	extern UR_DECL D3D11_MAP GfxGPUAccessFlagToD3D11(GfxGPUAccess gpuAccess);
 
 	extern UR_DECL D3D11_VIEWPORT GfxViewPortToD3D11(const GfxViewPort &viewPort);
+
+	extern UR_DECL GfxViewPort GfxViewPortFromD3D11(const D3D11_VIEWPORT &viewPort);
 
 	extern UR_DECL D3D11_RECT RectIToD3D11(const RectI &rect);
 

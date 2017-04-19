@@ -52,6 +52,10 @@ namespace UnlimRealms
 			GfxPixelShader *customPS = ur_null,
 			GfxBuffer *customCB1 = ur_null);
 
+		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const RectF &rect,
+			GfxPixelShader *customPS = ur_null,
+			GfxBuffer *customCB1 = ur_null);
+
 	protected:
 
 		struct GfxObjects

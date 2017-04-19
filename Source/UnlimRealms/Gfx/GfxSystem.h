@@ -116,6 +116,8 @@ namespace UnlimRealms
 
 		virtual Result SetViewPort(const GfxViewPort *viewPort);
 
+		virtual Result GetViewPort(GfxViewPort &viewPort);
+
 		virtual Result SetScissorRect(const RectI *rect);
 
 		virtual Result ClearTarget(GfxRenderTarget *rt,

@@ -149,6 +149,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GfxContext::GetViewPort(GfxViewPort &viewPort)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GfxContext::SetScissorRect(const RectI *rect)
 	{
 		return Result(NotImplemented);

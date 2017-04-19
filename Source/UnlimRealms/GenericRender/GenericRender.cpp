@@ -497,4 +497,21 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const RectF &rect,
+		GfxPixelShader *customPS, GfxBuffer *customCB1)
+	{
+		GfxViewPort viewPort;
+		Result res = gfxContext.GetViewPort(viewPort);
+		if (Failed(res))
+			return res;
+
+		ur_float4x4 mx = ur_float4x4::Identity;
+		mx.r[0][0] = rect.Width() / viewPort.Width;
+		mx.r[1][1] = rect.Height() / viewPort.Height;
+		mx.r[3][0] = rect.Min.x / viewPort.Width * 2.0f - 1.0f + mx.r[0][0];
+		mx.r[3][1] = (1.0f - rect.Min.y / viewPort.Height) * 2.0f - 1.0f - mx.r[1][1];
+		
+		return this->RenderScreenQuad(gfxContext, texture, &mx, customPS, customCB1);
+	}
+
 } // end namespace UnlimRealms
