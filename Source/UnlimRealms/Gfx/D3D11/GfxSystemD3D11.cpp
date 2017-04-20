@@ -369,7 +369,7 @@ namespace UnlimRealms
 		if (ur_null == state)
 			return Result(InvalidArgs);
 		
-		d3dContext->IASetPrimitiveTopology(GfxPrimitiveTopologyToD3D11(state_d3d11->GetRenderState().PrimitiveTopology));
+		d3dContext->IASetPrimitiveTopology(GfxPrimitiveTopologyToD3D11(state_d3d11->PrimitiveTopology));
 
 		if (state->InputLayout != ur_null)
 		{
@@ -399,7 +399,7 @@ namespace UnlimRealms
 
 		d3dContext->RSSetState(state_d3d11->GetD3DRasterizerState());
 
-		d3dContext->OMSetDepthStencilState(state_d3d11->GetD3DDepthStencilState(), (UINT)state_d3d11->GetRenderState().StencilRef);
+		d3dContext->OMSetDepthStencilState(state_d3d11->GetD3DDepthStencilState(), (UINT)state_d3d11->StencilRef);
 
 		d3dContext->OMSetBlendState(state_d3d11->GetD3DBlendState(), ur_null, 0xffffffff);
 

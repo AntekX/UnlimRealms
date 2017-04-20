@@ -174,6 +174,7 @@
     <ClInclude Include="..\..\UnlimRealms\Gfx\GfxSystem.h" />
     <ClInclude Include="..\..\UnlimRealms\Gfx\GfxSystem.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Gfx\GfxTypes.h" />
+    <ClInclude Include="..\..\UnlimRealms\HDRRender\HDRRender.h" />
     <ClInclude Include="..\..\UnlimRealms\ImguiRender\ImguiRender.h" />
     <ClInclude Include="..\..\UnlimRealms\Isosurface\Isosurface.h" />
     <ClInclude Include="..\..\UnlimRealms\Multiverse\Multiverse.h" />
@@ -211,6 +212,7 @@
     <ClCompile Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Gfx\GfxSystem.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Gfx\GfxTypes.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\HDRRender\HDRRender.cpp" />
     <ClCompile Include="..\..\UnlimRealms\ImguiRender\ImguiRender.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Isosurface\Isosurface.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Multiverse\Multiverse.cpp" />

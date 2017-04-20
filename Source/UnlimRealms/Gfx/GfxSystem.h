@@ -379,10 +379,12 @@ namespace UnlimRealms
 	class UR_DECL GfxPipelineState : public GfxEntity
 	{	
 	public:
-
+		
+		GfxPrimitiveTopology PrimitiveTopology;
 		GfxInputLayout *InputLayout;
 		GfxVertexShader *VertexShader;
 		GfxPixelShader *PixelShader;
+		ur_uint StencilRef;
 
 	public:
 

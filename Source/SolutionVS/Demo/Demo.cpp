@@ -14,6 +14,7 @@
 #include "GenericRender/GenericRender.h"
 #include "Resources/Resources.h"
 #include "Camera/CameraControl.h"
+#include "HDRRender/HDRRender.h"
 #include "Isosurface/Isosurface.h"
 #include "Atmosphere/Atmosphere.h"
 #include "Multiverse/Multiverse.h"
@@ -56,38 +57,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		res = gfxSwapChain->Initialize(canvasWidth, canvasHeight);
 	}
 
-	// HDR render target
-	std::unique_ptr<GfxRenderTarget> gfxRenderTargetHDR;
-	if (Succeeded(realm.GetGfxSystem()->CreateRenderTarget(gfxRenderTargetHDR)))
-	{
-		GfxTextureDesc desc;
-		desc.Width = canvasWidth;
-		desc.Height = canvasHeight;
-		desc.Levels = 1;
-		desc.Format = GfxFormat::R16G16B16A16;
-		desc.FormatView = GfxFormatView::Float;
-		desc.Usage = GfxUsage::Default;
-		desc.BindFlags = ur_uint(GfxBindFlag::RenderTarget) | ur_uint(GfxBindFlag::ShaderResource);
-		desc.AccessFlags = ur_uint(0);
-		gfxRenderTargetHDR->Initialize(desc, true, GfxFormat::R24G8);
-	}
-
-	// Luminance render target
-	std::unique_ptr<GfxRenderTarget> gfxLuminanceTarget;
-	if (Succeeded(realm.GetGfxSystem()->CreateRenderTarget(gfxLuminanceTarget)))
-	{
-		GfxTextureDesc desc;
-		desc.Width = canvasWidth/32;
-		desc.Height = canvasHeight/32;
-		desc.Levels = 1;
-		desc.Format = GfxFormat::R16G16B16A16;
-		desc.FormatView = GfxFormatView::Float;
-		desc.Usage = GfxUsage::Default;
-		desc.BindFlags = ur_uint(GfxBindFlag::RenderTarget) | ur_uint(GfxBindFlag::ShaderResource);
-		desc.AccessFlags = ur_uint(0);
-		gfxLuminanceTarget->Initialize(desc, false, GfxFormat::Unknown);
-	}
-
 	// temp: sample
 	std::unique_ptr<GfxPixelShader> gfxSamplePS;
 	CreatePixelShaderFromFile(realm, gfxSamplePS, "sample_ps.cso");
@@ -113,6 +82,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	{
 		genericRender = realm.GetComponent<GenericRender>();
 		genericRender->Init();
+	}
+
+	// HDR rendering
+	HDRRender* hdrRender = ur_null;
+	if (realm.AddComponent<HDRRender>(realm))
+	{
+		hdrRender = realm.GetComponent<HDRRender>();
+		hdrRender->Init(canvasWidth, canvasHeight);
 	}
 
 	// demo isosurface
@@ -209,6 +186,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 			canvasHeight = realm.GetCanvas()->GetClientBound().Height();
 			gfxSwapChain->Initialize(canvasWidth, canvasHeight);
+			hdrRender->Init(canvasWidth, canvasHeight);
 		}
 
 		// update sub systems
@@ -228,32 +206,27 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		{ // use context to draw
 			gfxContext->Begin();
 
-			// render to HDR target
-			gfxContext->SetRenderTarget(gfxRenderTargetHDR.get());
-			gfxContext->ClearTarget(gfxRenderTargetHDR.get(),
-				true, { 0.0f, 0.0f, 0.0f, 0.0f },
-				true, 1.0f,
-				true, 0);
+			// begin HDR rendering
+			hdrRender->BeginRender(*gfxContext);
 
 			// draw isosurface
 			isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
 			atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
 
-			// render luminance texture
-			gfxContext->SetRenderTarget(gfxLuminanceTarget.get());
-			genericRender->RenderScreenQuad(*gfxContext, gfxRenderTargetHDR->GetTargetBuffer());
+			// end HDR rendering
+			hdrRender->EndRender(*gfxContext);
 
-			// resolve HDR target to back buffer
+			// resolve HDR image to back buffer
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
-			genericRender->RenderScreenQuad(*gfxContext, gfxRenderTargetHDR->GetTargetBuffer());
+			hdrRender->Resolve(*gfxContext);
 			
-			{ // render target debug output example
-				ur_float sh = (ur_float)canvasHeight / 4;
-				ur_float w = (ur_float)gfxLuminanceTarget->GetTargetBuffer()->GetDesc().Width;
-				ur_float h = (ur_float)gfxLuminanceTarget->GetTargetBuffer()->GetDesc().Height;
-				genericRender->RenderScreenQuad(*gfxContext, gfxLuminanceTarget->GetTargetBuffer(),
-					RectF(0.0f, canvasHeight - sh, sh * w / h, (ur_float)canvasHeight), gfxSamplePS.get());
-			}
+			//{ // render target debug output example
+			//	ur_float sh = (ur_float)canvasHeight / 4;
+			//	ur_float w = (ur_float)gfxLuminanceTarget->GetTargetBuffer()->GetDesc().Width;
+			//	ur_float h = (ur_float)gfxLuminanceTarget->GetTargetBuffer()->GetDesc().Height;
+			//	genericRender->RenderScreenQuad(*gfxContext, gfxLuminanceTarget->GetTargetBuffer(),
+			//		RectF(0.0f, canvasHeight - sh, sh * w / h, (ur_float)canvasHeight), ur_null, gfxSamplePS.get());
+			//}
 
 			// render batched generic primitives
 			genericRender->Render(*gfxContext, camera.GetViewProj());

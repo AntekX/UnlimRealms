@@ -47,14 +47,15 @@ namespace UnlimRealms
 
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
-		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture,
-			const ur_float4x4 *transform = ur_null,
-			GfxPixelShader *customPS = ur_null,
-			GfxBuffer *customCB1 = ur_null);
+		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const ur_float4x4 *transform = ur_null,
+			GfxRenderState *customRenderState = ur_null,
+			GfxPixelShader *customPixelShader = ur_null,
+			GfxBuffer *customConstBufferSlot1 = ur_null);
 
 		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const RectF &rect,
-			GfxPixelShader *customPS = ur_null,
-			GfxBuffer *customCB1 = ur_null);
+			GfxRenderState *customRenderState = ur_null,
+			GfxPixelShader *customPixelShader = ur_null,
+			GfxBuffer *customConstBufferSlot1 = ur_null);
 
 	protected:
 
@@ -108,6 +109,8 @@ namespace UnlimRealms
 		};
 
 	protected:
+
+		static GfxRenderState DefaultQuadRenderState;
 
 		Result CreateGfxObjects();
 

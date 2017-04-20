@@ -402,12 +402,10 @@ namespace UnlimRealms
 		static const ur_uint MaxRenderTargets = 8;
 		static const ur_uint MaxSamplerStates = 16;
 
-		GfxPrimitiveTopology PrimitiveTopology;
 		GfxSamplerState SamplerState[MaxSamplerStates];
 		GfxRasterizerState RasterizerState;
 		GfxDepthStencilState DepthStencilState;
 		GfxBlendState BlendState[MaxRenderTargets];
-		ur_uint StencilRef;
 
 		static const GfxRenderState Default;
 	};

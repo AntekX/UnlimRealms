@@ -138,6 +138,9 @@
     <ClInclude Include="..\..\UnlimRealms\Multiverse\Multiverse.h">
       <Filter>Multiverse</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\HDRRender\HDRRender.h">
+      <Filter>HDRRender</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -224,6 +227,9 @@
     <ClCompile Include="..\..\UnlimRealms\Multiverse\Multiverse.cpp">
       <Filter>Multiverse</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\HDRRender\HDRRender.cpp">
+      <Filter>HDRRender</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Core">
@@ -270,6 +276,9 @@
     </Filter>
     <Filter Include="Multiverse">
       <UniqueIdentifier>{2ddd94e3-bd52-49c4-b6ca-28d3ae13be85}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="HDRRender">
+      <UniqueIdentifier>{ebc3c85d-b650-493a-b098-6e95fa152f73}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

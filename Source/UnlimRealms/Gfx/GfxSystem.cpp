@@ -577,7 +577,12 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	GfxPipelineState::GfxPipelineState(GfxSystem &gfxSystem) :
-		GfxEntity(gfxSystem)
+		GfxEntity(gfxSystem),
+		PrimitiveTopology(GfxPrimitiveTopology::TriangleList),
+		StencilRef(0x0),
+		InputLayout(ur_null),
+		VertexShader(ur_null),
+		PixelShader(ur_null)
 	{
 	}
 

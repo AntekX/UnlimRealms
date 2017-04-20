@@ -83,12 +83,12 @@ namespace UnlimRealms
 		res = this->GetRealm().GetGfxSystem()->CreatePipelineState(this->gfxPipelineState);
 		if (Succeeded(res))
 		{
+			this->gfxPipelineState->PrimitiveTopology = GfxPrimitiveTopology::TriangleList;
 			this->gfxPipelineState->InputLayout = this->gfxInputLayout.get();
 			this->gfxPipelineState->VertexShader = this->gfxVS.get();
 			this->gfxPipelineState->PixelShader = this->gfxPS.get();
 
 			GfxRenderState gfxState = GfxRenderState::Default;
-			gfxState.PrimitiveTopology = GfxPrimitiveTopology::TriangleList;
 			
 			gfxState.BlendState[0].BlendEnable = true;
 			gfxState.BlendState[0].SrcBlend = GfxBlendFactor::SrcAlpha;

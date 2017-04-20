@@ -72,7 +72,6 @@ namespace UnlimRealms
 	};
 
 	const GfxRenderState GfxRenderState::Default = {
-		GfxPrimitiveTopology::TriangleList, // PrimitiveTopology
 		{									// SamplerState
 			GfxSamplerState::Default,
 			GfxSamplerState::Default,
@@ -103,7 +102,6 @@ namespace UnlimRealms
 			GfxBlendState::Default,
 			GfxBlendState::Default
 		},
-		0x0									// StencilRef
 	};
 
 } // end namespace UnlimRealms
