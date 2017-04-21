@@ -57,6 +57,8 @@ namespace UnlimRealms
 			GfxPixelShader *customPixelShader = ur_null,
 			GfxBuffer *customConstBufferSlot1 = ur_null);
 
+		const GfxRenderState& GetDefaultQuadRenderState() const { return DefaultQuadRenderState; }
+
 	protected:
 
 		struct GfxObjects

@@ -309,6 +309,9 @@
     <FxCompile Include="..\..\UnlimRealms\Atmosphere\Atmosphere_ps.hlsl">
       <Filter>Atmosphere</Filter>
     </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\HDRRender\AverageLuminance_ps.hlsl">
+      <Filter>HDRRender</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli">

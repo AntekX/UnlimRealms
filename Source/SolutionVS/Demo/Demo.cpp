@@ -134,7 +134,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x * 1.0f;
 		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
 
-		dataVolume->Save("test.isd", desc.CellSize, desc.LatticeResolution);
+		//dataVolume->Save("test.isd", desc.CellSize, desc.LatticeResolution);
 
 		isosurface->Init(std::move(dataVolume), std::move(presentation));
 	}

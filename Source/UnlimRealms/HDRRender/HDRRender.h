@@ -36,11 +36,20 @@ namespace UnlimRealms
 
 		Result CreateGfxObjects();
 
+		static GfxRenderState AverageLuminanceRenderState;
+
+		struct alignas(16) AverageLuminanceCB
+		{
+			ur_float2 SrcTargetSize;
+		};
+
 		struct GfxObjects
 		{
 			std::unique_ptr<GfxRenderTarget> hdrRT;
-			std::unique_ptr<GfxRenderTarget> luminanceRT;
-			std::unique_ptr<GfxPixelShader> computeLuminancePS;
+			std::vector<std::unique_ptr<GfxRenderTarget>> avgLumRTChain;			
+			GfxRenderState averageLuminanceRS;
+			std::unique_ptr<GfxPixelShader> averageLuminancePS;
+			std::unique_ptr<GfxBuffer> averageLuminanceCB;
 			std::unique_ptr<GfxPixelShader> tonemappingPS;
 		};
 

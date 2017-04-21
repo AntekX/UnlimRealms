@@ -32,15 +32,28 @@ namespace UnlimRealms
 		this->gfxObjects.reset(ur_null);
 		std::unique_ptr<GfxObjects> gfxObjects(new GfxObjects());
 
+		// HDR RT
 		res = this->GetRealm().GetGfxSystem()->CreateRenderTarget(gfxObjects->hdrRT);
 		if (Failed(res))
 			return ResultError(Failure, "HDRRender::CreateGfxObjects: failed to create HDR render target");
 
-		res = this->GetRealm().GetGfxSystem()->CreateRenderTarget(gfxObjects->luminanceRT);
+		// average luminance PS
+		res = CreatePixelShaderFromFile(this->GetRealm(), gfxObjects->averageLuminancePS, "AverageLuminance_ps.cso");
 		if (Failed(res))
-			return ResultError(Failure, "HDRRender::CreateGfxObjects: failed to create luminance render target");
+			return ResultError(Failure, "HDRRender::CreateGfxObjects: failed to initialize average luminance PS");
 
-		// todo: create other gfx objects
+		// average luminance CB
+		res = this->GetRealm().GetGfxSystem()->CreateBuffer(gfxObjects->averageLuminanceCB);
+		if (Succeeded(res))
+		{
+			res = gfxObjects->averageLuminanceCB->Initialize(sizeof(AverageLuminanceCB), GfxUsage::Dynamic,
+				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "HDRRender::CreateGfxObjects: failed to initialize average luminance CB");
+
+		// todo: tonemapping PS
+		//tonemappingPS;
 
 		this->gfxObjects = std::move(gfxObjects);
 
@@ -59,7 +72,7 @@ namespace UnlimRealms
 		}
 
 		if (ur_null == this->gfxObjects)
-			return NotInitialized;
+			return NotInitialized;		
 
 		// (re)init HDR target
 		GfxTextureDesc descRT;
@@ -75,15 +88,46 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "HDRRender::Init: failed to initialize HDR render target");
 
-		// (re)init luminance render targets chain
-		ur_float widthLevels = floor(log2(ur_float(width)));
-		ur_float heightLevels = floor(log2(ur_float(height)));
+		// (re)create and/or (re)init luminance render targets chain
+		ur_float widthLevels = ceil(log2(ur_float(width)));
+		ur_float heightLevels = ceil(log2(ur_float(height)));
+		ur_uint avgLumRTChainSize = std::max(std::max(ur_uint(widthLevels), ur_uint(heightLevels)), ur_uint(1));
 		descRT.Levels = 1;
-		descRT.Width = (ur_uint)pow(2.0f, widthLevels)/4;
-		descRT.Height = (ur_uint)pow(2.0f, heightLevels)/4;
-		res = gfxObjects->luminanceRT->Initialize(descRT, false, GfxFormat::Unknown);
+		descRT.Width = (ur_uint)pow(2.0f, widthLevels - 1);
+		descRT.Height = (ur_uint)pow(2.0f, heightLevels - 1);
+		this->gfxObjects->avgLumRTChain.resize(avgLumRTChainSize);
+		for (ur_uint i = 0; i < avgLumRTChainSize; ++i)
+		{
+			auto &avgLumRT = this->gfxObjects->avgLumRTChain[i];
+			if (ur_null == avgLumRT.get())
+			{
+				res = this->GetRealm().GetGfxSystem()->CreateRenderTarget(avgLumRT);
+				if (Failed(res)) break;
+			}
+			
+			res = avgLumRT->Initialize(descRT, false, GfxFormat::Unknown);
+			if (Failed(res)) break;
+
+			descRT.Width = std::max(ur_uint(1), descRT.Width >> 1);
+			descRT.Height = std::max(ur_uint(1), descRT.Height >> 1);
+		}
 		if (Failed(res))
+		{
+			this->gfxObjects->avgLumRTChain.clear();
 			return ResultError(Failure, "HDRRender::Init: failed to initialize luminance render targets chain");
+		}
+
+		// init custom generic quad render state
+		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
+		res = (genericRender != ur_null);
+		if (Succeeded(res))
+		{
+			this->gfxObjects->averageLuminanceRS = genericRender->GetDefaultQuadRenderState();
+			this->gfxObjects->averageLuminanceRS.SamplerState[0].MinFilter = GfxFilter::Point;
+			this->gfxObjects->averageLuminanceRS.SamplerState[0].MagFilter = GfxFilter::Point;
+		}
+		if (Failed(res))
+			return ResultError(NotInitialized, "HDRRender::Init: failed to get GenericRender component");
 
 		return res;
 	}
@@ -112,15 +156,33 @@ namespace UnlimRealms
 		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
 		if (ur_null == this->gfxObjects || ur_null == genericRender)
 			return NotInitialized;
-
+		
+		// todo: compute luminance targets chain
 		// render test luminance texture
-		Result res = gfxContext.SetRenderTarget(this->gfxObjects->luminanceRT.get());
+		if (this->gfxObjects->avgLumRTChain.empty())
+			return NotInitialized;
+
+		auto &avgLumRT = this->gfxObjects->avgLumRTChain[0];
+		Result res = gfxContext.SetRenderTarget(avgLumRT.get());
 		if (Failed(res))
 			return res;
 
-		res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer());
+		AverageLuminanceCB cb;
+		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
+		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Height;
+		GfxResourceData cbResData = { &cb, sizeof(AverageLuminanceCB), 0 };
+		gfxContext.UpdateBuffer(this->gfxObjects->averageLuminanceCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
-		// todo: compute luminance targets chain
+		res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null,
+			&this->gfxObjects->averageLuminanceRS,
+			this->gfxObjects->averageLuminancePS.get(),
+			this->gfxObjects->averageLuminanceCB.get());
+
+		/*gfxContext.SetRenderTarget(this->gfxObjects->avgLumRTChain[2].get());
+		res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->avgLumRTChain[0]->GetTargetBuffer(), ur_null,
+			&this->gfxObjects->averageLuminanceRS,
+			this->gfxObjects->averageLuminancePS.get(),
+			this->gfxObjects->averageLuminanceCB.get());*/
 
 		return res;
 	}
@@ -133,6 +195,7 @@ namespace UnlimRealms
 
 		// todo: render hdrRT texture to active RT using previously computed avg log luminance 
 		Result res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer());
+		//Result res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->avgLumRTChain[2]->GetTargetBuffer());
 
 		return res;
 	}
