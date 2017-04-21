@@ -11,6 +11,7 @@
 #include "Sys/Log.h"
 #include "Resources/Resources.h"
 #include "GenericRender/GenericRender.h"
+#include "ImguiRender/ImguiRender.h"
 
 namespace UnlimRealms
 {
@@ -157,32 +158,41 @@ namespace UnlimRealms
 		if (ur_null == this->gfxObjects || ur_null == genericRender)
 			return NotInitialized;
 		
-		// todo: compute luminance targets chain
-		// render test luminance texture
 		if (this->gfxObjects->avgLumRTChain.empty())
 			return NotInitialized;
 
-		auto &avgLumRT = this->gfxObjects->avgLumRTChain[0];
-		Result res = gfxContext.SetRenderTarget(avgLumRT.get());
-		if (Failed(res))
-			return res;
+		// todo: compute luminance targets chain
 
 		AverageLuminanceCB cb;
+		GfxResourceData cbResData = { &cb, sizeof(AverageLuminanceCB), 0 };
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
 		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Height;
-		GfxResourceData cbResData = { &cb, sizeof(AverageLuminanceCB), 0 };
 		gfxContext.UpdateBuffer(this->gfxObjects->averageLuminanceCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
-		res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null,
+		// HDR RT to luminance first target
+		Result res = Success;
+		res &= gfxContext.SetRenderTarget(this->gfxObjects->avgLumRTChain[0].get());
+		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null,
 			&this->gfxObjects->averageLuminanceRS,
 			this->gfxObjects->averageLuminancePS.get(),
 			this->gfxObjects->averageLuminanceCB.get());
 
-		/*gfxContext.SetRenderTarget(this->gfxObjects->avgLumRTChain[2].get());
-		res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->avgLumRTChain[0]->GetTargetBuffer(), ur_null,
-			&this->gfxObjects->averageLuminanceRS,
-			this->gfxObjects->averageLuminancePS.get(),
-			this->gfxObjects->averageLuminanceCB.get());*/
+		// compute average luminance from 2x2 texels of source RT and write to the next target in chain
+		for (ur_size irt = 1; irt < this->gfxObjects->avgLumRTChain.size(); ++irt)
+		{
+			auto &srcRT = this->gfxObjects->avgLumRTChain[irt - 1];
+			auto &dstRT = this->gfxObjects->avgLumRTChain[irt];
+
+			cb.SrcTargetSize.x = (ur_float)srcRT->GetTargetBuffer()->GetDesc().Width;
+			cb.SrcTargetSize.y = (ur_float)srcRT->GetTargetBuffer()->GetDesc().Height;
+			gfxContext.UpdateBuffer(this->gfxObjects->averageLuminanceCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+			
+			gfxContext.SetRenderTarget(dstRT.get());
+			res = genericRender->RenderScreenQuad(gfxContext, srcRT->GetTargetBuffer(), ur_null,
+				&this->gfxObjects->averageLuminanceRS,
+				this->gfxObjects->averageLuminancePS.get(),
+				this->gfxObjects->averageLuminanceCB.get());
+		}
 
 		return res;
 	}
@@ -195,7 +205,19 @@ namespace UnlimRealms
 
 		// todo: render hdrRT texture to active RT using previously computed avg log luminance 
 		Result res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer());
-		//Result res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->avgLumRTChain[2]->GetTargetBuffer());
+
+		{ // debug output
+			int mip = 0;
+			ImGui::InputInt("HDR Render Luminance Mip", &mip);
+			auto &lumRT = this->gfxObjects->avgLumRTChain.back();
+			GfxViewPort viewPort;
+			gfxContext.GetViewPort(viewPort);
+			ur_float sh = (ur_float)viewPort.Width / 4;
+			ur_float w = (ur_float)lumRT->GetTargetBuffer()->GetDesc().Width;
+			ur_float h = (ur_float)lumRT->GetTargetBuffer()->GetDesc().Height;
+			genericRender->RenderScreenQuad(gfxContext, lumRT->GetTargetBuffer(),
+				RectF(0.0f, viewPort.Height - sh, sh * w / h, (ur_float)viewPort.Height));
+		}
 
 		return res;
 	}

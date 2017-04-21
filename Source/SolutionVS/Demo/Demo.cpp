@@ -219,14 +219,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			// resolve HDR image to back buffer
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
 			hdrRender->Resolve(*gfxContext);
-			
-			//{ // render target debug output example
-			//	ur_float sh = (ur_float)canvasHeight / 4;
-			//	ur_float w = (ur_float)gfxLuminanceTarget->GetTargetBuffer()->GetDesc().Width;
-			//	ur_float h = (ur_float)gfxLuminanceTarget->GetTargetBuffer()->GetDesc().Height;
-			//	genericRender->RenderScreenQuad(*gfxContext, gfxLuminanceTarget->GetTargetBuffer(),
-			//		RectF(0.0f, canvasHeight - sh, sh * w / h, (ur_float)canvasHeight), ur_null, gfxSamplePS.get());
-			//}
 
 			// render batched generic primitives
 			genericRender->Render(*gfxContext, camera.GetViewProj());
