@@ -119,8 +119,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		});*/
 		// canyons
 		generateParams.octaves.assign({
-			{ 1.100f, 8.0f, -1.00f, 0.4f },
-			{ 0.345f, 32.0f, -0.5f, 0.1f },
+			{ 1.100f, 8.0f, -0.20f, 0.4f },
+			{ 0.345f, 32.0f, -0.25f, 0.1f },
 			{ 0.035f, 128.0f, -1.0f, 0.2f },
 		});
 
@@ -145,6 +145,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		Atmosphere::Desc desc = Atmosphere::Desc::Default;
 		desc.InnerRadius = surfaceRadiusMin;
 		desc.OuterRadius = surfaceRadiusMin + (surfaceRadiusMax - surfaceRadiusMin) * 3.0f;
+		desc.Km = 0.0005f;
+		desc.Kr = 0.0015f;
 		atmosphere->Init(desc);
 	}
 

@@ -1,0 +1,5 @@
+﻿1>------ Build started: Project: UnlimRealms, Configuration: Release x64 ------
+1>  compilation object save succeeded; see D:\Projects\UnlimRealms\Bin\ToneMapping_ps.cso
+1>  UnlimRealms.vcxproj -> D:\Projects\UnlimRealms\Source\SolutionVS\UnlimRealms\..\..\..\Bin\UnlimRealms.dll
+1>  UnlimRealms.vcxproj -> ..\..\..\Bin\UnlimRealms.pdb (Full PDB)
+========== Build: 1 succeeded, 0 failed, 1 up-to-date, 0 skipped ==========

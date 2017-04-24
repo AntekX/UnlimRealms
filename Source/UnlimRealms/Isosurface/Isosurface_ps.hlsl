@@ -22,7 +22,7 @@ float4 main(PS_INPUT input) : SV_Target
 	const float3 sunDir = float3(1, 0, 0);
 	const float3 sphereN = normalize(input.wpos.xyz);
 	const float slope = max(0.0, dot(n, sphereN));
-	const float3 surfColor = lerp(float3(0.7, 0.5, 0.3)*0.75, float3(0.7, 0.8, 0.4), slope);
+	const float3 surfColor = lerp(float3(0.7, 0.5, 0.5)*0.75, float3(1.0, 0.6, 0.2), slope);
 	const float3 ambientLight = float3(0.1, 0.1, 0.15);
 	const float sunLightWrap = 0.5;
 	const float sunNdotL = max(0.0, (dot(-sunDir, n) + sunLightWrap) / (1.0 + sunLightWrap));
