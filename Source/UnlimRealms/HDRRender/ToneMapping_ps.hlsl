@@ -16,7 +16,8 @@ struct PS_INPUT
 	float2 uv	: TEXCOORD0;
 };
 sampler sampler0	: register(s0);
-Texture2D texture0	: register(t0);
+Texture2D hdrTexture	: register(t0);
+Texture2D avgLumTexture	: register(t1);
 
 cbuffer Constants : register(b1)
 {
@@ -25,23 +26,18 @@ cbuffer Constants : register(b1)
 	float WhitePoint;
 };
 
-static const int SampleCount = 4;
-static const float2 SampleOfs[SampleCount] = {
-	{ 0.0, 0.0 }, { 1.0, 0.0 },
-	{ 0.0, 1.0 }, { 1.0, 1.0 }
-};
-
 float4 main(PS_INPUT input) : SV_Target
 {
-	// log average luminance
-	float lumAvg = 0.0;
-	[unroll] for (int i = 0; i < SampleCount; ++i)
-	{
-		float2 uv = input.uv + SampleOfs[i] / SrcTargetSize;
-		float4 hdrVal = texture0.Sample(sampler0, uv);
-		float Lp = 0.27 * hdrVal.r + 0.67 * hdrVal.g + 0.06 * hdrVal.b;
-		lumAvg += Lp;
-	}
-	lumAvg = lumAvg / SampleCount;
-	return lumAvg;
+	static const float Gamma = 2.2;
+	static const float GammaRcp = 1.0 / Gamma;
+	
+	float4 hdrVal = hdrTexture.Sample(sampler0, input.uv);
+	float frameLum = exp(log((avgLumTexture.Sample(sampler0, float2(0.0, 0.0)).x)));
+	float Lp = 0.27 * hdrVal.r + 0.67 * hdrVal.g + 0.06 * hdrVal.b;
+	float L = LumScale * Lp / frameLum;
+	float Lt = L * (1.0 + L / (WhitePoint * WhitePoint)) / (1.0 + L);
+	float4 ldrVal = saturate(hdrVal * Lt);
+	float4 finalColor = pow(ldrVal, GammaRcp);
+	
+	return finalColor;
 }

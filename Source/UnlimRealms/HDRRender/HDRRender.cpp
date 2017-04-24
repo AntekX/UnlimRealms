@@ -38,23 +38,25 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "HDRRender::CreateGfxObjects: failed to create HDR render target");
 
-		// average luminance PS
-		res = CreatePixelShaderFromFile(this->GetRealm(), gfxObjects->averageLuminancePS, "AverageLuminance_ps.cso");
-		if (Failed(res))
-			return ResultError(Failure, "HDRRender::CreateGfxObjects: failed to initialize average luminance PS");
-
-		// average luminance CB
-		res = this->GetRealm().GetGfxSystem()->CreateBuffer(gfxObjects->averageLuminanceCB);
+		// constants CB
+		res = this->GetRealm().GetGfxSystem()->CreateBuffer(gfxObjects->constantsCB);
 		if (Succeeded(res))
 		{
-			res = gfxObjects->averageLuminanceCB->Initialize(sizeof(AverageLuminanceCB), GfxUsage::Dynamic,
+			res = gfxObjects->constantsCB->Initialize(sizeof(ConstantsCB), GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
 			return ResultError(Failure, "HDRRender::CreateGfxObjects: failed to initialize average luminance CB");
 
-		// todo: tonemapping PS
-		//tonemappingPS;
+		// average luminance PS
+		res = CreatePixelShaderFromFile(this->GetRealm(), gfxObjects->averageLuminancePS, "AverageLuminance_ps.cso");
+		if (Failed(res))
+			return ResultError(Failure, "HDRRender::CreateGfxObjects: failed to initialize average luminance PS");
+
+		// tone mapping PS
+		res = CreatePixelShaderFromFile(this->GetRealm(), gfxObjects->toneMappingPS, "ToneMapping_ps.cso");
+		if (Failed(res))
+			return ResultError(Failure, "HDRRender::CreateGfxObjects: failed to initialize tone mapping PS");
 
 		this->gfxObjects = std::move(gfxObjects);
 
@@ -123,9 +125,9 @@ namespace UnlimRealms
 		res = (genericRender != ur_null);
 		if (Succeeded(res))
 		{
-			this->gfxObjects->averageLuminanceRS = genericRender->GetDefaultQuadRenderState();
-			this->gfxObjects->averageLuminanceRS.SamplerState[0].MinFilter = GfxFilter::Point;
-			this->gfxObjects->averageLuminanceRS.SamplerState[0].MagFilter = GfxFilter::Point;
+			this->gfxObjects->quadPointSamplerRS = genericRender->GetDefaultQuadRenderState();
+			this->gfxObjects->quadPointSamplerRS.SamplerState[0].MinFilter = GfxFilter::Point;
+			this->gfxObjects->quadPointSamplerRS.SamplerState[0].MagFilter = GfxFilter::Point;
 		}
 		if (Failed(res))
 			return ResultError(NotInitialized, "HDRRender::Init: failed to get GenericRender component");
@@ -155,27 +157,23 @@ namespace UnlimRealms
 	Result HDRRender::EndRender(GfxContext &gfxContext)
 	{
 		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
-		if (ur_null == this->gfxObjects || ur_null == genericRender)
+		if (ur_null == this->gfxObjects || ur_null == genericRender ||
+			this->gfxObjects->avgLumRTChain.empty())
 			return NotInitialized;
 		
-		if (this->gfxObjects->avgLumRTChain.empty())
-			return NotInitialized;
-
-		// todo: compute luminance targets chain
-
-		AverageLuminanceCB cb;
-		GfxResourceData cbResData = { &cb, sizeof(AverageLuminanceCB), 0 };
+		ConstantsCB cb;
+		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
 		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Height;
-		gfxContext.UpdateBuffer(this->gfxObjects->averageLuminanceCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
 		// HDR RT to luminance first target
 		Result res = Success;
 		res &= gfxContext.SetRenderTarget(this->gfxObjects->avgLumRTChain[0].get());
 		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null,
-			&this->gfxObjects->averageLuminanceRS,
+			&this->gfxObjects->quadPointSamplerRS,
 			this->gfxObjects->averageLuminancePS.get(),
-			this->gfxObjects->averageLuminanceCB.get());
+			this->gfxObjects->constantsCB.get());
 
 		// compute average luminance from 2x2 texels of source RT and write to the next target in chain
 		for (ur_size irt = 1; irt < this->gfxObjects->avgLumRTChain.size(); ++irt)
@@ -185,13 +183,13 @@ namespace UnlimRealms
 
 			cb.SrcTargetSize.x = (ur_float)srcRT->GetTargetBuffer()->GetDesc().Width;
 			cb.SrcTargetSize.y = (ur_float)srcRT->GetTargetBuffer()->GetDesc().Height;
-			gfxContext.UpdateBuffer(this->gfxObjects->averageLuminanceCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+			gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 			
 			gfxContext.SetRenderTarget(dstRT.get());
 			res = genericRender->RenderScreenQuad(gfxContext, srcRT->GetTargetBuffer(), ur_null,
-				&this->gfxObjects->averageLuminanceRS,
+				&this->gfxObjects->quadPointSamplerRS,
 				this->gfxObjects->averageLuminancePS.get(),
-				this->gfxObjects->averageLuminanceCB.get());
+				this->gfxObjects->constantsCB.get());
 		}
 
 		return res;
@@ -200,19 +198,31 @@ namespace UnlimRealms
 	Result HDRRender::Resolve(GfxContext &gfxContext)
 	{
 		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
-		if (ur_null == this->gfxObjects || ur_null == genericRender)
+		if (ur_null == this->gfxObjects || ur_null == genericRender ||
+			this->gfxObjects->avgLumRTChain.empty())
 			return NotInitialized;
 
-		// todo: render hdrRT texture to active RT using previously computed avg log luminance 
-		Result res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer());
+		ConstantsCB cb;
+		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
+		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
+		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Height;
+		cb.LumScale = 1.0f;
+		cb.WhitePoint = 1.0f;
+		// todo: add debug control for white point and luminance scale
+		gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+
+		// do tonemapping
+		gfxContext.SetTexture(this->gfxObjects->avgLumRTChain.back()->GetTargetBuffer(), 1);
+		Result res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null,
+			&this->gfxObjects->quadPointSamplerRS,
+			this->gfxObjects->toneMappingPS.get(),
+			this->gfxObjects->constantsCB.get());
 
 		{ // debug output
-			int mip = 0;
-			ImGui::InputInt("HDR Render Luminance Mip", &mip);
 			auto &lumRT = this->gfxObjects->avgLumRTChain.back();
 			GfxViewPort viewPort;
 			gfxContext.GetViewPort(viewPort);
-			ur_float sh = (ur_float)viewPort.Width / 4;
+			ur_float sh = (ur_float)viewPort.Width / 8;
 			ur_float w = (ur_float)lumRT->GetTargetBuffer()->GetDesc().Width;
 			ur_float h = (ur_float)lumRT->GetTargetBuffer()->GetDesc().Height;
 			genericRender->RenderScreenQuad(gfxContext, lumRT->GetTargetBuffer(),

@@ -10,6 +10,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define LIGHT_WRAP 1
+#define APPLY_EXPOSURE 0
 static const int NumSamples = 4;
 static const float NumSamplesInv = 1.0 / NumSamples;
 static const float Pi = 3.14159;
@@ -105,7 +106,9 @@ float4 atmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const
 	float RayleighPhase = 0.75 * (1.0 + fCos*fCos);
 	float MiePhase = 1.5 * ((1.0 - G2) / (2.0 + G2)) * (1.0 + fCos*fCos) / pow(max(0.0, 1.0 + G2 - 2.0*a.G*fCos), 1.5);
 	output.rgb = (RayleighPhase * color + MiePhase * secondaryColor);
+	#if APPLY_EXPOSURE
 	output.rgb = 1.0 - exp(-Exposure * output.rgb);
+	#endif
 	//output.a = output.b;
 	output.a = max(max(output.r, output.r), output.b);
 
@@ -196,6 +199,8 @@ float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, fl
 	float3 c0 = v3FrontColor * (WaveLengthInv * KrESun + KmESun);
 	float3 c1 = max(ESun * 0.0025, v3Attenuate);
 	float3 c = (c0 + c1 * surfLight);
+	#if APPLY_EXPOSURE
 	c = 1.0 - exp(-Exposure * c);
+	#endif
 	return float4(c, 1.0);
 }
