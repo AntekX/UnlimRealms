@@ -202,13 +202,20 @@ namespace UnlimRealms
 			this->gfxObjects->avgLumRTChain.empty())
 			return NotInitialized;
 
+		// temp: add debug control for white point and luminance scale
+		static float DbgLumKey = 0.36f;
+		static float DbgLumWhite = 1.0e+4f; // "infinite" white
+		ImGui::Begin("HDR Rendering");
+		ImGui::DragFloat("LumKey", &DbgLumKey, 0.01f, 0.01f, 1.0f);
+		ImGui::InputFloat("LumWhite", &DbgLumWhite);
+		ImGui::End();
+
 		ConstantsCB cb;
 		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
 		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Height;
-		cb.LumScale = 1.0f;
-		cb.WhitePoint = 1.0f;
-		// todo: add debug control for white point and luminance scale
+		cb.LumKey = DbgLumKey;
+		cb.LumWhite = DbgLumWhite;
 		gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
 		// do tonemapping

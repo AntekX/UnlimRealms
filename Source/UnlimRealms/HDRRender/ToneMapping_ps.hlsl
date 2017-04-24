@@ -22,20 +22,21 @@ Texture2D avgLumTexture	: register(t1);
 cbuffer Constants : register(b1)
 {
 	float2 SrcTargetSize;
-	float LumScale;
-	float WhitePoint;
+	float LumKey;
+	float LumWhite;
 };
+static const float Gamma = 2.2;
+static const float GammaRcp = 1.0 / Gamma;
+static const float Eps = 1.0e-6;
 
 float4 main(PS_INPUT input) : SV_Target
 {
-	static const float Gamma = 2.2;
-	static const float GammaRcp = 1.0 / Gamma;
-	
 	float4 hdrVal = hdrTexture.Sample(sampler0, input.uv);
-	float frameLum = exp(log((avgLumTexture.Sample(sampler0, float2(0.0, 0.0)).x)));
+	float4 lumData = avgLumTexture.Sample(sampler0, float2(0.0, 0.0));
+	float Lf = exp(log(lumData.x + Eps));
 	float Lp = 0.27 * hdrVal.r + 0.67 * hdrVal.g + 0.06 * hdrVal.b;
-	float L = LumScale * Lp / frameLum;
-	float Lt = L * (1.0 + L / (WhitePoint * WhitePoint)) / (1.0 + L);
+	float L = LumKey / Lf * Lp ;
+	float Lt = L * (1.0 + L / (LumWhite * LumWhite)) / (1.0 + L);
 	float4 ldrVal = saturate(hdrVal * Lt);
 	float4 finalColor = pow(ldrVal, GammaRcp);
 	

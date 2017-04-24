@@ -41,8 +41,8 @@ namespace UnlimRealms
 		struct alignas(16) ConstantsCB
 		{
 			ur_float2 SrcTargetSize;
-			ur_float LumScale;
-			ur_float WhitePoint;
+			ur_float LumKey;
+			ur_float LumWhite;
 		};
 
 		struct GfxObjects

@@ -21,8 +21,8 @@ Texture2D texture0	: register(t0);
 cbuffer Constants : register(b1)
 {
 	float2 SrcTargetSize;
-	float LumScale;
-	float WhitePoint;
+	float LumKey;
+	float LumWhite;
 };
 
 static const int SampleCount = 4;
@@ -33,7 +33,6 @@ static const float2 SampleOfs[SampleCount] = {
 
 float4 main(PS_INPUT input) : SV_Target
 {
-	// log average luminance
 	float lumAvg = 0.0;
 	[unroll] for (int i = 0; i < SampleCount; ++i)
 	{
