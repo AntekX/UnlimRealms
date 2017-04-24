@@ -226,13 +226,13 @@ namespace UnlimRealms
 			this->gfxObjects->constantsCB.get());
 
 		{ // debug output
-			auto &lumRT = this->gfxObjects->avgLumRTChain.back();
+			auto &dbgRT = this->gfxObjects->hdrRT;
 			GfxViewPort viewPort;
 			gfxContext.GetViewPort(viewPort);
 			ur_float sh = (ur_float)viewPort.Width / 8;
-			ur_float w = (ur_float)lumRT->GetTargetBuffer()->GetDesc().Width;
-			ur_float h = (ur_float)lumRT->GetTargetBuffer()->GetDesc().Height;
-			genericRender->RenderScreenQuad(gfxContext, lumRT->GetTargetBuffer(),
+			ur_float w = (ur_float)dbgRT->GetTargetBuffer()->GetDesc().Width;
+			ur_float h = (ur_float)dbgRT->GetTargetBuffer()->GetDesc().Height;
+			genericRender->RenderScreenQuad(gfxContext, dbgRT->GetTargetBuffer(),
 				RectF(0.0f, viewPort.Height - sh, sh * w / h, (ur_float)viewPort.Height));
 		}
 

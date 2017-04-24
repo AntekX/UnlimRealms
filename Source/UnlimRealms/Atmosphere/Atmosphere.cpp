@@ -25,7 +25,7 @@ namespace UnlimRealms
 		1.0f,		// InnerRadius
 		1.025f,		// OuterRadius
 		0.25f,		// ScaleDepth
-		-0.90f,		// G
+		-0.92f,		// G
 		0.0025f,	// Km
 		0.0015f,	// Kr
 	};
