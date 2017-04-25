@@ -268,9 +268,9 @@ namespace UnlimRealms
 		ID3D11RenderTargetView *rtView[] = { rt != ur_null ?
 			static_cast<GfxRenderTargetD3D11*>(rt)->GetRTView() :
 			ur_null };
-		ID3D11DepthStencilView *dsView = rt != ur_null ?
+		ID3D11DepthStencilView *dsView = { rt != ur_null ?
 			static_cast<GfxRenderTargetD3D11*>(rt)->GetDSView() :
-			ur_null;
+			ur_null };
 		this->d3dContext->OMSetRenderTargets(1, rtView, dsView);
 
 		if (rt != ur_null)

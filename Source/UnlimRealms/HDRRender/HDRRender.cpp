@@ -170,10 +170,7 @@ namespace UnlimRealms
 		// HDR RT to luminance first target
 		Result res = Success;
 		res &= gfxContext.SetRenderTarget(this->gfxObjects->avgLumRTChain[0].get());
-		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null,
-			&this->gfxObjects->quadPointSamplerRS,
-			this->gfxObjects->averageLuminancePS.get(),
-			this->gfxObjects->constantsCB.get());
+		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer());
 
 		// compute average luminance from 2x2 texels of source RT and write to the next target in chain
 		for (ur_size irt = 1; irt < this->gfxObjects->avgLumRTChain.size(); ++irt)
@@ -225,16 +222,17 @@ namespace UnlimRealms
 			this->gfxObjects->toneMappingPS.get(),
 			this->gfxObjects->constantsCB.get());
 
-		{ // debug output
-			auto &dbgRT = this->gfxObjects->hdrRT;
-			GfxViewPort viewPort;
-			gfxContext.GetViewPort(viewPort);
-			ur_float sh = (ur_float)viewPort.Width / 8;
-			ur_float w = (ur_float)dbgRT->GetTargetBuffer()->GetDesc().Width;
-			ur_float h = (ur_float)dbgRT->GetTargetBuffer()->GetDesc().Height;
-			genericRender->RenderScreenQuad(gfxContext, dbgRT->GetTargetBuffer(),
-				RectF(0.0f, viewPort.Height - sh, sh * w / h, (ur_float)viewPort.Height));
-		}
+		// debug output
+		#if 0
+		auto &dbgRT = this->gfxObjects->hdrRT;
+		GfxViewPort viewPort;
+		gfxContext.GetViewPort(viewPort);
+		ur_float sh = (ur_float)viewPort.Width / 8;
+		ur_float w = (ur_float)dbgRT->GetTargetBuffer()->GetDesc().Width;
+		ur_float h = (ur_float)dbgRT->GetTargetBuffer()->GetDesc().Height;
+		genericRender->RenderScreenQuad(gfxContext, dbgRT->GetTargetBuffer(),
+			RectF(0.0f, viewPort.Height - sh, sh * w / h, (ur_float)viewPort.Height));
+		#endif
 
 		return res;
 	}

@@ -119,7 +119,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		});*/
 		// canyons
 		generateParams.octaves.assign({
-			{ 1.100f, 8.0f, -0.20f, 0.4f },
+			{ 1.100f, 8.0f, -0.25f, 0.4f },
 			{ 0.345f, 32.0f, -0.25f, 0.1f },
 			{ 0.035f, 128.0f, -1.0f, 0.2f },
 		});
@@ -148,6 +148,35 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		desc.Km = 0.0005f;
 		desc.Kr = 0.0015f;
 		atmosphere->Init(desc);
+	}
+
+	// demo moon
+	ur_float moonRadiusMin = 200.0f;
+	ur_float moonRadiusMax = 220.0f;
+	std::unique_ptr<Isosurface> moon(new Isosurface(realm));
+	{
+		ur_float r = moonRadiusMax;
+		ur_float3 p = ur_float3(+1000, 1500.0f, 1500.0f);
+		BoundingBox volumeBound(ur_float3(-r, -r, -r) + p, ur_float3(r, r, r) + p);
+		Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
+		generateParams.bound = volumeBound;
+		generateParams.radiusMin = moonRadiusMin;
+		generateParams.radiusMax = moonRadiusMax;
+		generateParams.octaves.assign({
+			{ 1.000f, 4.0f, -0.0f, 1.0f },
+			{ 0.400f, 16.0f, -1.0f, 0.2f },
+			{ 0.035f, 128.0f, -1.0f, 0.2f },
+		});
+		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*moon.get(),
+			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));
+
+		Isosurface::HybridCubes::Desc desc;
+		desc.CellSize = 2.0f;
+		desc.LatticeResolution = 10;
+		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x * 1.0f;
+		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*moon.get(), desc));
+
+		moon->Init(std::move(dataVolume), std::move(presentation));
 	}
 
 	// demo camera
@@ -200,10 +229,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		// update isosurface
 		isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
 		isosurface->Update();
+		moon->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
 		
 		// update camera control speed depending on the distance to isosurface
-		ur_float surfDist = (camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length();
-		cameraControl.SetSpeed(std::max(0.1f, (surfDist - surfaceRadiusMin) * 0.5f));
+		ur_float surfDist = std::min(
+			(camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length() - surfaceRadiusMin,
+			(camera.GetPosition() - moon->GetData()->GetBound().Center()).Length() - moonRadiusMin);
+		cameraControl.SetSpeed(std::max(0.1f, surfDist * 0.5f));
 
 		{ // use context to draw
 			gfxContext->Begin();
@@ -212,6 +244,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			hdrRender->BeginRender(*gfxContext);
 
 			// draw isosurface
+			moon->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), ur_null);
 			isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
 			atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
 
@@ -233,6 +266,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().Description.c_str());
 			cameraControl.ShowImgui();
 			isosurface->ShowImgui();
+			moon->ShowImgui();
 			ImGui::End();
 
 			// Imgui metrics

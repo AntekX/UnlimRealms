@@ -96,8 +96,8 @@ namespace UnlimRealms
 			gfxRS.BlendState[0].BlendEnable = true;
 			gfxRS.BlendState[0].SrcBlend = GfxBlendFactor::SrcAlpha;
 			gfxRS.BlendState[0].SrcBlendAlpha = GfxBlendFactor::SrcAlpha;
-			gfxRS.BlendState[0].DstBlend = GfxBlendFactor::InvSrcAlpha;
-			gfxRS.BlendState[0].DstBlendAlpha = GfxBlendFactor::InvSrcAlpha;
+			gfxRS.BlendState[0].DstBlend = GfxBlendFactor::One;
+			gfxRS.BlendState[0].DstBlendAlpha = GfxBlendFactor::One;
 			res = this->gfxObjects.pipelineState->SetRenderState(gfxRS);
 		}
 		if (Failed(res))
