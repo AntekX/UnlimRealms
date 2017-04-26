@@ -92,8 +92,11 @@ namespace UnlimRealms
 				gfxPipelineState->InputLayout = this->gfxObjects->inputLayout.get();
 				gfxPipelineState->VertexShader = this->gfxObjects->VS.get();
 				gfxPipelineState->PixelShader = this->gfxObjects->PS.get();
+
+				GfxRenderState gfxState = GfxRenderState::Default;
+				gfxState.RasterizerState.CullMode = GfxCullMode::None;
 				
-				res = gfxPipelineState->SetRenderState(DefaultQuadRenderState);
+				res = gfxPipelineState->SetRenderState(gfxState);
 
 				this->gfxObjects->pipelineState[i] = std::move(gfxPipelineState);
 			}
@@ -184,11 +187,7 @@ namespace UnlimRealms
 				gfxPipelineState->VertexShader = this->gfxObjects->VS.get();
 				gfxPipelineState->PixelShader = this->gfxObjects->PS.get();
 
-				GfxRenderState gfxState = GfxRenderState::Default;
-				gfxState.RasterizerState.CullMode = GfxCullMode::None;
-				gfxState.DepthStencilState.DepthEnable = false;
-
-				res = gfxPipelineState->SetRenderState(gfxState);
+				res = gfxPipelineState->SetRenderState(DefaultQuadRenderState);
 
 				this->gfxObjects->quadState = std::move(gfxPipelineState);
 			}
