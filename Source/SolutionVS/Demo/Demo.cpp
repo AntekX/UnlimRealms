@@ -57,10 +57,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		res = gfxSwapChain->Initialize(canvasWidth, canvasHeight);
 	}
 
-	// temp: sample
-	std::unique_ptr<GfxPixelShader> gfxSamplePS;
-	CreatePixelShaderFromFile(realm, gfxSamplePS, "sample_ps.cso");
-
 	// create gfx context
 	std::unique_ptr<GfxContext> gfxContext;
 	if (Succeeded(realm.GetGfxSystem()->CreateContext(gfxContext)))
@@ -283,6 +279,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		gfxSwapChain->Present();
     }
 	realm.GetLog().WriteLine("Left main message loop");
+
+	// deinitialize explicitly before realm instance destroyed
+	isosurface.reset(ur_null);
+	moon.reset(ur_null);
 
 	return 0;//(int)msg.wParam;
 }
