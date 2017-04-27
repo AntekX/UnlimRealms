@@ -315,6 +315,9 @@
     <FxCompile Include="..\..\UnlimRealms\HDRRender\ToneMapping_ps.hlsl">
       <Filter>HDRRender</Filter>
     </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\HDRRender\HDRTargetLuminance_ps.hlsl">
+      <Filter>HDRRender</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli">
@@ -325,6 +328,9 @@
     </None>
     <None Include="..\..\UnlimRealms\Atmosphere\AtmosphericScattering.hlsli">
       <Filter>Atmosphere</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\HDRRender\HDRRender.hlsli">
+      <Filter>HDRRender</Filter>
     </None>
   </ItemGroup>
 </Project>

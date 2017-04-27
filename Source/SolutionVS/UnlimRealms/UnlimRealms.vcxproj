@@ -261,6 +261,12 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
     </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\HDRRender\HDRTargetLuminance_ps.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
     <FxCompile Include="..\..\UnlimRealms\HDRRender\ToneMapping_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
@@ -310,6 +316,7 @@
   <ItemGroup>
     <None Include="..\..\UnlimRealms\Atmosphere\Atmosphere.hlsli" />
     <None Include="..\..\UnlimRealms\Atmosphere\AtmosphericScattering.hlsli" />
+    <None Include="..\..\UnlimRealms\HDRRender\HDRRender.hlsli" />
     <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

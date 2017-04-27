@@ -48,9 +48,10 @@ namespace UnlimRealms
 		struct GfxObjects
 		{
 			std::unique_ptr<GfxRenderTarget> hdrRT;
-			std::vector<std::unique_ptr<GfxRenderTarget>> avgLumRTChain;			
+			std::vector<std::unique_ptr<GfxRenderTarget>> lumRTChain;
 			GfxRenderState quadPointSamplerRS;
 			std::unique_ptr<GfxBuffer> constantsCB;
+			std::unique_ptr<GfxPixelShader> HDRTargetLuminancePS;
 			std::unique_ptr<GfxPixelShader> averageLuminancePS;
 			std::unique_ptr<GfxPixelShader> toneMappingPS;
 		};
