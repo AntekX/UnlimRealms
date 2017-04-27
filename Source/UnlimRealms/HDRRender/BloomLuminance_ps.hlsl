@@ -14,7 +14,6 @@ float4 main(GenericQuadVertex input) : SV_Target
 {
 	float4 hdrVal = HDRTexture.Sample(CommonSampler, input.uv);
 	float Lp = ComputeLuminance(hdrVal.rgb);
-	float lum = Lp;
-	if (LogLuminance) lum = log(lum + Eps);
-	return lum;
+	float bloom = max(0.0, Lp - BloomLumThreshold);
+	return bloom;
 }

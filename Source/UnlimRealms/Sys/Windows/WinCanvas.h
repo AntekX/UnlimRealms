@@ -31,8 +31,6 @@ namespace UnlimRealms
 
 		virtual ~WinCanvas();
 
-		inline const RectI& GetClientBound() const;
-
 		inline HINSTANCE GetHinstance() const;
 
 		inline HWND GetHwnd() const;
