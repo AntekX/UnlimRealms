@@ -16,7 +16,7 @@
 namespace UnlimRealms
 {
 
-	GfxRenderState GenericRender::DefaultQuadRenderState = GfxRenderState::Default;
+	GfxRenderState GenericRender::DefaultQuadRenderState;
 
 	GenericRender::GenericRender(Realm &realm) :
 		RealmEntity(realm)
@@ -28,7 +28,8 @@ namespace UnlimRealms
 			this->batches[ip].indicesCount = 0;
 		}
 
-		static bool initDefault = [] {
+		static const bool initDefault = [] {
+			DefaultQuadRenderState = GfxRenderState::Default;
 			DefaultQuadRenderState.RasterizerState.CullMode = GfxCullMode::None;
 			DefaultQuadRenderState.DepthStencilState.DepthEnable = false;
 			return true;

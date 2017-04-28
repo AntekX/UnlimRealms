@@ -114,8 +114,8 @@ namespace UnlimRealms
 
 		// (re)init bloom target
 		descRT.Format = GfxFormat::R16;
-		descRT.Width = std::max(ur_uint(1), width / 16);
-		descRT.Height = std::max(ur_uint(1), height / 16);
+		descRT.Width = std::max(ur_uint(1), width / 4);
+		descRT.Height = std::max(ur_uint(1), height / 4);
 		res = gfxObjects->bloomRT[0]->Initialize(descRT, false, GfxFormat::Unknown);
 		res &= gfxObjects->bloomRT[1]->Initialize(descRT, false, GfxFormat::Unknown);
 		if (Failed(res))
@@ -158,6 +158,8 @@ namespace UnlimRealms
 			this->gfxObjects->quadPointSamplerRS = genericRender->GetDefaultQuadRenderState();
 			this->gfxObjects->quadPointSamplerRS.SamplerState[0].MinFilter = GfxFilter::Point;
 			this->gfxObjects->quadPointSamplerRS.SamplerState[0].MagFilter = GfxFilter::Point;
+			this->gfxObjects->quadPointSamplerRS.SamplerState[1].MinFilter = GfxFilter::Linear;
+			this->gfxObjects->quadPointSamplerRS.SamplerState[1].MagFilter = GfxFilter::Linear;
 		}
 		if (Failed(res))
 			return ResultError(NotInitialized, "HDRRender::Init: failed to get GenericRender component");
@@ -215,8 +217,7 @@ namespace UnlimRealms
 			gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 			
 			gfxContext.SetRenderTarget(dstRT.get());
-			res = genericRender->RenderScreenQuad(gfxContext, srcRT->GetTargetBuffer(), ur_null,
-				&this->gfxObjects->quadPointSamplerRS,
+			res = genericRender->RenderScreenQuad(gfxContext, srcRT->GetTargetBuffer(), ur_null, ur_null,
 				this->gfxObjects->averageLuminancePS.get(),
 				this->gfxObjects->constantsCB.get());
 		}
@@ -285,6 +286,7 @@ namespace UnlimRealms
 		// debug output
 		#if 1
 		auto &dbgRT = this->gfxObjects->bloomRT[0];
+		//auto &dbgRT = this->gfxObjects->lumRTChain.back();
 		GfxViewPort viewPort;
 		gfxContext.GetViewPort(viewPort);
 		ur_float sh = (ur_float)viewPort.Width / 8;

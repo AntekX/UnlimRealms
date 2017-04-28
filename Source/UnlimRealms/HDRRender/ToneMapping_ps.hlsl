@@ -7,7 +7,8 @@
 
 #include "HDRRender.hlsli"
 
-sampler CommonSampler	: register(s0);
+sampler PointSampler	: register(s0);
+sampler LinearSampler	: register(s1);
 Texture2D HDRTexture	: register(t0);
 Texture2D LumTexture	: register(t1);
 Texture2D BloomTexture	: register(t2);
@@ -16,18 +17,19 @@ float4 main(GenericQuadVertex input) : SV_Target
 {
 	float4 finalColor = 0.0;
 
-	float4 hdrVal = HDRTexture.Sample(CommonSampler, input.uv);
-	float4 lumData = LumTexture.Sample(CommonSampler, float2(0.0, 0.0));
-	float bloom = 0;// BloomTexture.Sample(CommonSampler, input.uv).x; // todo
+	float4 hdrVal = HDRTexture.Sample(PointSampler, input.uv);
+	float4 lumData = LumTexture.Sample(PointSampler, float2(0.0, 0.0));
+	float bloom = BloomTexture.Sample(LinearSampler, input.uv).x;
 	
-	float Lf = lumData.x;
+	float Lf = (lumData.x + Eps);
 	if (LogLuminance) Lf = exp(Lf);
+	Lf = max(LumAdaptationMin, Lf);
 #if 1
 	// Reinhard
-	float Lp = ComputeLuminance(hdrVal.rgb) + bloom;
+	float Lp = ComputeLuminance(hdrVal.rgb);
 	float L = LumKey / Lf * Lp ;
 	float Lt = L * (1.0 + L / (LumWhite * LumWhite)) / (1.0 + L);
-	finalColor = saturate(hdrVal * Lt);
+	finalColor = saturate(hdrVal * Lt + bloom * Lt);
 #else
 	// Exposure
 	float T = pow(Lf, -1);
