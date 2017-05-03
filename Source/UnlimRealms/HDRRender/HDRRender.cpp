@@ -236,7 +236,7 @@ namespace UnlimRealms
 		ur_uint dstIdx = 0;
 		for (ur_uint ipass = 0; ipass < blurPasses * 2; ++ipass, ++srcIdx)
 		{
-			cb.BlurDirection = ur_float(ipass % blurPasses);
+			cb.BlurDirection = floor(ur_float(ipass) / blurPasses);
 			gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
 			srcIdx = srcIdx % 2;
