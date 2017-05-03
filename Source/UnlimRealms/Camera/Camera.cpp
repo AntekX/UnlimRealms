@@ -16,7 +16,7 @@ namespace UnlimRealms
 		RealmEntity(realm)
 	{
 		this->minViewDist = 1.0e-2f;
-		this->maxViewDist = 1.0e+5f;
+		this->maxViewDist = 1.0e+6f;
 		this->fieldOfView = MathConst<float>::Pi * 0.3f;
 		this->aspectRatio = 1.0f;
 		this->frame.SetIdentity();
