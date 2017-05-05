@@ -141,6 +141,9 @@
     <ClInclude Include="..\..\UnlimRealms\HDRRender\HDRRender.h">
       <Filter>HDRRender</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\RenderGraph\RenderGraph.h">
+      <Filter>RenderGraph</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -230,6 +233,9 @@
     <ClCompile Include="..\..\UnlimRealms\HDRRender\HDRRender.cpp">
       <Filter>HDRRender</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\RenderGraph\RenderGraph.cpp">
+      <Filter>RenderGraph</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Core">
@@ -279,6 +285,9 @@
     </Filter>
     <Filter Include="HDRRender">
       <UniqueIdentifier>{ebc3c85d-b650-493a-b098-6e95fa152f73}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="RenderGraph">
+      <UniqueIdentifier>{666b6d61-9ec2-473b-8ba4-f7087c4fe901}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

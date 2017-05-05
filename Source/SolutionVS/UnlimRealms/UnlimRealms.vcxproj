@@ -180,6 +180,7 @@
     <ClInclude Include="..\..\UnlimRealms\Multiverse\Multiverse.h" />
     <ClInclude Include="..\..\UnlimRealms\Realm\Realm.h" />
     <ClInclude Include="..\..\UnlimRealms\Realm\Realm.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\RenderGraph\RenderGraph.h" />
     <ClInclude Include="..\..\UnlimRealms\Resources\Resources.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Canvas.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Canvas.inline.h" />
@@ -217,6 +218,7 @@
     <ClCompile Include="..\..\UnlimRealms\Isosurface\Isosurface.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Multiverse\Multiverse.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Realm\Realm.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\RenderGraph\RenderGraph.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Resources\Resources.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Canvas.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Input.cpp" />
