@@ -975,15 +975,20 @@ namespace UnlimRealms
 		if (ur_null == node || !bbox.Intersects(node->GetBBox()))
 			return false;
 
-		//if (bbox.Contains(node->GetBBox()))
-		{
-			//ur_float nodeSize = (node->GetBBox().Max - node->GetBBox().Min).Length();
-			//ur_float bboxSize = bbox.SizeMax();
-			ur_float nodeSize = node->GetBBox().SizeMin();
-			ur_float bboxSize = bbox.SizeMax();
-			if (bboxSize > nodeSize)
-				return true;
-		}
+		ur_float nodeSize = node->GetBBox().SizeMin();
+		ur_float bboxSize = bbox.SizeMax();
+		if (bboxSize > nodeSize)
+			return true;
+		//RectF r0, r1, ri;
+		//{ // test XY
+		//	r0.Min.x = bbox.Min.x; r0.Min.y = bbox.Min.y;
+		//	r0.Max.x = bbox.Max.x; r0.Max.y = bbox.Max.y;
+		//	r1.Min.x = node->GetBBox().Min.x; r1.Min.y = node->GetBBox().Min.y;
+		//	r1.Max.x = node->GetBBox().Max.x; r1.Max.y = node->GetBBox().Max.y;
+		//	if (r0.Intersection(r1, ri) && ri.Area() > std::numeric_limits<ur_float>::epsilon() &&
+		//		(ri.Width() < r0.Width() || ri.Height() < r0.Height()))
+		//		return true;
+		//}
 		
 		for (ur_uint i = 0; i < EmptyOctree::Node::SubNodesCount; ++i)
 		{

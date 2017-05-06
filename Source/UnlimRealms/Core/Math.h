@@ -1170,6 +1170,11 @@ namespace UnlimRealms
 			return (Max.y - Min.y);
 		}
 
+		T Area() const
+		{
+			return this->Width() * this->Height();
+		}
+
 		bool IsInsideOut() const
 		{
 			return (this->Width() < 0 || this->Height() < 0);
@@ -1190,6 +1195,23 @@ namespace UnlimRealms
 			Max.x = Min.x + width;
 			Max.y = Min.y + height;
 		}
+
+		bool Intersects(const TRect<T> &r)
+		{
+			return !(r.Min.x > this->Max.x || r.Max.x < this->Min.x ||
+				r.Min.y > this->Max.y || r.Max.y < this->Min.y);
+		}
+
+		bool Intersection(const TRect<T> &r, TRect<T> &interection)
+		{
+			if (!Intersects(r))
+				return false;
+			interection.Min.x = std::max(r.Min.x, this->Min.x);
+			interection.Max.x = std::min(r.Max.x, this->Max.x);
+			interection.Min.y = std::max(r.Min.y, this->Min.y);
+			interection.Max.y = std::min(r.Max.y, this->Max.y);
+			return true;
+		}		
 	};
 
 
