@@ -20,6 +20,13 @@ namespace UnlimRealms
 	{
 	public:
 
+		struct UR_DECL Params
+		{
+			ur_float LumKey;
+			ur_float LumWhite;
+			ur_float BloomThreshold;
+		};
+
 		HDRRender(Realm &realm);
 
 		~HDRRender();
@@ -41,9 +48,8 @@ namespace UnlimRealms
 		struct alignas(16) ConstantsCB
 		{
 			ur_float2 SrcTargetSize;
-			ur_float LumKey;
-			ur_float LumWhite;
 			ur_float BlurDirection;
+			Params params;
 		};
 
 		struct GfxObjects
@@ -61,6 +67,7 @@ namespace UnlimRealms
 		};
 
 		std::unique_ptr<GfxObjects> gfxObjects;
+		Params params;
 	};
 
 } // end namespace UnlimRealms

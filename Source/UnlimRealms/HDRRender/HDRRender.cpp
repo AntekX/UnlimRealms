@@ -19,6 +19,10 @@ namespace UnlimRealms
 	HDRRender::HDRRender(Realm &realm) :
 		RealmEntity(realm)
 	{
+		// init defaults
+		this->params.LumKey = 0.36f;
+		this->params.LumWhite = 1.0e+4f; // "infinite" white
+		this->params.BloomThreshold = 1.0f;
 	}
 
 	HDRRender::~HDRRender()
@@ -113,7 +117,7 @@ namespace UnlimRealms
 			return ResultError(Failure, "HDRRender::Init: failed to initialize HDR render target");
 
 		// (re)init bloom target
-		descRT.Format = GfxFormat::R16;
+		descRT.Format = GfxFormat::R16G16B16A16;
 		descRT.Width = std::max(ur_uint(1), width / 8);
 		descRT.Height = std::max(ur_uint(1), height / 8);
 		res = gfxObjects->bloomRT[0]->Initialize(descRT, false, GfxFormat::Unknown);
@@ -197,6 +201,7 @@ namespace UnlimRealms
 		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
 		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Height;
+		cb.params = this->params;
 		gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
 		// HDR RT to luminance first target
@@ -263,16 +268,16 @@ namespace UnlimRealms
 		static float DbgLumKey = 0.36f;
 		static float DbgLumWhite = 1.0e+4f; // "infinite" white
 		ImGui::Begin("HDR Rendering");
-		ImGui::DragFloat("LumKey", &DbgLumKey, 0.01f, 0.01f, 1.0f);
-		ImGui::InputFloat("LumWhite", &DbgLumWhite);
+		ImGui::DragFloat("LumKey", &this->params.LumKey, 0.01f, 0.01f, 1.0f);
+		ImGui::InputFloat("LumWhite", &this->params.LumWhite);
+		ImGui::DragFloat("Bloom", &this->params.BloomThreshold, 0.01f, 0.01f, 100.0f);
 		ImGui::End();
 
 		ConstantsCB cb;
 		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
 		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Height;
-		cb.LumKey = DbgLumKey;
-		cb.LumWhite = DbgLumWhite;
+		cb.params = this->params;
 		gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
 		// do tonemapping

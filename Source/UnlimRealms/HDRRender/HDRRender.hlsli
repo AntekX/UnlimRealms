@@ -16,15 +16,15 @@ struct GenericQuadVertex
 cbuffer Constants : register(b1)
 {
 	float2 SrcTargetSize;
+	float BlurDirection;
 	float LumKey;
 	float LumWhite;
-	float BlurDirection;
+	float BloomThreshold;
 };
 
 static const float Gamma = 2.2;
 static const float GammaRcp = 1.0 / Gamma;
 static const float LumAdaptationMin = 0.1;
-static const float BloomLumThreshold = 1.0f;
 static const float Eps = 1.0e-6;
 static const bool LogLuminance = false;
 
