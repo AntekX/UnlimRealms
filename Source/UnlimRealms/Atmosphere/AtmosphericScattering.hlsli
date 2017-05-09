@@ -9,22 +9,6 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// logarithmic depth
-// http://outerra.blogspot.com.by/2009/08/logarithmic-z-buffer.html
-// todo: move to common fx
-// temporary here, used in Isosurface and Atmosphere rendering
-float LogDepth(float4 projPos)
-{
-	const float C = 0.001;
-	const float Far = 1.0e+6;
-	return log(C * projPos.w + 1.0) / log(C * Far + 1.0) * projPos.w;
-}
-float4 LogDepthPos(float4 projPos)
-{
-	projPos.z = LogDepth(projPos);
-	return projPos;
-}
-
 #define LIGHT_WRAP 0
 #define APPLY_EXPOSURE 0
 static const int NumSamples = 4;

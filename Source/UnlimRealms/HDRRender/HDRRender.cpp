@@ -265,8 +265,6 @@ namespace UnlimRealms
 			return NotInitialized;
 
 		// temp: add debug control for white point and luminance scale
-		static float DbgLumKey = 0.36f;
-		static float DbgLumWhite = 1.0e+4f; // "infinite" white
 		ImGui::Begin("HDR Rendering");
 		ImGui::DragFloat("LumKey", &this->params.LumKey, 0.01f, 0.01f, 1.0f);
 		ImGui::InputFloat("LumWhite", &this->params.LumWhite);

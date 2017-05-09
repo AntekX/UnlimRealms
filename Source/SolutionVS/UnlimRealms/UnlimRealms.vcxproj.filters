@@ -289,6 +289,9 @@
     <Filter Include="RenderGraph">
       <UniqueIdentifier>{666b6d61-9ec2-473b-8ba4-f7087c4fe901}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ShaderLib">
+      <UniqueIdentifier>{3f5fd6d0-25cb-4925-b205-e25b55bbecf5}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\..\UnlimRealms\ImguiRender\Imgui_ps.hlsl">
@@ -346,6 +349,9 @@
     </None>
     <None Include="..\..\UnlimRealms\HDRRender\HDRRender.hlsli">
       <Filter>HDRRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\ShaderLib\LogDepth.hlsli">
+      <Filter>ShaderLib</Filter>
     </None>
   </ItemGroup>
 </Project>
