@@ -23,6 +23,8 @@ namespace UnlimRealms
 		this->params.LumKey = 0.36f;
 		this->params.LumWhite = 1.0e+4f; // "infinite" white
 		this->params.BloomThreshold = 1.0f;
+
+		this->debugRT = DebugRT_None;
 	}
 
 	HDRRender::~HDRRender()
@@ -264,13 +266,6 @@ namespace UnlimRealms
 			this->gfxObjects->lumRTChain.empty())
 			return NotInitialized;
 
-		// temp: add debug control for white point and luminance scale
-		ImGui::Begin("HDR Rendering");
-		ImGui::DragFloat("LumKey", &this->params.LumKey, 0.01f, 0.01f, 1.0f);
-		ImGui::InputFloat("LumWhite", &this->params.LumWhite);
-		ImGui::DragFloat("Bloom", &this->params.BloomThreshold, 0.01f, 0.01f, 100.0f);
-		ImGui::End();
-
 		ConstantsCB cb;
 		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
@@ -286,20 +281,40 @@ namespace UnlimRealms
 			this->gfxObjects->toneMappingPS.get(),
 			this->gfxObjects->constantsCB.get());
 
-		// debug output
-		#if 1
-		auto &dbgRT = this->gfxObjects->bloomRT[0];
-		//auto &dbgRT = this->gfxObjects->lumRTChain.back();
-		GfxViewPort viewPort;
-		gfxContext.GetViewPort(viewPort);
-		ur_float sh = (ur_float)viewPort.Width / 8;
-		ur_float w = (ur_float)dbgRT->GetTargetBuffer()->GetDesc().Width;
-		ur_float h = (ur_float)dbgRT->GetTargetBuffer()->GetDesc().Height;
-		genericRender->RenderScreenQuad(gfxContext, dbgRT->GetTargetBuffer(),
-			RectF(0.0f, viewPort.Height - sh, sh * w / h, (ur_float)viewPort.Height));
-		#endif
+		// debug render
+		if (this->debugRT != DebugRT_None)
+		{
+			GfxTexture *dbgTex = ur_null;
+			switch (this->debugRT)
+			{
+			case DebugRT_Bloom: dbgTex = this->gfxObjects->bloomRT[0] ? this->gfxObjects->bloomRT[0]->GetTargetBuffer() : ur_null; break;
+			case DebugRT_LumFirst: dbgTex = this->gfxObjects->lumRTChain.front() ? this->gfxObjects->lumRTChain.front()->GetTargetBuffer() : ur_null; break;
+			case DebugRT_LumLast: dbgTex = this->gfxObjects->lumRTChain.back() ? this->gfxObjects->lumRTChain.back()->GetTargetBuffer() : ur_null; break;
+			}
+			if (dbgTex != ur_null)
+			{
+				GfxViewPort viewPort;
+				gfxContext.GetViewPort(viewPort);
+				ur_float sh = (ur_float)viewPort.Width / 8;
+				ur_float w = (ur_float)dbgTex->GetDesc().Width;
+				ur_float h = (ur_float)dbgTex->GetDesc().Height;
+				genericRender->RenderScreenQuad(gfxContext, dbgTex,
+					RectF(0.0f, viewPort.Height - sh, sh * w / h, (ur_float)viewPort.Height));
+			}
+		}
 
 		return res;
+	}
+
+	void HDRRender::ShowImgui()
+	{
+		ImGui::Begin("HDR Rendering");
+		ImGui::DragFloat("LumKey", &this->params.LumKey, 0.01f, 0.01f, 1.0f);
+		ImGui::InputFloat("LumWhite", &this->params.LumWhite);
+		ImGui::DragFloat("Bloom", &this->params.BloomThreshold, 0.01f, 0.01f, 100.0f);
+		const char* DebugListBoxItems = "None\0Bloom\0LumFirst\0LumLast";
+		ImGui::Combo("DebugRT", (int*)&this->debugRT, DebugListBoxItems);
+		ImGui::End();
 	}
 
 } // end namespace UnlimRealms

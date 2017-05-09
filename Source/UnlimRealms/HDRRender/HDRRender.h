@@ -39,6 +39,8 @@ namespace UnlimRealms
 
 		Result Resolve(GfxContext &gfxContext);
 
+		void ShowImgui();
+
 	protected:
 
 		Result CreateGfxObjects();
@@ -68,6 +70,15 @@ namespace UnlimRealms
 
 		std::unique_ptr<GfxObjects> gfxObjects;
 		Params params;
+		
+		enum DebugRT
+		{
+			DebugRT_None,
+			DebugRT_Bloom,
+			DebugRT_LumFirst,
+			DebugRT_LumLast,
+		};
+		DebugRT debugRT;
 	};
 
 } // end namespace UnlimRealms

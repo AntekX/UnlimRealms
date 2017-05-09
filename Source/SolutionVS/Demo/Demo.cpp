@@ -266,6 +266,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			cameraControl.ShowImgui();
 			isosurface->ShowImgui();
 			moon->ShowImgui();
+			hdrRender->ShowImgui();
 			ImGui::End();
 
 			// Imgui metrics
