@@ -61,22 +61,22 @@
       <Filter>Sys</Filter>
     </ClInclude>
     <ClInclude Include="..\..\3rdParty\imgui\imconfig.h">
-      <Filter>Imgui</Filter>
+      <Filter>3rdParty\Imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\..\3rdParty\imgui\imgui.h">
-      <Filter>Imgui</Filter>
+      <Filter>3rdParty\Imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\..\3rdParty\imgui\imgui_internal.h">
-      <Filter>Imgui</Filter>
+      <Filter>3rdParty\Imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\..\3rdParty\imgui\stb_rect_pack.h">
-      <Filter>Imgui</Filter>
+      <Filter>3rdParty\Imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\..\3rdParty\imgui\stb_textedit.h">
-      <Filter>Imgui</Filter>
+      <Filter>3rdParty\Imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\..\3rdParty\imgui\stb_truetype.h">
-      <Filter>Imgui</Filter>
+      <Filter>3rdParty\Imgui</Filter>
     </ClInclude>
     <ClInclude Include="..\..\UnlimRealms\ImguiRender\ImguiRender.h">
       <Filter>ImguiRender</Filter>
@@ -144,6 +144,147 @@
     <ClInclude Include="..\..\UnlimRealms\RenderGraph\RenderGraph.h">
       <Filter>RenderGraph</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\config.h">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\devil_cpp_wrapper.hpp">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\devil_internal_exports.h">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\il.h">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\il_constants.h">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\il_palette.h">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\il2.h">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\ilu.h">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\ilu_region.h">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\ilu2.h">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\ilut.h">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\ilut_config.h">
+      <Filter>3rdParty\ResIL\include\IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\altivec_common.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\altivec_typeconversion.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_alloc.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_bits.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_bmp.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_dds.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_doompal.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_dpx.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_endian.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_exr.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_files.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_gif.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_hdr.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_icns.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_icon.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_internal.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_jpeg.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_manip.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_mdl.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_pal.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_pcx.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_pic.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_pnm.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_psd.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_psp.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_q2pal.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_register.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_rle.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_sgi.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_stack.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_states.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_targa.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_utx.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_vtf.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_wdp.h">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -180,13 +321,13 @@
       <Filter>Sys</Filter>
     </ClCompile>
     <ClCompile Include="..\..\3rdParty\imgui\imgui.cpp">
-      <Filter>Imgui</Filter>
+      <Filter>3rdParty\Imgui</Filter>
     </ClCompile>
     <ClCompile Include="..\..\3rdParty\imgui\imgui_demo.cpp">
-      <Filter>Imgui</Filter>
+      <Filter>3rdParty\Imgui</Filter>
     </ClCompile>
     <ClCompile Include="..\..\3rdParty\imgui\imgui_draw.cpp">
-      <Filter>Imgui</Filter>
+      <Filter>3rdParty\Imgui</Filter>
     </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\ImguiRender\ImguiRender.cpp">
       <Filter>ImguiRender</Filter>
@@ -236,6 +377,240 @@
     <ClCompile Include="..\..\UnlimRealms\RenderGraph\RenderGraph.cpp">
       <Filter>RenderGraph</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\altivec_common.c">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\altivec_typeconversion.c">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_alloc.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_api1.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_bits.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_blp.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_bmp.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_convbuff.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_convert.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_cut.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_dcx.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_dds.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_dds-save.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_devil.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_dicom.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_doom.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_dpx.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_endian.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_error.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_exr.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_fastconv.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_files.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_fits.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_ftx.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_gif.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_hdr.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_header.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_icns.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_icon.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_iff.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_ilbm.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_internal.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_io.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_iwi.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_jp2.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_jpeg.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_lif.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_main.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_manip.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_mdl.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_mng.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_mp3.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_neuquant.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_nvidia.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_palette.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pcd.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pcx.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pic.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pix.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_png.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pnm.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_profiles.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_psd.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_psp.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pxr.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_quantizer.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_raw.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_rawdata.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_register.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_rle.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_rot.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_sgi.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_size.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_squish.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_stack.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_states.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_sun.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_targa.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_texture.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_tiff.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_tpl.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_utility.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_utx.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_vtf.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_wal.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_wbmp.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_wdp.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_xpm.cpp">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Core">
@@ -258,9 +633,6 @@
     </Filter>
     <Filter Include="Sys\Std">
       <UniqueIdentifier>{dc65d448-242a-4191-a0ef-1882988eb5fd}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Imgui">
-      <UniqueIdentifier>{48cda07e-62a2-4e84-bc77-ad99e46bf74f}</UniqueIdentifier>
     </Filter>
     <Filter Include="ImguiRender">
       <UniqueIdentifier>{bc8d4244-91e9-4897-9f1e-3d806d7e6053}</UniqueIdentifier>
@@ -291,6 +663,24 @@
     </Filter>
     <Filter Include="ShaderLib">
       <UniqueIdentifier>{3f5fd6d0-25cb-4925-b205-e25b55bbecf5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3rdParty">
+      <UniqueIdentifier>{2cf467c3-c249-47ec-8d53-bab9659f2479}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3rdParty\Imgui">
+      <UniqueIdentifier>{48cda07e-62a2-4e84-bc77-ad99e46bf74f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3rdParty\ResIL">
+      <UniqueIdentifier>{577d33cb-cfd0-458c-8279-9885afe7798c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3rdParty\ResIL\src-IL">
+      <UniqueIdentifier>{25aabbc0-2fc2-4412-afc4-c831029a864b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3rdParty\ResIL\include">
+      <UniqueIdentifier>{2deb5076-c8ba-4e8d-abc5-c1fd7525894a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3rdParty\ResIL\include\IL">
+      <UniqueIdentifier>{a48ae7e6-6288-422a-834e-8d77f21ae85e}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -352,6 +742,9 @@
     </None>
     <None Include="..\..\UnlimRealms\ShaderLib\LogDepth.hlsli">
       <Filter>ShaderLib</Filter>
+    </None>
+    <None Include="..\..\3rdParty\ResIL\src-IL\il_tiff.c.old">
+      <Filter>3rdParty\ResIL\src-IL</Filter>
     </None>
   </ItemGroup>
 </Project>

@@ -166,6 +166,53 @@
     <ClInclude Include="..\..\3rdParty\imgui\stb_rect_pack.h" />
     <ClInclude Include="..\..\3rdParty\imgui\stb_textedit.h" />
     <ClInclude Include="..\..\3rdParty\imgui\stb_truetype.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\config.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\devil_cpp_wrapper.hpp" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\devil_internal_exports.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\il.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\il2.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\ilu.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\ilu2.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\ilut.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\ilut_config.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\ilu_region.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\il_constants.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\include\IL\il_palette.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\altivec_common.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\altivec_typeconversion.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_alloc.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_bits.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_bmp.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_dds.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_doompal.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_dpx.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_endian.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_exr.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_files.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_gif.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_hdr.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_icns.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_icon.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_internal.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_jpeg.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_manip.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_mdl.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_pal.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_pcx.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_pic.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_pnm.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_psd.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_psp.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_q2pal.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_register.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_rle.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_sgi.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_stack.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_states.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_targa.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_utx.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_vtf.h" />
+    <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_wdp.h" />
     <ClInclude Include="..\..\UnlimRealms\Atmosphere\Atmosphere.h" />
     <ClInclude Include="..\..\UnlimRealms\Camera\Camera.h" />
     <ClInclude Include="..\..\UnlimRealms\Camera\Camera.inline.h" />
@@ -214,6 +261,84 @@
     <ClCompile Include="..\..\3rdParty\imgui\imgui.cpp" />
     <ClCompile Include="..\..\3rdParty\imgui\imgui_demo.cpp" />
     <ClCompile Include="..\..\3rdParty\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\altivec_common.c" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\altivec_typeconversion.c" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_alloc.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_api1.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_bits.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_blp.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_bmp.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_convbuff.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_convert.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_cut.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_dcx.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_dds-save.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_dds.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_devil.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_dicom.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_doom.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_dpx.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_endian.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_error.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_exr.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_fastconv.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_files.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_fits.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_ftx.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_gif.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_hdr.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_header.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_icns.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_icon.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_iff.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_ilbm.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_internal.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_io.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_iwi.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_jp2.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_jpeg.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_lif.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_main.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_manip.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_mdl.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_mng.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_mp3.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_neuquant.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_nvidia.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_palette.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pcd.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pcx.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pic.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pix.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_png.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pnm.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_profiles.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_psd.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_psp.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_pxr.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_quantizer.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_raw.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_rawdata.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_register.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_rle.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_rot.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_sgi.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_size.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_squish.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_stack.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_states.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_sun.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_targa.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_texture.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_tiff.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_tpl.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_utility.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_utx.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_vtf.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_wal.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_wbmp.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_wdp.cpp" />
+    <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_xpm.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Atmosphere\Atmosphere.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Camera\Camera.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Camera\CameraControl.cpp" />
@@ -260,6 +385,10 @@
     <FxCompile Include="..\..\UnlimRealms\GenericRender\Generic_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="..\..\UnlimRealms\GenericRender\Generic_vs.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
@@ -343,6 +472,7 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\3rdParty\ResIL\src-IL\il_tiff.c.old" />
     <None Include="..\..\UnlimRealms\Atmosphere\Atmosphere.hlsli" />
     <None Include="..\..\UnlimRealms\Atmosphere\AtmosphericScattering.hlsli" />
     <None Include="..\..\UnlimRealms\HDRRender\HDRRender.hlsli" />

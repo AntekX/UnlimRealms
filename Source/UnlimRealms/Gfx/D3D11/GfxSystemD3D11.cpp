@@ -625,14 +625,19 @@ namespace UnlimRealms
 		if (ur_null == d3dDevice)
 			return ResultError(NotInitialized, "GfxTextureD3D11: failed to initialize, device not ready");
 
-		D3D11_SUBRESOURCE_DATA d3dData;
+		std::vector<D3D11_SUBRESOURCE_DATA> d3dData;
 		D3D11_SUBRESOURCE_DATA *d3dDataPtr = ur_null; 
 		if (data != ur_null)
 		{
-			d3dData.pSysMem = data->Ptr;
-			d3dData.SysMemPitch = data->RowPitch;
-			d3dData.SysMemSlicePitch = data->SlicePitch;
-			d3dDataPtr = &d3dData;
+			ur_uint levels = this->GetDesc().Levels;
+			d3dData.resize(std::max(ur_uint(1), levels));
+			for (ur_uint i = 0; i < levels; ++i)
+			{
+				d3dData[i].pSysMem = data[i].Ptr;
+				d3dData[i].SysMemPitch = data[i].RowPitch;
+				d3dData[i].SysMemSlicePitch = data[i].SlicePitch;
+			}
+			d3dDataPtr = d3dData.data();
 		}
 
 		D3D11_TEXTURE2D_DESC d3dDesc = GfxTextureDescToD3D11(this->GetDesc());

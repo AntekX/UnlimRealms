@@ -18,6 +18,7 @@
 #include "Isosurface/Isosurface.h"
 #include "Atmosphere/Atmosphere.h"
 #include "Multiverse/Multiverse.h"
+#include "3rdParty/ResIL/include/IL/il.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
@@ -191,6 +192,64 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	//	// TODO: add a space here
 	//}
 
+	// TEMP: trying ResIL
+	std::unique_ptr<GfxTexture> testTexture;
+#if 0
+	ILuint ImgId;
+	ilInit();
+	ilGenImages(1, &ImgId);
+	ilBindImage(ImgId);
+	ilSetInteger(IL_KEEP_DXTC_DATA, IL_TRUE);
+	if (ilLoadImage(L"testimage_dxt5_mips.dds"))
+	{
+		ILint ilWidth, ilHeight, ilMips, ilFormat, ilDXTFormat, ilBpp, ilBpc;
+		ilGetImageInteger(IL_IMAGE_WIDTH, &ilWidth);
+		ilGetImageInteger(IL_IMAGE_HEIGHT, &ilHeight);
+		ilGetImageInteger(IL_IMAGE_FORMAT, &ilFormat);
+		ilGetImageInteger(IL_IMAGE_BPP, &ilBpp);
+		ilGetImageInteger(IL_IMAGE_BPC, &ilBpc);
+		ilGetImageInteger(IL_NUM_MIPMAPS, &ilMips);
+		ilGetImageInteger(IL_DXTC_DATA_FORMAT, &ilDXTFormat);
+
+		std::vector<GfxResourceData> gfxTexData(ilMips + 1);
+		gfxTexData[0].Ptr = (void*)ilGetData();
+		gfxTexData[0].RowPitch = (ur_uint)ilWidth * ilBpp * ilBpc;
+		gfxTexData[0].SlicePitch = 0;
+
+		GfxTextureDesc gfxTexDesc;
+		gfxTexDesc.Width = (ur_uint)ilWidth;
+		gfxTexDesc.Height = (ur_uint)ilHeight;
+		gfxTexDesc.Levels = (ur_uint)ilMips + 1;
+		gfxTexDesc.Format = GfxFormat::R8G8B8A8;
+		gfxTexDesc.FormatView = GfxFormatView::Unorm;
+		gfxTexDesc.Usage = GfxUsage::Default;
+		gfxTexDesc.BindFlags = (ur_uint)GfxBindFlag::ShaderResource;
+		gfxTexDesc.AccessFlags = 0;
+		if (ilDXTFormat != IL_DXT_NO_COMP)
+		{
+			switch (ilDXTFormat)
+			{
+			case IL_DXT1: gfxTexDesc.Format = GfxFormat::BC1; break;
+			case IL_DXT5: gfxTexDesc.Format = GfxFormat::BC3; break;
+			}
+			gfxTexData[0].Ptr = (void*)ilGetDXTCData();
+		}
+		for (ur_uint i = 1; i < gfxTexDesc.Levels; ++i)
+		{
+			// todo: get mip data ptr
+			gfxTexData[i].RowPitch = gfxTexData[i - 1].RowPitch / 2;
+			gfxTexData[i].Ptr = (void*)(ilDXTFormat != IL_DXT_NO_COMP ? ilGetMipDXTCData(i - 1) : ilGetMipData(i - 1));
+		}
+
+		if (Succeeded(realm.GetGfxSystem()->CreateTexture(testTexture)))
+		{
+			testTexture->Initialize(gfxTexDesc, gfxTexData.data());
+		}
+		
+		ilDeleteImages(1, &ImgId);
+	}
+#endif
+
     // Main message loop:
 	realm.GetLog().WriteLine("Entering main message loop");
 	MSG msg;
@@ -256,6 +315,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(),
 				false, 0.0f, true, 1.0f, true, 0);
 			genericRender->Render(*gfxContext, camera.GetViewProj());
+
+			// temp: ResIL test, draw loaded image
+			if (testTexture)
+			{
+				Vector2 pos(
+					(ur_float)realm.GetInput()->GetMouse()->GetPos().x,
+					(ur_float)realm.GetInput()->GetMouse()->GetPos().y);
+				genericRender->RenderScreenQuad(*gfxContext, testTexture.get(),
+					{ pos, { pos.x + (ur_float)testTexture->GetDesc().Width, pos.y + (ur_float)testTexture->GetDesc().Height } }
+				);
+			}
 
 			// expose demo gui
 			static const ImVec2 imguiDemoWndSize(300.0f, 400.0f);
