@@ -21,4 +21,6 @@ namespace UnlimRealms
 
 	Result UR_DECL CreatePixelShaderFromFile(Realm &realm, std::unique_ptr<GfxPixelShader> &resOutput, const std::string &resName);
 
+	Result UR_DECL CreateTextureFromFile(Realm &realm, std::unique_ptr<GfxTexture> &resOutput, const std::string &resName);
+
 } // end namespace UnlimRealms

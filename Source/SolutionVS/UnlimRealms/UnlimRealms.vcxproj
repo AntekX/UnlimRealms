@@ -357,6 +357,7 @@
     <ClCompile Include="..\..\UnlimRealms\Realm\Realm.cpp" />
     <ClCompile Include="..\..\UnlimRealms\RenderGraph\RenderGraph.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Resources\Resources.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Resources\Resources_ResIL.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Canvas.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Input.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Sys\Log.cpp" />

@@ -611,6 +611,9 @@
     <ClCompile Include="..\..\3rdParty\ResIL\src-IL\il_xpm.cpp">
       <Filter>3rdParty\ResIL\src-IL</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Resources\Resources_ResIL.cpp">
+      <Filter>Resources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Core">

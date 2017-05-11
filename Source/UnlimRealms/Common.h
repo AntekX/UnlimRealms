@@ -58,6 +58,7 @@
 #include <mutex>
 #include <thread>
 #include <string>
+#include <codecvt>
 #include <sstream>
 #include <iostream>
 #include <fstream>

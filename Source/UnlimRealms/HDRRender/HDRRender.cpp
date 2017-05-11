@@ -120,8 +120,8 @@ namespace UnlimRealms
 
 		// (re)init bloom target
 		descRT.Format = GfxFormat::R16G16B16A16;
-		descRT.Width = std::max(ur_uint(1), width / 8);
-		descRT.Height = std::max(ur_uint(1), height / 8);
+		descRT.Width = std::max(ur_uint(1), width / 4);
+		descRT.Height = std::max(ur_uint(1), height / 4);
 		res = gfxObjects->bloomRT[0]->Initialize(descRT, false, GfxFormat::Unknown);
 		res &= gfxObjects->bloomRT[1]->Initialize(descRT, false, GfxFormat::Unknown);
 		if (Failed(res))
