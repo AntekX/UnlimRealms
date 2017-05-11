@@ -144,7 +144,7 @@ void ILAPIENTRY il2Init(void);
 ILAPI ILimage* ILAPIENTRY il2GenImage();
 
 // Creates a new ILimage based on the specifications given
-ILAPI ILimage* ILAPIENTRY il2NewImage(ILuint Width, ILuint Height, ILuint Depth, ILubyte Bpp, ILubyte Bpc);
+ILAPI ILimage* ILAPIENTRY il2NewImage(ILuint Width, ILuint Height, ILuint Depth, ILubyte Bpp, ILubyte Bpc, ILboolean allocDataBuffer = true);
 
 // Delete an image and all associated data
 ILAPI void ILAPIENTRY il2DeleteImage(ILimage * imageExt);
@@ -359,6 +359,6 @@ ILAPI ILboolean il2SwapColours(ILimage* image);
 	\exception IL_OUT_OF_MEMORY Could not allocate enough memory.
 	\return Boolean value of failure or success*/
 ILAPI ILboolean ILAPIENTRY il2TexImage(ILimage * image, ILuint Width, ILuint Height, 
-	ILuint Depth, ILubyte Bpp, ILenum Format, ILenum Type, void *Data);
+	ILuint Depth, ILubyte Bpp, ILenum Format, ILenum Type, void *Data, ILboolean allocDataBuffer = true);
 
 #endif

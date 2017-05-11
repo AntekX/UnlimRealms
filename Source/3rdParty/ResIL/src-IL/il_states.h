@@ -51,6 +51,7 @@ typedef struct IL_STATES
 	ILuint		ilNeuSample;
 	ILuint		ilQuantMaxIndexs;
 	// DXTC states
+	ILboolean	ilDecompressDxtcData;
 	ILboolean	ilKeepDxtcData;
 	ILboolean	ilUseNVidiaDXT;
 	ILboolean	ilUseSquishDXT;

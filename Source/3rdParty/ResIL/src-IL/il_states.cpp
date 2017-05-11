@@ -95,6 +95,7 @@ void ilDefaultStates()
 	ilStates[ilCurrentPos].ilNeuSample = 15;
 	ilStates[ilCurrentPos].ilQuantMaxIndexs = 256;
 
+	ilStates[ilCurrentPos].ilDecompressDxtcData = IL_TRUE;
 	ilStates[ilCurrentPos].ilKeepDxtcData = IL_FALSE;
 	ilStates[ilCurrentPos].ilUseNVidiaDXT = IL_FALSE;
 	ilStates[ilCurrentPos].ilUseSquishDXT = IL_FALSE;
@@ -330,6 +331,9 @@ ILAPI void ILAPIENTRY il2GetIntegerv(ILenum Mode, ILint *Param)
 			break;
 		case IL_INTERLACE_MODE:
 			*Param = ilStates[ilCurrentPos].ilInterlace;
+			break;
+		case IL_DECOMPRESS_DXTC:
+			*Param = ilStates[ilCurrentPos].ilDecompressDxtcData;
 			break;
 		case IL_KEEP_DXTC_DATA:
 			*Param = ilStates[ilCurrentPos].ilKeepDxtcData;
@@ -921,6 +925,12 @@ ILAPI void ILAPIENTRY il2SetInteger(ILenum Mode, ILint Param)
 		case IL_FORMAT_MODE:
 			ilFormatFunc(Param);
 			return;
+		case IL_DECOMPRESS_DXTC:
+			if (Param == IL_FALSE || Param == IL_TRUE) {
+				ilStates[ilCurrentPos].ilDecompressDxtcData = Param;
+				return;
+			}
+			break;
 		case IL_KEEP_DXTC_DATA:
 			if (Param == IL_FALSE || Param == IL_TRUE) {
 				ilStates[ilCurrentPos].ilKeepDxtcData = Param;

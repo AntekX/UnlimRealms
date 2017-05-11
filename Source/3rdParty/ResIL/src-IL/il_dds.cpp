@@ -325,9 +325,10 @@ ILboolean AllocImage(ILimage* image, DDSHEAD * header, ILuint CompFormat,
 				channels = 3; //normal map
 				format = IL_RGB;
 			}
-
+			
+			ILboolean allocDataBuffer = (il2GetInteger(IL_DECOMPRESS_DXTC) == IL_TRUE);
 			if (!il2TexImage(image, header->Width, header->Height, header->Depth, 
-				channels, format, IL_UNSIGNED_BYTE, NULL))
+				channels, format, IL_UNSIGNED_BYTE, NULL, allocDataBuffer))
 			{
 				return IL_FALSE;
 			}
@@ -1478,7 +1479,8 @@ ILboolean ReadMipmaps(ILimage* image, DDSHEAD* header, ILuint CompFormat, ILubyt
 		if (header->Height == 0) 
 			header->Height = 1;
 
-		image->Mipmaps = il2NewImage(header->Width, header->Height, header->Depth, Channels, Bpc);
+		ILboolean decompress = (il2GetInteger(IL_DECOMPRESS_DXTC) == IL_TRUE);
+		image->Mipmaps = il2NewImage(header->Width, header->Height, header->Depth, Channels, Bpc, decompress);
 		if (image->Mipmaps == NULL)
 			goto mip_fail;
 		image = image->Mipmaps;
@@ -1532,7 +1534,8 @@ ILboolean ReadMipmaps(ILimage* image, DDSHEAD* header, ILuint CompFormat, ILubyt
 			memcpy(image->DxtcData, CompData, image->DxtcSize);
 		}
 
-		if (!DdsDecompress(image, header, CompFormat, CompData))
+		if (decompress &&
+			!DdsDecompress(image, header, CompFormat, CompData))
 			goto mip_fail;
 	}
 
@@ -1606,7 +1609,8 @@ ILboolean iLoadDdsCubemapInternal(ILimage* baseImage, DDSHEAD * header, ILuint C
 
 			currImage->CubeFlags = CubemapDirections[i];
 
-			if (!DdsDecompress(currImage, header, CompFormat, CompData)) {
+			if ((il2GetInteger(IL_DECOMPRESS_DXTC) == IL_TRUE) &&
+				!DdsDecompress(currImage, header, CompFormat, CompData)) {
 				if (CompData) {
 					ifree(CompData);
 					CompData = NULL;
@@ -1864,7 +1868,8 @@ ILboolean iLoadDdsInternal(ILimage* baseImage)
 		}
 		return IL_FALSE;
 	}
-	if (!DdsDecompress(currImage, &header, CompFormat, CompData)) {
+	if ((il2GetInteger(IL_DECOMPRESS_DXTC) == IL_TRUE) &&
+		!DdsDecompress(currImage, &header, CompFormat, CompData)) {
 		if (CompData) {
 			ifree(CompData);
 			CompData = NULL;

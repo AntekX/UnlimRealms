@@ -18,7 +18,7 @@
 
 
 ILAPI ILboolean ILAPIENTRY il2InitImage(ILimage *Image, ILuint Width, ILuint Height, ILuint Depth, ILubyte Bpp, 
-	ILenum Format, ILenum Type, void *Data)
+	ILenum Format, ILenum Type, void *Data, ILboolean allocDataBuffer)
 {
 	memset(Image, 0, sizeof(ILimage));
 
@@ -28,12 +28,12 @@ ILAPI ILboolean ILAPIENTRY il2InitImage(ILimage *Image, ILuint Width, ILuint Hei
 	Image->DxtcFormat  = IL_DXT_NO_COMP;
 	Image->DxtcData    = NULL;
 
-	return il2TexImage(Image, Width, Height, Depth, Bpp, Format, Type, Data);
+	return il2TexImage(Image, Width, Height, Depth, Bpp, Format, Type, Data, allocDataBuffer);
 }
 
 
 // Creates a new ILimage based on the specifications given
-ILAPI ILimage* ILAPIENTRY il2NewImage(ILuint Width, ILuint Height, ILuint Depth, ILubyte Bpp, ILubyte Bpc)
+ILAPI ILimage* ILAPIENTRY il2NewImage(ILuint Width, ILuint Height, ILuint Depth, ILubyte Bpp, ILubyte Bpc, ILboolean allocDataBuffer)
 {
 	ILimage *Image;
 
@@ -46,7 +46,7 @@ ILAPI ILimage* ILAPIENTRY il2NewImage(ILuint Width, ILuint Height, ILuint Depth,
 		return NULL;
 	}
 
-	if (!il2InitImage(Image, Width, Height, Depth, Bpp, ilGetFormatBpp(Bpp), ilGetTypeBpc(Bpc), NULL)) {
+	if (!il2InitImage(Image, Width, Height, Depth, Bpp, ilGetFormatBpp(Bpp), ilGetTypeBpc(Bpc), NULL, allocDataBuffer)) {
 		if (Image->Data != NULL) {
 			ifree(Image->Data);
 		}
@@ -124,7 +124,7 @@ ILAPI void ILAPIENTRY il2DeleteImage(ILimage * image)
 	\return Boolean value of failure or success*/
 ILAPI ILboolean ILAPIENTRY il2TexImage(ILimage *Image, ILuint Width, 
 	ILuint Height, ILuint Depth, ILubyte Bpp, ILenum Format, ILenum Type, 
-	void *Data)
+	void *Data, ILboolean allocDataBuffer)
 {
 	if (Image == NULL) {
 		il2SetError(IL_ILLEGAL_OPERATION);
@@ -179,17 +179,23 @@ ILAPI ILboolean ILAPIENTRY il2TexImage(ILimage *Image, ILuint Width,
 	Image->SizeOfData  = Image->SizeOfPlane * Depth;
 	Image->Format      = Format;
 	Image->Type        = Type;
-	Image->Data = (ILubyte*)ialloc(Image->SizeOfData);
+	Image->Data        = NULL;
 
-	if (Image->Data != NULL) {
-		if (Data != NULL) {
-			memcpy(Image->Data, Data, Image->SizeOfData);
+	if (allocDataBuffer)
+	{
+		Image->Data = (ILubyte*)ialloc(Image->SizeOfData);
+		if (Image->Data != NULL) {
+			if (Data != NULL) {
+				memcpy(Image->Data, Data, Image->SizeOfData);
+			}
+			return IL_TRUE;
 		}
-
-		return IL_TRUE;
-	} else {
-		return IL_FALSE;
+		else {
+			return IL_FALSE;
+		}
 	}
+
+	return IL_TRUE;
 }
 
 

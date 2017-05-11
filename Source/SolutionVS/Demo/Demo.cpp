@@ -200,7 +200,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	ilGenImages(1, &ImgId);
 	ilBindImage(ImgId);
 	ilSetInteger(IL_KEEP_DXTC_DATA, IL_TRUE);
-	if (ilLoadImage(L"testimage_dxt5_mips.dds"))
+	ilSetInteger(IL_DECOMPRESS_DXTC, IL_FALSE);
+	if (ilLoadImage(L"PBS_rock06_FWD.dds"))
 	{
 		ILint ilWidth, ilHeight, ilMips, ilFormat, ilDXTFormat, ilBpp, ilBpc;
 		ilGetImageInteger(IL_IMAGE_WIDTH, &ilWidth);
