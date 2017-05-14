@@ -191,10 +191,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	//	// TODO: add a space here
 	//}
 
-	// TEMP: trying ResIL
-	std::unique_ptr<GfxTexture> testTexture;
-	//CreateTextureFromFile(realm, testTexture, "Res/PBS_rock06_FWD.dds");
-
     // Main message loop:
 	realm.GetLog().WriteLine("Entering main message loop");
 	MSG msg;
@@ -260,17 +256,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(),
 				false, 0.0f, true, 1.0f, true, 0);
 			genericRender->Render(*gfxContext, camera.GetViewProj());
-
-			// temp: ResIL test, draw loaded image
-			if (testTexture)
-			{
-				Vector2 pos(
-					(ur_float)realm.GetInput()->GetMouse()->GetPos().x,
-					(ur_float)realm.GetInput()->GetMouse()->GetPos().y);
-				genericRender->RenderScreenQuad(*gfxContext, testTexture.get(),
-					{ pos, { pos.x + (ur_float)testTexture->GetDesc().Width, pos.y + (ur_float)testTexture->GetDesc().Height } }
-				);
-			}
 
 			// expose demo gui
 			static const ImVec2 imguiDemoWndSize(300.0f, 400.0f);

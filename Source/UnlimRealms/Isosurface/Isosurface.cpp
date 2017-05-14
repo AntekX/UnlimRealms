@@ -1856,6 +1856,8 @@ namespace UnlimRealms
 			GfxRenderState gfxRS = GfxRenderState::Default;
 			gfxRS.RasterizerState.CullMode = GfxCullMode::CCW;
 			gfxRS.RasterizerState.FillMode = GfxFillMode::Solid;
+			gfxRS.SamplerState[0].AddressU = GfxTextureAddressMode::Wrap;
+			gfxRS.SamplerState[0].AddressV = GfxTextureAddressMode::Wrap;
 			res = this->gfxObjects.pipelineState->SetRenderState(gfxRS);
 		}
 		if (Failed(res))
@@ -1896,6 +1898,25 @@ namespace UnlimRealms
 
 		if (this->presentation.get() != ur_null)
 		{
+			// texturing test
+			#if 0
+			static const bool firstTime = [&]{
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.albedoMaps[0], "Res/PBS_rock14_debris_FWD.dds");
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.albedoMaps[1], "Res/SandDesert_03_00344_FWD.dds");
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.albedoMaps[2], "Res/PBS_Stones_Big_01_FWD.dds");
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.normalMaps[0], "Res/PBS_rock14_debris_NM.dds");
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.normalMaps[1], "Res/SandDesert_03_00344_NM.dds");
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.normalMaps[2], "Res/PBS_Stones_Big_01_NM.dds");
+				return true;
+			}();
+			gfxContext.SetTexture(this->gfxObjects.albedoMaps[0].get(), 0);
+			gfxContext.SetTexture(this->gfxObjects.albedoMaps[1].get(), 1);
+			gfxContext.SetTexture(this->gfxObjects.albedoMaps[2].get(), 2);
+			gfxContext.SetTexture(this->gfxObjects.normalMaps[0].get(), 3);
+			gfxContext.SetTexture(this->gfxObjects.normalMaps[1].get(), 4);
+			gfxContext.SetTexture(this->gfxObjects.normalMaps[2].get(), 5);
+			#endif
+
 			CommonCB cb;
 			cb.ViewProj = viewProj;
 			cb.CameraPos = cameraPos;

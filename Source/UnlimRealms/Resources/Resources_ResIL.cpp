@@ -62,7 +62,7 @@ namespace UnlimRealms
 		gfxTexDesc.Levels = (ur_uint)ilMips + 1;
 		gfxTexDesc.Format = GfxFormat::R8G8B8A8;
 		gfxTexDesc.FormatView = GfxFormatView::Unorm;
-		gfxTexDesc.Usage = GfxUsage::Default;
+		gfxTexDesc.Usage = GfxUsage::Immutable;
 		gfxTexDesc.BindFlags = (ur_uint)GfxBindFlag::ShaderResource;
 		gfxTexDesc.AccessFlags = 0;
 		if (ilDXTFormat != IL_DXT_NO_COMP)

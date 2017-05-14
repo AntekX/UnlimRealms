@@ -348,6 +348,8 @@ namespace UnlimRealms
 			std::unique_ptr<GfxBuffer> CB;
 			std::unique_ptr<GfxPipelineState> pipelineState;
 			std::unique_ptr<GfxPipelineState> wireframeState;
+			std::unique_ptr<GfxTexture> albedoMaps[3];
+			std::unique_ptr<GfxTexture> normalMaps[3];
 		} gfxObjects;
 
 		struct alignas(16) CommonCB

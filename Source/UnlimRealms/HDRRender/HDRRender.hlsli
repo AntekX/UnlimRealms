@@ -35,10 +35,10 @@ float ComputeLuminance(float3 hdrVal)
 
 float4 LinearToGamma(float4 linearColor)
 {
-	return pow(linearColor, GammaRcp);
+	return pow(abs(linearColor), GammaRcp);
 }
 
 float4 GammaToLinear(float4 gammaColor)
 {
-	return pow(gammaColor, Gamma);
+	return pow(abs(gammaColor), Gamma);
 }
