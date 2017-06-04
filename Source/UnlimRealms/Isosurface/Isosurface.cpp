@@ -1901,12 +1901,12 @@ namespace UnlimRealms
 			// texturing test
 			#if 0
 			static const bool firstTime = [&]{
-				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.albedoMaps[0], "Res/PBS_rock14_debris_FWD.dds");
-				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.albedoMaps[1], "Res/SandDesert_03_00344_FWD.dds");
-				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.albedoMaps[2], "Res/PBS_Stones_Big_01_FWD.dds");
-				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.normalMaps[0], "Res/PBS_rock14_debris_NM.dds");
-				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.normalMaps[1], "Res/SandDesert_03_00344_NM.dds");
-				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.normalMaps[2], "Res/PBS_Stones_Big_01_NM.dds");
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.albedoMaps[0], "Res/PBS_Stones_Big_AM.dds");
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.albedoMaps[1], "Res/PBS_Stones_Big_AM.dds");
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.albedoMaps[2], "Res/PBS_Stones_Big_AM.dds");
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.normalMaps[0], "Res/PBS_Stones_Big_NM.dds");
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.normalMaps[1], "Res/PBS_Stones_Big_NM.dds");
+				CreateTextureFromFile(this->GetRealm(), this->gfxObjects.normalMaps[2], "Res/PBS_Stones_Big_NM.dds");
 				return true;
 			}();
 			gfxContext.SetTexture(this->gfxObjects.albedoMaps[0].get(), 0);

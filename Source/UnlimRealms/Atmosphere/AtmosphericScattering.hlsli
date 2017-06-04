@@ -204,145 +204,98 @@ float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, fl
 	return float4(c, 1.0);
 }
 
-//-----------
 
-// scatter const
-static const float K_R = 0.166;
-static const float K_M = 0.0025;
-static const float E = 15; 							// light intensity
-static const float3 C_R = float3(0.3, 0.7, 1.0); 	// 1 / wavelength ^ 4
-static const float G_M = -0.85;						// Mie g
-static const int NUM_IN_SCATTER = 5;
-static const int NUM_OUT_SCATTER = 5;
-static const float MAX = 5000.0;
+//-----------------------------------
 
-// ray intersects sphere
-// e = -b +/- sqrt( b^2 - c )
-float2 ray_vs_sphere(float3 p, float3 dir, float r)
+//struct AtmosphereDesc
+//{
+//	float InnerRadius;
+//	float OuterRadius;
+//	float ScaleDepth;
+//	float G;
+//	float Km;
+//	float Kr;
+//};
+
+// http://publications.lib.chalmers.se/records/fulltext/203057/203057.pdf
+
+static const int IntergrationSteps = 4;
+static const float HeightScaleRayleigh = 0.1; // note: 8000 m for Earth
+static const float HeightScaleMie = 0.015; // note: 1200 m for Earth
+static const float3 ScatterRayleigh = float3(6.55e-6, 1.73e-5, 2.30e-5);
+static const float3 ScatterMie = float3(2.0e-6, 2.0e-6, 2.0e-6);
+static const float3 ExtinctionRayleigh = ScatterRayleigh;
+static const float3 ExtinctionMie = ScatterMie / 0.9;
+
+float IntersectSphere(const float3 rayOrigin, const float3 rayDir, const float3 sphereCenter, const float sphereRadius)
 {
-	float b = dot(p, dir);
-	float c = dot(p, p) - r * r;
+	float3 L = sphereCenter - rayOrigin;
+	float Ld = dot(L, L);
+	float sphereRadius2 = sphereRadius * sphereRadius;
+	[flatten] if (Ld <= sphereRadius2) return 0.0; // inside sphere, near point = rayOrigin
 
-	float d = b * b - c;
-	if (d < 0.0)
-		return float2(MAX, -MAX);
-	
-	d = sqrt(d);
+	float tca = dot(L, rayDir);
+	//[flatten] if (tca < 0.0) return -1.0; // we are not inside and sphere center is behind - no intersection
 
-	return float2(-b - d, -b + d);
+	float d2 = Ld - tca * tca;
+	//[flatten] if (d2 > sphereRadius2) return -1.0; // ray misses the sphere
+
+	float thc = sqrt(sphereRadius2 - d2);
+	return (tca - thc);
 }
 
-// Mie
-// g : ( -0.75, -0.999 )
-//      3 * ( 1 - g^2 )               1 + c^2
-// F = ----------------- * -------------------------------
-//      2 * ( 2 + g^2 )     ( 1 + g^2 - 2 * g * c )^(3/2)
-float phase_mie(float g, float c, float cc)
+float RelativeHeight(const AtmosphereDesc a, const float3 p)
 {
-	float gg = g * g;
-
-	float a = (1.0 - gg) * (1.0 + cc);
-
-	float b = 1.0 + gg - 2.0 * g * c;
-	b *= sqrt(b);
-	b *= 2.0 + gg;
-
-	return 1.5 * a / b;
+	return saturate((length(p) - a.InnerRadius) / (a.OuterRadius - a.InnerRadius));
 }
 
-// Reyleigh
-// g : 0
-// F = 3/4 * ( 1 + c^2 )
-float phase_reyleigh(float cc)
+float DensityRayleigh(float h)
 {
-	return 0.75 * (1.0 + cc);
+	return exp(-h / HeightScaleRayleigh);
 }
 
-float density(const AtmosphereDesc a, float3 p)
+float DensityMie(float h)
 {
-	float SCALE_H = 4.0 / (a.OuterRadius - a.InnerRadius);
-	return exp(-(length(p) - a.InnerRadius) * SCALE_H);
+	return exp(-h / HeightScaleMie);
 }
 
-float optic(const AtmosphereDesc a, float3 p, float3 q)
+float3 AtmosphericTransmittance(const AtmosphereDesc a, const float3 Pa, const float3 Pb)
 {
-	float3 step = (q - p) / NUM_OUT_SCATTER;
-	float3 v = p + step * 0.5;
-
-	float sum = 0.0;
-	for (int i = 0; i < NUM_OUT_SCATTER; i++)
+	float3 dir = Pb - Pa;
+	float dist = length(dir);
+	dir /= dist;
+	float stepSize = dist / IntergrationSteps;
+	float3 stepVec = dir * stepSize;
+	float totalDensityMie = 0.0;
+	float totalDensityRayleigh = 0.0;
+	float prevDensityMie = 0.0;
+	float prevDensityRayleigh = 0.0;
+	[unroll] for (int step = 0; step < IntergrationSteps; ++step)
 	{
-		sum += density(a, v);
-		v += step;
+		float3 s = Pa + stepVec * step;
+		float h = RelativeHeight(a, s);
+		float crntDensityMie = DensityMie(h);
+		float crntDensityRayleigh = DensityRayleigh(h);
+		totalDensityMie += (crntDensityMie + prevDensityMie) * 0.5 * stepSize;
+		totalDensityRayleigh += (crntDensityRayleigh + prevDensityRayleigh) * 0.5 * stepSize;
+		prevDensityMie = crntDensityMie;
+		prevDensityRayleigh = crntDensityRayleigh;
 	}
-	float SCALE_L = 1.0 / (a.OuterRadius - a.InnerRadius);
-	sum *= length(step) * SCALE_L;
+	float3 transmittance = exp(-(totalDensityRayleigh * ExtinctionRayleigh + totalDensityMie * ExtinctionMie));
 
-	return sum;
-}
-
-float3 in_scatter(const AtmosphereDesc a, float3 o, float3 dir, float2 e, float3 l)
-{
-	float len = (e.y - e.x) / NUM_IN_SCATTER;
-	float3 step = dir * len;
-	float3 p = o + dir * e.x;
-	float3 v = p + dir * (len * 0.5);
-
-	float3 sum = (float3)0.0;
-	for (int i = 0; i < NUM_IN_SCATTER; i++)
-	{
-		float2 f = ray_vs_sphere(v, l, a.OuterRadius);
-		float3 u = v + l * f.y;
-
-		float n = (optic(a, p, v) + optic(a, v, u)) * (Pi * 4.0);
-
-		sum += density(a, v) * exp(-n * (K_R * C_R + K_M));
-
-		v += step;
-	}
-	float SCALE_L = 1.0 / (a.OuterRadius - a.InnerRadius);
-	sum *= len * SCALE_L;
-
-	float c = dot(dir, -l);
-	float cc = c * c;
-
-	return sum * (K_R * C_R * phase_reyleigh(cc) + K_M * phase_mie(G_M, c, cc)) * E;
+	return transmittance;
 }
 
 float4 __atmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const float3 cameraPos)
 {
-	/*float3 eye = cameraPos;
+	// todo
+	float3 aPos = float3(0.0, 0.0, 0.0); // vpos & cameraPos are expected to be in atmosphere local coords
 	float3 dir = normalize(vpos - cameraPos);
-	float2 e = ray_vs_sphere(eye, dir, a.OuterRadius);
-	if (e.x > e.y)
-		discard;*/
+	float Ad = IntersectSphere(cameraPos, dir, aPos, a.OuterRadius);
+	float3 Pa = cameraPos + dir * Ad;
+	float3 Pb = vpos;
 	
-	// Get the ray from the camera to the vertex and its length (which is the far point of the ray passing through the atmosphere) 
-	float3 ray = vpos - cameraPos;
-	float farDist = length(ray);
-	ray /= farDist;
-	// Calculate the closest intersection of the ray with the outer atmosphere (which is the near point of the ray passing through the atmosphere)	
-	float cameraHeight = length(cameraPos);
-	float B = 2.0 * dot(cameraPos, ray);
-	float C = cameraHeight * cameraHeight - a.OuterRadius * a.OuterRadius;
-	float Det = max(0.0, B*B - 4.0 * C);
-	float nearDist = max(0.0, 0.5 * (-B - sqrt(Det)));
-	
-	float3 eye = cameraPos;
-	float3 dir = ray;
-	float2 e = float2(nearDist, farDist);
+	float3 result = AtmosphericTransmittance(a, Pa, Pb);
 
-	float2 f = ray_vs_sphere(eye, dir, a.InnerRadius);
-	e.y = min(e.y, f.x);
-
-	float3 I = in_scatter(a, eye, dir, e, -SunDirection);
-	float alpha = max(max(I.r, I.r), I.b);
-
-	return float4(I, alpha);
-}
-
-float4 __atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, float3 vpos, float3 cameraPos)
-{
-	float3 c = surfLight + atmosphericScatteringSky(a, vpos, cameraPos).xyz;
-	return float4(c, 1.0);
+	return float4(result, result.b);
 }

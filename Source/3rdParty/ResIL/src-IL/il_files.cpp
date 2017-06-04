@@ -91,7 +91,7 @@ ILint64 ILAPIENTRY iDefaultRead(SIO* io, void *Buffer, ILuint Size, ILuint Numbe
 
 ILint64 ILAPIENTRY iDefaultSeek(SIO* io, ILint64 Offset, ILuint Mode)
 {
-	return fseek((FILE*)(io->handle), Offset, Mode);
+	return fseek((FILE*)(io->handle), (long)Offset, (int)Mode);
 }
 
 
@@ -362,7 +362,7 @@ ILint64 ILAPIENTRY iSeekFile(SIO* io, ILint64 Offset, ILuint Mode)
 {
 	if (Mode == IL_SEEK_SET)
 		Offset += io->ReadFileStart;  // This allows us to use IL_SEEK_SET in the middle of a file.
-	return fseek((FILE*) io->handle, Offset, Mode);
+	return fseek((FILE*) io->handle, (long)Offset, Mode);
 }
 
 

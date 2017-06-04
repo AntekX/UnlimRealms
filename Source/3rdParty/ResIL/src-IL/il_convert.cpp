@@ -636,8 +636,8 @@ ILboolean ilAddAlphaKey(ILimage *Image)
 		// Set the colour index to be transparent.
 		//Image->Pal.Palette[(ILuint)(KeyAlpha * UCHAR_MAX) * 4 + 3] = 0;
 		ILubyte r, g, b;
-		Image->Pal.getRGB(KeyAlpha * UCHAR_MAX, r, g, b);
-		Image->Pal.setRGBA(KeyAlpha * UCHAR_MAX, r, g, b, 0);
+		Image->Pal.getRGB(ILuint(KeyAlpha * UCHAR_MAX), r, g, b);
+		Image->Pal.setRGBA(ILuint(KeyAlpha * UCHAR_MAX), r, g, b, 0);
 
 		// @TODO: Check if this is the required behaviour.
 
