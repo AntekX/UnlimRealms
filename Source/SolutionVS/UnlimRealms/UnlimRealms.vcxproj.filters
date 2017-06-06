@@ -646,9 +646,6 @@
     <Filter Include="Camera">
       <UniqueIdentifier>{0412afb3-b9a4-48ce-a105-39d9d9f287ea}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Isosurface">
-      <UniqueIdentifier>{055a3b5c-0852-413b-abb4-e13ce7500490}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Atmosphere">
       <UniqueIdentifier>{190ae49e-a97b-4f8c-b3bd-440a7dbd7634}</UniqueIdentifier>
     </Filter>
@@ -684,6 +681,9 @@
     </Filter>
     <Filter Include="3rdParty\ResIL\include\IL">
       <UniqueIdentifier>{a48ae7e6-6288-422a-834e-8d77f21ae85e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Isosurface">
+      <UniqueIdentifier>{055a3b5c-0852-413b-abb4-e13ce7500490}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

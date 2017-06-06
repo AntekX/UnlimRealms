@@ -227,21 +227,26 @@ static const float3 ScatterMie = float3(2.0e-6, 2.0e-6, 2.0e-6);
 static const float3 ExtinctionRayleigh = ScatterRayleigh;
 static const float3 ExtinctionMie = ScatterMie / 0.9;
 
-float IntersectSphere(const float3 rayOrigin, const float3 rayDir, const float3 sphereCenter, const float sphereRadius)
+float2 IntersectSphere(const float3 rayOrigin, const float3 rayDir, const float3 sphereCenter, const float sphereRadius)
 {
 	float3 L = sphereCenter - rayOrigin;
-	float Ld = dot(L, L);
+	float L2 = dot(L, L);
 	float sphereRadius2 = sphereRadius * sphereRadius;
-	[flatten] if (Ld <= sphereRadius2) return 0.0; // inside sphere, near point = rayOrigin
+	//[flatten] if (L2 <= sphereRadius2) near = 0.0; // inside sphere, near point = rayOrigin
 
-	float tca = dot(L, rayDir);
-	//[flatten] if (tca < 0.0) return -1.0; // we are not inside and sphere center is behind - no intersection
+	float tc = dot(L, rayDir);
+	//[flatten] if (tc < 0.0) return -1.0; // we are not inside and sphere center is behind - no intersection
 
-	float d2 = Ld - tca * tca;
-	//[flatten] if (d2 > sphereRadius2) return -1.0; // ray misses the sphere
+	float d2 = L2 - tc * tc;
+	[flatten] if (d2 > sphereRadius2) return -1.0; // ray misses the sphere
 
-	float thc = sqrt(sphereRadius2 - d2);
-	return (tca - thc);
+	float tcd = sqrt(sphereRadius2 - d2);
+	float d0 = (tc - tcd);
+	float d1 = (tc + tcd);
+	float near = max(0.0, min(d0, d1));
+	float far = max(d0, d1);
+
+	return float2(near, far);
 }
 
 float RelativeHeight(const AtmosphereDesc a, const float3 p)
@@ -283,6 +288,8 @@ float3 AtmosphericTransmittance(const AtmosphereDesc a, const float3 Pa, const f
 	}
 	float3 transmittance = exp(-(totalDensityRayleigh * ExtinctionRayleigh + totalDensityMie * ExtinctionMie));
 
+	return totalDensityRayleigh;
+
 	return transmittance;
 }
 
@@ -291,11 +298,12 @@ float4 __atmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, con
 	// todo
 	float3 aPos = float3(0.0, 0.0, 0.0); // vpos & cameraPos are expected to be in atmosphere local coords
 	float3 dir = normalize(vpos - cameraPos);
-	float Ad = IntersectSphere(cameraPos, dir, aPos, a.OuterRadius);
-	float3 Pa = cameraPos + dir * Ad;
-	float3 Pb = vpos;
+	float2 Ad = IntersectSphere(cameraPos, dir, aPos, a.OuterRadius);
+	float3 Pa = cameraPos + dir * Ad.x;
+	float3 Pb = cameraPos + dir * Ad.y;
 	
 	float3 result = AtmosphericTransmittance(a, Pa, Pb);
+	//result.rgb = (Ad.y - Ad.x) / (a.OuterRadius * 2);
 
 	return float4(result, result.b);
 }
