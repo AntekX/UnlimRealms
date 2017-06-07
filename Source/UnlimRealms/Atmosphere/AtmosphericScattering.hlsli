@@ -220,12 +220,17 @@ float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, fl
 // http://publications.lib.chalmers.se/records/fulltext/203057/203057.pdf
 
 static const int IntergrationSteps = 4;
-static const float HeightScaleRayleigh = 0.1; // note: 8000 m for Earth
-static const float HeightScaleMie = 0.015; // note: 1200 m for Earth
-static const float3 ScatterRayleigh = float3(6.55e-6, 1.73e-5, 2.30e-5);
-static const float3 ScatterMie = float3(2.0e-6, 2.0e-6, 2.0e-6);
+static const float EarthRadius = 6371.0; // km, just for info
+static const float EarthHeightRayleigh = 8.0; // km, just for info
+static const float EarthHeightMie = 1.2; // km, just for info
+static const float HeightScaleRayleigh = 0.25;
+static const float HeightScaleMie = HeightScaleRayleigh * 0.15;
+static const float EarthScatterToSmallScale = 1e+3; // must be applied to real scattering params to immitate Earth atmosphere on a small scale planetoid
+static const float3 ScatterRayleigh = float3(6.55e-6, 1.73e-5, 2.30e-5) * EarthScatterToSmallScale;
+static const float3 ScatterMie = float3(2.0e-6, 2.0e-6, 2.0e-6) * EarthScatterToSmallScale;
 static const float3 ExtinctionRayleigh = ScatterRayleigh;
 static const float3 ExtinctionMie = ScatterMie / 0.9;
+static const float3 LightIntensity = float3(1.0, 1.0, 1.0) * 100.0;
 
 float2 IntersectSphere(const float3 rayOrigin, const float3 rayDir, const float3 sphereCenter, const float sphereRadius)
 {
@@ -278,7 +283,7 @@ float3 AtmosphericTransmittance(const AtmosphereDesc a, const float3 Pa, const f
 	[unroll] for (int step = 0; step < IntergrationSteps; ++step)
 	{
 		float3 s = Pa + stepVec * step;
-		float h = RelativeHeight(a, s);
+		float h = RelativeHeight(a, s); // non absolute height is used, therefore extinction/scattering values are scaled
 		float crntDensityMie = DensityMie(h);
 		float crntDensityRayleigh = DensityRayleigh(h);
 		totalDensityMie += (crntDensityMie + prevDensityMie) * 0.5 * stepSize;
@@ -288,22 +293,48 @@ float3 AtmosphericTransmittance(const AtmosphereDesc a, const float3 Pa, const f
 	}
 	float3 transmittance = exp(-(totalDensityRayleigh * ExtinctionRayleigh + totalDensityMie * ExtinctionMie));
 
-	return totalDensityRayleigh;
-
 	return transmittance;
 }
 
-float4 __atmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const float3 cameraPos)
+float3 AtmosphericSingleScattering(const AtmosphereDesc a, const float3 vpos, const float3 cameraPos)
 {
-	// todo
+	float3 totalInscatteringMie = 0.0;
+	float3 totalInscatteringRayleigh = 0.0;
+	float3 prevInscatteringMie = 0.0;
+	float3 prevInscatteringRayleigh = 0.0;
+
 	float3 aPos = float3(0.0, 0.0, 0.0); // vpos & cameraPos are expected to be in atmosphere local coords
 	float3 dir = normalize(vpos - cameraPos);
 	float2 Ad = IntersectSphere(cameraPos, dir, aPos, a.OuterRadius);
 	float3 Pa = cameraPos + dir * Ad.x;
 	float3 Pb = cameraPos + dir * Ad.y;
-	
-	float3 result = AtmosphericTransmittance(a, Pa, Pb);
-	//result.rgb = (Ad.y - Ad.x) / (a.OuterRadius * 2);
 
-	return float4(result, result.b);
+	float dist = Ad.y - Ad.x;
+	float stepSize = dist / IntergrationSteps;
+	float3 stepVec = dir * stepSize;
+	[unroll] for (int step = 0; step < IntergrationSteps; ++step)
+	{
+		float3 P = Pa + stepVec * step;
+		float3 Pc = P - IntersectSphere(P, -SunDirection, aPos, a.OuterRadius).y * SunDirection;
+		float3 transmittance = AtmosphericTransmittance(a, Pa, P) * AtmosphericTransmittance(a, P, Pc);
+		float h = RelativeHeight(a, P); // non absolute height is used, therefore extinction/scattering values are scaled
+		float3 crntInscatteringMie = DensityMie(h) * transmittance;
+		float3 crntInscatteringRayleigh = DensityRayleigh(h) * transmittance;
+		totalInscatteringMie = (crntInscatteringMie + prevInscatteringMie) * 0.5 * stepSize;
+		totalInscatteringRayleigh = (crntInscatteringRayleigh + prevInscatteringRayleigh) * 0.5 * stepSize;
+		prevInscatteringMie = crntInscatteringMie;
+		prevInscatteringRayleigh = crntInscatteringRayleigh;
+	}
+
+	float3 LSm = totalInscatteringMie * ScatterMie / (Pi * 4.0) * LightIntensity;
+	float3 LSr = totalInscatteringRayleigh * ScatterRayleigh / (Pi * 4.0) * LightIntensity;
+	float3 light = LSm + LSr;
+	
+	return light;
+}
+
+float4 __atmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const float3 cameraPos)
+{
+	float3 light = AtmosphericSingleScattering(a, vpos, cameraPos);
+	return float4(light.rgb, light.b);
 }
