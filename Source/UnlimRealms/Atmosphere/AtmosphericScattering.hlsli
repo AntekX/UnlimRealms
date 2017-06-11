@@ -207,17 +207,8 @@ float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, fl
 
 //-----------------------------------
 
-//struct AtmosphereDesc
-//{
-//	float InnerRadius;
-//	float OuterRadius;
-//	float ScaleDepth;
-//	float G;
-//	float Km;
-//	float Kr;
-//};
-
 // http://publications.lib.chalmers.se/records/fulltext/203057/203057.pdf
+// http://www.vis.uni-stuttgart.de/~schafhts/HomePage/pubs/wscg07-schafhitzel.pdf
 
 static const int IntergrationSteps = 10;
 static const float EarthRadius = 6371.0e+3;
@@ -233,7 +224,7 @@ static const float3 ScatterRayleigh = EarthScatterRayleigh;
 static const float3 ScatterMie = EarthScatterMie;
 static const float3 ExtinctionRayleigh = ScatterRayleigh;
 static const float3 ExtinctionMie = ScatterMie / 0.9;
-static const float3 LightIntensity = float3(1.0, 1.0, 1.0) * 1000.0;
+static const float3 LightIntensity = float3(1.0, 1.0, 1.0) * 100.0;
 static const float HeightScaleRayleigh = 0.25;
 static const float HeightScaleMie = HeightScaleRayleigh * 0.15;
 
@@ -271,7 +262,7 @@ float DensityRayleigh(const AtmosphereDesc a, float h)
 
 float DensityMie(const AtmosphereDesc a, float h)
 {
-	return exp(-h / /*HeightScaleMie*/(a.ScaleDepth * 0.15));
+	return exp(-h / /*HeightScaleMie*/a.ScaleDepth);
 }
 
 float PhaseRayleigh(const AtmosphereDesc a, const float dirToCameraCos)
@@ -287,7 +278,7 @@ float PhaseMie(const AtmosphereDesc a, const float dirToCameraCos)
 	return 1.5 * ((1.0 - G2) / (2.0 + G2)) * (1.0 + C2) / pow(max(0.0, 1.0 + G2 - 2.0 * a.G * C), 1.5);
 }
 
-// Transmittance (Out-Scattering)
+// Transmittance (Attenuation / Out-Scattering)
 float3 AtmosphericTransmittance(const AtmosphereDesc a, const float3 Pa, const float3 Pb)
 {
 	float scale = 1.0;// EarthAtmosphereHeight / (a.OuterRadius - a.InnerRadius);
@@ -311,7 +302,8 @@ float3 AtmosphericTransmittance(const AtmosphereDesc a, const float3 Pa, const f
 		prevDensityMie = crntDensityMie;
 		prevDensityRayleigh = crntDensityRayleigh;
 	}
-	float3 transmittance = exp(-(totalDensityRayleigh * ExtinctionRayleigh + totalDensityMie * ExtinctionMie));
+	//float3 transmittance = exp(-(totalDensityRayleigh * ExtinctionRayleigh + totalDensityMie * ExtinctionMie));
+	float3 transmittance = exp(-(totalDensityRayleigh * a.Kr*4.0*Pi*ScatterLightWaveLength + totalDensityMie*a.Km*4.0*Pi));
 
 	return transmittance;
 }
@@ -337,7 +329,7 @@ float3 AtmosphericSingleScattering(const AtmosphereDesc a, const float3 vpos, co
 	{
 		float3 P = Pa + stepVec * step;
 		float3 Pc = P - IntersectSphere(P, -SunDirection, aPos, a.OuterRadius).y * SunDirection;
-		float3 transmittance = AtmosphericTransmittance(a, Pa, P) * AtmosphericTransmittance(a, P, Pc);
+		float3 transmittance = /*AtmosphericTransmittance(a, Pa, P) * */AtmosphericTransmittance(a, P, Pc);
 		float h = ScaledHeight(a, P);
 		float3 crntInscatteringMie = DensityMie(a, h) * transmittance;
 		float3 crntInscatteringRayleigh = DensityRayleigh(a, h) * transmittance;
@@ -348,10 +340,10 @@ float3 AtmosphericSingleScattering(const AtmosphereDesc a, const float3 vpos, co
 	}
 
 	float dirToCameraCos = dot(dir, SunDirection);
-	totalInscatteringMie *= PhaseMie(a, dirToCameraCos) * ScatterMie / (Pi * 4.0);
-	totalInscatteringRayleigh *= PhaseRayleigh(a, dirToCameraCos) * ScatterRayleigh / (Pi * 4.0);
+	totalInscatteringMie *= PhaseMie(a, dirToCameraCos) * a.Km;//ScatterMie / (Pi * 4.0);
+	totalInscatteringRayleigh *= PhaseRayleigh(a, dirToCameraCos) * a.Kr*ScatterLightWaveLength;//ScatterRayleigh / (Pi * 4.0);
 	
-	return LightIntensity * (totalInscatteringMie + totalInscatteringRayleigh);
+	return LightIntensity*10 * (totalInscatteringMie + totalInscatteringRayleigh);
 }
 
 float4 __atmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const float3 cameraPos)

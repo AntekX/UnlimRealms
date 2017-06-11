@@ -141,6 +141,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		Atmosphere::Desc desc = Atmosphere::Desc::Default;
 		desc.InnerRadius = surfaceRadiusMin;
 		desc.OuterRadius = surfaceRadiusMin + (surfaceRadiusMax - surfaceRadiusMin) * 3.0f;
+		desc.Kr = 0.0020;
+		desc.Km = 0.0005;
 		atmosphere->Init(desc);
 	}
 
