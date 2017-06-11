@@ -141,9 +141,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		Atmosphere::Desc desc = Atmosphere::Desc::Default;
 		desc.InnerRadius = surfaceRadiusMin;
 		desc.OuterRadius = surfaceRadiusMin + (surfaceRadiusMax - surfaceRadiusMin) * 3.0f;
-		desc.Km = 0.0005f;
-		desc.Kr = 0.0015f;
-		desc.ScaleDepth = 0.25f;
 		atmosphere->Init(desc);
 	}
 
@@ -265,6 +262,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().Description.c_str());
 			cameraControl.ShowImgui();
 			isosurface->ShowImgui();
+			atmosphere->ShowImgui();
 			moon->ShowImgui();
 			hdrRender->ShowImgui();
 			ImGui::End();

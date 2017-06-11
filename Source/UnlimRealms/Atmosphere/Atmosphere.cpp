@@ -24,10 +24,10 @@ namespace UnlimRealms
 	const Atmosphere::Desc Atmosphere::Desc::Default = {
 		1.0f,		// InnerRadius
 		1.025f,		// OuterRadius
-		0.25f,		// ScaleDepth
-		-0.92f,		// G
-		0.0025f,	// Km
-		0.0015f,	// Kr
+		0.225f,		// ScaleDepth
+		-0.98f,		// G
+		0.0015f,	// Km
+		0.0025f,	// Kr
 	};
 
 	Atmosphere::Atmosphere(Realm &realm) :
@@ -203,6 +203,18 @@ namespace UnlimRealms
 		gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
 
 		return Success;
+	}
+
+	void Atmosphere::ShowImgui()
+	{
+		ImGui::Begin("Atmosphere");
+		ImGui::InputFloat("InnerRadius", &this->desc.InnerRadius);
+		ImGui::InputFloat("OuterRadius", &this->desc.OuterRadius);
+		ImGui::DragFloat("ScaleDepth", &this->desc.ScaleDepth, 0.01f, 0.0f, 1.0f);
+		ImGui::InputFloat("Kr", &this->desc.Kr);
+		ImGui::InputFloat("Km", &this->desc.Km);
+		ImGui::DragFloat("G", &this->desc.G, 0.01f, -1.0f, 1.0f);
+		ImGui::End();
 	}
 
 } // end namespace UnlimRealms

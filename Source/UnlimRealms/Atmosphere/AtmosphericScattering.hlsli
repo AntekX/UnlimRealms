@@ -110,7 +110,7 @@ float4 atmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const
 	output.rgb = 1.0 - exp(-Exposure * output.rgb);
 	#endif
 	//output.a = output.b;
-	output.a = max(max(output.r, output.r), output.b);
+	output.a = max(max(output.r, output.g), output.b);
 
 	return output;
 }
@@ -219,18 +219,23 @@ float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, fl
 
 // http://publications.lib.chalmers.se/records/fulltext/203057/203057.pdf
 
-static const int IntergrationSteps = 4;
-static const float EarthRadius = 6371.0; // km, just for info
-static const float EarthHeightRayleigh = 8.0; // km, just for info
-static const float EarthHeightMie = 1.2; // km, just for info
-static const float HeightScaleRayleigh = 0.25;
-static const float HeightScaleMie = HeightScaleRayleigh * 0.15;
-static const float EarthScatterToSmallScale = 1e+3; // must be applied to real scattering params to immitate Earth atmosphere on a small scale planetoid
-static const float3 ScatterRayleigh = float3(6.55e-6, 1.73e-5, 2.30e-5) * EarthScatterToSmallScale;
-static const float3 ScatterMie = float3(2.0e-6, 2.0e-6, 2.0e-6) * EarthScatterToSmallScale;
+static const int IntergrationSteps = 10;
+static const float EarthRadius = 6371.0e+3;
+static const float EarthAtmosphereHeight = 160.0e+3;
+static const float EarthHeightRayleigh = 8.0e+3;
+static const float EarthHeightMie = 1.2e+3;
+static const float3 EarthScatterRayleigh = float3(6.55e-6, 1.73e-5, 2.30e-5); // precomputed scattering coefficient
+static const float3 EarthScatterMie = float3(2.0e-6, 2.0e-6, 2.0e-6); // precomputed scattering coefficient
+static const float EarthScatterScale = 1e+3; // must be applied to real scattering params to immitate Earth atmosphere on a small scale planetoid
+static const float3 LightWaveLength = float3(0.650, 0.570, 0.475);
+static const float3 ScatterLightWaveLength = 1.0 / pow(WaveLength, 4.0); // precomputed constant from wavelength
+static const float3 ScatterRayleigh = EarthScatterRayleigh;
+static const float3 ScatterMie = EarthScatterMie;
 static const float3 ExtinctionRayleigh = ScatterRayleigh;
 static const float3 ExtinctionMie = ScatterMie / 0.9;
-static const float3 LightIntensity = float3(1.0, 1.0, 1.0) * 100.0;
+static const float3 LightIntensity = float3(1.0, 1.0, 1.0) * 1000.0;
+static const float HeightScaleRayleigh = 0.25;
+static const float HeightScaleMie = HeightScaleRayleigh * 0.15;
 
 float2 IntersectSphere(const float3 rayOrigin, const float3 rayDir, const float3 sphereCenter, const float sphereRadius)
 {
@@ -254,23 +259,38 @@ float2 IntersectSphere(const float3 rayOrigin, const float3 rayDir, const float3
 	return float2(near, far);
 }
 
-float RelativeHeight(const AtmosphereDesc a, const float3 p)
+float ScaledHeight(const AtmosphereDesc a, const float3 p)
 {
 	return saturate((length(p) - a.InnerRadius) / (a.OuterRadius - a.InnerRadius));
 }
 
-float DensityRayleigh(float h)
+float DensityRayleigh(const AtmosphereDesc a, float h)
 {
-	return exp(-h / HeightScaleRayleigh);
+	return exp(-h / /*HeightScaleRayleigh*/a.ScaleDepth);
 }
 
-float DensityMie(float h)
+float DensityMie(const AtmosphereDesc a, float h)
 {
-	return exp(-h / HeightScaleMie);
+	return exp(-h / /*HeightScaleMie*/(a.ScaleDepth * 0.15));
 }
 
+float PhaseRayleigh(const AtmosphereDesc a, const float dirToCameraCos)
+{
+	return 0.75 * (1.0 + dirToCameraCos * dirToCameraCos);
+}
+
+float PhaseMie(const AtmosphereDesc a, const float dirToCameraCos)
+{
+	const float C = dirToCameraCos;
+	const float C2 = C * C;
+	float G2 = a.G * a.G;
+	return 1.5 * ((1.0 - G2) / (2.0 + G2)) * (1.0 + C2) / pow(max(0.0, 1.0 + G2 - 2.0 * a.G * C), 1.5);
+}
+
+// Transmittance (Out-Scattering)
 float3 AtmosphericTransmittance(const AtmosphereDesc a, const float3 Pa, const float3 Pb)
 {
+	float scale = 1.0;// EarthAtmosphereHeight / (a.OuterRadius - a.InnerRadius);
 	float3 dir = Pb - Pa;
 	float dist = length(dir);
 	dir /= dist;
@@ -283,11 +303,11 @@ float3 AtmosphericTransmittance(const AtmosphereDesc a, const float3 Pa, const f
 	[unroll] for (int step = 0; step < IntergrationSteps; ++step)
 	{
 		float3 s = Pa + stepVec * step;
-		float h = RelativeHeight(a, s); // non absolute height is used, therefore extinction/scattering values are scaled
-		float crntDensityMie = DensityMie(h);
-		float crntDensityRayleigh = DensityRayleigh(h);
-		totalDensityMie += (crntDensityMie + prevDensityMie) * 0.5 * stepSize;
-		totalDensityRayleigh += (crntDensityRayleigh + prevDensityRayleigh) * 0.5 * stepSize;
+		float h = ScaledHeight(a, s);
+		float crntDensityMie = DensityMie(a, h);
+		float crntDensityRayleigh = DensityRayleigh(a, h);
+		totalDensityMie += (crntDensityMie + prevDensityMie) * 0.5 * stepSize * scale;
+		totalDensityRayleigh += (crntDensityRayleigh + prevDensityRayleigh) * 0.5 * stepSize * scale;
 		prevDensityMie = crntDensityMie;
 		prevDensityRayleigh = crntDensityRayleigh;
 	}
@@ -310,6 +330,7 @@ float3 AtmosphericSingleScattering(const AtmosphereDesc a, const float3 vpos, co
 	float3 Pb = cameraPos + dir * Ad.y;
 
 	float dist = Ad.y - Ad.x;
+	float scale = 1.0;// EarthAtmosphereHeight / (a.OuterRadius - a.InnerRadius);
 	float stepSize = dist / IntergrationSteps;
 	float3 stepVec = dir * stepSize;
 	[unroll] for (int step = 0; step < IntergrationSteps; ++step)
@@ -317,24 +338,25 @@ float3 AtmosphericSingleScattering(const AtmosphereDesc a, const float3 vpos, co
 		float3 P = Pa + stepVec * step;
 		float3 Pc = P - IntersectSphere(P, -SunDirection, aPos, a.OuterRadius).y * SunDirection;
 		float3 transmittance = AtmosphericTransmittance(a, Pa, P) * AtmosphericTransmittance(a, P, Pc);
-		float h = RelativeHeight(a, P); // non absolute height is used, therefore extinction/scattering values are scaled
-		float3 crntInscatteringMie = DensityMie(h) * transmittance;
-		float3 crntInscatteringRayleigh = DensityRayleigh(h) * transmittance;
-		totalInscatteringMie = (crntInscatteringMie + prevInscatteringMie) * 0.5 * stepSize;
-		totalInscatteringRayleigh = (crntInscatteringRayleigh + prevInscatteringRayleigh) * 0.5 * stepSize;
+		float h = ScaledHeight(a, P);
+		float3 crntInscatteringMie = DensityMie(a, h) * transmittance;
+		float3 crntInscatteringRayleigh = DensityRayleigh(a, h) * transmittance;
+		totalInscatteringMie = (crntInscatteringMie + prevInscatteringMie) * 0.5 * stepSize * scale;
+		totalInscatteringRayleigh = (crntInscatteringRayleigh + prevInscatteringRayleigh) * 0.5 * stepSize * scale;
 		prevInscatteringMie = crntInscatteringMie;
 		prevInscatteringRayleigh = crntInscatteringRayleigh;
 	}
 
-	float3 LSm = totalInscatteringMie * ScatterMie / (Pi * 4.0) * LightIntensity;
-	float3 LSr = totalInscatteringRayleigh * ScatterRayleigh / (Pi * 4.0) * LightIntensity;
-	float3 light = LSm + LSr;
+	float dirToCameraCos = dot(dir, SunDirection);
+	totalInscatteringMie *= PhaseMie(a, dirToCameraCos) * ScatterMie / (Pi * 4.0);
+	totalInscatteringRayleigh *= PhaseRayleigh(a, dirToCameraCos) * ScatterRayleigh / (Pi * 4.0);
 	
-	return light;
+	return LightIntensity * (totalInscatteringMie + totalInscatteringRayleigh);
 }
 
 float4 __atmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const float3 cameraPos)
 {
 	float3 light = AtmosphericSingleScattering(a, vpos, cameraPos);
-	return float4(light.rgb, light.b);
+	float alpha = max(max(light.r, light.g), light.b);
+	return float4(light.rgb, alpha);
 }

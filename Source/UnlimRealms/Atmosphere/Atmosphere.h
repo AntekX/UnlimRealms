@@ -39,6 +39,8 @@ namespace UnlimRealms
 
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
 
+		void ShowImgui();
+
 		inline const Desc& GetDesc() const { return this->desc; }
 
 	protected:
