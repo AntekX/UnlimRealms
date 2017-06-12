@@ -19,7 +19,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 
 	float4 hdrVal = HDRTexture.Sample(PointSampler, input.uv);
 	float4 lumData = LumTexture.Sample(PointSampler, float2(0.0, 0.0));
-	float bloom = BloomTexture.Sample(LinearSampler, input.uv).x;
+	float4 bloom = BloomTexture.Sample(LinearSampler, input.uv);
 	
 	float Lf = (lumData.x + Eps);
 	if (LogLuminance) Lf = exp(Lf);
@@ -29,7 +29,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 	float Lp = ComputeLuminance(hdrVal.rgb);
 	float L = LumKey / Lf * Lp ;
 	float Lt = L * (1.0 + L / (LumWhite * LumWhite)) / (1.0 + L);
-	finalColor = saturate(hdrVal * Lt + 0*bloom);
+	finalColor = saturate(hdrVal * Lt + bloom);
 #else
 	// Exposure
 	float T = pow(Lf, -1);

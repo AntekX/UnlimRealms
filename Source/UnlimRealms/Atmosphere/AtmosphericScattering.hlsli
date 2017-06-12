@@ -322,7 +322,7 @@ float3 AtmosphericSingleScattering(const AtmosphereDesc a, const float3 vpos, co
 	float3 dir = normalize(vpos - cameraPos);
 	float2 Ad = IntersectSphere(cameraPos, dir, aPos, a.OuterRadius);
 	float3 Pa = cameraPos + dir * Ad.x;
-	float3 Pb = vpos;//cameraPos + dir * Ad.y;
+	float3 Pb = cameraPos + dir * Ad.y;
 
 	float dist = Ad.y - Ad.x;
 	float scale = 1.0;// EarthAtmosphereHeight / (a.OuterRadius - a.InnerRadius);
@@ -358,7 +358,33 @@ float4 atmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const
 
 float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, float3 vpos, float3 cameraPos)
 {
-	return __atmosphericScatteringSurface(a, surfLight, vpos, cameraPos);
-	/*float3 light = AtmosphericSingleScattering(a, vpos, cameraPos) + surfLight;
-	return float4(light.rgb, 1.0);*/
+	float3 totalInscatteringRayleigh = 0.0;
+	float3 prevInscatteringRayleigh = 0.0;
+
+	float3 aPos = float3(0.0, 0.0, 0.0); // vpos & cameraPos are expected to be in atmosphere local coords
+	float3 dir = normalize(vpos - cameraPos);
+	float2 Ad = IntersectSphere(cameraPos, dir, aPos, a.OuterRadius);
+	float3 Pa = cameraPos + dir * Ad.x;
+	float3 Pb = vpos;
+
+	float dist = length(Pb - Pa);
+	float stepSize = dist / IntergrationSteps;
+	float3 stepVec = dir * stepSize;
+	float3 transmittance = 1.0;
+	[unroll] for (int step = 0; step < IntergrationSteps; ++step)
+	{
+		float3 P = Pa + stepVec * step;
+		float3 Pc = P - IntersectSphere(P, -SunDirection, aPos, a.OuterRadius).y * SunDirection;
+		transmittance = AtmosphericTransmittance(a, Pa, P) * AtmosphericTransmittance(a, P, Pc);
+		float h = ScaledHeight(a, P);
+		float3 crntInscatteringRayleigh = DensityRayleigh(a, h) * transmittance;
+		totalInscatteringRayleigh = (crntInscatteringRayleigh + prevInscatteringRayleigh) * 0.5 * stepSize;
+		prevInscatteringRayleigh = crntInscatteringRayleigh;
+	}
+
+	float3 lightIntensity = LightIntensity * 0.07;
+	float3 scatteredLight = lightIntensity * totalInscatteringRayleigh * a.Kr * ScatterLightWaveLength;
+	float3 light = scatteredLight + surfLight * max(transmittance, lightIntensity * 0.0025);
+
+	return float4(light.rgb, 1.0);
 }
