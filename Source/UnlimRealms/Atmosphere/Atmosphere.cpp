@@ -24,10 +24,11 @@ namespace UnlimRealms
 	const Atmosphere::Desc Atmosphere::Desc::Default = {
 		1.0f,		// InnerRadius
 		1.025f,		// OuterRadius
-		0.225f,		// ScaleDepth
+		0.250f,		// ScaleDepth
 		-0.98f,		// G
 		0.0015f,	// Km
 		0.0025f,	// Kr
+		2.718f,		// D
 	};
 
 	Atmosphere::Atmosphere(Realm &realm) :
@@ -214,6 +215,7 @@ namespace UnlimRealms
 		ImGui::InputFloat("Kr", &this->desc.Kr);
 		ImGui::InputFloat("Km", &this->desc.Km);
 		ImGui::DragFloat("G", &this->desc.G, 0.01f, -1.0f, 1.0f);
+		ImGui::InputFloat("D", &this->desc.D);
 		ImGui::End();
 	}
 

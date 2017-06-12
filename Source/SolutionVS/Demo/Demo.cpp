@@ -35,7 +35,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	// create system canvas
 	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindow, L"Voxel Planet Demo"));
-	canvas->Initialize( RectI(0, 0, (ur_uint)GetSystemMetrics(SM_CXSCREEN), (ur_uint)GetSystemMetrics(SM_CYSCREEN)) );
+	canvas->Initialize( RectI(0, 0, /*(ur_uint)GetSystemMetrics(SM_CXSCREEN)*/800, /*(ur_uint)GetSystemMetrics(SM_CYSCREEN)*/600) );
 	realm.SetCanvas( std::move(canvas) );
 
 	// create input system
@@ -140,9 +140,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	{
 		Atmosphere::Desc desc = Atmosphere::Desc::Default;
 		desc.InnerRadius = surfaceRadiusMin;
-		desc.OuterRadius = surfaceRadiusMin + (surfaceRadiusMax - surfaceRadiusMin) * 3.0f;
-		desc.Kr = 0.0020;
-		desc.Km = 0.0005;
+		desc.OuterRadius = surfaceRadiusMin * 1.2f;
+		desc.Kr = 0.00005f;
+		desc.Km = 0.00005f;
 		atmosphere->Init(desc);
 	}
 

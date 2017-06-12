@@ -28,6 +28,7 @@ namespace UnlimRealms
 			ur_float G;
 			ur_float Km;
 			ur_float Kr;
+			ur_float D;
 			static const Desc Default;
 		};
 

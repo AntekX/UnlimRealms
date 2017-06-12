@@ -29,7 +29,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 	float Lp = ComputeLuminance(hdrVal.rgb);
 	float L = LumKey / Lf * Lp ;
 	float Lt = L * (1.0 + L / (LumWhite * LumWhite)) / (1.0 + L);
-	finalColor = saturate(hdrVal * Lt + bloom);
+	finalColor = saturate(hdrVal * Lt + 0*bloom);
 #else
 	// Exposure
 	float T = pow(Lf, -1);
