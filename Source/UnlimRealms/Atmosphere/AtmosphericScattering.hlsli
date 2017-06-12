@@ -3,23 +3,12 @@
 //	UnlimRealms
 //	Author: Anatole Kuzub
 //
-//  Based on
-//  Sean O'Neil Accurate Atmospheric Scattering
+//  Resources:
+//	http://publications.lib.chalmers.se/records/fulltext/203057/203057.pdf
+//	http://www.vis.uni-stuttgart.de/~schafhts/HomePage/pubs/wscg07-schafhitzel.pdf
 //  http://http.developer.nvidia.com/GPUGems2/gpugems2_chapter16.html
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#define LIGHT_WRAP 0
-#define APPLY_EXPOSURE 0
-static const int NumSamples = 4;
-static const float NumSamplesInv = 1.0 / NumSamples;
-static const float Pi = 3.14159;
-static const float SunIntensity = 100.0;
-static const float3 SunLight = float3(1.0, 1.0, 1.0);
-static const float3 SunDirection = float3(1.0, 0.0, 0.0);
-static const float3 WaveLength = float3(0.650, 0.570, 0.475);
-static const float3 WaveLengthInv = 1.0 / pow(WaveLength, 4.0);
-static const float Exposure = 1.0;
 
 struct AtmosphereDesc
 {
@@ -32,6 +21,20 @@ struct AtmosphereDesc
 	float D;
 };
 
+
+//------------------------------------------------------------------
+
+#define LIGHT_WRAP 0
+#define APPLY_EXPOSURE 0
+static const int NumSamples = 4;
+static const float NumSamplesInv = 1.0 / NumSamples;
+static const float Pi = 3.14159;
+static const float SunIntensity = 100.0;
+static const float3 SunLight = float3(1.0, 1.0, 1.0);
+static const float3 SunDirection = float3(1.0, 0.0, 0.0);
+static const float3 WaveLength = float3(0.650, 0.570, 0.475);
+static const float3 WaveLengthInv = 1.0 / pow(WaveLength, 4.0);
+static const float Exposure = 1.0;
 
 float scale(float scaleDepth, float fCos)
 {
@@ -143,7 +146,7 @@ float getFarIntersection(float3 v3Pos, float3 v3Ray, float fDistance2, float fRa
 	return 0.5 * (-B + sqrt(fDet));
 }
 
-float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, float3 vpos, float3 cameraPos)
+float4 __atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, float3 vpos, float3 cameraPos)
 {
 	// precomputed derivatives
 	const float ScaleDepthInv = 1.0f / a.ScaleDepth;
@@ -207,9 +210,6 @@ float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, fl
 
 
 //-----------------------------------
-
-// http://publications.lib.chalmers.se/records/fulltext/203057/203057.pdf
-// http://www.vis.uni-stuttgart.de/~schafhts/HomePage/pubs/wscg07-schafhitzel.pdf
 
 static const int IntergrationSteps = 10;
 static const float EarthRadius = 6371.0e+3;
@@ -322,7 +322,7 @@ float3 AtmosphericSingleScattering(const AtmosphereDesc a, const float3 vpos, co
 	float3 dir = normalize(vpos - cameraPos);
 	float2 Ad = IntersectSphere(cameraPos, dir, aPos, a.OuterRadius);
 	float3 Pa = cameraPos + dir * Ad.x;
-	float3 Pb = cameraPos + dir * Ad.y;
+	float3 Pb = vpos;//cameraPos + dir * Ad.y;
 
 	float dist = Ad.y - Ad.x;
 	float scale = 1.0;// EarthAtmosphereHeight / (a.OuterRadius - a.InnerRadius);
@@ -353,5 +353,12 @@ float4 atmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const
 {
 	float3 light = AtmosphericSingleScattering(a, vpos, cameraPos);
 	float alpha = max(max(light.r, light.g), light.b);
-	return float4(light.rgb, /*alpha*/1);
+	return float4(light.rgb, min(alpha, 1.0));
+}
+
+float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, float3 vpos, float3 cameraPos)
+{
+	return __atmosphericScatteringSurface(a, surfLight, vpos, cameraPos);
+	/*float3 light = AtmosphericSingleScattering(a, vpos, cameraPos) + surfLight;
+	return float4(light.rgb, 1.0);*/
 }
