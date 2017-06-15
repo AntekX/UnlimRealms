@@ -74,6 +74,7 @@ namespace UnlimRealms
 		enum DebugRT
 		{
 			DebugRT_None,
+			DebugRT_HDR,
 			DebugRT_Bloom,
 			DebugRT_LumFirst,
 			DebugRT_LumLast,

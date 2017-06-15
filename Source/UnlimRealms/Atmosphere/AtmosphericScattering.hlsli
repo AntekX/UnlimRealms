@@ -211,7 +211,7 @@ float4 __atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, 
 
 //-----------------------------------
 
-static const int IntergrationSteps = 10;
+static const int IntergrationSteps = 8;
 static const float EarthRadius = 6371.0e+3;
 static const float EarthAtmosphereHeight = 160.0e+3;
 static const float EarthHeightRayleigh = 8.0e+3;
@@ -370,7 +370,7 @@ float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, fl
 	float dist = length(Pb - Pa);
 	float stepSize = dist / IntergrationSteps;
 	float3 stepVec = dir * stepSize;
-	float3 transmittance = 1.0;
+	float3 transmittance = 0.0;
 	[unroll] for (int step = 0; step < IntergrationSteps; ++step)
 	{
 		float3 P = Pa + stepVec * step;
@@ -382,9 +382,9 @@ float4 atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, fl
 		prevInscatteringRayleigh = crntInscatteringRayleigh;
 	}
 
-	float3 lightIntensity = LightIntensity * 0.07;
+	float3 lightIntensity = LightIntensity * 0.05;
 	float3 scatteredLight = lightIntensity * totalInscatteringRayleigh * a.Kr * ScatterLightWaveLength;
-	float3 light = scatteredLight + surfLight * max(transmittance, lightIntensity * 0.0025);
+	float3 light = scatteredLight + surfLight * transmittance;
 
 	return float4(light.rgb, 1.0);
 }

@@ -287,6 +287,7 @@ namespace UnlimRealms
 			GfxTexture *dbgTex = ur_null;
 			switch (this->debugRT)
 			{
+			case DebugRT_HDR: dbgTex = this->gfxObjects->hdrRT ? this->gfxObjects->hdrRT->GetTargetBuffer() : ur_null; break;
 			case DebugRT_Bloom: dbgTex = this->gfxObjects->bloomRT[0] ? this->gfxObjects->bloomRT[0]->GetTargetBuffer() : ur_null; break;
 			case DebugRT_LumFirst: dbgTex = this->gfxObjects->lumRTChain.front() ? this->gfxObjects->lumRTChain.front()->GetTargetBuffer() : ur_null; break;
 			case DebugRT_LumLast: dbgTex = this->gfxObjects->lumRTChain.back() ? this->gfxObjects->lumRTChain.back()->GetTargetBuffer() : ur_null; break;
@@ -295,7 +296,7 @@ namespace UnlimRealms
 			{
 				GfxViewPort viewPort;
 				gfxContext.GetViewPort(viewPort);
-				ur_float sh = (ur_float)viewPort.Width / 8;
+				ur_float sh = (ur_float)viewPort.Width / 5;
 				ur_float w = (ur_float)dbgTex->GetDesc().Width;
 				ur_float h = (ur_float)dbgTex->GetDesc().Height;
 				genericRender->RenderScreenQuad(gfxContext, dbgTex,
@@ -312,7 +313,7 @@ namespace UnlimRealms
 		ImGui::DragFloat("LumKey", &this->params.LumKey, 0.01f, 0.01f, 1.0f);
 		ImGui::InputFloat("LumWhite", &this->params.LumWhite);
 		ImGui::DragFloat("Bloom", &this->params.BloomThreshold, 0.01f, 0.01f, 100.0f);
-		const char* DebugListBoxItems = "None\0Bloom\0LumFirst\0LumLast\0";
+		const char* DebugListBoxItems = "None\0HDR\0Bloom\0LumFirst\0LumLast\0";
 		ImGui::Combo("DebugRT", (int*)&this->debugRT, DebugListBoxItems);
 		ImGui::End();
 	}

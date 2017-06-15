@@ -23,6 +23,7 @@ namespace UnlimRealms
 		{
 			BorderlessWindow,
 			OverlappedWindow,
+			OverlappedWindowMaximized,
 		};
 
 		WinCanvas(Realm &realm,

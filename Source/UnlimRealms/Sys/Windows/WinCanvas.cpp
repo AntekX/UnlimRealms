@@ -59,7 +59,10 @@ namespace UnlimRealms
 		switch (this->style)
 		{
 			case Style::BorderlessWindow: dwStyle = WS_OVERLAPPED | WS_POPUP; break;
-			case Style::OverlappedWindow: dwStyle = WS_OVERLAPPEDWINDOW; break;
+			case Style::OverlappedWindow:
+			case Style::OverlappedWindowMaximized:
+				dwStyle = WS_OVERLAPPEDWINDOW;
+				break;
 		}
 
 		this->hwnd = CreateWindowW(WndClassName, this->title.c_str(), dwStyle,
@@ -68,7 +71,8 @@ namespace UnlimRealms
 		if (!this->hwnd)
 			ResultError(Failure, "WinCanvas: failed to create window");
 
-		ShowWindow(this->hwnd, SW_SHOWMAXIMIZED);
+		ur_int showMode = (Style::OverlappedWindowMaximized == this->style ? SW_SHOWMAXIMIZED : SW_NORMAL);
+		ShowWindow(this->hwnd, showMode);
 		UpdateWindow(this->hwnd);
 
 		return ResultNote(Success, "WinCanvas: initialized");

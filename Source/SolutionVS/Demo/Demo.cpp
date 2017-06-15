@@ -34,8 +34,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	realm.Initialize();
 
 	// create system canvas
-	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindow, L"Voxel Planet Demo"));
-	canvas->Initialize( RectI(0, 0, /*(ur_uint)GetSystemMetrics(SM_CXSCREEN)*/800, /*(ur_uint)GetSystemMetrics(SM_CYSCREEN)*/600) );
+	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindow/*Maximized*/, L"Voxel Planet Demo"));
+	canvas->Initialize( RectI(0, 0, /*(ur_uint)GetSystemMetrics(SM_CXSCREEN)*/1400, /*(ur_uint)GetSystemMetrics(SM_CYSCREEN)*/1000) );
 	realm.SetCanvas( std::move(canvas) );
 
 	// create input system

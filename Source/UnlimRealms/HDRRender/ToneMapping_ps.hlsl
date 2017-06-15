@@ -24,7 +24,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 	float Lf = (lumData.x + Eps);
 	if (LogLuminance) Lf = exp(Lf);
 	Lf = max(LumAdaptationMin, Lf);
-#if 1
+#if 0
 	// Reinhard
 	float Lp = ComputeLuminance(hdrVal.rgb);
 	float L = LumKey / Lf * Lp ;
@@ -32,8 +32,9 @@ float4 main(GenericQuadVertex input) : SV_Target
 	finalColor = saturate(hdrVal * Lt + bloom);
 #else
 	// Exposure
-	float T = pow(Lf, -1);
-	finalColor = saturate(1.0 - exp(-T * hdrVal));
+	//float T = pow(Lf, -1);
+	float T = LumKey / Lf;
+	finalColor = saturate(1.0 - exp(-T * (hdrVal + bloom)));
 #endif
 
 	//finalColor = saturate(finalColor + bloom);
