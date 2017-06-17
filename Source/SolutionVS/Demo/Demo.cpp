@@ -85,6 +85,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	if (realm.AddComponent<HDRRender>(realm))
 	{
 		hdrRender = realm.GetComponent<HDRRender>();
+		HDRRender::Params hdrParams = HDRRender::Params::Default;
+		hdrParams.BloomThreshold = 4.0f;
+		hdrRender->SetParams(hdrParams);
 		hdrRender->Init(canvasWidth, canvasHeight);
 	}
 
@@ -143,6 +146,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		desc.OuterRadius = surfaceRadiusMin * 1.2f;
 		desc.Kr = 0.00005f;
 		desc.Km = 0.00005f;
+		desc.ScaleDepth = 0.2f;
 		atmosphere->Init(desc);
 	}
 

@@ -25,11 +25,15 @@ namespace UnlimRealms
 			ur_float LumKey;
 			ur_float LumWhite;
 			ur_float BloomThreshold;
+
+			static const Params Default;
 		};
 
 		HDRRender(Realm &realm);
 
 		~HDRRender();
+
+		Result SetParams(const Params &params);
 
 		Result Init(ur_uint width, ur_uint height, bool depthStencilEnabled = true);
 

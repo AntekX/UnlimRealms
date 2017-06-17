@@ -211,7 +211,7 @@ float4 __atmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, 
 
 //-----------------------------------
 
-static const int IntergrationSteps = 10;
+static const int IntergrationSteps = 5;
 static const float EarthRadius = 6371.0e+3;
 static const float EarthAtmosphereHeight = 160.0e+3;
 static const float EarthHeightRayleigh = 8.0e+3;
@@ -225,7 +225,7 @@ static const float3 ScatterRayleigh = EarthScatterRayleigh;
 static const float3 ScatterMie = EarthScatterMie;
 static const float3 ExtinctionRayleigh = ScatterRayleigh;
 static const float3 ExtinctionMie = ScatterMie / 0.9;
-static const float3 LightIntensity = float3(1.0, 1.0, 1.0) * 100.0;
+static const float3 LightIntensity = float3(1.0, 1.0, 1.0) * 200.0;
 static const float HeightScaleRayleigh = 0.25;
 static const float HeightScaleMie = HeightScaleRayleigh * 0.15;
 

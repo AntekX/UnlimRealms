@@ -16,20 +16,28 @@
 namespace UnlimRealms
 {
 
+	const HDRRender::Params HDRRender::Params::Default = {
+		0.36f,		// LumKey
+		1.0e+4f,	// LumWhite ("infinite" white)
+		1.0f,		// BloomThreshold
+	};
+
 	HDRRender::HDRRender(Realm &realm) :
 		RealmEntity(realm)
 	{
-		// init defaults
-		this->params.LumKey = 0.36f;
-		this->params.LumWhite = 1.0e+4f; // "infinite" white
-		this->params.BloomThreshold = 1.0f;
-
+		this->params = Params::Default;
 		this->debugRT = DebugRT_None;
 	}
 
 	HDRRender::~HDRRender()
 	{
 
+	}
+
+	Result HDRRender::SetParams(const Params &params)
+	{
+		this->params = params;
+		return Success;
 	}
 
 	Result HDRRender::CreateGfxObjects()
