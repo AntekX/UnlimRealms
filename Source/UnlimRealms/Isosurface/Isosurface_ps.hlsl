@@ -132,21 +132,21 @@ float4 main(PS_INPUT input) : SV_Target
 	wXZ /= wS;
 	float4 tileColor = tileColorXY * wXY + tileColorZY * wZY + tileColorXZ * wXZ;
 	float3 tileNormal = tileNormalXY * wXY + tileNormalZY * wZY + tileNormalXZ * wXZ;
-	const float3 surfColor = tileColor.xyz;
+	const float3 surfAlbedo = tileColor.xyz;
 	const float3 surfNormal = mul(tileNormal, GetTBN(n));
 #else
-	const float3 surfColor = lerp(float3(0.7, 0.5, 0.5)*0.75, float3(1.0, 0.6, 0.2), slope);
+	const float3 surfAlbedo = lerp(float3(0.7, 0.5, 0.5)*0.75, float3(1.0, 0.6, 0.2), slope);
 	const float3 surfNormal = n;
 #endif
 
 	const float3 sunDir = float3(1, 0, 0);
 	const float3 ambientLight = float3(0.5, 0.5, 1.0) * 1e-2;
-	const float sunLightWrap = 0.0;
-	const float sunNdotL = max(0.0, (dot(-sunDir, surfNormal) + sunLightWrap) / (1.0 + sunLightWrap));
-	const float globalSelfShadow = max(0.0, (dot(+sunDir, sphereN) + sunLightWrap) / (1.0 + sunLightWrap));
+	const float sunNdotL = max(0.0, dot(-sunDir, surfNormal));
+	const float globalSelfShadow = max(0.0, dot(+sunDir, sphereN));
 	
-	float3 sutfDirect = surfColor * SunLight * max(0.0, sunNdotL - globalSelfShadow);
-	float3 surfAmbient = surfColor * ambientLight;
+	float3 directLightIntensity = LightIntensity * 0.025;
+	float3 sutfDirect = surfAlbedo * max(0.0, sunNdotL - globalSelfShadow) * directLightIntensity;
+	float3 surfAmbient = surfAlbedo * ambientLight;
 	color.xyz = surfAmbient + atmosphericScatteringSurface(Atmosphere, sutfDirect, input.wpos.xyz, CameraPos.xyz).xyz;
 
 	return color;

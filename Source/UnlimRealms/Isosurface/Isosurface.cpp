@@ -1920,7 +1920,7 @@ namespace UnlimRealms
 			CommonCB cb;
 			cb.ViewProj = viewProj;
 			cb.CameraPos = cameraPos;
-			cb.AtmoParams = (atmosphere != ur_null ? atmosphere->GetDesc() : Atmosphere::Desc::Default);
+			cb.AtmoParams = (atmosphere != ur_null ? atmosphere->GetDesc() : Atmosphere::Desc::Invisible);
 			GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
 			gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 			gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);

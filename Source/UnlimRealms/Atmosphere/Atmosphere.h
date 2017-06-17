@@ -30,6 +30,7 @@ namespace UnlimRealms
 			ur_float Kr;
 			ur_float D;
 			static const Desc Default;
+			static const Desc Invisible;
 		};
 
 		Atmosphere(Realm &realm);

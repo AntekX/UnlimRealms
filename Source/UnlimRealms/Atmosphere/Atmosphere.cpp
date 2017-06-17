@@ -26,8 +26,18 @@ namespace UnlimRealms
 		1.025f,		// OuterRadius
 		0.250f,		// ScaleDepth
 		-0.98f,		// G
-		0.0015f,	// Km
-		0.0025f,	// Kr
+		0.00005f,	// Km
+		0.00005f,	// Kr
+		2.718f,		// D
+	};
+
+	const Atmosphere::Desc Atmosphere::Desc::Invisible = {
+		1.0f,		// InnerRadius
+		1.025f,		// OuterRadius
+		1.000f,		// ScaleDepth
+		-0.98f,		// G
+		0.0f,		// Km
+		0.0f,		// Kr
 		2.718f,		// D
 	};
 

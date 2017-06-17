@@ -139,7 +139,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	std::unique_ptr<Atmosphere> atmosphere(new Atmosphere(realm));
 	{
 		Atmosphere::Desc desc = Atmosphere::Desc::Default;
-		desc.InnerRadius = surfaceRadiusMin;
+		desc.InnerRadius = surfaceRadiusMin + (surfaceRadiusMax - surfaceRadiusMin) * 0.5f;
 		desc.OuterRadius = surfaceRadiusMin * 1.2f;
 		desc.Kr = 0.00005f;
 		desc.Km = 0.00005f;
