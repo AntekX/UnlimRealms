@@ -749,5 +749,8 @@
     <None Include="..\..\3rdParty\ResIL\src-IL\il_tiff.c.old">
       <Filter>3rdParty\ResIL\src-IL</Filter>
     </None>
+    <None Include="..\..\UnlimRealms\ShaderLib\Math.hlsli">
+      <Filter>ShaderLib</Filter>
+    </None>
   </ItemGroup>
 </Project>

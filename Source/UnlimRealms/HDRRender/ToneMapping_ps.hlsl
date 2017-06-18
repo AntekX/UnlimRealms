@@ -18,7 +18,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 	float4 finalColor = 0.0;
 
 	float4 hdrVal = HDRTexture.Sample(PointSampler, input.uv);
-	float4 lumData = LumTexture.Sample(PointSampler, float2(0.0, 0.0));
+	float4 lumData = LumTexture.Sample(PointSampler, input.uv);
 	float4 bloom = BloomTexture.Sample(LinearSampler, input.uv);
 	
 	float Lf = (lumData.x + Eps);

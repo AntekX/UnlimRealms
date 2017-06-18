@@ -261,7 +261,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			genericRender->Render(*gfxContext, camera.GetViewProj());
 
 			// expose demo gui
-			static const ImVec2 imguiDemoWndSize(300.0f, 400.0f);
+			static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
 			ImGui::SetNextWindowSize(imguiDemoWndSize, ImGuiSetCond_Once);
 			ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
 			ImGui::Begin("Control Panel");
@@ -269,7 +269,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			cameraControl.ShowImgui();
 			isosurface->ShowImgui();
 			atmosphere->ShowImgui();
-			moon->ShowImgui();
 			hdrRender->ShowImgui();
 			ImGui::End();
 

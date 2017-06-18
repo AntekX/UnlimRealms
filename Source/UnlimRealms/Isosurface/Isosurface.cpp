@@ -1940,7 +1940,6 @@ namespace UnlimRealms
 
 	void Isosurface::ShowImgui()
 	{
-		ImGui::SetNextTreeNodeOpen(true);
 		if (ImGui::CollapsingHeader("Isosurface"))
 		{
 			ImGui::Checkbox("Draw wireframe", &this->drawWireframe);

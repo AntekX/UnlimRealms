@@ -317,13 +317,14 @@ namespace UnlimRealms
 
 	void HDRRender::ShowImgui()
 	{
-		ImGui::Begin("HDR Rendering");
-		ImGui::DragFloat("LumKey", &this->params.LumKey, 0.01f, 0.01f, 1.0f);
-		ImGui::InputFloat("LumWhite", &this->params.LumWhite);
-		ImGui::DragFloat("Bloom", &this->params.BloomThreshold, 0.01f, 0.01f, 100.0f);
-		const char* DebugListBoxItems = "None\0HDR\0Bloom\0LumFirst\0LumLast\0";
-		ImGui::Combo("DebugRT", (int*)&this->debugRT, DebugListBoxItems);
-		ImGui::End();
+		if (ImGui::CollapsingHeader("HDR Rendering"))
+		{
+			ImGui::DragFloat("LumKey", &this->params.LumKey, 0.01f, 0.01f, 1.0f);
+			ImGui::InputFloat("LumWhite", &this->params.LumWhite);
+			ImGui::DragFloat("Bloom", &this->params.BloomThreshold, 0.01f, 0.01f, 100.0f);
+			const char* DebugListBoxItems = "None\0HDR\0Bloom\0LumFirst\0LumLast\0";
+			ImGui::Combo("DebugRT", (int*)&this->debugRT, DebugListBoxItems);
+		}
 	}
 
 } // end namespace UnlimRealms

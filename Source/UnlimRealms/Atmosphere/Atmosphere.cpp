@@ -218,15 +218,16 @@ namespace UnlimRealms
 
 	void Atmosphere::ShowImgui()
 	{
-		ImGui::Begin("Atmosphere");
-		ImGui::InputFloat("InnerRadius", &this->desc.InnerRadius);
-		ImGui::InputFloat("OuterRadius", &this->desc.OuterRadius);
-		ImGui::DragFloat("ScaleDepth", &this->desc.ScaleDepth, 0.01f, 0.0f, 1.0f);
-		ImGui::InputFloat("Kr", &this->desc.Kr);
-		ImGui::InputFloat("Km", &this->desc.Km);
-		ImGui::DragFloat("G", &this->desc.G, 0.01f, -1.0f, 1.0f);
-		ImGui::InputFloat("D", &this->desc.D);
-		ImGui::End();
+		if (ImGui::CollapsingHeader("Atmosphere"))
+		{
+			ImGui::InputFloat("InnerRadius", &this->desc.InnerRadius);
+			ImGui::InputFloat("OuterRadius", &this->desc.OuterRadius);
+			ImGui::DragFloat("ScaleDepth", &this->desc.ScaleDepth, 0.01f, 0.0f, 1.0f);
+			ImGui::InputFloat("Kr", &this->desc.Kr);
+			ImGui::InputFloat("Km", &this->desc.Km);
+			ImGui::DragFloat("G", &this->desc.G, 0.01f, -1.0f, 1.0f);
+			ImGui::InputFloat("D", &this->desc.D);
+		}
 	}
 
 } // end namespace UnlimRealms
