@@ -98,7 +98,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 	float4 L = (hdrVal + bloom) * LumKey / Lf;
 	finalColor = filmicACES(L) / filmicACES(LumWhite);
 
-#elif 1
+#elif 0
 
 	// Filmic Uncharted2
 	float4 L = (hdrVal + bloom) * LumKey / Lf;
