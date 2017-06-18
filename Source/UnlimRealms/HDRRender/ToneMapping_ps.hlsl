@@ -13,6 +13,27 @@ Texture2D HDRTexture	: register(t0);
 Texture2D LumTexture	: register(t1);
 Texture2D BloomTexture	: register(t2);
 
+float4 filmicF(float4 x)
+{
+	float a = 0.22;
+	float b = 0.30;
+	float c = 0.10;
+	float d = 0.20;
+	float e = 0.01;
+	float f = 0.30;
+	return ((x * (a * x + c * b) + d * e) / (x * (a * x + b) + d * f)) - e / f;
+}
+
+float4 filmicACES(float4 x)
+{
+	float a = 2.51;
+	float b = 0.03;
+	float c = 2.43;
+	float d = 0.59;
+	float e = 0.14;
+	return ((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
 float4 main(GenericQuadVertex input) : SV_Target
 {
 	float4 finalColor = 0.0;
@@ -74,25 +95,26 @@ float4 main(GenericQuadVertex input) : SV_Target
 #elif 0
 
 	// ACES filmic
-	float4 x = hdrVal + bloom;
-	float a = 2.51;
-	float b = 0.03;
-	float c = 2.43;
-	float d = 0.59;
-	float e = 0.14;
-	finalColor = saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+	float4 L = (hdrVal + bloom) * LumKey / Lf;
+	finalColor = filmicACES(L) / filmicACES(LumWhite);
+
+#elif 1
+
+	// Filmic Uncharted2
+	float4 L = (hdrVal + bloom) * LumKey / Lf;
+	finalColor = filmicF(L) / filmicF(LumWhite);
 
 #elif 1
 
 	// Exponential
-	//float T = pow(Lf, -1);
 	float T = LumKey / Lf;
 	finalColor = saturate(1.0 - exp(-T * (hdrVal + bloom)));
 
-#elif 1
+#elif 0
 
 	// Simple
-	finalColor = (hdrVal + bloom) / (hdrVal + 1.0);
+	float4 L = (hdrVal + bloom) * LumKey / Lf;
+	finalColor = L / (L + 1.0);
 
 #endif
 
