@@ -41,6 +41,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 	float4 hdrVal = HDRTexture.Sample(PointSampler, input.uv);
 	float4 lumData = LumTexture.Sample(PointSampler, input.uv);
 	float4 bloom = BloomTexture.Sample(LinearSampler, input.uv);
+	hdrVal += bloom;
 	
 	float Lf = (lumData.x + Eps);
 	if (LogLuminance) Lf = exp(Lf);
@@ -49,7 +50,6 @@ float4 main(GenericQuadVertex input) : SV_Target
 #if 0
 
 	// Reinhard
-	hdrVal += bloom;
 	float Lp = ComputeLuminance(hdrVal.rgb);
 	float L = LumKey / Lf * Lp ;
 	float Lt = L * (1.0 + L / (LumWhite * LumWhite)) / (1.0 + L);
@@ -65,7 +65,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 		0.265068,  0.67023428, 0.06409157,
 		0.0241188, 0.1228178,  0.84442666
 	};
-	float3 XYZ = mul(RGB2XYZ, hdrVal.xyz + bloom.xyz);
+	float3 XYZ = mul(RGB2XYZ, hdrVal.xyz);
 
 	// XYZ -> Yxy conversion
 	float3 Yxy;
@@ -95,30 +95,29 @@ float4 main(GenericQuadVertex input) : SV_Target
 #elif 0
 
 	// ACES filmic
-	float4 L = (hdrVal + bloom) * LumKey / Lf;
+	float4 L = hdrVal * LumKey / Lf;
 	finalColor = filmicACES(L) / filmicACES(LumWhite);
 
 #elif 0
 
 	// Filmic Uncharted2
-	float4 L = (hdrVal + bloom) * LumKey / Lf;
+	float4 L = hdrVal * LumKey / Lf;
 	finalColor = filmicF(L) / filmicF(LumWhite);
 
 #elif 1
 
 	// Exponential
 	float T = LumKey / Lf;
-	finalColor = saturate(1.0 - exp(-T * (hdrVal + bloom)));
+	finalColor = saturate(1.0 - exp(-T * hdrVal));
 
-#elif 0
+#elif 1
 
 	// Simple
-	float4 L = (hdrVal + bloom) * LumKey / Lf;
+	float4 L = hdrVal * LumKey / Lf;
 	finalColor = L / (L + 1.0);
 
 #endif
 
-	//finalColor = saturate(finalColor + bloom);
 	finalColor = LinearToGamma(finalColor);
 	
 	return finalColor;

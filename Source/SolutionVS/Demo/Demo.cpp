@@ -142,11 +142,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	std::unique_ptr<Atmosphere> atmosphere(new Atmosphere(realm));
 	{
 		Atmosphere::Desc desc = Atmosphere::Desc::Default;
-		desc.InnerRadius = lerp(surfaceRadiusMin, surfaceRadiusMax, 0.5f);
+		desc.InnerRadius = lerp(surfaceRadiusMin, surfaceRadiusMax, 0.6f);
 		desc.OuterRadius = surfaceRadiusMin * 1.2f;
 		desc.Kr = 0.00005f;
 		desc.Km = 0.00005f;
-		desc.ScaleDepth = 0.2f;
+		desc.ScaleDepth = 0.16f;
 		atmosphere->Init(desc);
 	}
 
