@@ -25,7 +25,7 @@ cbuffer Constants : register(b1)
 static const float Gamma = 2.2;
 static const float GammaRcp = 1.0 / Gamma;
 static const float LumAdaptationMin = 0.5;
-static const float Eps = 1.0e-6;
+static const float Eps = 1.0e-4;
 static const bool LogLuminance = false;
 
 float ComputeLuminance(float3 hdrVal)

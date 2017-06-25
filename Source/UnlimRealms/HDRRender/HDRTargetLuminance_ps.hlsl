@@ -13,8 +13,7 @@ Texture2D HDRTexture	: register(t0);
 float4 main(GenericQuadVertex input) : SV_Target
 {
 	float4 hdrVal = HDRTexture.Sample(CommonSampler, input.uv);
-	float Lp = ComputeLuminance(hdrVal.rgb);
-	float lum = Lp;
+	float lum = ComputeLuminance(hdrVal.rgb);
 	if (LogLuminance) lum = log(lum + Eps);
 	return lum;
 }

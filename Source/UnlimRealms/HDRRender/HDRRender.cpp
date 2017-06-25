@@ -232,7 +232,8 @@ namespace UnlimRealms
 			gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 			
 			gfxContext.SetRenderTarget(dstRT.get());
-			res = genericRender->RenderScreenQuad(gfxContext, srcRT->GetTargetBuffer(), ur_null, ur_null,
+			res = genericRender->RenderScreenQuad(gfxContext, srcRT->GetTargetBuffer(), ur_null,
+				&this->gfxObjects->quadPointSamplerRS,
 				this->gfxObjects->averageLuminancePS.get(),
 				this->gfxObjects->constantsCB.get());
 		}
@@ -276,8 +277,8 @@ namespace UnlimRealms
 
 		ConstantsCB cb;
 		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
-		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
-		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Height;
+		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->lumRTChain.front()->GetTargetBuffer()->GetDesc().Width;
+		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->lumRTChain.front()->GetTargetBuffer()->GetDesc().Height;
 		cb.params = this->params;
 		gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
@@ -308,7 +309,8 @@ namespace UnlimRealms
 				ur_float w = (ur_float)dbgTex->GetDesc().Width;
 				ur_float h = (ur_float)dbgTex->GetDesc().Height;
 				genericRender->RenderScreenQuad(gfxContext, dbgTex,
-					RectF(0.0f, viewPort.Height - sh, sh * w / h, (ur_float)viewPort.Height));
+					RectF(0.0f, viewPort.Height - sh, sh * w / h, (ur_float)viewPort.Height),
+					&this->gfxObjects->quadPointSamplerRS);
 			}
 		}
 

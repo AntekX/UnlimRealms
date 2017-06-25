@@ -12,8 +12,8 @@ Texture2D LumTexture	: register(t0);
 
 static const int SampleCount = 4;
 static const float2 SampleOfs[SampleCount] = {
-	{ 0.0, 0.0 }, { 1.0, 0.0 },
-	{ 0.0, 1.0 }, { 1.0, 1.0 }
+	{-0.5,-0.5 }, { 0.5,-0.5 },
+	{-0.5, 0.5 }, { 0.5, 0.5 }
 };
 
 float4 main(GenericQuadVertex input) : SV_Target
@@ -25,6 +25,6 @@ float4 main(GenericQuadVertex input) : SV_Target
 		float lumVal = LumTexture.Sample(CommonSampler, uv).x;
 		lumAvg += lumVal;
 	}
-	lumAvg = lumAvg / SampleCount;
+	if (!LogLuminance) lumAvg = lumAvg / SampleCount;
 	return lumAvg;
 }

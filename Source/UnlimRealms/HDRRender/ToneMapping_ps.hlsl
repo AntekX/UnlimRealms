@@ -43,8 +43,8 @@ float4 main(GenericQuadVertex input) : SV_Target
 	float4 bloom = BloomTexture.Sample(LinearSampler, input.uv);
 	hdrVal += bloom;
 	
-	float Lf = (lumData.x + Eps);
-	if (LogLuminance) Lf = exp(Lf);
+	float Lf = lumData.x + Eps;
+	if (LogLuminance) Lf = exp(Lf) / (SrcTargetSize.x * SrcTargetSize.y);
 	Lf = max(LumAdaptationMin, Lf);
 
 #if 0
