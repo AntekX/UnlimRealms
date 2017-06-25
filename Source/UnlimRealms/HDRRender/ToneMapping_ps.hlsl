@@ -92,7 +92,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 	};
 	finalColor.xyz = mul(XYZ2RGB, XYZ);
 
-#elif 0
+#elif 1
 
 	// ACES filmic
 	float4 L = hdrVal * LumKey / Lf;
