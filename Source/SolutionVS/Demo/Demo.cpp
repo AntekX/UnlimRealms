@@ -253,7 +253,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 			// resolve HDR image to back buffer
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
-			hdrRender->Resolve(*gfxContext);
+			hdrRender->Resolve(*gfxContext, camera.GetViewProj());
 
 			// render batched generic primitives
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(),

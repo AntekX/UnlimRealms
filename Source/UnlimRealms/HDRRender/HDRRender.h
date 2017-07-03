@@ -41,7 +41,7 @@ namespace UnlimRealms
 
 		Result EndRender(GfxContext &gfxContext);
 
-		Result Resolve(GfxContext &gfxContext);
+		Result Resolve(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
 		void ShowImgui();
 
@@ -53,6 +53,7 @@ namespace UnlimRealms
 
 		struct alignas(16) ConstantsCB
 		{
+			ur_float4x4 CameraViewProj;
 			ur_float2 SrcTargetSize;
 			ur_float BlurDirection;
 			Params params;

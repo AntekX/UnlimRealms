@@ -268,7 +268,7 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result HDRRender::Resolve(GfxContext &gfxContext)
+	Result HDRRender::Resolve(GfxContext &gfxContext, const ur_float4x4 &viewProj)
 	{
 		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
 		if (ur_null == this->gfxObjects || ur_null == genericRender ||
@@ -277,6 +277,7 @@ namespace UnlimRealms
 
 		ConstantsCB cb;
 		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
+		cb.CameraViewProj = viewProj;
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->lumRTChain.front()->GetTargetBuffer()->GetDesc().Width;
 		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->lumRTChain.front()->GetTargetBuffer()->GetDesc().Height;
 		cb.params = this->params;

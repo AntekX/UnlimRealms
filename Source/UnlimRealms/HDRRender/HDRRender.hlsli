@@ -15,6 +15,7 @@ struct GenericQuadVertex
 
 cbuffer Constants : register(b1)
 {
+	float4x4 CameraViewProj;
 	float2 SrcTargetSize;
 	float BlurDirection;
 	float LumKey;
