@@ -50,12 +50,14 @@ namespace UnlimRealms
 		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const ur_float4x4 *transform = ur_null,
 			GfxRenderState *customRenderState = ur_null,
 			GfxPixelShader *customPixelShader = ur_null,
-			GfxBuffer *customConstBufferSlot1 = ur_null);
+			GfxBuffer *customConstBufferSlot1 = ur_null,
+			ur_uint stencilRef = 0);
 
 		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const RectF &rect,
 			GfxRenderState *customRenderState = ur_null,
 			GfxPixelShader *customPixelShader = ur_null,
-			GfxBuffer *customConstBufferSlot1 = ur_null);
+			GfxBuffer *customConstBufferSlot1 = ur_null,
+			ur_uint stencilRef = 0);
 
 		const GfxRenderState& GetDefaultQuadRenderState() const { return DefaultQuadRenderState; }
 

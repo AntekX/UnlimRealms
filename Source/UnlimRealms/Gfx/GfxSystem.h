@@ -114,6 +114,8 @@ namespace UnlimRealms
 
 		virtual Result SetRenderTarget(GfxRenderTarget *rt);
 
+		virtual Result SetRenderTarget(GfxRenderTarget *rt, GfxRenderTarget *ds);
+
 		virtual Result SetViewPort(const GfxViewPort *viewPort);
 
 		virtual Result GetViewPort(GfxViewPort &viewPort);

@@ -41,6 +41,9 @@ namespace UnlimRealms
 
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
 
+		Result RenderPostEffects(GfxContext &gfxContext, GfxRenderTarget &renderTarget,
+			const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
+
 		void ShowImgui();
 
 		inline const Desc& GetDesc() const { return this->desc; }
@@ -62,6 +65,10 @@ namespace UnlimRealms
 			std::unique_ptr<GfxPipelineState> wireframeState;
 			std::unique_ptr<GfxBuffer> VB;
 			std::unique_ptr<GfxBuffer> IB;
+			std::unique_ptr<GfxPixelShader> lightShaftsPS;
+			std::unique_ptr<GfxRenderTarget> lightShaftsRT;
+			GfxRenderState occlusionMaskRS;
+			GfxRenderState lightShaftsBlendRS;
 		} gfxObjects;
 
 		struct alignas(16) CommonCB

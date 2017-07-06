@@ -13,6 +13,7 @@
 #include "Sys/Canvas.h"
 #include "Resources/Resources.h"
 #include "ImguiRender/ImguiRender.h"
+#include "GenericRender/GenericRender.h"
 
 namespace UnlimRealms
 {
@@ -109,6 +110,9 @@ namespace UnlimRealms
 			gfxRS.BlendState[0].SrcBlendAlpha = GfxBlendFactor::SrcAlpha;
 			gfxRS.BlendState[0].DstBlend = GfxBlendFactor::One;
 			gfxRS.BlendState[0].DstBlendAlpha = GfxBlendFactor::One;
+			gfxRS.DepthStencilState.StencilEnable = true;
+			gfxRS.DepthStencilState.FrontFace.StencilPassOp = GfxStencilOp::Replace;
+			this->gfxObjects.pipelineState->StencilRef = 0x1;
 			res = this->gfxObjects.pipelineState->SetRenderState(gfxRS);
 		}
 		if (Failed(res))
@@ -123,6 +127,34 @@ namespace UnlimRealms
 		}
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGfxObjects: failed to initialize constant buffer");
+
+		// Light Shafts PS
+		res = CreatePixelShaderFromFile(this->GetRealm(), this->gfxObjects.lightShaftsPS, "LightShafts_ps.cso");
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGfxObjects: failed to initialize Light Shafts PS");
+
+		// Light Shafts RT
+		res = this->GetRealm().GetGfxSystem()->CreateRenderTarget(this->gfxObjects.lightShaftsRT);
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGfxObjects: failed to create Light Shafts render target");
+
+		// Light Shafts post effect render states
+		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
+		res = (genericRender != ur_null);
+		{
+			this->gfxObjects.occlusionMaskRS = genericRender->GetDefaultQuadRenderState();
+			this->gfxObjects.occlusionMaskRS.DepthStencilState.StencilEnable = true;
+			this->gfxObjects.occlusionMaskRS.DepthStencilState.FrontFace.StencilFunc = GfxCmpFunc::Equal;
+			this->gfxObjects.lightShaftsBlendRS = genericRender->GetDefaultQuadRenderState();
+			this->gfxObjects.lightShaftsBlendRS.BlendState[0].BlendEnable = true;
+			this->gfxObjects.lightShaftsBlendRS.BlendState[0].SrcBlend = GfxBlendFactor::SrcAlpha;
+			this->gfxObjects.lightShaftsBlendRS.BlendState[0].SrcBlendAlpha = GfxBlendFactor::SrcAlpha;
+			this->gfxObjects.lightShaftsBlendRS.BlendState[0].DstBlend = GfxBlendFactor::InvSrcAlpha;
+			this->gfxObjects.lightShaftsBlendRS.BlendState[0].DstBlendAlpha = GfxBlendFactor::InvSrcAlpha;
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGfxObjects: failed to initialize Light Shafts render states");
+		
 
 		return res;
 	}
@@ -214,6 +246,62 @@ namespace UnlimRealms
 		gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
 
 		return Success;
+	}
+
+	Result Atmosphere::RenderPostEffects(GfxContext &gfxContext, GfxRenderTarget &renderTarget,
+		const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
+	{
+		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
+		if (ur_null == this->gfxObjects.lightShaftsRT || ur_null == genericRender)
+			return NotInitialized;
+
+		if (ur_null == renderTarget.GetTargetBuffer())
+			return InvalidArgs;
+
+		Result res = Success;
+
+		// (re)init post process RT
+		const GfxTextureDesc &targetDesc = renderTarget.GetTargetBuffer()->GetDesc();
+		if (this->gfxObjects.lightShaftsRT == ur_null || this->gfxObjects.lightShaftsRT->GetTargetBuffer() == ur_null ||
+			this->gfxObjects.lightShaftsRT->GetTargetBuffer()->GetDesc().Width != targetDesc.Width ||
+			this->gfxObjects.lightShaftsRT->GetTargetBuffer()->GetDesc().Height != targetDesc.Height)
+		{
+			GfxTextureDesc descRT;
+			descRT.Width = targetDesc.Width;
+			descRT.Height = targetDesc.Height;
+			descRT.Levels = 1;
+			descRT.Format = targetDesc.Format;
+			descRT.FormatView = targetDesc.FormatView;
+			descRT.Usage = GfxUsage::Default;
+			descRT.BindFlags = ur_uint(GfxBindFlag::RenderTarget) | ur_uint(GfxBindFlag::ShaderResource);
+			descRT.AccessFlags = ur_uint(0);
+			res &= this->gfxObjects.lightShaftsRT->Initialize(descRT, false, GfxFormat::Unknown);
+			if (Failed(res))
+				return ResultError(Failure, "Atmosphere::RenderPostEffects: failed to (re)init Light Shafts render target");
+		}
+
+		// update constants
+		CommonCB cb;
+		cb.ViewProj = viewProj;
+		cb.CameraPos = cameraPos;
+		cb.Params = this->desc;
+		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
+		res &= gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		res &= gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);
+
+		// draw atmosphere into separate RT and mask out occlusion fragments using atmosphere's stencil ref
+		res &= gfxContext.SetRenderTarget(this->gfxObjects.lightShaftsRT.get()/*, &renderTarget*/); // << TODO: problem's here
+		res &= genericRender->RenderScreenQuad(gfxContext, renderTarget.GetTargetBuffer(), ur_null,
+			&this->gfxObjects.occlusionMaskRS, ur_null, ur_null, 0x1);
+
+		// draw lights shafts into given RT
+		res &= gfxContext.SetRenderTarget(&renderTarget);
+		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects.lightShaftsRT->GetTargetBuffer(), ur_null/*RectF(0.0f, 0.0f, 600.0f, 600.0f)*/,
+			&this->gfxObjects.lightShaftsBlendRS,
+			this->gfxObjects.lightShaftsPS.get(),
+			this->gfxObjects.CB.get());
+
+		return res;
 	}
 
 	void Atmosphere::ShowImgui()

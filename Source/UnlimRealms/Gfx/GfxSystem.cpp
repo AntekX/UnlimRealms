@@ -144,6 +144,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GfxContext::SetRenderTarget(GfxRenderTarget *rt, GfxRenderTarget *ds)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GfxContext::SetViewPort(const GfxViewPort *viewPort)
 	{
 		return Result(NotImplemented);

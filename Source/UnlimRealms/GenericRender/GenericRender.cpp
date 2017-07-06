@@ -479,7 +479,8 @@ namespace UnlimRealms
 	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const ur_float4x4 *transform,
 		GfxRenderState *customRenderState,
 		GfxPixelShader *customPixelShader,
-		GfxBuffer *customConstBufferSlot1)
+		GfxBuffer *customConstBufferSlot1,
+		ur_uint stencilRef)
 	{
 		if (ur_null == this->gfxObjects ||
 			ur_null == this->gfxObjects->quadVB ||
@@ -491,6 +492,7 @@ namespace UnlimRealms
 			this->gfxObjects->quadState->SetRenderState(*customRenderState);
 
 		this->gfxObjects->quadState->PixelShader = (customPixelShader != ur_null ? customPixelShader : this->gfxObjects->PS.get());
+		this->gfxObjects->quadState->StencilRef = stencilRef;
 
 		CommonCB cb;
 		cb.viewProj = (transform != ur_null ? *transform : ur_float4x4::Identity);
@@ -507,6 +509,7 @@ namespace UnlimRealms
 		// reset defaults
 		if (customRenderState != ur_null)
 			this->gfxObjects->quadState->SetRenderState(DefaultQuadRenderState);
+		this->gfxObjects->quadState->StencilRef = 0;
 
 		return Result(Success);
 	}
@@ -514,7 +517,8 @@ namespace UnlimRealms
 	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const RectF &rect,
 		GfxRenderState *customRenderState,
 		GfxPixelShader *customPixelShader,
-		GfxBuffer *customConstBufferSlot1)
+		GfxBuffer *customConstBufferSlot1,
+		ur_uint stencilRef)
 	{
 		GfxViewPort viewPort;
 		Result res = gfxContext.GetViewPort(viewPort);
@@ -527,7 +531,7 @@ namespace UnlimRealms
 		mx.r[3][0] = rect.Min.x / viewPort.Width * 2.0f - 1.0f + mx.r[0][0];
 		mx.r[3][1] = (1.0f - rect.Min.y / viewPort.Height) * 2.0f - 1.0f - mx.r[1][1];
 		
-		return this->RenderScreenQuad(gfxContext, texture, &mx, customRenderState, customPixelShader, customConstBufferSlot1);
+		return this->RenderScreenQuad(gfxContext, texture, &mx, customRenderState, customPixelShader, customConstBufferSlot1, stencilRef);
 	}
 
 } // end namespace UnlimRealms

@@ -262,21 +262,26 @@ namespace UnlimRealms
 
 	Result GfxContextD3D11::SetRenderTarget(GfxRenderTarget *rt)
 	{
+		return this->SetRenderTarget(rt, rt);
+	}
+
+	Result GfxContextD3D11::SetRenderTarget(GfxRenderTarget *rt, GfxRenderTarget *ds)
+	{
 		if (this->d3dContext.empty())
 			return ResultError(Failure, "GfxContextD3D11::SetRenderTarget: failed, device context is not ready");
 
 		ID3D11RenderTargetView *rtView[] = { rt != ur_null ?
 			static_cast<GfxRenderTargetD3D11*>(rt)->GetRTView() :
 			ur_null };
-		ID3D11DepthStencilView *dsView = { rt != ur_null ?
-			static_cast<GfxRenderTargetD3D11*>(rt)->GetDSView() :
+		ID3D11DepthStencilView *dsView = { ds != ur_null ?
+			static_cast<GfxRenderTargetD3D11*>(ds)->GetDSView() :
 			ur_null };
 		this->d3dContext->OMSetRenderTargets(1, rtView, dsView);
 
 		if (rt != ur_null)
 		{
 			GfxTexture *rtTex = rt->GetTargetBuffer();
-			if (ur_null == rtTex) rtTex = rt->GetDepthStencilBuffer();
+			if (ur_null == rtTex && ds != ur_null) rtTex = ds->GetDepthStencilBuffer();
 			if (rtTex != ur_null)
 			{
 				GfxViewPort gfxViewPort = {

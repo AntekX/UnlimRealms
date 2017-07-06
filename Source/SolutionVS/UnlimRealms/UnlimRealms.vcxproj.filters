@@ -729,6 +729,9 @@
     <FxCompile Include="..\..\UnlimRealms\HDRRender\Blur_ps.hlsl">
       <Filter>HDRRender</Filter>
     </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Atmosphere\LightShafts_ps.hlsl">
+      <Filter>Atmosphere</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli">
@@ -751,6 +754,9 @@
     </None>
     <None Include="..\..\UnlimRealms\ShaderLib\Math.hlsli">
       <Filter>ShaderLib</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\GenericRender\Generic.hlsli">
+      <Filter>GenericRender</Filter>
     </None>
   </ItemGroup>
 </Project>

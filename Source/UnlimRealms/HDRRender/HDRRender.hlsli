@@ -5,17 +5,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// generic quad input
-struct GenericQuadVertex
-{
-	float4 pos	: SV_POSITION;
-	float4 col	: COLOR0;
-	float2 uv	: TEXCOORD0;
-};
-
 cbuffer Constants : register(b1)
 {
-	float4x4 CameraViewProj;
 	float2 SrcTargetSize;
 	float BlurDirection;
 	float LumKey;

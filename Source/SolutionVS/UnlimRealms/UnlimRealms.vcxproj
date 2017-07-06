@@ -389,6 +389,14 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Atmosphere\LightShafts_ps.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
     <FxCompile Include="..\..\UnlimRealms\GenericRender\Generic_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
@@ -512,6 +520,7 @@
     <None Include="..\..\3rdParty\ResIL\src-IL\il_tiff.c.old" />
     <None Include="..\..\UnlimRealms\Atmosphere\Atmosphere.hlsli" />
     <None Include="..\..\UnlimRealms\Atmosphere\AtmosphericScattering.hlsli" />
+    <None Include="..\..\UnlimRealms\GenericRender\Generic.hlsli" />
     <None Include="..\..\UnlimRealms\HDRRender\HDRRender.hlsli" />
     <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli" />
     <None Include="..\..\UnlimRealms\ShaderLib\LogDepth.hlsli" />

@@ -241,19 +241,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			gfxContext->Begin();
 
 			// begin HDR rendering
-			hdrRender->BeginRender(*gfxContext);
+			if (Succeeded(hdrRender->BeginRender(*gfxContext)))
+			{
+				// draw isosurface
+				moon->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), ur_null);
+				isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
 
-			// draw isosurface
-			moon->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), ur_null);
-			isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
-			atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
+				// draw atmosphere
+				atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
 
-			// end HDR rendering
-			hdrRender->EndRender(*gfxContext);
+				// end HDR rendering
+				hdrRender->EndRender(*gfxContext);
 
-			// resolve HDR image to back buffer
-			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
-			hdrRender->Resolve(*gfxContext, camera.GetViewProj());
+				// atmospheric post effects
+				//atmosphere->RenderPostEffects(*gfxContext, *hdrRender->GetHDRTarget(), camera.GetViewProj(), camera.GetPosition());
+
+				// resolve HDR image to back buffer
+				gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
+				hdrRender->Resolve(*gfxContext);
+			}
 
 			// render batched generic primitives
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(),
