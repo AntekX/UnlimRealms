@@ -36,6 +36,7 @@ namespace UnlimRealms
 		struct UR_DECL LightShaftsDesc
 		{
 			float Density;
+			float DensityMax;
 			float Weight;
 			float Decay;
 			float Exposure;

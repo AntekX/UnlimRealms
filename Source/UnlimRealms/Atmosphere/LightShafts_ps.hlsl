@@ -18,6 +18,7 @@ cbuffer AtmosphereConstants : register(b1)
 cbuffer LightShaftsConstants : register(b2)
 {
 	float Density;
+	float DensityMax;
 	float Weight;
 	float Decay;
 	float Exposure;
@@ -53,11 +54,15 @@ float4 LightShaftsScreenSpace(const float2 screenUV)
 	[branch] if (intensity <= 0.0)
 		return 0.0;
 
+	float2 offcentre = abs(ScreenLightPos.xy - 0.5) * 2.0;
+	float densityFactor = saturate(1.0 - max(offcentre.x, offcentre.y));
+	float density = lerp(Density, DensityMax, densityFactor);
+
 	// Calculate vector from pixel to light source in screen space.
 	float2 texCoord = screenUV;
 	float2 deltaTexCoord = (texCoord - ScreenLightPos.xy);
 	// Divide by number of samples and scale by control factor.
-	deltaTexCoord *= 1.0f / NUM_SAMPLES * Density;
+	deltaTexCoord *= 1.0f / NUM_SAMPLES * density;
 	// Set up illumination decay factor.
 	float illuminationDecay = 1.0f;
 	// Evaluate summation from Equation 3 NUM_SAMPLES iterations.

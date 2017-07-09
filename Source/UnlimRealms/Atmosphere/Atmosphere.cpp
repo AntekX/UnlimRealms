@@ -44,6 +44,7 @@ namespace UnlimRealms
 
 	const Atmosphere::LightShaftsDesc Atmosphere::LightShaftsDesc::Default = {
 		0.300f,		// Density
+		0.700f,		// DensityMax
 		0.070f,		// Weight
 		0.970f,		// Decay
 		0.250f,		// Exposure
@@ -335,12 +336,14 @@ namespace UnlimRealms
 			ImGui::DragFloat("G", &this->desc.G, 0.01f, -1.0f, 1.0f);
 			ImGui::InputFloat("D", &this->desc.D);
 
-			if (ImGui::CollapsingHeader("LightShafts"))
+			if (ImGui::TreeNode("LightShafts"))
 			{
 				ImGui::DragFloat("Density", &this->lightShafts.Density, 0.01f, 0.0f, 1.0f);
+				ImGui::DragFloat("DensityMax", &this->lightShafts.DensityMax, 0.01f, 0.0f, 1.0f);
 				ImGui::DragFloat("Weight", &this->lightShafts.Weight, 0.01f, 0.0f, 1.0f);
 				ImGui::DragFloat("Decay", &this->lightShafts.Decay, 0.01f, 0.0f, 1.0f);
 				ImGui::DragFloat("Exposure", &this->lightShafts.Exposure, 0.01f, 0.0f, 1.0f);
+				ImGui::TreePop();
 			}
 		}
 	}
