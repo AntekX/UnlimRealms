@@ -42,9 +42,17 @@ namespace UnlimRealms
 		2.718f,		// D
 	};
 
+	const Atmosphere::LightShaftsDesc Atmosphere::LightShaftsDesc::Default = {
+		0.300f,		// Density
+		0.070f,		// Weight
+		0.970f,		// Decay
+		0.250f,		// Exposure
+	};
+
 	Atmosphere::Atmosphere(Realm &realm) :
 		RealmEntity(realm)
 	{
+		this->lightShafts = LightShaftsDesc::Default;
 	}
 
 	Atmosphere::~Atmosphere()
@@ -111,7 +119,7 @@ namespace UnlimRealms
 			gfxRS.BlendState[0].DstBlend = GfxBlendFactor::One;
 			gfxRS.BlendState[0].DstBlendAlpha = GfxBlendFactor::One;
 			gfxRS.DepthStencilState.StencilEnable = true;
-			gfxRS.DepthStencilState.FrontFace.StencilPassOp = GfxStencilOp::Replace;
+			gfxRS.DepthStencilState.BackFace.StencilPassOp = GfxStencilOp::Replace;
 			this->gfxObjects.pipelineState->StencilRef = 0x1;
 			res = this->gfxObjects.pipelineState->SetRenderState(gfxRS);
 		}
@@ -138,13 +146,26 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGfxObjects: failed to create Light Shafts render target");
 
+		// Light Shafts CB
+		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects.lightShaftsCB);
+		if (Succeeded(res))
+		{
+			res = this->gfxObjects.lightShaftsCB->Initialize(sizeof(LightShaftsCB), GfxUsage::Dynamic,
+				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGfxObjects: failed to initialize Light Shafts constant buffer");
+
 		// Light Shafts post effect render states
 		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
 		res = (genericRender != ur_null);
 		{
 			this->gfxObjects.occlusionMaskRS = genericRender->GetDefaultQuadRenderState();
+			this->gfxObjects.occlusionMaskRS.SamplerState[0].MinFilter = GfxFilter::Point;
+			this->gfxObjects.occlusionMaskRS.SamplerState[0].MagFilter = GfxFilter::Point;
 			this->gfxObjects.occlusionMaskRS.DepthStencilState.StencilEnable = true;
 			this->gfxObjects.occlusionMaskRS.DepthStencilState.FrontFace.StencilFunc = GfxCmpFunc::Equal;
+			this->gfxObjects.occlusionMaskRS.DepthStencilState.StencilWriteMask = 0x0;
 			this->gfxObjects.lightShaftsBlendRS = genericRender->GetDefaultQuadRenderState();
 			this->gfxObjects.lightShaftsBlendRS.BlendState[0].BlendEnable = true;
 			this->gfxObjects.lightShaftsBlendRS.BlendState[0].SrcBlend = GfxBlendFactor::SrcAlpha;
@@ -280,23 +301,21 @@ namespace UnlimRealms
 				return ResultError(Failure, "Atmosphere::RenderPostEffects: failed to (re)init Light Shafts render target");
 		}
 
-		// update constants
-		CommonCB cb;
-		cb.ViewProj = viewProj;
-		cb.CameraPos = cameraPos;
-		cb.Params = this->desc;
-		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
-		res &= gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
-		res &= gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);
+		// constants
+		GfxResourceData cbResData = { &this->lightShafts, sizeof(LightShaftsCB), 0 };
+		res &= gfxContext.UpdateBuffer(this->gfxObjects.lightShaftsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
 		// draw atmosphere into separate RT and mask out occlusion fragments using atmosphere's stencil ref
-		res &= gfxContext.SetRenderTarget(this->gfxObjects.lightShaftsRT.get()/*, &renderTarget*/); // << TODO: problem's here
+		res &= gfxContext.SetRenderTarget(this->gfxObjects.lightShaftsRT.get(), &renderTarget);
+		res = gfxContext.ClearTarget(this->gfxObjects.lightShaftsRT.get(), true, { 0.0f, 0.0f, 0.0f, 0.0f }, false, 0, false, 0);
 		res &= genericRender->RenderScreenQuad(gfxContext, renderTarget.GetTargetBuffer(), ur_null,
 			&this->gfxObjects.occlusionMaskRS, ur_null, ur_null, 0x1);
+		gfxContext.SetRenderTarget(ur_null);
 
 		// draw lights shafts into given RT
 		res &= gfxContext.SetRenderTarget(&renderTarget);
-		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects.lightShaftsRT->GetTargetBuffer(), ur_null/*RectF(0.0f, 0.0f, 600.0f, 600.0f)*/,
+		res &= gfxContext.SetConstantBuffer(this->gfxObjects.lightShaftsCB.get(), 2);
+		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects.lightShaftsRT->GetTargetBuffer(), ur_null,
 			&this->gfxObjects.lightShaftsBlendRS,
 			this->gfxObjects.lightShaftsPS.get(),
 			this->gfxObjects.CB.get());
@@ -315,6 +334,14 @@ namespace UnlimRealms
 			ImGui::InputFloat("Km", &this->desc.Km);
 			ImGui::DragFloat("G", &this->desc.G, 0.01f, -1.0f, 1.0f);
 			ImGui::InputFloat("D", &this->desc.D);
+
+			if (ImGui::CollapsingHeader("LightShafts"))
+			{
+				ImGui::DragFloat("Density", &this->lightShafts.Density, 0.01f, 0.0f, 1.0f);
+				ImGui::DragFloat("Weight", &this->lightShafts.Weight, 0.01f, 0.0f, 1.0f);
+				ImGui::DragFloat("Decay", &this->lightShafts.Decay, 0.01f, 0.0f, 1.0f);
+				ImGui::DragFloat("Exposure", &this->lightShafts.Exposure, 0.01f, 0.0f, 1.0f);
+			}
 		}
 	}
 

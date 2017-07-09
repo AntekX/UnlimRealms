@@ -181,7 +181,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	// demo camera
 	Camera camera(realm);
-	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
+	CameraControl cameraControl(realm, &camera, CameraControl::Mode::Free);
 	camera.SetPosition(ur_float3(0.0f, 0.0f, -surfaceRadiusMax * 3.0f));
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
 
@@ -254,7 +254,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 				hdrRender->EndRender(*gfxContext);
 
 				// atmospheric post effects
-				//atmosphere->RenderPostEffects(*gfxContext, *hdrRender->GetHDRTarget(), camera.GetViewProj(), camera.GetPosition());
+				atmosphere->RenderPostEffects(*gfxContext, *hdrRender->GetHDRTarget(), camera.GetViewProj(), camera.GetPosition());
 
 				// resolve HDR image to back buffer
 				gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());

@@ -32,6 +32,7 @@ namespace UnlimRealms
 			DefaultQuadRenderState = GfxRenderState::Default;
 			DefaultQuadRenderState.RasterizerState.CullMode = GfxCullMode::None;
 			DefaultQuadRenderState.DepthStencilState.DepthEnable = false;
+			DefaultQuadRenderState.DepthStencilState.DepthWriteEnable = false;
 			return true;
 		}();
 	}

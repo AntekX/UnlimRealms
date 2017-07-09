@@ -33,6 +33,15 @@ namespace UnlimRealms
 			static const Desc Invisible;
 		};
 
+		struct UR_DECL LightShaftsDesc
+		{
+			float Density;
+			float Weight;
+			float Decay;
+			float Exposure;
+			static const LightShaftsDesc Default;
+		};
+
 		Atmosphere(Realm &realm);
 
 		virtual ~Atmosphere();
@@ -67,6 +76,7 @@ namespace UnlimRealms
 			std::unique_ptr<GfxBuffer> IB;
 			std::unique_ptr<GfxPixelShader> lightShaftsPS;
 			std::unique_ptr<GfxRenderTarget> lightShaftsRT;
+			std::unique_ptr<GfxBuffer> lightShaftsCB;
 			GfxRenderState occlusionMaskRS;
 			GfxRenderState lightShaftsBlendRS;
 		} gfxObjects;
@@ -78,6 +88,10 @@ namespace UnlimRealms
 			Desc Params;
 		};
 
+		struct alignas(16) LightShaftsCB : public LightShaftsDesc
+		{
+		};
+
 		struct Vertex
 		{
 			ur_float3 pos;
@@ -86,6 +100,7 @@ namespace UnlimRealms
 		typedef ur_uint16 Index;
 
 		Desc desc;
+		LightShaftsDesc lightShafts;
 	};
 
 } // end namespace UnlimRealms

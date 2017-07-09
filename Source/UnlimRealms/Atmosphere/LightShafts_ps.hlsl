@@ -8,11 +8,19 @@
 #include "AtmosphericScattering.hlsli"
 #include "../GenericRender/Generic.hlsli"
 
-cbuffer Constants : register(b1)
+cbuffer AtmosphereConstants : register(b1)
 {
 	float4x4 CameraViewProj;
 	float3 CameraPos;
 	AtmosphereDesc Atmosphere;
+};
+
+cbuffer LightShaftsConstants : register(b2)
+{
+	float Density;
+	float Weight;
+	float Decay;
+	float Exposure;
 };
 
 sampler LinearSampler	: register(s0);
@@ -22,11 +30,7 @@ Texture2D HDRTexture	: register(t0);
 // https://developer.nvidia.com/gpugems/GPUGems3/gpugems3_ch13.html
 float4 LightShaftsScreenSpace(const float2 screenUV)
 {
-	const int NUM_SAMPLES = 40;
-	const float Density = 0.5;
-	const float Weight = 1.0;
-	const float Decay = 0.85;
-	const float Exposure = 0.2;
+	const int NUM_SAMPLES = 50;
 	const float3 LightDirection = float3(1.0, 0.0, 0.0);
 	const float3 LightPos = (-LightDirection) * 1e+5;
 
@@ -34,14 +38,19 @@ float4 LightShaftsScreenSpace(const float2 screenUV)
 	ScreenLightPos.xyz /= ScreenLightPos.w;
 	ScreenLightPos.xy = (ScreenLightPos.xy + 1.0) * 0.5;
 	ScreenLightPos.y = 1.0 - ScreenLightPos.y;
-	if (ScreenLightPos.w < 0.0)
+	[branch] if (ScreenLightPos.w < 0.0)
 		return 0.0;
 
 	float2 offscreen;
 	offscreen.x = max(ScreenLightPos.x - 1.0, 0.0 - ScreenLightPos.x);
 	offscreen.y = max(ScreenLightPos.y - 1.0, 0.0 - ScreenLightPos.y);
 	float intensity = saturate(1.0 - max(offscreen.x, offscreen.y) / 1.0);
-	if (intensity <= 0.0)
+
+	const float3 atmoPos = 0.0; // TODO: pass as input data
+	float height = (length(CameraPos - atmoPos) - Atmosphere.InnerRadius) / (Atmosphere.OuterRadius - Atmosphere.InnerRadius);
+	intensity *= min(1.0, (1.0 - height + Atmosphere.ScaleDepth) / (1.0 - Atmosphere.ScaleDepth));
+
+	[branch] if (intensity <= 0.0)
 		return 0.0;
 
 	// Calculate vector from pixel to light source in screen space.
