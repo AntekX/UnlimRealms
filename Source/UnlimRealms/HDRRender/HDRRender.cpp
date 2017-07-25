@@ -93,6 +93,45 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "HDRRender::CreateGfxObjects: failed to initialize blur PS");
 
+		// init custom generic quad render states
+		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
+		res = (genericRender != ur_null);
+		if (Succeeded(res))
+		{
+			// common
+			GfxRenderState quadPointSamplerRS = genericRender->GetDefaultQuadRenderState();
+			quadPointSamplerRS.SamplerState[0].MinFilter = GfxFilter::Point;
+			quadPointSamplerRS.SamplerState[0].MagFilter = GfxFilter::Point;
+			quadPointSamplerRS.SamplerState[1].MinFilter = GfxFilter::Linear;
+			quadPointSamplerRS.SamplerState[1].MagFilter = GfxFilter::Linear;
+
+			// HDR to Luminance
+			genericRender->CreateScreenQuadState(gfxObjects->screenQuadStateHDRLuminance,
+				gfxObjects->HDRTargetLuminancePS.get());
+
+			// average Luminance
+			genericRender->CreateScreenQuadState(gfxObjects->screenQuadStateAverageLuminance,
+				gfxObjects->averageLuminancePS.get(), &quadPointSamplerRS);
+			
+			// bloom
+			genericRender->CreateScreenQuadState(gfxObjects->screenQuadStateBloom,
+				gfxObjects->bloomLuminancePS.get());
+
+			// blur
+			genericRender->CreateScreenQuadState(gfxObjects->screenQuadStateBlur,
+				gfxObjects->blurPS.get(), &quadPointSamplerRS);
+
+			// tonemapping
+			genericRender->CreateScreenQuadState(gfxObjects->screenQuadStateTonemapping,
+				gfxObjects->toneMappingPS.get(), &quadPointSamplerRS);
+
+			// debug
+			genericRender->CreateScreenQuadState(gfxObjects->screenQuadStateDebug,
+				ur_null, &quadPointSamplerRS);
+		}
+		if (Failed(res))
+			return ResultError(NotInitialized, "HDRRender::Init: failed to get GenericRender component");
+
 		this->gfxObjects = std::move(gfxObjects);
 
 		return res;
@@ -164,20 +203,6 @@ namespace UnlimRealms
 			return ResultError(Failure, "HDRRender::Init: failed to initialize luminance render targets chain");
 		}
 
-		// init custom generic quad render state
-		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
-		res = (genericRender != ur_null);
-		if (Succeeded(res))
-		{
-			this->gfxObjects->quadPointSamplerRS = genericRender->GetDefaultQuadRenderState();
-			this->gfxObjects->quadPointSamplerRS.SamplerState[0].MinFilter = GfxFilter::Point;
-			this->gfxObjects->quadPointSamplerRS.SamplerState[0].MagFilter = GfxFilter::Point;
-			this->gfxObjects->quadPointSamplerRS.SamplerState[1].MinFilter = GfxFilter::Linear;
-			this->gfxObjects->quadPointSamplerRS.SamplerState[1].MagFilter = GfxFilter::Linear;
-		}
-		if (Failed(res))
-			return ResultError(NotInitialized, "HDRRender::Init: failed to get GenericRender component");
-
 		return res;
 	}
 
@@ -206,20 +231,21 @@ namespace UnlimRealms
 		if (ur_null == this->gfxObjects || ur_null == genericRender ||
 			this->gfxObjects->lumRTChain.empty())
 			return NotInitialized;
+
+		Result res = Success;
 		
 		ConstantsCB cb;
 		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
 		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Height;
 		cb.params = this->params;
-		gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		res &= gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		res &= gfxContext.SetConstantBuffer(this->gfxObjects->constantsCB.get(), 1);
 
 		// HDR RT to luminance first target
-		Result res = Success;
 		res &= gfxContext.SetRenderTarget(this->gfxObjects->lumRTChain[0].get());
-		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null, ur_null,
-			this->gfxObjects->HDRTargetLuminancePS.get(),
-			this->gfxObjects->constantsCB.get());
+		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null,
+			this->gfxObjects->screenQuadStateHDRLuminance.get());
 
 		// compute average luminance from 2x2 texels of source RT and write to the next target in chain
 		for (ur_size irt = 1; irt < this->gfxObjects->lumRTChain.size(); ++irt)
@@ -232,36 +258,31 @@ namespace UnlimRealms
 			gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 			
 			gfxContext.SetRenderTarget(dstRT.get());
-			res = genericRender->RenderScreenQuad(gfxContext, srcRT->GetTargetBuffer(), ur_null,
-				&this->gfxObjects->quadPointSamplerRS,
-				this->gfxObjects->averageLuminancePS.get(),
-				this->gfxObjects->constantsCB.get());
+			res &= genericRender->RenderScreenQuad(gfxContext, srcRT->GetTargetBuffer(), ur_null,
+				this->gfxObjects->screenQuadStateAverageLuminance.get());
 		}
 
 		// compute bloom texture from HDR source
 		gfxContext.SetRenderTarget(this->gfxObjects->bloomRT[0].get());
-		res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null, ur_null,
-			this->gfxObjects->bloomLuminancePS.get(),
-			this->gfxObjects->constantsCB.get());
+		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null,
+			this->gfxObjects->screenQuadStateBloom.get());
 		
 		// apply blur to bloom texture
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->bloomRT[0]->GetTargetBuffer()->GetDesc().Width;
 		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->bloomRT[0]->GetTargetBuffer()->GetDesc().Height;
-		const ur_uint blurPasses = 4;
+		const ur_uint blurPasses = 8;
 		ur_uint srcIdx = 0;
 		ur_uint dstIdx = 0;
 		for (ur_uint ipass = 0; ipass < blurPasses * 2; ++ipass, ++srcIdx)
 		{
 			cb.BlurDirection = floor(ur_float(ipass) / blurPasses);
-			gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+			res &= gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
 			srcIdx = srcIdx % 2;
 			dstIdx = (srcIdx + 1) % 2;
-			gfxContext.SetRenderTarget(this->gfxObjects->bloomRT[dstIdx].get());
-			res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->bloomRT[srcIdx]->GetTargetBuffer(), ur_null,
-				&this->gfxObjects->quadPointSamplerRS,
-				this->gfxObjects->blurPS.get(),
-				this->gfxObjects->constantsCB.get());
+			res &= gfxContext.SetRenderTarget(this->gfxObjects->bloomRT[dstIdx].get());
+			res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->bloomRT[srcIdx]->GetTargetBuffer(), ur_null,
+				this->gfxObjects->screenQuadStateBlur.get());
 		}
 		if (dstIdx != 0) this->gfxObjects->bloomRT[0].swap(this->gfxObjects->bloomRT[1]);
 
@@ -275,20 +296,21 @@ namespace UnlimRealms
 			this->gfxObjects->lumRTChain.empty())
 			return NotInitialized;
 
+		Result res = Success;
+
 		ConstantsCB cb;
 		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->lumRTChain.front()->GetTargetBuffer()->GetDesc().Width;
 		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->lumRTChain.front()->GetTargetBuffer()->GetDesc().Height;
 		cb.params = this->params;
-		gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		res &= gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		res &= gfxContext.SetConstantBuffer(this->gfxObjects->constantsCB.get(), 1);
 
 		// do tonemapping
-		gfxContext.SetTexture(this->gfxObjects->lumRTChain.back()->GetTargetBuffer(), 1);
-		gfxContext.SetTexture(this->gfxObjects->bloomRT[0]->GetTargetBuffer(), 2);
-		Result res = genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null,
-			&this->gfxObjects->quadPointSamplerRS,
-			this->gfxObjects->toneMappingPS.get(),
-			this->gfxObjects->constantsCB.get());
+		res &= gfxContext.SetTexture(this->gfxObjects->lumRTChain.back()->GetTargetBuffer(), 1);
+		res &= gfxContext.SetTexture(this->gfxObjects->bloomRT[0]->GetTargetBuffer(), 2);
+		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects->hdrRT->GetTargetBuffer(), ur_null,
+			this->gfxObjects->screenQuadStateTonemapping.get());
 
 		// debug render
 		if (this->debugRT != DebugRT_None)
@@ -310,7 +332,7 @@ namespace UnlimRealms
 				ur_float h = (ur_float)dbgTex->GetDesc().Height;
 				genericRender->RenderScreenQuad(gfxContext, dbgTex,
 					RectF(0.0f, viewPort.Height - sh, sh * w / h, (ur_float)viewPort.Height),
-					&this->gfxObjects->quadPointSamplerRS);
+					this->gfxObjects->screenQuadStateDebug.get());
 			}
 		}
 

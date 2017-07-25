@@ -9,6 +9,7 @@
 
 #include "Realm/Realm.h"
 #include "Gfx/GfxSystem.h"
+#include "GenericRender/GenericRender.h"
 
 namespace UnlimRealms
 {
@@ -78,8 +79,8 @@ namespace UnlimRealms
 			std::unique_ptr<GfxPixelShader> lightShaftsPS;
 			std::unique_ptr<GfxRenderTarget> lightShaftsRT;
 			std::unique_ptr<GfxBuffer> lightShaftsCB;
-			GfxRenderState occlusionMaskRS;
-			GfxRenderState lightShaftsBlendRS;
+			std::unique_ptr<GenericRender::PipelineState> screenQuadStateOcclusionMask;
+			std::unique_ptr<GenericRender::PipelineState> screenQuadStateBlendLightShafts;
 		} gfxObjects;
 
 		struct alignas(16) CommonCB

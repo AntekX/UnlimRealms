@@ -157,26 +157,32 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGfxObjects: failed to initialize Light Shafts constant buffer");
 
-		// Light Shafts post effect render states
+		// Custom screen quad render states
 		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
 		res = (genericRender != ur_null);
 		{
-			this->gfxObjects.occlusionMaskRS = genericRender->GetDefaultQuadRenderState();
-			this->gfxObjects.occlusionMaskRS.SamplerState[0].MinFilter = GfxFilter::Point;
-			this->gfxObjects.occlusionMaskRS.SamplerState[0].MagFilter = GfxFilter::Point;
-			this->gfxObjects.occlusionMaskRS.DepthStencilState.StencilEnable = true;
-			this->gfxObjects.occlusionMaskRS.DepthStencilState.FrontFace.StencilFunc = GfxCmpFunc::Equal;
-			this->gfxObjects.occlusionMaskRS.DepthStencilState.StencilWriteMask = 0x0;
-			this->gfxObjects.lightShaftsBlendRS = genericRender->GetDefaultQuadRenderState();
-			this->gfxObjects.lightShaftsBlendRS.BlendState[0].BlendEnable = true;
-			this->gfxObjects.lightShaftsBlendRS.BlendState[0].SrcBlend = GfxBlendFactor::SrcAlpha;
-			this->gfxObjects.lightShaftsBlendRS.BlendState[0].SrcBlendAlpha = GfxBlendFactor::SrcAlpha;
-			this->gfxObjects.lightShaftsBlendRS.BlendState[0].DstBlend = GfxBlendFactor::InvSrcAlpha;
-			this->gfxObjects.lightShaftsBlendRS.BlendState[0].DstBlendAlpha = GfxBlendFactor::InvSrcAlpha;
+			// Occlusion mask
+			GfxRenderState occlusionMaskRS = genericRender->GetDefaultQuadRenderState();
+			occlusionMaskRS.SamplerState[0].MinFilter = GfxFilter::Point;
+			occlusionMaskRS.SamplerState[0].MagFilter = GfxFilter::Point;
+			occlusionMaskRS.DepthStencilState.StencilEnable = true;
+			occlusionMaskRS.DepthStencilState.FrontFace.StencilFunc = GfxCmpFunc::Equal;
+			occlusionMaskRS.DepthStencilState.StencilWriteMask = 0x0;
+			genericRender->CreateScreenQuadState(this->gfxObjects.screenQuadStateOcclusionMask,
+				ur_null, &occlusionMaskRS, 0x1);
+
+			// Blend light shafts 
+			GfxRenderState lightShaftsBlendRS = genericRender->GetDefaultQuadRenderState();
+			lightShaftsBlendRS.BlendState[0].BlendEnable = true;
+			lightShaftsBlendRS.BlendState[0].SrcBlend = GfxBlendFactor::SrcAlpha;
+			lightShaftsBlendRS.BlendState[0].SrcBlendAlpha = GfxBlendFactor::SrcAlpha;
+			lightShaftsBlendRS.BlendState[0].DstBlend = GfxBlendFactor::InvSrcAlpha;
+			lightShaftsBlendRS.BlendState[0].DstBlendAlpha = GfxBlendFactor::InvSrcAlpha;
+			genericRender->CreateScreenQuadState(this->gfxObjects.screenQuadStateBlendLightShafts,
+				this->gfxObjects.lightShaftsPS.get(), &lightShaftsBlendRS);
 		}
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGfxObjects: failed to initialize Light Shafts render states");
-		
 
 		return res;
 	}
@@ -305,21 +311,20 @@ namespace UnlimRealms
 		// constants
 		GfxResourceData cbResData = { &this->lightShafts, sizeof(LightShaftsCB), 0 };
 		res &= gfxContext.UpdateBuffer(this->gfxObjects.lightShaftsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		res &= gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 1);
+		res &= gfxContext.SetConstantBuffer(this->gfxObjects.lightShaftsCB.get(), 2);
 
 		// draw atmosphere into separate RT and mask out occlusion fragments using atmosphere's stencil ref
 		res &= gfxContext.SetRenderTarget(this->gfxObjects.lightShaftsRT.get(), &renderTarget);
-		res = gfxContext.ClearTarget(this->gfxObjects.lightShaftsRT.get(), true, { 0.0f, 0.0f, 0.0f, 0.0f }, false, 0, false, 0);
+		res &= gfxContext.ClearTarget(this->gfxObjects.lightShaftsRT.get(), true, { 0.0f, 0.0f, 0.0f, 0.0f }, false, 0, false, 0);
 		res &= genericRender->RenderScreenQuad(gfxContext, renderTarget.GetTargetBuffer(), ur_null,
-			&this->gfxObjects.occlusionMaskRS, ur_null, ur_null, 0x1);
+			this->gfxObjects.screenQuadStateOcclusionMask.get());
 		gfxContext.SetRenderTarget(ur_null);
 
 		// draw lights shafts into given RT
 		res &= gfxContext.SetRenderTarget(&renderTarget);
-		res &= gfxContext.SetConstantBuffer(this->gfxObjects.lightShaftsCB.get(), 2);
 		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects.lightShaftsRT->GetTargetBuffer(), ur_null,
-			&this->gfxObjects.lightShaftsBlendRS,
-			this->gfxObjects.lightShaftsPS.get(),
-			this->gfxObjects.CB.get());
+			this->gfxObjects.screenQuadStateBlendLightShafts.get());
 
 		return res;
 	}

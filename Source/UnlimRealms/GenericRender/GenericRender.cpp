@@ -180,23 +180,36 @@ namespace UnlimRealms
 
 		// Quad Pipeline State
 		{
-			std::unique_ptr<GfxPipelineState> gfxPipelineState;
-			res = this->GetRealm().GetGfxSystem()->CreatePipelineState(gfxPipelineState);
-			if (Succeeded(res))
+			std::unique_ptr<PipelineState> gfxPipelineState;
+			if (Succeeded(this->CreateScreenQuadState(gfxPipelineState)))
 			{
-				gfxPipelineState->PrimitiveTopology = GfxPrimitiveTopology::TriangleStrip;
-				gfxPipelineState->InputLayout = this->gfxObjects->inputLayout.get();
-				gfxPipelineState->VertexShader = this->gfxObjects->VS.get();
-				gfxPipelineState->PixelShader = this->gfxObjects->PS.get();
-
-				res = gfxPipelineState->SetRenderState(DefaultQuadRenderState);
-
 				this->gfxObjects->quadState = std::move(gfxPipelineState);
 			}
 		}
 		if (Failed(res))
 			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize quad pipeline state");
 
+		return res;
+	}
+
+	Result GenericRender::CreateScreenQuadState(std::unique_ptr<PipelineState> &pipelineState,
+		GfxPixelShader *customPS, GfxRenderState *customRS, ur_uint stencilRef)
+	{
+		std::unique_ptr<GfxPipelineState> gfxPipelineState;
+		Result res = this->GetRealm().GetGfxSystem()->CreatePipelineState(gfxPipelineState);
+		if (Succeeded(res))
+		{
+			gfxPipelineState->PrimitiveTopology = GfxPrimitiveTopology::TriangleStrip;
+			gfxPipelineState->InputLayout = this->gfxObjects->inputLayout.get();
+			gfxPipelineState->VertexShader = this->gfxObjects->VS.get();
+			gfxPipelineState->PixelShader = (customPS != ur_null ? customPS : this->gfxObjects->PS.get());
+			gfxPipelineState->StencilRef = stencilRef;
+			res = gfxPipelineState->SetRenderState(customRS != ur_null ? *customRS : DefaultQuadRenderState);
+			if (Succeeded(res))
+			{
+				pipelineState = std::move(gfxPipelineState);
+			}
+		}
 		return res;
 	}
 
@@ -478,10 +491,7 @@ namespace UnlimRealms
 	}
 
 	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const ur_float4x4 *transform,
-		GfxRenderState *customRenderState,
-		GfxPixelShader *customPixelShader,
-		GfxBuffer *customConstBufferSlot1,
-		ur_uint stencilRef)
+		PipelineState *customState)
 	{
 		if (ur_null == this->gfxObjects ||
 			ur_null == this->gfxObjects->quadVB ||
@@ -489,11 +499,7 @@ namespace UnlimRealms
 			ur_null == this->gfxObjects->CB)
 			return Result(NotInitialized);
 		
-		if (customRenderState != ur_null)
-			this->gfxObjects->quadState->SetRenderState(*customRenderState);
-
-		this->gfxObjects->quadState->PixelShader = (customPixelShader != ur_null ? customPixelShader : this->gfxObjects->PS.get());
-		this->gfxObjects->quadState->StencilRef = stencilRef;
+		GfxPipelineState *pipelineState = (customState != ur_null ? customState : this->gfxObjects->quadState.get());
 
 		CommonCB cb;
 		cb.viewProj = (transform != ur_null ? *transform : ur_float4x4::Identity);
@@ -501,25 +507,16 @@ namespace UnlimRealms
 		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
 		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
-		gfxContext.SetConstantBuffer(customConstBufferSlot1, 1);
 		gfxContext.SetVertexBuffer(this->gfxObjects->quadVB.get(), 0, sizeof(Vertex), 0);
 		gfxContext.SetTexture(texture != ur_null ? texture : this->gfxObjects->atlas.get(), 0);
-		gfxContext.SetPipelineState(this->gfxObjects->quadState.get());
+		gfxContext.SetPipelineState(pipelineState);
 		gfxContext.Draw(4, 0, 0, 0);
-
-		// reset defaults
-		if (customRenderState != ur_null)
-			this->gfxObjects->quadState->SetRenderState(DefaultQuadRenderState);
-		this->gfxObjects->quadState->StencilRef = 0;
 
 		return Result(Success);
 	}
 
 	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const RectF &rect,
-		GfxRenderState *customRenderState,
-		GfxPixelShader *customPixelShader,
-		GfxBuffer *customConstBufferSlot1,
-		ur_uint stencilRef)
+		PipelineState *customState)
 	{
 		GfxViewPort viewPort;
 		Result res = gfxContext.GetViewPort(viewPort);
@@ -532,7 +529,7 @@ namespace UnlimRealms
 		mx.r[3][0] = rect.Min.x / viewPort.Width * 2.0f - 1.0f + mx.r[0][0];
 		mx.r[3][1] = (1.0f - rect.Min.y / viewPort.Height) * 2.0f - 1.0f - mx.r[1][1];
 		
-		return this->RenderScreenQuad(gfxContext, texture, &mx, customRenderState, customPixelShader, customConstBufferSlot1, stencilRef);
+		return this->RenderScreenQuad(gfxContext, texture, &mx, customState);
 	}
 
 } // end namespace UnlimRealms

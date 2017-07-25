@@ -9,6 +9,7 @@
 
 #include "Realm/Realm.h"
 #include "Gfx/GfxSystem.h"
+#include "GenericRender/GenericRender.h"
 
 namespace UnlimRealms
 {
@@ -65,13 +66,18 @@ namespace UnlimRealms
 			std::unique_ptr<GfxRenderTarget> hdrRT;
 			std::vector<std::unique_ptr<GfxRenderTarget>> lumRTChain;
 			std::unique_ptr<GfxRenderTarget> bloomRT[2];
-			GfxRenderState quadPointSamplerRS;
 			std::unique_ptr<GfxBuffer> constantsCB;
 			std::unique_ptr<GfxPixelShader> HDRTargetLuminancePS;
 			std::unique_ptr<GfxPixelShader> bloomLuminancePS;
 			std::unique_ptr<GfxPixelShader> averageLuminancePS;
 			std::unique_ptr<GfxPixelShader> toneMappingPS;
 			std::unique_ptr<GfxPixelShader> blurPS;
+			std::unique_ptr<GenericRender::PipelineState> screenQuadStateHDRLuminance;
+			std::unique_ptr<GenericRender::PipelineState> screenQuadStateAverageLuminance;
+			std::unique_ptr<GenericRender::PipelineState> screenQuadStateBloom;
+			std::unique_ptr<GenericRender::PipelineState> screenQuadStateBlur;
+			std::unique_ptr<GenericRender::PipelineState> screenQuadStateTonemapping;
+			std::unique_ptr<GenericRender::PipelineState> screenQuadStateDebug;
 		};
 
 		std::unique_ptr<GfxObjects> gfxObjects;

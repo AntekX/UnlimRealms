@@ -28,6 +28,8 @@ namespace UnlimRealms
 			Count
 		};
 
+		typedef GfxPipelineState PipelineState;
+
 		GenericRender(Realm &realm);
 
 		~GenericRender();
@@ -48,16 +50,13 @@ namespace UnlimRealms
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
 		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const ur_float4x4 *transform = ur_null,
-			GfxRenderState *customRenderState = ur_null,
-			GfxPixelShader *customPixelShader = ur_null,
-			GfxBuffer *customConstBufferSlot1 = ur_null,
-			ur_uint stencilRef = 0);
+			PipelineState *customState = ur_null);
 
 		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const RectF &rect,
-			GfxRenderState *customRenderState = ur_null,
-			GfxPixelShader *customPixelShader = ur_null,
-			GfxBuffer *customConstBufferSlot1 = ur_null,
-			ur_uint stencilRef = 0);
+			PipelineState *customState = ur_null);
+
+		Result CreateScreenQuadState(std::unique_ptr<PipelineState> &pipelineState,
+			GfxPixelShader *customPS = ur_null, GfxRenderState *customRS = ur_null, ur_uint stencilRef = 0);
 
 		const GfxRenderState& GetDefaultQuadRenderState() const { return DefaultQuadRenderState; }
 
