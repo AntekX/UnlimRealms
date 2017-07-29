@@ -119,6 +119,7 @@ namespace UnlimRealms
 			gfxRS.BlendState[0].SrcBlendAlpha = GfxBlendFactor::SrcAlpha;
 			gfxRS.BlendState[0].DstBlend = GfxBlendFactor::One;
 			gfxRS.BlendState[0].DstBlendAlpha = GfxBlendFactor::One;
+			gfxRS.DepthStencilState.DepthWriteEnable = false;
 			gfxRS.DepthStencilState.StencilEnable = true;
 			gfxRS.DepthStencilState.BackFace.StencilPassOp = GfxStencilOp::Replace;
 			this->gfxObjects.pipelineState->StencilRef = 0x1;

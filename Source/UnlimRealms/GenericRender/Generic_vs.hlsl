@@ -5,6 +5,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#include "LogDepth.hlsli"
+
 cbuffer Common : register(b0)
 {
 	float4x4 ViewProj;
@@ -28,7 +30,7 @@ PS_INPUT main(VS_INPUT input)
 {
 	PS_INPUT output;
 
-	output.pos = mul(ViewProj, float4(input.pos.xyz, 1.0f));
+	output.pos = LogDepthPos(mul(ViewProj, float4(input.pos.xyz, 1.0f)));
 	output.col = input.col;
 	output.uv = input.uv;
 

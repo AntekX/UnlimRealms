@@ -257,14 +257,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 				atmosphere->RenderPostEffects(*gfxContext, *hdrRender->GetHDRTarget(), camera.GetViewProj(), camera.GetPosition());
 
 				// resolve HDR image to back buffer
-				gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer());
+				gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), hdrRender->GetHDRTarget());
 				hdrRender->Resolve(*gfxContext);
+				
+				// render batched generic primitives
+				genericRender->Render(*gfxContext, camera.GetViewProj());
 			}
-
-			// render batched generic primitives
-			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(),
-				false, 0.0f, true, 1.0f, true, 0);
-			genericRender->Render(*gfxContext, camera.GetViewProj());
 
 			// expose demo gui
 			static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
