@@ -65,24 +65,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	}
 
 	// initialize ImguiRender
-	ImguiRender *imguiRender = ur_null;
-	if (realm.AddComponent<ImguiRender>(realm))
+	ImguiRender *imguiRender = realm.AddComponent<ImguiRender>(realm);
+	if (imguiRender != ur_null)
 	{
 		imguiRender = realm.GetComponent<ImguiRender>();
 		res = imguiRender->Init();
 	}
 
 	// initialize GenericRender
-	GenericRender *genericRender = ur_null;
-	if (realm.AddComponent<GenericRender>(realm))
+	GenericRender *genericRender = realm.AddComponent<GenericRender>(realm);
+	if (genericRender != ur_null)
 	{
 		genericRender = realm.GetComponent<GenericRender>();
 		genericRender->Init();
 	}
 
 	// HDR rendering
-	HDRRender* hdrRender = ur_null;
-	if (realm.AddComponent<HDRRender>(realm))
+	HDRRender* hdrRender = realm.AddComponent<HDRRender>(realm);
+	if (hdrRender != ur_null)
 	{
 		hdrRender = realm.GetComponent<HDRRender>();
 		HDRRender::Params hdrParams = HDRRender::Params::Default;

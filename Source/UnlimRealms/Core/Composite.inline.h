@@ -28,26 +28,26 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <class T, class ... Args>
-	bool Composite::AddComponent(Args&&... args)
+	T* Composite::AddComponent(Args&&... args)
 	{
 		static_assert(std::is_base_of<Component, T>(), "Composite::AddComponent: class type is not a component");
-		return this->AddComponent(Component::GetUID<T>(), std::unique_ptr<Component>(new T(args...)));
+		return static_cast<T*>(this->AddComponent(Component::GetUID<T>(), std::unique_ptr<Component>(new T(args...))));
 	}
 
 	template <class TBase, class TImpl, class ... Args>
-	inline bool Composite::AddComponent(Args&&... args)
+	inline TImpl* Composite::AddComponent(Args&&... args)
 	{
 		static_assert(std::is_base_of<Component, TBase>(), "Composite::AddComponent: TBase is not a component");
 		static_assert(std::is_base_of<TBase, TImpl>(), "Composite::AddComponent: TBase is not a base type for TImpl");
-		return this->AddComponent(Component::GetUID<TBase>(), std::unique_ptr<Component>(new TImpl(args...)));
+		return static_cast<TImpl*>(this->AddComponent(Component::GetUID<TBase>(), std::unique_ptr<Component>(new TImpl(args...))));
 	}
 
-	bool Composite::AddComponent(Component::UID uid, std::unique_ptr<Component> &component)
+	Component* Composite::AddComponent(Component::UID uid, std::unique_ptr<Component> &component)
 	{
 		if (this->HasComponent(uid))
 			return false;
 		this->components[uid] = std::move(component);
-		return true;
+		return this->components[uid].get();
 	}
 
 	template <class T>

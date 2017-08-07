@@ -67,12 +67,12 @@ namespace UnlimRealms
 		~Composite();
 
 		template <class T, class ... Args>
-		inline bool AddComponent(Args&&... args);
-		
+		inline T* AddComponent(Args&&... args);
+
 		template <class TBase, class TImpl, class ... Args>
-		inline bool AddComponent(Args&&... args);
+		inline TImpl* AddComponent(Args&&... args);
 		
-		inline bool AddComponent(Component::UID uid, std::unique_ptr<Component> &component);
+		inline Component* AddComponent(Component::UID uid, std::unique_ptr<Component> &component);
 
 		template <class T>
 		inline bool RemoveComponent();
