@@ -46,6 +46,8 @@
 
 // STL
 
+#include <cassert>
+#include <typeindex>
 #include <array>
 #include <vector>
 #include <set>

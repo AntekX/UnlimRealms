@@ -285,6 +285,9 @@
     <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_wdp.h">
       <Filter>3rdParty\ResIL\src-IL</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Terrain\Terrain.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -614,6 +617,9 @@
     <ClCompile Include="..\..\UnlimRealms\Resources\Resources_ResIL.cpp">
       <Filter>Resources</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Terrain\Terrain.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Core">
@@ -684,6 +690,9 @@
     </Filter>
     <Filter Include="Isosurface">
       <UniqueIdentifier>{055a3b5c-0852-413b-abb4-e13ce7500490}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Terrain">
+      <UniqueIdentifier>{5cfe85cb-64fd-401a-8801-9e67b395ec25}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
