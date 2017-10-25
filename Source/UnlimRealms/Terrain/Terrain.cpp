@@ -35,6 +35,7 @@ namespace UnlimRealms
 
 	Result Terrain::SubSystem::Create(InstanceHandle& instanceHandle, const InstanceDesc &instanceDesc)
 	{
+        instanceHandle = InvalidHandle;
 		return NotImplemented;
 	}
 
@@ -78,7 +79,8 @@ namespace UnlimRealms
 
 	Result Terrain::ProceduralData::Create(InstanceHandle& instanceHandle, const ProceduralData::InstanceDesc &desc)
 	{
-		return NotImplemented;
+        // TODO
+        return SubSystem::Create(instanceHandle, desc);
 	}
 
 
@@ -108,7 +110,7 @@ namespace UnlimRealms
 	Result Terrain::SimpleGrid::Create(InstanceHandle& instanceHandle, const SimpleGrid::InstanceDesc &desc)
 	{
 		// TODO
-		return NotImplemented;
+        return SubSystem::Create(instanceHandle, desc);
 	}
 
 	Result Terrain::SimpleGrid::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere)
