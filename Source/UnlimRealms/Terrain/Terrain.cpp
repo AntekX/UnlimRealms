@@ -17,6 +17,51 @@
 
 namespace UnlimRealms
 {
+	
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Base terrain sub system
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	Terrain::SubSystem::SubSystem(Terrain &terrain) :
+		terrain(terrain)
+	{
+
+	}
+
+	Terrain::SubSystem::~SubSystem()
+	{
+	
+	}
+
+	Result Terrain::SubSystem::Create(InstanceHandle& instanceHandle, const InstanceDesc &instanceDesc)
+	{
+		return NotImplemented;
+	}
+
+	Result Terrain::SubSystem::AddInstance(InstanceHandle& instanceHandle, std::unique_ptr<Instance> &instance)
+	{
+		instanceHandle = InvalidHandle;
+		if (ur_null == instance.get())
+			return InvalidArgs;
+
+		static ur_size InstanceHandleIdx = 0;
+		instanceHandle = InstanceHandleIdx++;
+		this->instances.insert(std::pair<InstanceHandle, std::unique_ptr<Instance>>(instanceHandle, std::move(instance)));
+		
+		return Success;
+	}
+
+	Result Terrain::SubSystem::RemoveInstance(const InstanceHandle& instanceHandle)
+	{
+		auto record = this->instances.find(instanceHandle);
+		if (this->instances.end() == record)
+			return NotFound;
+
+		this->instances.erase(record);
+
+		return Success;
+	}
+
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Procedural data generator
@@ -31,7 +76,7 @@ namespace UnlimRealms
 	{
 	}
 
-	Result Terrain::ProceduralData::Create(Handle& instanceHandle, const ProceduralData::InstanceDesc &desc)
+	Result Terrain::ProceduralData::Create(InstanceHandle& instanceHandle, const ProceduralData::InstanceDesc &desc)
 	{
 		return NotImplemented;
 	}
@@ -39,6 +84,16 @@ namespace UnlimRealms
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Base presentation
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	Result Terrain::Presentation::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere)
+	{
+		return NotImplemented;
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// SimpleGrid
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	Terrain::SimpleGrid::SimpleGrid(Terrain &terrain) :
@@ -50,8 +105,15 @@ namespace UnlimRealms
 	{
 	}
 
-	Result Terrain::SimpleGrid::Create(Handle& instanceHandle, const SimpleGrid::InstanceDesc &desc)
+	Result Terrain::SimpleGrid::Create(InstanceHandle& instanceHandle, const SimpleGrid::InstanceDesc &desc)
 	{
+		// TODO
+		return NotImplemented;
+	}
+
+	Result Terrain::SimpleGrid::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere)
+	{
+		// TODO
 		return NotImplemented;
 	}
 
@@ -77,10 +139,21 @@ namespace UnlimRealms
 		this->RegisterSubSystem<ProceduralData>();
 		this->RegisterSubSystem<SimpleGrid>();
 
-		Handle hinstance;		
+		InstanceHandle hinstance;
 		this->Create<ProceduralData, SimpleGrid>(hinstance, ProceduralData::InstanceDesc(), SimpleGrid::InstanceDesc());
 		
 		// nothing to do
+		return Success;
+	}
+
+	Result Terrain::Update()
+	{
+		return Success;
+	}
+
+	Result Terrain::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere)
+	{
+
 		return Success;
 	}
 
