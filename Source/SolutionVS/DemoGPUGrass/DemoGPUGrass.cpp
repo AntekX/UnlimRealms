@@ -167,6 +167,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 				// render batched generic primitives
 				genericRender->Render(*gfxContext, camera.GetViewProj());
+
+				// test surface grid
+				{
+					static const ur_float3 points[] = {
+						{ -1.0f, 0.0f, -1.0f },{ 1.0f, 0.0f, -1.0f },
+						{ 1.0f, 0.0f,  1.0f },{ -1.0f, 0.0f,  1.0f },
+						{ -1.0f, 0.0f, -1.0f }
+					};
+					genericRender->DrawPolyline(ur_array_size(points), points, ur_float4(1.0f, 0.0f, 0.0f, 1.0f));
+					ur_float4x4 wvp = ur_float4x4::Scaling(100.0f, 1.0f, 100.0f);
+					wvp.Multiply(ur_float4x4::Translation(camera.GetPosition().x, surfaceRadiusMin, camera.GetPosition().z));
+					wvp.Multiply(camera.GetViewProj());
+					genericRender->Render(*gfxContext, wvp);
+				}
 			}
 
 			// expose demo gui

@@ -137,16 +137,28 @@ namespace UnlimRealms
 
 			class UR_DECL Instance : public SubSystem::Instance
 			{
+			public:
+
+				InstanceDesc desc;
+			};
+
+			struct alignas(16) PatchCB
+			{
+				BoundingBox bbox;
 			};
 
 			struct GfxObjects
 			{
 				std::unique_ptr<GfxInputLayout> inputLayout;
-				std::unique_ptr<GfxVertexShader> VS;
-				std::unique_ptr<GfxPixelShader> PS;
-				std::unique_ptr<GfxBuffer> CB;
-				std::unique_ptr<GfxPipelineState> PLSColorPass;
+				std::unique_ptr<GfxVertexShader> patchCommonVS;
+				std::unique_ptr<GfxPixelShader> patchColorPS;
+				std::unique_ptr<GfxBuffer> patchCB;
+				std::unique_ptr<GfxBuffer> patchVB;
+				std::unique_ptr<GfxBuffer> patchIB;
+				std::unique_ptr<GfxPipelineState> colorPassPLS;
 			} gfxObjects;
+
+			Result CreateGfxObjects();
 		};
 
 
