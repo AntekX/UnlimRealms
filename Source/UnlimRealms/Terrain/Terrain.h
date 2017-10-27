@@ -111,7 +111,7 @@ namespace UnlimRealms
 
 		
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Base presentation
+		// SimpleGrid presentation
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		class UR_DECL SimpleGrid : public Presentation
 		{
@@ -149,7 +149,7 @@ namespace UnlimRealms
 
 			struct GfxObjects
 			{
-				std::unique_ptr<GfxInputLayout> inputLayout;
+				std::unique_ptr<GfxInputLayout> patchIL;
 				std::unique_ptr<GfxVertexShader> patchCommonVS;
 				std::unique_ptr<GfxPixelShader> patchColorPS;
 				std::unique_ptr<GfxBuffer> patchCB;

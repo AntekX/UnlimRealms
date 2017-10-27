@@ -128,13 +128,13 @@ namespace UnlimRealms
 			return LogResult(Failure, realm.GetLog(), Log::Error, "Terrain::SimpleGrid::CreateGfxObjects: failed to initialize PS");
 
 		// Input Layout
-		res = realm.GetGfxSystem()->CreateInputLayout(objects.inputLayout);
+		res = realm.GetGfxSystem()->CreateInputLayout(objects.patchIL);
 		if (Succeeded(res))
 		{
 			GfxInputElement elements[] = {
 				{ GfxSemantic::Position, 0, 0, GfxFormat::R32G32, GfxFormatView::Float, 0 }
 			};
-			res = objects.inputLayout->Initialize(*objects.patchCommonVS.get(), elements, ur_array_size(elements));
+			res = objects.patchIL->Initialize(*objects.patchCommonVS.get(), elements, ur_array_size(elements));
 		}
 		if (Failed(res))
 			return LogResult(Failure, realm.GetLog(), Log::Error, "Terrain::SimpleGrid::CreateGfxObjects: failed to initialize input layout");
@@ -143,7 +143,7 @@ namespace UnlimRealms
 		res = realm.GetGfxSystem()->CreatePipelineState(objects.colorPassPLS);
 		if (Succeeded(res))
 		{
-			objects.colorPassPLS->InputLayout = objects.inputLayout.get();
+			objects.colorPassPLS->InputLayout = objects.patchIL.get();
 			objects.colorPassPLS->VertexShader = objects.patchCommonVS.get();
 			objects.colorPassPLS->PixelShader = objects.patchColorPS.get();
 			GfxRenderState gfxRS = GfxRenderState::Default;
@@ -198,13 +198,6 @@ namespace UnlimRealms
 
 	Result Terrain::Init()
 	{
-		// test
-		this->RegisterSubSystem<ProceduralData>();
-		this->RegisterSubSystem<SimpleGrid>();
-
-		InstanceHandle hinstance;
-		this->Create<ProceduralData, SimpleGrid>(hinstance, ProceduralData::InstanceDesc(), SimpleGrid::InstanceDesc());
-		
 		// nothing to do
 		return Success;
 	}

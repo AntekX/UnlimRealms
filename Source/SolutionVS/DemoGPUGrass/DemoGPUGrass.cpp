@@ -15,7 +15,7 @@
 #include "Resources/Resources.h"
 #include "Camera/CameraControl.h"
 #include "HDRRender/HDRRender.h"
-#include "Isosurface/Isosurface.h"
+#include "Terrain/Terrain.h"
 #include "Atmosphere/Atmosphere.h"
 #include "Multiverse/Multiverse.h"
 #pragma comment(lib, "UnlimRealms.lib")
@@ -91,7 +91,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		hdrRender->Init(canvasWidth, canvasHeight);
 	}
 
-	// demo atmosphere
+	// atmosphere
 	ur_float surfaceRadiusMin = 63710.0f;
 	std::unique_ptr<Atmosphere> atmosphere(new Atmosphere(realm));
 	{
@@ -104,10 +104,30 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		atmosphere->Init(desc);
 	}
 
+	// terrain
+	//std::unique_ptr<Terrain> terrain(new Terrain(realm));
+	//Terrain::InstanceHandle terrainHandle;
+	//{
+	//	terrain->Init();
+	//	terrain->RegisterSubSystem<Terrain::ProceduralData>();
+	//	terrain->RegisterSubSystem<Terrain::SimpleGrid>();
+	//	
+	//	// demo instance
+	//	ur_float3 size(1000.0f, 200.0f, 1000.0f);
+	//	Terrain::ProceduralData::InstanceDesc dataDesc;
+	//	dataDesc.Width = 1024;
+	//	dataDesc.Height = 1024;
+	//	dataDesc.Seed = 0;
+	//	Terrain::SimpleGrid::InstanceDesc presentationDesc;
+	//	presentationDesc.Bound.Min = ur_float3(-size.x * 0.5f, surfaceRadiusMin, -size.z);
+ //       presentationDesc.Bound.Max = ur_float3(+size.x * 0.5f, surfaceRadiusMin + size.y, +size.z);
+	//	terrain->Create<Terrain::ProceduralData, Terrain::SimpleGrid>(terrainHandle, dataDesc, presentationDesc);
+	//}
+
 	// demo camera
 	Camera camera(realm);
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::Free);
-	camera.SetPosition(ur_float3(0.0f, surfaceRadiusMin + 10.0f, 0.0f));
+	camera.SetPosition(ur_float3(0.0f, surfaceRadiusMin + 2.0f, 0.0f));
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
 
 	// Main message loop:
