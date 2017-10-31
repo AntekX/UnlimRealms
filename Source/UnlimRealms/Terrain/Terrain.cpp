@@ -162,6 +162,53 @@ namespace UnlimRealms
 		if (Failed(res))
 			return LogResult(Failure, realm.GetLog(), Log::Error, "Terrain::SimpleGrid::CreateGfxObjects: failed to initialize constant buffer");
 
+		// Vertex Buffer
+		const ur_uint patchResolution = 33;
+		res = realm.GetGfxSystem()->CreateBuffer(objects.patchVB);
+		if (Succeeded(res))
+		{			
+			std::vector<Vertex> vertices(patchResolution * patchResolution);
+			Vertex *vptr = vertices.data();
+			for (ur_uint iy = 0; iy < patchResolution; ++iy)
+			{
+				vptr->pos.y = ur_float(iy) / (patchResolution - 1);
+				for (ur_uint ix = 0; ix < patchResolution; ++ix, ++vptr)
+				{
+					vptr->pos.x = ur_float(ix) / (patchResolution - 1);
+				}
+			}
+			GfxResourceData gfxRes = { vertices.data(), (ur_uint)vertices.size() * sizeof(Vertex), 0 };
+			res = objects.patchVB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::VertexBuffer, 0, &gfxRes);
+		}
+		if (Failed(res))
+			return LogResult(Failure, realm.GetLog(), Log::Error, "Terrain::SimpleGrid::CreateGfxObjects: failed to initialize vertex buffer");
+
+		// Index Buffer
+		res = realm.GetGfxSystem()->CreateBuffer(objects.patchIB);
+		if (Succeeded(res))
+		{
+			const ur_uint patchCellCount = patchResolution - 1;
+			const ur_uint patchPrimitiveCount = patchCellCount * patchCellCount * 2;
+			std::vector<Index> indices(patchPrimitiveCount);
+			Index *iptr = indices.data();
+			for (ur_uint iy = 0; iy < patchCellCount; ++iy)
+			{
+				for (ur_uint ix = 0; ix < patchCellCount; ++ix)
+				{
+					*iptr++ = ix + iy * patchResolution;
+					*iptr++ = ix + (iy + 1) * patchResolution;
+					*iptr++ = ix + (iy + 1) * patchResolution + 1;
+					*iptr++ = ix + (iy + 1) * patchResolution + 1;
+					*iptr++ = ix + iy * patchResolution + 1;
+					*iptr++ = ix + iy * patchResolution;
+				}
+			}
+			GfxResourceData gfxRes = { indices.data(), (ur_uint)indices.size() * sizeof(Index), 0 };
+			res = objects.patchIB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::IndexBuffer, 0, &gfxRes);
+		}
+		if (Failed(res))
+			return LogResult(Failure, realm.GetLog(), Log::Error, "Terrain::SimpleGrid::CreateGfxObjects: failed to initialize index buffer");
+
 		return res;
 	}
 

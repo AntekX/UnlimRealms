@@ -105,24 +105,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	}
 
 	// terrain
-	//std::unique_ptr<Terrain> terrain(new Terrain(realm));
-	//Terrain::InstanceHandle terrainHandle;
-	//{
-	//	terrain->Init();
-	//	terrain->RegisterSubSystem<Terrain::ProceduralData>();
-	//	terrain->RegisterSubSystem<Terrain::SimpleGrid>();
-	//	
-	//	// demo instance
-	//	ur_float3 size(1000.0f, 200.0f, 1000.0f);
-	//	Terrain::ProceduralData::InstanceDesc dataDesc;
-	//	dataDesc.Width = 1024;
-	//	dataDesc.Height = 1024;
-	//	dataDesc.Seed = 0;
-	//	Terrain::SimpleGrid::InstanceDesc presentationDesc;
-	//	presentationDesc.Bound.Min = ur_float3(-size.x * 0.5f, surfaceRadiusMin, -size.z);
- //       presentationDesc.Bound.Max = ur_float3(+size.x * 0.5f, surfaceRadiusMin + size.y, +size.z);
-	//	terrain->Create<Terrain::ProceduralData, Terrain::SimpleGrid>(terrainHandle, dataDesc, presentationDesc);
-	//}
+	std::unique_ptr<Terrain> terrain(new Terrain(realm));
+	Terrain::InstanceHandle terrainHandle;
+	{
+		terrain->Init();
+		terrain->RegisterSubSystem<Terrain::ProceduralData>();
+		terrain->RegisterSubSystem<Terrain::SimpleGrid>();
+		
+		// demo instance
+		ur_float3 size(1000.0f, 200.0f, 1000.0f);
+		Terrain::ProceduralData::InstanceDesc dataDesc;
+		dataDesc.Width = 1024;
+		dataDesc.Height = 1024;
+		dataDesc.Seed = 0;
+		Terrain::SimpleGrid::InstanceDesc presentationDesc;
+		presentationDesc.Bound.Min = ur_float3(-size.x * 0.5f, surfaceRadiusMin, -size.z);
+        presentationDesc.Bound.Max = ur_float3(+size.x * 0.5f, surfaceRadiusMin + size.y, +size.z);
+		terrain->Create<Terrain::ProceduralData, Terrain::SimpleGrid>(terrainHandle, dataDesc, presentationDesc);
+	}
 
 	// demo camera
 	Camera camera(realm);

@@ -126,7 +126,6 @@ namespace UnlimRealms
 			public:
 
 				BoundingBox Bound;
-				ur_uint2 Resolution;
 			};
 
 			Result Create(InstanceHandle& instanceHandle, const SimpleGrid::InstanceDesc &desc);
@@ -146,6 +145,13 @@ namespace UnlimRealms
 			{
 				BoundingBox bbox;
 			};
+
+			struct Vertex
+			{
+				ur_float2 pos;
+			};
+
+			typedef ur_uint16 Index;
 
 			struct GfxObjects
 			{
