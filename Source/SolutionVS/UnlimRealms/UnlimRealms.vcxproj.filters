@@ -741,6 +741,12 @@
     <FxCompile Include="..\..\UnlimRealms\Atmosphere\LightShafts_ps.hlsl">
       <Filter>Atmosphere</Filter>
     </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Terrain\Terrain_vs.hlsl">
+      <Filter>Terrain</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\Terrain\Terrain_ps.hlsl">
+      <Filter>Terrain</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli">
@@ -766,6 +772,9 @@
     </None>
     <None Include="..\..\UnlimRealms\GenericRender\Generic.hlsli">
       <Filter>GenericRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\Terrain\Terrain.hlsli">
+      <Filter>Terrain</Filter>
     </None>
   </ItemGroup>
 </Project>

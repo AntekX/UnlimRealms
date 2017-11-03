@@ -141,9 +141,13 @@ namespace UnlimRealms
 				InstanceDesc desc;
 			};
 
-			struct alignas(16) PatchCB
+			struct alignas(16) CommonCB
 			{
-				BoundingBox bbox;
+				ur_float4x4 ViewProj;
+				ur_float4 CameraPos;
+				Atmosphere::Desc Atmosphere;
+				ur_float3 PatchPos;
+				ur_float3 PatchSize;
 			};
 
 			struct Vertex
@@ -158,7 +162,7 @@ namespace UnlimRealms
 				std::unique_ptr<GfxInputLayout> patchIL;
 				std::unique_ptr<GfxVertexShader> patchCommonVS;
 				std::unique_ptr<GfxPixelShader> patchColorPS;
-				std::unique_ptr<GfxBuffer> patchCB;
+				std::unique_ptr<GfxBuffer> commonCB;
 				std::unique_ptr<GfxBuffer> patchVB;
 				std::unique_ptr<GfxBuffer> patchIB;
 				std::unique_ptr<GfxPipelineState> colorPassPLS;

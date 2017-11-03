@@ -152,11 +152,11 @@ namespace UnlimRealms
 		if (Failed(res))
 			return LogResult(Failure, realm.GetLog(), Log::Error, "Terrain::SimpleGrid::CreateGfxObjects: failed to initialize pipeline state");
 
-		// Constant Buffer
-		res = realm.GetGfxSystem()->CreateBuffer(objects.patchCB);
+		// Constant Buffer Patch
+		res = realm.GetGfxSystem()->CreateBuffer(objects.commonCB);
 		if (Succeeded(res))
 		{
-			res = objects.patchCB->Initialize(sizeof(PatchCB), GfxUsage::Dynamic,
+			res = objects.commonCB->Initialize(sizeof(PatchCB), GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
