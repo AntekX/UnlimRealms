@@ -111,17 +111,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		generateParams.radiusMin = surfaceRadiusMin;
 		generateParams.radiusMax = surfaceRadiusMax;
 		// smooth
-		/*generateParams.octaves.assign({
+		generateParams.octaves.assign({
 			{ 0.875f, 7.5f, -1.0f, 0.5f },
 			{ 0.345f, 30.0f, -0.5f, 0.1f },
 			{ 0.035f, 120.0f, -1.0f, 0.2f },
-		});*/
+		});
 		// canyons
-		generateParams.octaves.assign({
+		/*generateParams.octaves.assign({
 			{ 1.100f, 8.0f, -0.25f, 0.4f },
 			{ 0.345f, 32.0f, -0.25f, 0.1f },
 			{ 0.035f, 128.0f, -1.0f, 0.2f },
-		});
+		});*/
 
 		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),
 			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));

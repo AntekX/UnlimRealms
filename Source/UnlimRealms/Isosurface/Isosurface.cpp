@@ -376,25 +376,30 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	#define CAVE_TEST 1
 	Result Isosurface::ProceduralGenerator::GenerateSimplexNoise(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox)
 	{
 		const SimplexNoiseParams &params = static_cast<const SimplexNoiseParams&>(*this->generateParams.get());
 		ur_float3 center = params.bound.Center();
 		ur_float brad = (bbox.Max - bbox.Min).Length() * 0.5f;
 		ur_float dist = (bbox.Center() - center).Length();
-		//if (dist + brad < params.radiusMin ||
-		//	dist - brad > params.radiusMax)
-		//	return Result(NotFound); // does not intersect isosurface
+		#if (!CAVE_TEST)
+		if (dist + brad < params.radiusMin ||
+			dist - brad > params.radiusMax)
+			return Result(NotFound); // does not intersect isosurface
+		#endif
 
 		if (ur_null == values || ur_null == points || 0 == count)
 			return Result(InvalidArgs);
 
 		// temp
+		#if (CAVE_TEST)
 		std::vector<SimplexNoiseParams::Octave> cave_octaves = {
-			{ 1.000f, 4.0f, -1.0f, 1.0f },
+			{ 0.800f, 6.0f, -1.0f, 1.0f },
 			{ 0.400f, 16.0f, -0.5f, 0.1f },
 			{ 0.10f, 64.0f, -1.0f, 0.2f },
 		};
+		#endif
 
 		SimplexNoise noise;
 		ur_float radius = (params.radiusMax + params.radiusMin) * 0.5f;
@@ -404,7 +409,7 @@ namespace UnlimRealms
 		for (ur_uint i = 0; i < count; ++i, ++p_value, ++p_point)
 		{
 			*p_value = radius - (*p_point - center).Length();
-			/*for (auto &octave : params.octaves)
+			for (auto &octave : params.octaves)
 			{
 				ur_float val = (ur_float)noise.Noise(
 					ur_double(p_point->x / radius * octave.freq),
@@ -415,8 +420,9 @@ namespace UnlimRealms
 				val = std::min(octave.clamp_max, val);
 				val *= octave.scale * distMax;
 				*p_value += val;
-			}*/
+			}
 			
+			#if (CAVE_TEST)
 			// test: caves
 			ur_float cave_value = 0.0f;
 			for (auto &octave : cave_octaves)
@@ -436,8 +442,8 @@ namespace UnlimRealms
 			//cave_value *= -1.0f;
 			ur_float d = std::max(0.0f, params.radiusMin - (*p_point - center).Length());
 			cave_value += d;
-			
 			*p_value = std::min(*p_value, cave_value);
+			#endif
 		}
 
 		return Result(Success);
