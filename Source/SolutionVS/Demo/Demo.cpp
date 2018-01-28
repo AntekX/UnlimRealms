@@ -151,8 +151,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	}
 
 	// demo moon
-	ur_float moonRadiusMin = 200.0f;
-	ur_float moonRadiusMax = 220.0f;
+	ur_float moonRadiusMin = 400.0f;
+	ur_float moonRadiusMax = 420.0f;
 	std::unique_ptr<Isosurface> moon(new Isosurface(realm));
 	{
 		ur_float r = moonRadiusMax;
@@ -235,7 +235,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		ur_float surfDist = std::min(
 			(camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length() - surfaceRadiusMin,
 			(camera.GetPosition() - moon->GetData()->GetBound().Center()).Length() - moonRadiusMin);
-		cameraControl.SetSpeed(std::max(0.1f, surfDist * 0.5f));
+		cameraControl.SetSpeed(std::max(5.0f, surfDist * 0.5f));
 
 		{ // use context to draw
 			gfxContext->Begin();
@@ -266,21 +266,26 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 			// expose demo gui
 			static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
-			ImGui::SetNextWindowSize(imguiDemoWndSize, ImGuiSetCond_Once);
-			ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
-			ImGui::Begin("Control Panel");
-			ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().Description.c_str());
-			cameraControl.ShowImgui();
-			isosurface->ShowImgui();
-			atmosphere->ShowImgui();
-			hdrRender->ShowImgui();
-			ImGui::End();
+			static bool showGUI = true;
+			showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
+			if (showGUI)
+			{
+				ImGui::SetNextWindowSize(imguiDemoWndSize, ImGuiSetCond_Once);
+				ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
+				ImGui::Begin("Control Panel");
+				ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().Description.c_str());
+				cameraControl.ShowImgui();
+				isosurface->ShowImgui();
+				atmosphere->ShowImgui();
+				hdrRender->ShowImgui();
+				ImGui::End();
 
-			// Imgui metrics
-			ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
-			ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
-			ImGui::ShowMetricsWindow();
-			imguiRender->Render(*gfxContext);
+				// Imgui metrics
+				ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
+				ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+				ImGui::ShowMetricsWindow();
+				imguiRender->Render(*gfxContext);
+			}
 
 			gfxContext->End();
 		}

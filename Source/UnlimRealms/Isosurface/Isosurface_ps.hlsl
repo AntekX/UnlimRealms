@@ -135,7 +135,8 @@ float4 main(PS_INPUT input) : SV_Target
 	const float3 surfAlbedo = tileColor.xyz;
 	const float3 surfNormal = mul(tileNormal, GetTBN(n));
 #else
-	const float3 surfAlbedo = lerp(float3(0.7, 0.5, 0.5)*0.75, float3(1.0, 0.6, 0.2), slope);
+	//const float3 surfAlbedo = lerp(float3(0.7, 0.5, 0.5)*0.75, float3(1.0, 0.6, 0.2), slope);
+	const float3 surfAlbedo = lerp(float3(1.0, 0.6, 0.2)*0.75, float3(0.6, 1.0, 0.2), slope);
 	const float3 surfNormal = n;
 #endif
 

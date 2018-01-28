@@ -156,7 +156,7 @@ namespace UnlimRealms
 		res = realm.GetGfxSystem()->CreateBuffer(objects.commonCB);
 		if (Succeeded(res))
 		{
-			res = objects.commonCB->Initialize(sizeof(PatchCB), GfxUsage::Dynamic,
+			res = objects.commonCB->Initialize(sizeof(CommonCB), GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))

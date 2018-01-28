@@ -197,6 +197,95 @@ namespace UnlimRealms
 		}
 	};
 
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Fast access std container extension
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+
+	//template <class TValue>
+	//class DynamicArray;
+
+	//template <class TValue>
+	//class UR_DECL DynamicEntry
+	//{
+	//	friend class DynamicArray<TValue>;
+
+	//public:
+
+	//	typedef ur_size Index;
+	//	static const Index InvalidIdx = ~ur_size(0);
+
+	//	DynamicEntry() = delete;
+
+	//	DynamicEntry(const TValue& v) : val(v)
+	//	{
+	//		this->idx = InvalidIdx;
+	//	}
+
+	//	DynamicEntry(TValue &&v)
+	//	{
+	//		this->idx = InvalidIdx;
+	//		this->val = std::move(v);
+	//	}
+
+	//	DynamicEntry(const DynamicEntry<TValue>& v) : val(v.val), idx(v.idx)
+	//	{
+	//	}
+	//	
+	//	DynamicEntry(DynamicEntry&& v)
+	//	{
+	//		this->idx = v.idx;
+	//		this->val = std::move(v.val);
+	//		v.idx = InvalidIdx;
+	//	}
+	//	
+	//	~DynamicEntry() {}
+
+	//	DynamicEntry<TValue>& operator = (TValue& v)
+	//	{
+	//		this->idx = InvalidIdx;
+	//		this->val = v;
+	//		return *this;
+	//	}
+
+	//	DynamicEntry<TValue>& operator = (TValue&& v)
+	//	{
+	//		this->idx = InvalidIdx;
+	//		this->val = std::move(v);
+	//		return *this;
+	//	}
+
+	//	DynamicEntry<TValue>& operator = (DynamicEntry<TValue>&& v)
+	//	{
+	//		this->idx = v.idx;
+	//		this->val = std::move(v.val);
+	//		v.idx = InvalidIdx;
+	//		return *this;
+	//	}
+
+	//	DynamicEntry<TValue>& operator = (const DynamicEntry<TValue>& v)
+	//	{
+	//		this->idx = v.idx;
+	//		this->val = v.val;
+	//	}
+
+	//private:
+
+	//	Index idx;
+	//	TValue val;
+	//};
+
+	//template <class TValue>
+	//class UR_DECL DynamicArray : public std::vector<DynamicEntry<TValue>>
+	//{
+	//public:
+
+	//	DynamicArray() {}
+	//	~DynamicArray() {}
+
+	//	// todo: override functions use handle info for fast erase
+	//};
+
 } // end namespace UnlimRealms
 
 #include "Algorithms.inline.h"

@@ -29,7 +29,7 @@ static const float3 LightDirection = float3(1.0, 0.0, 0.0);
 static const float3 LightIntensity = float3(1.0, 1.0, 1.0) * 200.0;
 static const float3 LightWaveLength = float3(0.650, 0.570, 0.475);
 static const float3 LightWaveLengthScatterConst = 1.0 / pow(LightWaveLength, 4.0); // precomputed constant from wavelength
-static const int    IntergrationSteps = 5;
+static const int    IntergrationSteps = 8;
 
 // Earth related physically based parameters for reference
 static const float  EarthRadius = 6371.0e+3;

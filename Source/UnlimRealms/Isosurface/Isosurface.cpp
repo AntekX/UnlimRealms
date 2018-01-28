@@ -382,12 +382,19 @@ namespace UnlimRealms
 		ur_float3 center = params.bound.Center();
 		ur_float brad = (bbox.Max - bbox.Min).Length() * 0.5f;
 		ur_float dist = (bbox.Center() - center).Length();
-		if (dist + brad < params.radiusMin ||
-			dist - brad > params.radiusMax)
-			return Result(NotFound); // does not intersect isosurface
+		//if (dist + brad < params.radiusMin ||
+		//	dist - brad > params.radiusMax)
+		//	return Result(NotFound); // does not intersect isosurface
 
 		if (ur_null == values || ur_null == points || 0 == count)
 			return Result(InvalidArgs);
+
+		// temp
+		std::vector<SimplexNoiseParams::Octave> cave_octaves = {
+			{ 1.000f, 4.0f, -1.0f, 1.0f },
+			{ 0.400f, 16.0f, -0.5f, 0.1f },
+			{ 0.10f, 64.0f, -1.0f, 0.2f },
+		};
 
 		SimplexNoise noise;
 		ur_float radius = (params.radiusMax + params.radiusMin) * 0.5f;
@@ -397,7 +404,7 @@ namespace UnlimRealms
 		for (ur_uint i = 0; i < count; ++i, ++p_value, ++p_point)
 		{
 			*p_value = radius - (*p_point - center).Length();
-			for (auto &octave : params.octaves)
+			/*for (auto &octave : params.octaves)
 			{
 				ur_float val = (ur_float)noise.Noise(
 					ur_double(p_point->x / radius * octave.freq),
@@ -408,7 +415,29 @@ namespace UnlimRealms
 				val = std::min(octave.clamp_max, val);
 				val *= octave.scale * distMax;
 				*p_value += val;
+			}*/
+			
+			// test: caves
+			ur_float cave_value = 0.0f;
+			for (auto &octave : cave_octaves)
+			{
+				ur_float val = (ur_float)noise.Noise(
+					ur_double(p_point->x / radius * octave.freq),
+					ur_double(p_point->y / radius * octave.freq),
+					ur_double(p_point->z / radius * octave.freq));
+				val *= 2.0f;
+				//val = (0.07f - fabs(val));
+				//val = val + 0.2f;
+				val = std::max(octave.clamp_min, val);
+				val = std::min(octave.clamp_max, val);
+				val *= octave.scale * distMax;
+				cave_value += val;
 			}
+			//cave_value *= -1.0f;
+			ur_float d = std::max(0.0f, params.radiusMin - (*p_point - center).Length());
+			cave_value += d;
+			
+			*p_value = std::min(*p_value, cave_value);
 		}
 
 		return Result(Success);
@@ -944,6 +973,7 @@ namespace UnlimRealms
 		{
 			ur_float refinementDistance = (node->GetBBox().Max - node->GetBBox().Min).Length() * 0.5f;
 			doSplit = (node->GetBBox().Distance(refinementPoint) < refinementDistance);
+			doSplit |= node->GetLevel() < 2; // TEMP: always split to minimal refinement level
 		}
 #else
 		bool doSplit = (node->GetLevel() < this->refinementDistance.size());

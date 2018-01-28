@@ -13,7 +13,7 @@
 #include "GenericRender/GenericRender.h"
 #include "Atmosphere/Atmosphere.h"
 // TEMP: referencing Atmosphere class here for atmosperic scattering rendering test
-// TODO: isosurface shoukd provide basic rendering only, all advance d lighting stuff should be a part of a "VoxelPlanet" class
+// TODO: isosurface should provide basic rendering only, all advanced lighting stuff should be a part of a "VoxelPlanet" class
 
 namespace UnlimRealms
 {
@@ -24,6 +24,10 @@ namespace UnlimRealms
 	class UR_DECL Isosurface : public RealmEntity
 	{
 	public:
+
+		
+		// forward declaration
+		class UR_DECL Instance;
 
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,6 +42,21 @@ namespace UnlimRealms
 
 		public:
 
+			// sub system's per instance data
+			class UR_DECL InstanceData
+			{
+			public:
+
+				explicit InstanceData(Isosurface::Instance &owner) : owner(owner) {};
+				explicit InstanceData(const InstanceData &i) : owner(i.owner) {};
+				~InstanceData() {}
+
+			private:
+
+				Isosurface::Instance &owner;
+			};
+
+			
 			SubSystem(Isosurface &isosurface) : isosurface(isosurface) {};
 
 			virtual ~SubSystem() {};
@@ -45,6 +64,7 @@ namespace UnlimRealms
 		protected:
 
 			Isosurface &isosurface;
+			std::list<std::unique_ptr<InstanceData>> instances;
 		};
 
 
@@ -132,6 +152,7 @@ namespace UnlimRealms
 			Result GenerateSimplexNoise(ValueType *values, const ur_float3 *points, const ur_uint count, const BoundingBox &bbox);
 
 
+			// todo: per instance data
 			Algorithm algorithm;
 			std::unique_ptr<GenerateParams> generateParams;
 		};
@@ -292,22 +313,22 @@ namespace UnlimRealms
 			Result RenderOctree(GfxContext &gfxContext, GenericRender *genericRender, EmptyOctree::Node *node);
 
 
-			Desc desc;
-			static const ur_uint RootsCount = 6;
-			std::unique_ptr<Node> root[RootsCount];
-			EmptyOctree refinementTree;
-			std::vector<ur_float> refinementDistance;
-			std::multimap<ur_uint, Tetrahedron*> buildQueue;
-			
-			// job(s) data
+			// common data
 			ur_float3 updatePoint;
-			std::unique_ptr<Node> rootBack[RootsCount];
-			Stats statsBack;
+			std::multimap<ur_uint, Tetrahedron*> buildQueue;
 			std::shared_ptr<Job> jobUpdate;
 			std::list<std::shared_ptr<Job>> jobBuild;
 			std::list<std::pair<HybridCubes*, Tetrahedron*>> jobBuildCtx;
 			std::atomic<ur_uint> jobBuildCounter;
 			std::atomic<ur_uint> jobBuildRequested;
+
+			// todo: per instance data
+			Desc desc;
+			EmptyOctree refinementTree;
+			std::vector<ur_float> refinementDistance;
+			static const ur_uint RootsCount = 6;
+			std::unique_ptr<Node> root[RootsCount];
+			std::unique_ptr<Node> rootBack[RootsCount];
 			
 			// debug info
 			bool freezeUpdate;
@@ -316,6 +337,25 @@ namespace UnlimRealms
 			bool drawHexahedra;
 			bool drawRefinementTree;
 			Stats stats;
+			Stats statsBack; // async update structure
+		};
+
+
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Isosurface instance
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		class UR_DECL Instance
+		{
+		public:
+
+			explicit Instance(Isosurface &isosurface) : isosurface(isosurface) {}
+			~Instance() {}
+
+		protected:
+
+			Isosurface &isosurface;
+			DataVolume::InstanceData *dataInstance;
+			Presentation::InstanceData *presentationInstance;
 		};
 
 
@@ -324,6 +364,8 @@ namespace UnlimRealms
 		virtual ~Isosurface();
 
 		Result Init(std::unique_ptr<DataVolume> data, std::unique_ptr<Presentation> presentation);
+
+		Result CreateInstance();
 
 		Result Update();
 
@@ -370,6 +412,7 @@ namespace UnlimRealms
 
 		std::unique_ptr<DataVolume> data;
 		std::unique_ptr<Presentation> presentation;
+		std::list<std::unique_ptr<Instance>> instances;
 		bool drawWireframe;
 	};
 
