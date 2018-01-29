@@ -182,7 +182,19 @@ namespace UnlimRealms
 
 		if (ur_null == pAdapter)
 		{
-			//this->gfxAdapterIdx = (this->dxgiAdapters.size() > 1 ? 1 : 0);
+			this->gfxAdapterIdx = 0;
+			// try to find high performance GPU
+			DXGI_ADAPTER_DESC1 adapterDesc;
+			for (ur_size idx = 0; idx < this->dxgiAdapters.size(); ++idx)
+			{
+				this->dxgiAdapters[idx]->GetDesc1(&adapterDesc);
+				ur_size dedicatedMemoryMb = adapterDesc.DedicatedVideoMemory / (1 << 20);
+				if (dedicatedMemoryMb > 1024) // let's consider that HP GPU has at least that much VRAM on board
+				{
+					this->gfxAdapterIdx = idx;
+					break;
+				}
+			}
 			pAdapter = *(this->dxgiAdapters.begin() + this->gfxAdapterIdx);
 		}
 

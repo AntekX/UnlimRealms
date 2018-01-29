@@ -198,6 +198,7 @@ namespace UnlimRealms
 		shared_ref<IDXGIFactory1> dxgiFactory;
 		std::vector<shared_ref<IDXGIAdapter1>> dxgiAdapters;
 		D3D_FEATURE_LEVEL d3dFeatureLevel;
+		IDXGIAdapter1 *d3dDeviceAdapter;
 		shared_ref<ID3D11Device> d3dDevice;
 		shared_ref<ID3D11DeviceContext> d3dImmediateContext;
 		std::vector<shared_ref<ID3D11CommandList>> d3dCommandLists[2];
