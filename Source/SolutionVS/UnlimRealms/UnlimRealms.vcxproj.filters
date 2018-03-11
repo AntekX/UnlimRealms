@@ -288,6 +288,18 @@
     <ClInclude Include="..\..\UnlimRealms\Terrain\Terrain.h">
       <Filter>Terrain</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Gfx\D3D12\GfxSystemD3D12.h">
+      <Filter>Gfx\D3D12</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Gfx\D3D12\GfxSystemD3D12.inline.h">
+      <Filter>Gfx\D3D12</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinUtils.h">
+      <Filter>Sys\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Gfx\DXGIUtils\DXGIUtils.h">
+      <Filter>Gfx\DXGIUtils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -620,6 +632,12 @@
     <ClCompile Include="..\..\UnlimRealms\Terrain\Terrain.cpp">
       <Filter>Terrain</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Gfx\D3D12\GfxSystemD3D12.cpp">
+      <Filter>Gfx\D3D12</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Gfx\DXGIUtils\DXGIUtils.cpp">
+      <Filter>Gfx\DXGIUtils</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Core">
@@ -693,6 +711,12 @@
     </Filter>
     <Filter Include="Terrain">
       <UniqueIdentifier>{5cfe85cb-64fd-401a-8801-9e67b395ec25}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gfx\D3D12">
+      <UniqueIdentifier>{5e4d8931-ec46-4a9d-a2c0-5f8c46e08009}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gfx\DXGIUtils">
+      <UniqueIdentifier>{a7f7a6da-22b4-4fbf-8e11-7fbf22bc0ee8}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

@@ -34,7 +34,7 @@ namespace UnlimRealms
 	{
 		std::lock_guard<std::mutex> lock(commandListMutex);
 
-		d3dCommandLists[commandListId].push_back(d3dCommandList);
+		d3dCommandLists[this->commandListId].push_back(d3dCommandList);
 	}
 
 	inline ID3D11Texture2D* GfxTextureD3D11::GetD3DTexture() const
