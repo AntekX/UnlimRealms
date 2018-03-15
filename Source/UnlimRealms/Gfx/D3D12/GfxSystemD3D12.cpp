@@ -154,22 +154,26 @@ namespace UnlimRealms
 
 	Result GfxSystemD3D12::CreateTexture(std::unique_ptr<GfxTexture> &gfxTexture)
 	{
-		return NotImplemented;
+		gfxTexture.reset(new GfxTextureD3D12(*this));
+		return Result(Success);
 	}
 
 	Result GfxSystemD3D12::CreateRenderTarget(std::unique_ptr<GfxRenderTarget> &gfxRT)
 	{
-		return NotImplemented;
+		gfxRT.reset(new GfxRenderTargetD3D12(*this));
+		return Result(Success);
 	}
 
 	Result GfxSystemD3D12::CreateSwapChain(std::unique_ptr<GfxSwapChain> &gfxSwapChain)
 	{
-		return NotImplemented;
+		gfxSwapChain.reset(new GfxSwapChainD3D12(*this));
+		return Result(Success);
 	}
 
 	Result GfxSystemD3D12::CreateBuffer(std::unique_ptr<GfxBuffer> &gfxBuffer)
 	{
-		return NotImplemented;
+		gfxBuffer.reset(new GfxBufferD3D12(*this));
+		return Result(Success);
 	}
 
 	Result GfxSystemD3D12::CreateVertexShader(std::unique_ptr<GfxVertexShader> &gfxVertexShader)
@@ -318,6 +322,11 @@ namespace UnlimRealms
 	{
 	}
 
+	Result GfxTextureD3D12::Initialize(const GfxTextureDesc &desc, shared_ref<ID3D12Resource> &d3dTexture)
+	{
+		return NotImplemented;
+	}
+
 	Result GfxTextureD3D12::OnInitialize(const GfxResourceData *data)
 	{
 		return NotImplemented;
@@ -350,6 +359,8 @@ namespace UnlimRealms
 	GfxSwapChainD3D12::GfxSwapChainD3D12(GfxSystem &gfxSystem) :
 		GfxSwapChain(gfxSystem)
 	{
+		memset(&this->dxgiChainDesc, 0, sizeof(this->dxgiChainDesc));
+		this->backBufferIndex = 0;
 	}
 
 	GfxSwapChainD3D12::~GfxSwapChainD3D12()
@@ -358,17 +369,126 @@ namespace UnlimRealms
 
 	Result GfxSwapChainD3D12::Initialize(const GfxPresentParams &params)
 	{
-		return NotImplemented;
+		this->backBuffers.clear();
+
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+		IDXGIFactory4 *dxgiFactory = d3dSystem.GetDXGIFactory();
+		ID3D12Device *d3dDevice = d3dSystem.GetDevice();
+		if (ur_null == d3dSystem.GetWinCanvas())
+			return ResultError(NotInitialized, "GfxSwapChainD3D12::Initialize: failed, canvas not initialized");
+
+		this->dxgiChainDesc.Width = params.BufferWidth;
+		this->dxgiChainDesc.Height = params.BufferHeight;
+		this->dxgiChainDesc.Format = GfxFormatToDXGI(params.BufferFormat, GfxFormatView::Unorm);
+		this->dxgiChainDesc.Stereo = false;
+		this->dxgiChainDesc.SampleDesc.Count = params.MutisampleCount;
+		this->dxgiChainDesc.SampleDesc.Quality = params.MutisampleQuality;
+		this->dxgiChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+		this->dxgiChainDesc.BufferCount = params.BufferCount;
+		this->dxgiChainDesc.Scaling = DXGI_SCALING_STRETCH;
+		this->dxgiChainDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+		this->dxgiChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+		this->dxgiChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+
+		shared_ref<IDXGISwapChain1> dxgiSwapChain1;
+		HRESULT hr = dxgiFactory->CreateSwapChainForHwnd(d3dDevice, d3dSystem.GetWinCanvas()->GetHwnd(),
+			&this->dxgiChainDesc, nullptr, nullptr, dxgiSwapChain1);
+		if (FAILED(hr))
+			return ResultError(Failure, "GfxSwapChainD3D12::Initialize: failed to create DXGI swap chain");
+
+		GfxTextureDesc desc;
+		desc.Width = params.BufferWidth;
+		desc.Height = params.BufferHeight;
+		desc.Levels = 1;
+		desc.Format = params.BufferFormat;
+		desc.FormatView = GfxFormatView::Unorm;
+		desc.Usage = GfxUsage::Default;
+		desc.BindFlags = ur_uint(GfxBindFlag::RenderTarget);
+		desc.AccessFlags = ur_uint(0);
+
+		std::unique_ptr<BackBuffer> dummy;
+		this->backBuffers.reserve(params.BufferCount);
+		for (ur_uint ibuffer = 0; ibuffer < params.BufferCount; ++ibuffer)
+		{
+			shared_ref<ID3D12Resource> d3dResource;
+			hr = this->dxgiSwapChain->GetBuffer(ibuffer, __uuidof(ID3D12Resource), d3dResource);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxSwapChainD3D12::Initialize: failed to retrieve back buffer resource");
+
+			std::unique_ptr<GfxSwapChainD3D12::BackBuffer> backBuffer(new BackBuffer(d3dSystem, d3dResource));
+			Result res = backBuffer->Initialize(desc, params.DepthStencilEnabled, params.DepthStencilFormat);
+			if (Failed(res))
+				return ResultError(res.Code, "GfxSwapChainD3D12::Initialize: failed to initialize back buffer");
+
+			this->backBuffers.push_back(std::move(backBuffer));
+		}
+
+		dxgiSwapChain1->QueryInterface(__uuidof(IDXGISwapChain3), this->dxgiSwapChain);
+		this->backBufferIndex = (ur_uint)this->dxgiSwapChain->GetCurrentBackBufferIndex();
+
+		return Result(Success);
 	}
 
 	Result GfxSwapChainD3D12::Present()
 	{
-		return NotImplemented;
+		if (this->dxgiSwapChain.empty())
+			return ResultError(NotInitialized, "GfxSwapChainD3D12::Present: DXGI swap chain not initialized");
+
+		if (FAILED(this->dxgiSwapChain->Present(0, 0)))
+			return ResultError(Failure, "GfxSwapChainD3D12::Present: failed");
+
+		return Result(Success);
 	}
 
 	GfxRenderTarget* GfxSwapChainD3D12::GetTargetBuffer()
 	{
-		return ur_null;
+		if (this->backBufferIndex > (ur_uint)this->backBuffers.size())
+			return ur_null;
+
+		return this->backBuffers[this->backBufferIndex].get();
+	}
+
+	GfxSwapChainD3D12::BackBuffer::BackBuffer(GfxSystem &gfxSystem, shared_ref<ID3D12Resource> &dxgiSwapChainBuffer) :
+		GfxRenderTargetD3D12(gfxSystem),
+		dxgiSwapChainBuffer(dxgiSwapChainBuffer)
+	{
+	}
+
+	GfxSwapChainD3D12::BackBuffer::~BackBuffer()
+	{
+	}
+
+	Result GfxSwapChainD3D12::BackBuffer::InitializeTargetBuffer(std::unique_ptr<GfxTexture> &resultBuffer, const GfxTextureDesc &desc)
+	{
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+
+		std::unique_ptr<GfxTextureD3D12> newTargetBuffer(new GfxTextureD3D12(d3dSystem));
+		Result res = newTargetBuffer->Initialize(desc, this->dxgiSwapChainBuffer);
+		if (Failed(res))
+			return ResultError(res.Code, "GfxSwapChainD3D12::BackBuffer::InitializeTargetBuffer: failed");
+
+		resultBuffer = std::move(newTargetBuffer);
+
+		return Result(Success);
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Direct3D12 render targets swap chain
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+
+	GfxBufferD3D12::GfxBufferD3D12(GfxSystem &gfxSystem) :
+		GfxBuffer(gfxSystem)
+	{
+	}
+
+	GfxBufferD3D12::~GfxBufferD3D12()
+	{
+	}
+
+	Result GfxBufferD3D12::OnInitialize(const GfxResourceData *data)
+	{
+		return NotImplemented;
 	}
 
 } // end namespace UnlimRealms

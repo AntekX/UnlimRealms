@@ -10,6 +10,19 @@
 namespace UnlimRealms
 {
 
+	inline WinCanvas* GfxSystemD3D12::GetWinCanvas() const
+	{
+		return this->winCanvas;
+	}
 
+	inline IDXGIFactory4* GfxSystemD3D12::GetDXGIFactory() const
+	{
+		return this->dxgiFactory;
+	}
+
+	inline ID3D12Device* GfxSystemD3D12::GetDevice() const
+	{
+		return this->d3dDevice;
+	}
 
 } // end namespace UnlimRealms

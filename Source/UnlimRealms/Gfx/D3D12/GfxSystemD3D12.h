@@ -53,6 +53,12 @@ namespace UnlimRealms
 
 		virtual Result CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState);
 
+		inline WinCanvas* GetWinCanvas() const;
+
+		inline IDXGIFactory4* GetDXGIFactory() const;
+
+		inline ID3D12Device* GetDevice() const;
+
 	private:
 
 		Result InitializeDXGI();
@@ -139,6 +145,8 @@ namespace UnlimRealms
 
 		virtual ~GfxTextureD3D12();
 
+		Result Initialize(const GfxTextureDesc &desc, shared_ref<ID3D12Resource> &d3dTexture);
+
 	protected:
 
 		virtual Result OnInitialize(const GfxResourceData *data);
@@ -187,9 +195,48 @@ namespace UnlimRealms
 
 		virtual GfxRenderTarget* GetTargetBuffer();
 
+	protected:
+
+		class UR_DECL BackBuffer : public GfxRenderTargetD3D12
+		{
+		public:
+
+			BackBuffer(GfxSystem &gfxSystem, shared_ref<ID3D12Resource> &dxgiSwapChainBuffer);
+
+			virtual ~BackBuffer();
+
+		protected:
+
+			virtual Result InitializeTargetBuffer(std::unique_ptr<GfxTexture> &resultBuffer, const GfxTextureDesc &desc);
+
+		private:
+
+			shared_ref<ID3D12Resource> dxgiSwapChainBuffer;
+		};
+
 	private:
 
-		// todo
+		DXGI_SWAP_CHAIN_DESC1 dxgiChainDesc;
+		shared_ref<IDXGISwapChain3> dxgiSwapChain;
+		ur_uint backBufferIndex;
+		std::vector<std::unique_ptr<BackBuffer>> backBuffers;
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Direct3D12 graphics buffer
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	class UR_DECL GfxBufferD3D12 : public GfxBuffer
+	{
+	public:
+
+		GfxBufferD3D12(GfxSystem &gfxSystem);
+
+		virtual ~GfxBufferD3D12();
+
+	protected:
+
+		virtual Result OnInitialize(const GfxResourceData *data);
 	};
 
 } // end namespace UnlimRealms

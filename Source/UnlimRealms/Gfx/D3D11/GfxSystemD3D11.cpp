@@ -776,7 +776,7 @@ namespace UnlimRealms
 		IDXGIFactory1 *dxgiFactory = d3dSystem.GetDXGIFactory();
 		ID3D11Device *d3dDevice = d3dSystem.GetDevice();
 		if (ur_null == d3dSystem.GetWinCanvas())
-			return ResultError(NotInitialized, "GfxSwapChainD3D11::InitializeRenderTarget: failed, canvas not initialized");
+			return ResultError(NotInitialized, "GfxSwapChainD3D11::Initialize: failed, canvas not initialized");
 
 		this->dxgiChainDesc.OutputWindow = d3dSystem.GetWinCanvas()->GetHwnd();
 		this->dxgiChainDesc.Windowed = !params.Fullscreen;
@@ -793,12 +793,12 @@ namespace UnlimRealms
 
 		HRESULT hr = dxgiFactory->CreateSwapChain(d3dDevice, &this->dxgiChainDesc, this->dxgiSwapChain);
 		if (FAILED(hr))
-			return ResultError(Failure, "GfxSwapChainD3D11::InitializeRenderTarget: failed to create DXGI swap chain");
+			return ResultError(Failure, "GfxSwapChainD3D11::Initialize: failed to create DXGI swap chain");
 
 		shared_ref<ID3D11Texture2D> d3dTargetBuffer;
 		hr = this->dxgiSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)d3dTargetBuffer);
 		if (FAILED(hr))
-			return ResultError(Failure, "GfxSwapChainD3D11::InitializeRenderTarget: failed to retrieve buffer from swap chain");
+			return ResultError(Failure, "GfxSwapChainD3D11::Initialize: failed to retrieve buffer from swap chain");
 
 		GfxTextureDesc desc;
 		desc.Width = params.BufferWidth;
@@ -813,7 +813,7 @@ namespace UnlimRealms
 		std::unique_ptr<GfxSwapChainD3D11::RenderTarget> newRenderTarget(new RenderTarget(d3dSystem, d3dTargetBuffer));
 		Result res = newRenderTarget->Initialize(desc, params.DepthStencilEnabled, params.DepthStencilFormat);
 		if (Failed(res))
-			return ResultError(res.Code, "GfxSwapChainD3D11::InitializeRenderTarget: failed to initialize render target");
+			return ResultError(res.Code, "GfxSwapChainD3D11::Initialize: failed to initialize render target");
 
 		this->targetBuffer = std::move(newRenderTarget);
 
