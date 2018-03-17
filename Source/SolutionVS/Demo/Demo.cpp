@@ -10,6 +10,7 @@
 #include "Sys/Windows/WinCanvas.h"
 #include "Sys/Windows/WinInput.h"
 #include "Gfx/D3D11/GfxSystemD3D11.h"
+#include "Gfx/D3D12/GfxSystemD3D12.h"
 #include "ImguiRender/ImguiRender.h"
 #include "GenericRender/GenericRender.h"
 #include "Resources/Resources.h"
@@ -44,7 +45,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	realm.SetInput( std::move(input) );
 
 	// create gfx system
-	std::unique_ptr<GfxSystemD3D11> gfx(new GfxSystemD3D11(realm));
+	//std::unique_ptr<GfxSystemD3D11> gfx(new GfxSystemD3D11(realm));
+	std::unique_ptr<GfxSystemD3D12> gfx(new GfxSystemD3D12(realm));
 	Result res = gfx->Initialize( realm.GetCanvas() );
 	realm.SetGfxSystem( std::move(gfx) );
 
@@ -54,7 +56,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	std::unique_ptr<GfxSwapChain> gfxSwapChain;
 	if (Succeeded(realm.GetGfxSystem()->CreateSwapChain(gfxSwapChain)))
 	{
-		res = gfxSwapChain->Initialize(canvasWidth, canvasHeight);
+		res = gfxSwapChain->Initialize(canvasWidth, canvasHeight,
+			false, GfxFormat::R8G8B8A8, true);
 	}
 
 	// create gfx context
@@ -65,125 +68,125 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	}
 
 	// initialize ImguiRender
-	ImguiRender *imguiRender = realm.AddComponent<ImguiRender>(realm);
-	if (imguiRender != ur_null)
-	{
-		imguiRender = realm.GetComponent<ImguiRender>();
-		res = imguiRender->Init();
-	}
-
-	// initialize GenericRender
-	GenericRender *genericRender = realm.AddComponent<GenericRender>(realm);
-	if (genericRender != ur_null)
-	{
-		genericRender = realm.GetComponent<GenericRender>();
-		genericRender->Init();
-	}
-
-	// HDR rendering
-	HDRRender* hdrRender = realm.AddComponent<HDRRender>(realm);
-	if (hdrRender != ur_null)
-	{
-		hdrRender = realm.GetComponent<HDRRender>();
-		HDRRender::Params hdrParams = HDRRender::Params::Default;
-		hdrParams.BloomThreshold = 4.0f;
-		hdrRender->SetParams(hdrParams);
-		hdrRender->Init(canvasWidth, canvasHeight);
-	}
-
-	// demo isosurface
-	ur_float surfaceRadiusMin = 1000.0f;
-	ur_float surfaceRadiusMax = 1100.0f;
-	std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
-	{
-		ur_float r = surfaceRadiusMax;
-		BoundingBox volumeBound(ur_float3(-r, -r, -r), ur_float3(r, r, r));
-#if 0
-		Isosurface::ProceduralGenerator::SphericalDistanceFieldParams generateParams;
-		generateParams.bound = volumeBound;
-		generateParams.center = volumeBound.Center();
-		generateParams.radius = surfaceRadiusMin;
-		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),
-			Isosurface::ProceduralGenerator::Algorithm::SphericalDistanceField, generateParams));
-#else
-		Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
-		generateParams.bound = volumeBound;
-		generateParams.radiusMin = surfaceRadiusMin;
-		generateParams.radiusMax = surfaceRadiusMax;
-		// smooth
-		generateParams.octaves.assign({
-			{ 0.875f, 7.5f, -1.0f, 0.5f },
-			{ 0.345f, 30.0f, -0.5f, 0.1f },
-			{ 0.035f, 120.0f, -1.0f, 0.2f },
-		});
-		// canyons
-		/*generateParams.octaves.assign({
-			{ 1.100f, 8.0f, -0.25f, 0.4f },
-			{ 0.345f, 32.0f, -0.25f, 0.1f },
-			{ 0.035f, 128.0f, -1.0f, 0.2f },
-		});*/
-
-		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),
-			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));
-#endif
-
-		Isosurface::HybridCubes::Desc desc;
-		desc.CellSize = 2.0f;
-		desc.LatticeResolution = 10;
-		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x * 1.0f;
-		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
-
-		//dataVolume->Save("test.isd", desc.CellSize, desc.LatticeResolution);
-
-		isosurface->Init(std::move(dataVolume), std::move(presentation));
-	}
-
-	// demo atmosphere
-	std::unique_ptr<Atmosphere> atmosphere(new Atmosphere(realm));
-	{
-		Atmosphere::Desc desc = Atmosphere::Desc::Default;
-		desc.InnerRadius = lerp(surfaceRadiusMin, surfaceRadiusMax, 0.75f);
-		desc.OuterRadius = surfaceRadiusMin * 1.2f;
-		desc.Kr = 0.00005f;
-		desc.Km = 0.00005f;
-		desc.ScaleDepth = 0.16f;
-		atmosphere->Init(desc);
-	}
-
-	// demo moon
-	ur_float moonRadiusMin = 400.0f;
-	ur_float moonRadiusMax = 420.0f;
-	std::unique_ptr<Isosurface> moon(new Isosurface(realm));
-	{
-		ur_float r = moonRadiusMax;
-		ur_float3 p = ur_float3(+1000, 1500.0f, 1500.0f);
-		BoundingBox volumeBound(ur_float3(-r, -r, -r) + p, ur_float3(r, r, r) + p);
-		Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
-		generateParams.bound = volumeBound;
-		generateParams.radiusMin = moonRadiusMin;
-		generateParams.radiusMax = moonRadiusMax;
-		generateParams.octaves.assign({
-			{ 1.000f, 4.0f, -0.0f, 1.0f },
-			{ 0.400f, 16.0f, -1.0f, 0.2f },
-			{ 0.035f, 128.0f, -1.0f, 0.2f },
-		});
-		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*moon.get(),
-			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));
-
-		Isosurface::HybridCubes::Desc desc;
-		desc.CellSize = 2.0f;
-		desc.LatticeResolution = 10;
-		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x * 1.0f;
-		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*moon.get(), desc));
-
-		moon->Init(std::move(dataVolume), std::move(presentation));
-	}
-
-	// demo camera
-	Camera camera(realm);
-	CameraControl cameraControl(realm, &camera, CameraControl::Mode::Free);
-	camera.SetPosition(ur_float3(0.0f, 0.0f, -surfaceRadiusMax * 3.0f));
-	cameraControl.SetTargetPoint(ur_float3(0.0f));
+//	ImguiRender *imguiRender = realm.AddComponent<ImguiRender>(realm);
+//	if (imguiRender != ur_null)
+//	{
+//		imguiRender = realm.GetComponent<ImguiRender>();
+//		res = imguiRender->Init();
+//	}
+//
+//	// initialize GenericRender
+//	GenericRender *genericRender = realm.AddComponent<GenericRender>(realm);
+//	if (genericRender != ur_null)
+//	{
+//		genericRender = realm.GetComponent<GenericRender>();
+//		genericRender->Init();
+//	}
+//
+//	// HDR rendering
+//	HDRRender* hdrRender = realm.AddComponent<HDRRender>(realm);
+//	if (hdrRender != ur_null)
+//	{
+//		hdrRender = realm.GetComponent<HDRRender>();
+//		HDRRender::Params hdrParams = HDRRender::Params::Default;
+//		hdrParams.BloomThreshold = 4.0f;
+//		hdrRender->SetParams(hdrParams);
+//		hdrRender->Init(canvasWidth, canvasHeight);
+//	}
+//
+//	// demo isosurface
+//	ur_float surfaceRadiusMin = 1000.0f;
+//	ur_float surfaceRadiusMax = 1100.0f;
+//	std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
+//	{
+//		ur_float r = surfaceRadiusMax;
+//		BoundingBox volumeBound(ur_float3(-r, -r, -r), ur_float3(r, r, r));
+//#if 0
+//		Isosurface::ProceduralGenerator::SphericalDistanceFieldParams generateParams;
+//		generateParams.bound = volumeBound;
+//		generateParams.center = volumeBound.Center();
+//		generateParams.radius = surfaceRadiusMin;
+//		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),
+//			Isosurface::ProceduralGenerator::Algorithm::SphericalDistanceField, generateParams));
+//#else
+//		Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
+//		generateParams.bound = volumeBound;
+//		generateParams.radiusMin = surfaceRadiusMin;
+//		generateParams.radiusMax = surfaceRadiusMax;
+//		// smooth
+//		generateParams.octaves.assign({
+//			{ 0.875f, 7.5f, -1.0f, 0.5f },
+//			{ 0.345f, 30.0f, -0.5f, 0.1f },
+//			{ 0.035f, 120.0f, -1.0f, 0.2f },
+//		});
+//		// canyons
+//		/*generateParams.octaves.assign({
+//			{ 1.100f, 8.0f, -0.25f, 0.4f },
+//			{ 0.345f, 32.0f, -0.25f, 0.1f },
+//			{ 0.035f, 128.0f, -1.0f, 0.2f },
+//		});*/
+//
+//		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),
+//			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));
+//#endif
+//
+//		Isosurface::HybridCubes::Desc desc;
+//		desc.CellSize = 2.0f;
+//		desc.LatticeResolution = 10;
+//		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x * 1.0f;
+//		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
+//
+//		//dataVolume->Save("test.isd", desc.CellSize, desc.LatticeResolution);
+//
+//		isosurface->Init(std::move(dataVolume), std::move(presentation));
+//	}
+//
+//	// demo atmosphere
+//	std::unique_ptr<Atmosphere> atmosphere(new Atmosphere(realm));
+//	{
+//		Atmosphere::Desc desc = Atmosphere::Desc::Default;
+//		desc.InnerRadius = lerp(surfaceRadiusMin, surfaceRadiusMax, 0.75f);
+//		desc.OuterRadius = surfaceRadiusMin * 1.2f;
+//		desc.Kr = 0.00005f;
+//		desc.Km = 0.00005f;
+//		desc.ScaleDepth = 0.16f;
+//		atmosphere->Init(desc);
+//	}
+//
+//	// demo moon
+//	ur_float moonRadiusMin = 400.0f;
+//	ur_float moonRadiusMax = 420.0f;
+//	std::unique_ptr<Isosurface> moon(new Isosurface(realm));
+//	{
+//		ur_float r = moonRadiusMax;
+//		ur_float3 p = ur_float3(+1000, 1500.0f, 1500.0f);
+//		BoundingBox volumeBound(ur_float3(-r, -r, -r) + p, ur_float3(r, r, r) + p);
+//		Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
+//		generateParams.bound = volumeBound;
+//		generateParams.radiusMin = moonRadiusMin;
+//		generateParams.radiusMax = moonRadiusMax;
+//		generateParams.octaves.assign({
+//			{ 1.000f, 4.0f, -0.0f, 1.0f },
+//			{ 0.400f, 16.0f, -1.0f, 0.2f },
+//			{ 0.035f, 128.0f, -1.0f, 0.2f },
+//		});
+//		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*moon.get(),
+//			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));
+//
+//		Isosurface::HybridCubes::Desc desc;
+//		desc.CellSize = 2.0f;
+//		desc.LatticeResolution = 10;
+//		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x * 1.0f;
+//		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*moon.get(), desc));
+//
+//		moon->Init(std::move(dataVolume), std::move(presentation));
+//	}
+//
+//	// demo camera
+//	Camera camera(realm);
+//	CameraControl cameraControl(realm, &camera, CameraControl::Mode::Free);
+//	camera.SetPosition(ur_float3(0.0f, 0.0f, -surfaceRadiusMax * 3.0f));
+//	cameraControl.SetTargetPoint(ur_float3(0.0f));
 
 	// multiverse
 	//Multiverse *multiverse = ur_null;
@@ -217,75 +220,77 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 			canvasHeight = realm.GetCanvas()->GetClientBound().Height();
 			gfxSwapChain->Initialize(canvasWidth, canvasHeight);
-			hdrRender->Init(canvasWidth, canvasHeight);
+			//hdrRender->Init(canvasWidth, canvasHeight);
 		}
 
 		// update sub systems
 		realm.GetInput()->Update();
-		imguiRender->NewFrame();
-		cameraControl.Update();
-		camera.SetAspectRatio((float)canvasWidth / canvasHeight);
+		//imguiRender->NewFrame();
+		//cameraControl.Update();
+		//camera.SetAspectRatio((float)canvasWidth / canvasHeight);
 
-		// update isosurface
-		isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
-		isosurface->Update();
-		moon->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
-		
-		// update camera control speed depending on the distance to isosurface
-		ur_float surfDist = std::min(
-			(camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length() - surfaceRadiusMin,
-			(camera.GetPosition() - moon->GetData()->GetBound().Center()).Length() - moonRadiusMin);
-		cameraControl.SetSpeed(std::max(5.0f, surfDist * 0.5f));
+		//// update isosurface
+		//isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
+		//isosurface->Update();
+		//moon->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
+		//
+		//// update camera control speed depending on the distance to isosurface
+		//ur_float surfDist = std::min(
+		//	(camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length() - surfaceRadiusMin,
+		//	(camera.GetPosition() - moon->GetData()->GetBound().Center()).Length() - moonRadiusMin);
+		//cameraControl.SetSpeed(std::max(5.0f, surfDist * 0.5f));
 
 		{ // use context to draw
 			gfxContext->Begin();
 
+			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, ur_float4(0.0f, 0.0f, 1.0f, 1.0f), false, 1.0f, false, 0);
+
 			// begin HDR rendering
-			if (Succeeded(hdrRender->BeginRender(*gfxContext)))
-			{
-				// draw isosurface
-				moon->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), ur_null);
-				isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
+			//if (Succeeded(hdrRender->BeginRender(*gfxContext)))
+			//{
+			//	// draw isosurface
+			//	moon->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), ur_null);
+			//	isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
 
-				// draw atmosphere
-				atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
+			//	// draw atmosphere
+			//	atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
 
-				// end HDR rendering
-				hdrRender->EndRender(*gfxContext);
+			//	// end HDR rendering
+			//	hdrRender->EndRender(*gfxContext);
 
-				// atmospheric post effects
-				atmosphere->RenderPostEffects(*gfxContext, *hdrRender->GetHDRTarget(), camera.GetViewProj(), camera.GetPosition());
+			//	// atmospheric post effects
+			//	atmosphere->RenderPostEffects(*gfxContext, *hdrRender->GetHDRTarget(), camera.GetViewProj(), camera.GetPosition());
 
-				// resolve HDR image to back buffer
-				gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), hdrRender->GetHDRTarget());
-				hdrRender->Resolve(*gfxContext);
-				
-				// render batched generic primitives
-				genericRender->Render(*gfxContext, camera.GetViewProj());
-			}
+			//	// resolve HDR image to back buffer
+			//	gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), hdrRender->GetHDRTarget());
+			//	hdrRender->Resolve(*gfxContext);
+			//	
+			//	// render batched generic primitives
+			//	genericRender->Render(*gfxContext, camera.GetViewProj());
+			//}
 
-			// expose demo gui
-			static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
-			static bool showGUI = true;
-			showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
-			if (showGUI)
-			{
-				ImGui::SetNextWindowSize(imguiDemoWndSize, ImGuiSetCond_Once);
-				ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
-				ImGui::Begin("Control Panel");
-				ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().Description.c_str());
-				cameraControl.ShowImgui();
-				isosurface->ShowImgui();
-				atmosphere->ShowImgui();
-				hdrRender->ShowImgui();
-				ImGui::End();
+			//// expose demo gui
+			//static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
+			//static bool showGUI = true;
+			//showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
+			//if (showGUI)
+			//{
+			//	ImGui::SetNextWindowSize(imguiDemoWndSize, ImGuiSetCond_Once);
+			//	ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
+			//	ImGui::Begin("Control Panel");
+			//	ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().Description.c_str());
+			//	cameraControl.ShowImgui();
+			//	isosurface->ShowImgui();
+			//	atmosphere->ShowImgui();
+			//	hdrRender->ShowImgui();
+			//	ImGui::End();
 
-				// Imgui metrics
-				ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
-				ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
-				ImGui::ShowMetricsWindow();
-				imguiRender->Render(*gfxContext);
-			}
+			//	// Imgui metrics
+			//	ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
+			//	ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+			//	ImGui::ShowMetricsWindow();
+			//	imguiRender->Render(*gfxContext);
+			//}
 
 			gfxContext->End();
 		}
@@ -297,8 +302,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	realm.GetLog().WriteLine("Left main message loop");
 
 	// deinitialize explicitly before realm instance destroyed
-	isosurface.reset(ur_null);
-	moon.reset(ur_null);
+	//isosurface.reset(ur_null);
+	//moon.reset(ur_null);
+	gfxSwapChain.reset(ur_null);
 
 	return 0;//(int)msg.wParam;
 }

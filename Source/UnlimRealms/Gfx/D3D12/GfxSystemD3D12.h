@@ -57,7 +57,73 @@ namespace UnlimRealms
 
 		inline IDXGIFactory4* GetDXGIFactory() const;
 
-		inline ID3D12Device* GetDevice() const;
+		inline ID3D12Device* GetD3DDevice() const;
+		
+		inline ID3D12CommandQueue* GetD3DCommandQueue() const;
+
+		inline ID3D12CommandAllocator* GetD3DCommandAllocator() const;
+
+
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Descriptor & Descriptors Heap
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		
+		class UR_DECL DescriptorHeap;
+
+		class UR_DECL Descriptor
+		{
+			friend class DescriptorHeap;
+		public:
+
+			Descriptor(DescriptorHeap* heap);
+
+			~Descriptor();
+
+			inline D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle() const;
+			
+			inline D3D12_GPU_DESCRIPTOR_HANDLE GpuHandle() const;
+
+		private:
+
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+			D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+			DescriptorHeap* heap;
+			ur_size heapIdx;
+		};
+
+		class UR_DECL DescriptorHeap : public GfxEntity
+		{
+		public:
+
+			DescriptorHeap(GfxSystemD3D12& gfxSystem, D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType);
+
+			~DescriptorHeap();
+
+			Result AcquireDescriptor(std::unique_ptr<Descriptor>& descriptor);
+
+			Result ReleaseDescriptor(Descriptor& descriptor);
+
+		private:
+
+			static const ur_size DescriptorsPerHeap = 256;
+
+			typedef std::pair<ur_size, ur_size> Range;
+
+			struct Page : public NonCopyable
+			{
+				shared_ref<ID3D12DescriptorHeap> d3dHeap;
+				std::vector<Range> freeRanges; // todo: optimize ranges
+			};
+
+			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType;
+			std::mutex modifyMutex;
+			std::vector<std::unique_ptr<Page>> pagePool;
+			std::vector<Descriptor*> descriptors;
+			ur_uint32 d3dDescriptorSize;
+			ur_size currentPageIdx;
+		};
+
+		inline DescriptorHeap* GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType);
 
 	private:
 
@@ -73,6 +139,9 @@ namespace UnlimRealms
 		shared_ref<IDXGIFactory4> dxgiFactory;
 		std::vector<shared_ref<IDXGIAdapter1>> dxgiAdapters;
 		shared_ref<ID3D12Device> d3dDevice;
+		shared_ref<ID3D12CommandQueue> d3dCommandQueue;
+		shared_ref<ID3D12CommandAllocator> d3dCommandAllocator;
+		std::vector<std::unique_ptr<DescriptorHeap>> descriptorHeaps;
 	};
 
 
@@ -130,7 +199,7 @@ namespace UnlimRealms
 
 	private:
 
-		// todo
+		shared_ref<ID3D12CommandList> d3dCommandList;
 	};
 
 
@@ -147,13 +216,17 @@ namespace UnlimRealms
 
 		Result Initialize(const GfxTextureDesc &desc, shared_ref<ID3D12Resource> &d3dTexture);
 
+		inline ID3D12Resource* GetD3DResource() const;
+
 	protected:
 
 		virtual Result OnInitialize(const GfxResourceData *data);
 
 	private:
 
-		// todo
+		bool initializedFromD3DRes;
+		shared_ref<ID3D12Resource> d3dResource;
+		std::unique_ptr<GfxSystemD3D12::Descriptor> srvDescriptor;
 	};
 
 
@@ -174,7 +247,8 @@ namespace UnlimRealms
 
 	private:
 
-		// todo
+		std::unique_ptr<GfxSystemD3D12::Descriptor> rtvDescriptor;
+		std::unique_ptr<GfxSystemD3D12::Descriptor> dsvDescriptor;
 	};
 
 
@@ -238,6 +312,19 @@ namespace UnlimRealms
 
 		virtual Result OnInitialize(const GfxResourceData *data);
 	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Utilities
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	extern UR_DECL D3D12_RESOURCE_DESC GfxTextureDescToD3D12ResDesc(const GfxTextureDesc &desc);
+
+	extern UR_DECL D3D12_RESOURCE_FLAGS GfxBindFlagsToD3D12ResFlags(const ur_uint gfxFlags);
+
+	extern UR_DECL D3D12_HEAP_TYPE GfxUsageToD3D12HeapType(const GfxUsage gfxUsage);
+
+	extern UR_DECL D3D12_RESOURCE_STATES GfxBindFlagsAndUsageToD3D12ResState(ur_uint gfxBindFlags, const GfxUsage gfxUsage);
 
 } // end namespace UnlimRealms
 
