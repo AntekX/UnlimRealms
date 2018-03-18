@@ -32,7 +32,7 @@ namespace UnlimRealms
 
 	inline ID3D12CommandAllocator* GfxSystemD3D12::GetD3DCommandAllocator() const
 	{
-		return this->d3dCommandAllocator;
+		return this->d3dCommandAllocators[this->frameIndex];
 	}
 
 	inline GfxSystemD3D12::DescriptorHeap* GfxSystemD3D12::GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType)
@@ -53,6 +53,21 @@ namespace UnlimRealms
 	inline ID3D12Resource* GfxTextureD3D12::GetD3DResource() const
 	{
 		return this->d3dResource;
+	}
+
+	inline GfxSystemD3D12::Descriptor* GfxTextureD3D12::GetSRVDescriptor() const
+	{
+		return this->srvDescriptor.get();
+	}
+
+	inline GfxSystemD3D12::Descriptor* GfxRenderTargetD3D12::GetRTVDescriptor() const
+	{
+		return this->rtvDescriptor.get();
+	}
+
+	inline GfxSystemD3D12::Descriptor* GfxRenderTargetD3D12::GetDSVDescriptor() const
+	{
+		return this->dsvDescriptor.get();
 	}
 
 } // end namespace UnlimRealms

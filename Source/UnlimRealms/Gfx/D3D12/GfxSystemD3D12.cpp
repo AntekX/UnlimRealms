@@ -23,6 +23,9 @@ namespace UnlimRealms
 		GfxSystem(realm)
 	{
 		this->winCanvas = ur_null;
+		this->commandListsId = 0;
+		this->frameIndex = 0;
+		this->framesCount = 0;
 	}
 
 	GfxSystemD3D12::~GfxSystemD3D12()
@@ -119,14 +122,43 @@ namespace UnlimRealms
 		if (FAILED(hr))
 			return ResultError(Failure, "GfxSystemD3D12: failed to create direct command queue");
 
-		// initialize command allocator
+		return Result(Success);
+	}
 
-		// TODO: command allocator must be created per frame for maximal GPU utilization!!!
-		hr = this->d3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), this->d3dCommandAllocator);
-		if (FAILED(hr))
-			return ResultError(Failure, "GfxSystemD3D12: failed to create direct command allocator");
+	Result GfxSystemD3D12::InitializeFrameData(ur_uint framesCount)
+	{
+		// todo: wait GPU till all frame data is no longer used
+
+		this->frameIndex = 0;
+		this->framesCount = std::max(framesCount, ur_uint(1));
+		this->d3dCommandAllocators.resize(framesCount);
+		this->d3dCommandAllocators.shrink_to_fit();
+
+		for (ur_size iframe = 0; iframe < framesCount; ++iframe)
+		{
+			HRESULT hr = this->d3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), this->d3dCommandAllocators[iframe]);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxSystemD3D12::InitializeFrameData: failed to create direct command allocator");
+		}
 
 		return Result(Success);
+	}
+
+	Result GfxSystemD3D12::SetFrame(ur_uint frameIndex)
+	{
+		// todo: synchronization
+
+		this->frameIndex = frameIndex;
+
+		this->d3dCommandAllocators[this->frameIndex]->Reset();
+
+		return Result(Success);
+	}
+
+	Result GfxSystemD3D12::SetNextFrame()
+	{
+		ur_uint nextFrameIndex = (this->frameIndex + 1) % this->framesCount;
+		return this->SetFrame(nextFrameIndex);
 	}
 
 	void GfxSystemD3D12::ReleaseDXGIObjects()
@@ -138,8 +170,12 @@ namespace UnlimRealms
 
 	void GfxSystemD3D12::ReleaseDeviceObjects()
 	{
+		for (auto& commandLists : this->d3dCommandLists)
+		{
+			commandLists.clear();
+		}
+		this->d3dCommandAllocators.clear();
 		this->d3dCommandQueue.reset(ur_null);
-		this->d3dCommandAllocator.reset(ur_null);
 		this->d3dDevice.reset(ur_null);
 	}
 
@@ -163,6 +199,12 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(res.Code, "GfxSystemD3D12: failed to initialize D3D device objects");
 
+		// initialize frame data
+		const ur_uint defaultFramesCount = 1;
+		res = InitializeFrameData(defaultFramesCount);
+		if (Failed(res))
+			return ResultError(Failure, "GfxSystemD3D12: failed to initialize frame data");
+
 		// initialize descriptor heaps
 		for (ur_int heapType = 0; heapType < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++heapType)
 		{
@@ -173,9 +215,34 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GfxSystemD3D12::AddCommandList(shared_ref<ID3D12CommandList> &d3dCommandList)
+	{
+		std::lock_guard<std::mutex> lockCommandLists(this->commandListsMutex);
+
+		this->d3dCommandLists[this->commandListsId].push_back(d3dCommandList);
+
+		return Result(Success);
+	}
+
 	Result GfxSystemD3D12::Render()
 	{
-		return NotImplemented;
+		{ // swap command lists
+			std::lock_guard<std::mutex> lockCommandLists(this->commandListsMutex);
+			this->commandListsId = !this->commandListsId;
+		}
+
+		// execute command lists
+		std::vector<ID3D12CommandList*> executionList;
+		executionList.reserve(this->d3dCommandLists->size());
+		for (auto &d3dCommandList : this->d3dCommandLists[!this->commandListsId])
+		{
+			executionList.push_back(d3dCommandList.get());
+		}
+		this->d3dCommandQueue->ExecuteCommandLists((UINT)executionList.size(), executionList.data());
+		
+		this->d3dCommandLists[!this->commandListsId].clear();
+
+		return Result(Success);
 	}
 
 	Result GfxSystemD3D12::CreateContext(std::unique_ptr<GfxContext> &gfxContext)
@@ -418,17 +485,29 @@ namespace UnlimRealms
 		if (FAILED(hr))
 			return ResultError(Failure, "GfxContextD3D12: failed to create command list");
 
+		// start in non-recording state
+		this->d3dCommandList->Close();
+
 		return Result(Success);
 	}
 
 	Result GfxContextD3D12::Begin()
 	{
-		return NotImplemented;
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+		
+		this->d3dCommandList->Reset(d3dSystem.GetD3DCommandAllocator(), ur_null);
+		
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::End()
 	{
-		return NotImplemented;
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+
+		this->d3dCommandList->Close();
+		d3dSystem.AddCommandList(shared_ref<ID3D12CommandList>(this->d3dCommandList.get()));
+
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::SetRenderTarget(GfxRenderTarget *rt)
@@ -461,7 +540,19 @@ namespace UnlimRealms
 		bool clearDepth, const ur_float &depth,
 		bool clearStencil, const ur_uint &stencil)
 	{
-		return NotImplemented;
+		if (ur_null == rt)
+			return Result(InvalidArgs);
+
+		GfxRenderTargetD3D12 *rt_d3d12 = static_cast<GfxRenderTargetD3D12*>(rt);
+
+		if (clearColor)
+		{
+			this->d3dCommandList->ClearRenderTargetView(rt_d3d12->GetRTVDescriptor()->CpuHandle(), &color.x, 0, ur_null);
+		}
+
+		// todo: clear depth & stencil
+
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::SetPipelineState(GfxPipelineState *state)
@@ -696,10 +787,14 @@ namespace UnlimRealms
 
 	Result GfxSwapChainD3D12::Initialize(const GfxPresentParams &params)
 	{
+		// todo: wait till buffers are no longer used by GPU
+
 		this->backBuffers.clear();
+		this->d3dCommandList.reset(ur_null);
 
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		IDXGIFactory4 *dxgiFactory = d3dSystem.GetDXGIFactory();
+		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
 		ID3D12CommandQueue *d3dCommandQueue = d3dSystem.GetD3DCommandQueue();
 		if (ur_null == d3dSystem.GetWinCanvas())
 			return ResultError(NotInitialized, "GfxSwapChainD3D12::Initialize: failed, canvas not initialized");
@@ -754,6 +849,19 @@ namespace UnlimRealms
 
 		this->backBufferIndex = (ur_uint)this->dxgiSwapChain->GetCurrentBackBufferIndex();
 
+		// request GfxSystemD3D12 to initialize per frame data corresponding to the number of back buffers
+		d3dSystem.InitializeFrameData(params.BufferCount);
+		d3dSystem.SetFrame(this->backBufferIndex);
+
+		// create command list to execute resource transitions
+		hr = d3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, d3dSystem.GetD3DCommandAllocator(), ur_null,
+			__uuidof(ID3D12GraphicsCommandList), this->d3dCommandList);
+		if (FAILED(hr))
+			return ResultError(Failure, "GfxSwapChainD3D12::Initialize: failed to create command list");
+		
+		// start in non-recording state
+		this->d3dCommandList->Close();
+
 		return Result(Success);
 	}
 
@@ -762,26 +870,45 @@ namespace UnlimRealms
 		if (this->dxgiSwapChain.empty())
 			return ResultError(NotInitialized, "GfxSwapChainD3D12::Present: DXGI swap chain not initialized");
 
-		//GfxRenderTargetD3D12 *rt_d3d12 = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
-		//if (ur_null == rt_d3d12)
-		//	return ResultError(Failure, "GfxSwapChainD3D12::Present: failed, invalid render target");
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
+		
+		// finalize current frame
 
-		//// set barrier: render target -> present
-		//ID3D12Resource* d3dResBackBuffer = static_cast<GfxTextureD3D12*>(rt_d3d12->GetTargetBuffer())->GetD3DResource();
-		//D3D12_RESOURCE_BARRIER d3dResBarrier = {};
-		//d3dResBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		//d3dResBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		//d3dResBarrier.Transition.pResource = d3dResBackBuffer;
-		//d3dResBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-		//d3dResBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		//d3dResBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-		//this->d3dCommandList->ResourceBarrier(1, &d3dResBarrier);
-
+		// transition barrier: render target -> present
+		GfxRenderTargetD3D12 *currentFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
+		ID3D12Resource* currentFrameBuffer = static_cast<GfxTextureD3D12*>(currentFrameRT->GetTargetBuffer())->GetD3DResource();
+		D3D12_RESOURCE_BARRIER d3dResBarrier = {};
+		d3dResBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		d3dResBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		d3dResBarrier.Transition.pResource = currentFrameBuffer;
+		d3dResBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		d3dResBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		d3dResBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+		HRESULT hr = this->d3dCommandList->Reset(d3dSystem.GetD3DCommandAllocator(), ur_null);
+		this->d3dCommandList->ResourceBarrier(1, &d3dResBarrier);
+		hr = this->d3dCommandList->Close();
+		d3dSystem.AddCommandList(shared_ref<ID3D12CommandList>(this->d3dCommandList.get()));
+		d3dSystem.Render();
+		
 		if (FAILED(this->dxgiSwapChain->Present(0, 0)))
 			return ResultError(Failure, "GfxSwapChainD3D12::Present: failed");
 
-		// move to next back buffer
+		// move to next frame
+
 		this->backBufferIndex = (ur_uint)this->dxgiSwapChain->GetCurrentBackBufferIndex();
+		d3dSystem.SetFrame(this->backBufferIndex);
+
+		// transition barrier: present -> render target
+		GfxRenderTargetD3D12 *newFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
+		ID3D12Resource* newFrameBuffer = static_cast<GfxTextureD3D12*>(newFrameRT->GetTargetBuffer())->GetD3DResource();
+		d3dResBarrier.Transition.pResource = newFrameBuffer;
+		d3dResBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+		d3dResBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		hr = this->d3dCommandList->Reset(d3dSystem.GetD3DCommandAllocator(), ur_null);
+		this->d3dCommandList->ResourceBarrier(1, &d3dResBarrier);
+		hr = this->d3dCommandList->Close();
+		d3dSystem.AddCommandList(shared_ref<ID3D12CommandList>(this->d3dCommandList.get()));
 
 		return Result(Success);
 	}
