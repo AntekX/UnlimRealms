@@ -26,10 +26,13 @@ namespace UnlimRealms
 		this->commandListsId = 0;
 		this->frameIndex = 0;
 		this->framesCount = 0;
+		this->frameFenceEvent = CreateEvent(ur_null, false, false, ur_null);
 	}
 
 	GfxSystemD3D12::~GfxSystemD3D12()
 	{
+		this->WaitGPU();
+		CloseHandle(this->frameFenceEvent);
 	}
 
 	Result GfxSystemD3D12::InitializeDXGI()
@@ -127,7 +130,7 @@ namespace UnlimRealms
 
 	Result GfxSystemD3D12::InitializeFrameData(ur_uint framesCount)
 	{
-		// todo: wait GPU till all frame data is no longer used
+		this->WaitGPU();
 
 		this->frameIndex = 0;
 		this->framesCount = std::max(framesCount, ur_uint(1));
@@ -141,17 +144,29 @@ namespace UnlimRealms
 				return ResultError(Failure, "GfxSystemD3D12::InitializeFrameData: failed to create direct command allocator");
 		}
 
+		this->frameFenceValues.resize(framesCount);
+		memset(this->frameFenceValues.data(), 0, this->frameFenceValues.size() * sizeof(ur_uint));
+		this->d3dDevice->CreateFence(this->frameFenceValues[this->frameIndex], D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), this->d3dFrameFence);
+		++this->frameFenceValues[this->frameIndex];
+
 		return Result(Success);
 	}
 
 	Result GfxSystemD3D12::SetFrame(ur_uint frameIndex)
 	{
-		// todo: synchronization
+		// add signal command to the current frame's queue
+		ur_uint frameFenceValue = this->frameFenceValues[frameIndex];
+		this->d3dCommandQueue->Signal(this->d3dFrameFence, frameFenceValue);
 
-		//this->d3dCommandQueue->Signal()
-
+		// setup new frame
 		this->frameIndex = frameIndex;
+		if (!this->IsFrameComplete(this->frameIndex))
+		{
+			this->WaitFrame(this->frameIndex);
+		}
+		this->frameFenceValues[frameIndex] = frameFenceValue + 1;
 
+		// prepare frame resources
 		this->d3dCommandAllocators[this->frameIndex]->Reset();
 
 		return Result(Success);
@@ -163,6 +178,35 @@ namespace UnlimRealms
 		return this->SetFrame(nextFrameIndex);
 	}
 
+	Result GfxSystemD3D12::WaitFrame(ur_uint frameIndex)
+	{
+		this->Render(); // force execute any pending command lists
+
+		ur_uint &frameFenceValue = this->frameFenceValues[frameIndex];
+		this->d3dCommandQueue->Signal(this->d3dFrameFence, frameFenceValue);
+		this->d3dFrameFence->SetEventOnCompletion(frameFenceValue, this->frameFenceEvent);
+		WaitForSingleObjectEx(this->frameFenceEvent, INFINITE, false);
+		++frameFenceValue;
+
+		return Result(Success);
+	}
+
+	Result GfxSystemD3D12::WaitCurrentFrame()
+	{
+		return WaitFrame(this->frameIndex);
+	}
+
+	Result GfxSystemD3D12::WaitGPU()
+	{
+		// wait all frames
+		Result res = Success;
+		for (ur_uint iframe = 0; iframe < this->framesCount; ++iframe)
+		{
+			res &= WaitFrame(iframe);
+		}
+		return res;
+	}
+
 	void GfxSystemD3D12::ReleaseDXGIObjects()
 	{
 		this->gfxAdapters.clear();
@@ -172,10 +216,7 @@ namespace UnlimRealms
 
 	void GfxSystemD3D12::ReleaseDeviceObjects()
 	{
-		for (auto& commandLists : this->d3dCommandLists)
-		{
-			commandLists.clear();
-		}
+		this->d3dCommandLists.clear();
 		this->d3dCommandAllocators.clear();
 		this->d3dCommandQueue.reset(ur_null);
 		this->d3dDevice.reset(ur_null);
@@ -221,28 +262,26 @@ namespace UnlimRealms
 	{
 		std::lock_guard<std::mutex> lockCommandLists(this->commandListsMutex);
 
-		this->d3dCommandLists[this->commandListsId].push_back(d3dCommandList);
+		this->d3dCommandLists.push_back(d3dCommandList);
 
 		return Result(Success);
 	}
 
 	Result GfxSystemD3D12::Render()
 	{
-		{ // swap command lists
-			std::lock_guard<std::mutex> lockCommandLists(this->commandListsMutex);
-			this->commandListsId = !this->commandListsId;
-		}
-
 		// execute command lists
+
+		std::lock_guard<std::mutex> lockCommandLists(this->commandListsMutex);
+		
 		std::vector<ID3D12CommandList*> executionList;
-		executionList.reserve(this->d3dCommandLists->size());
-		for (auto &d3dCommandList : this->d3dCommandLists[!this->commandListsId])
+		executionList.reserve(this->d3dCommandLists.size());
+		for (auto &d3dCommandList : this->d3dCommandLists)
 		{
 			executionList.push_back(d3dCommandList.get());
 		}
 		this->d3dCommandQueue->ExecuteCommandLists((UINT)executionList.size(), executionList.data());
 		
-		this->d3dCommandLists[!this->commandListsId].clear();
+		this->d3dCommandLists.clear();
 
 		return Result(Success);
 	}
@@ -785,16 +824,22 @@ namespace UnlimRealms
 
 	GfxSwapChainD3D12::~GfxSwapChainD3D12()
 	{
+		// ensure command lists possibly referencing swap chain resources are done before releasing
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+		d3dSystem.WaitGPU();
 	}
 
 	Result GfxSwapChainD3D12::Initialize(const GfxPresentParams &params)
 	{
-		// todo: wait till buffers are no longer used by GPU
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+
+		// ensure back buffers are no longer used by GPU
+		d3dSystem.WaitGPU();
 
 		this->backBuffers.clear();
 		this->d3dCommandList.reset(ur_null);
+		this->dxgiSwapChain.reset(ur_null);
 
-		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		IDXGIFactory4 *dxgiFactory = d3dSystem.GetDXGIFactory();
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
 		ID3D12CommandQueue *d3dCommandQueue = d3dSystem.GetD3DCommandQueue();

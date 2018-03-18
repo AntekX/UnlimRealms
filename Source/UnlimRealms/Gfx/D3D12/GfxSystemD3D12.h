@@ -33,14 +33,6 @@ namespace UnlimRealms
 
 		virtual Result Initialize(Canvas *canvas);
 
-		Result InitializeFrameData(ur_uint framesCount);
-
-		Result SetFrame(ur_uint frameIndex);
-
-		Result SetNextFrame();
-
-		Result AddCommandList(shared_ref<ID3D12CommandList> &d3dCommandList);
-
 		virtual Result Render();
 
 		virtual Result CreateContext(std::unique_ptr<GfxContext> &gfxContext);
@@ -60,6 +52,24 @@ namespace UnlimRealms
 		virtual Result CreateInputLayout(std::unique_ptr<GfxInputLayout> &gfxInputLayout);
 
 		virtual Result CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState);
+
+		Result InitializeFrameData(ur_uint framesCount);
+
+		Result SetFrame(ur_uint frameIndex);
+
+		Result SetNextFrame();
+
+		Result WaitFrame(ur_uint frameIndex);
+
+		Result WaitCurrentFrame();
+
+		Result WaitGPU();
+
+		Result AddCommandList(shared_ref<ID3D12CommandList> &d3dCommandList);
+
+		inline ur_bool IsFrameComplete(ur_uint frameIndex);
+
+		inline ur_bool IsCurrentFrameComplete();
 
 		inline WinCanvas* GetWinCanvas() const;
 
@@ -149,7 +159,7 @@ namespace UnlimRealms
 		std::vector<shared_ref<IDXGIAdapter1>> dxgiAdapters;
 		shared_ref<ID3D12Device> d3dDevice;
 		shared_ref<ID3D12CommandQueue> d3dCommandQueue;
-		std::vector<shared_ref<ID3D12CommandList>> d3dCommandLists[2];
+		std::vector<shared_ref<ID3D12CommandList>> d3dCommandLists;
 		std::mutex commandListsMutex;
 		ur_uint commandListsId;
 		std::vector<std::unique_ptr<DescriptorHeap>> descriptorHeaps;

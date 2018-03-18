@@ -10,6 +10,16 @@
 namespace UnlimRealms
 {
 
+	inline ur_bool GfxSystemD3D12::IsFrameComplete(ur_uint frameIndex)
+	{
+		return !(this->frameFenceValues[this->frameIndex] > this->d3dFrameFence->GetCompletedValue());
+	}
+
+	inline ur_bool GfxSystemD3D12::IsCurrentFrameComplete()
+	{
+		return this->IsFrameComplete(this->frameIndex);
+	}
+
 	inline WinCanvas* GfxSystemD3D12::GetWinCanvas() const
 	{
 		return this->winCanvas;
