@@ -154,6 +154,9 @@ namespace UnlimRealms
 		ur_uint commandListsId;
 		std::vector<std::unique_ptr<DescriptorHeap>> descriptorHeaps;
 		std::vector<shared_ref<ID3D12CommandAllocator>> d3dCommandAllocators;
+		std::vector<ur_uint> frameFenceValues;
+		shared_ref<ID3D12Fence> d3dFrameFence;
+		HANDLE frameFenceEvent;
 		ur_uint frameIndex;
 		ur_uint framesCount;
 	};

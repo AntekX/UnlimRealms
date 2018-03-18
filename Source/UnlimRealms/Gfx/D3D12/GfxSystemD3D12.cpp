@@ -148,6 +148,8 @@ namespace UnlimRealms
 	{
 		// todo: synchronization
 
+		//this->d3dCommandQueue->Signal()
+
 		this->frameIndex = frameIndex;
 
 		this->d3dCommandAllocators[this->frameIndex]->Reset();
@@ -199,18 +201,18 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(res.Code, "GfxSystemD3D12: failed to initialize D3D device objects");
 
-		// initialize frame data
-		const ur_uint defaultFramesCount = 1;
-		res = InitializeFrameData(defaultFramesCount);
-		if (Failed(res))
-			return ResultError(Failure, "GfxSystemD3D12: failed to initialize frame data");
-
 		// initialize descriptor heaps
 		for (ur_int heapType = 0; heapType < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++heapType)
 		{
 			std::unique_ptr<DescriptorHeap> newHeap(new DescriptorHeap(*this, D3D12_DESCRIPTOR_HEAP_TYPE(heapType)));
 			this->descriptorHeaps.push_back(std::move(newHeap));
 		}
+
+		// initialize frame data
+		const ur_uint defaultFramesCount = 1;
+		res = InitializeFrameData(defaultFramesCount);
+		if (Failed(res))
+			return ResultError(Failure, "GfxSystemD3D12: failed to initialize frame data");
 
 		return Result(Success);
 	}
