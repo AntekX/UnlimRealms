@@ -121,6 +121,7 @@ namespace UnlimRealms
 
 		// initialize command allocator
 
+		// TODO: command allocator must be created per frame for maximal GPU utilization!!!
 		hr = this->d3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), this->d3dCommandAllocator);
 		if (FAILED(hr))
 			return ResultError(Failure, "GfxSystemD3D12: failed to create direct command allocator");
@@ -413,7 +414,7 @@ namespace UnlimRealms
 
 		UINT nodeMask = 0;
 		HRESULT hr = d3dDevice->CreateCommandList(nodeMask, D3D12_COMMAND_LIST_TYPE_DIRECT, d3dSystem.GetD3DCommandAllocator(), ur_null,
-			__uuidof(ID3D12CommandList), this->d3dCommandList);
+			__uuidof(ID3D12GraphicsCommandList), this->d3dCommandList);
 		if (FAILED(hr))
 			return ResultError(Failure, "GfxContextD3D12: failed to create command list");
 
@@ -761,8 +762,26 @@ namespace UnlimRealms
 		if (this->dxgiSwapChain.empty())
 			return ResultError(NotInitialized, "GfxSwapChainD3D12::Present: DXGI swap chain not initialized");
 
+		//GfxRenderTargetD3D12 *rt_d3d12 = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
+		//if (ur_null == rt_d3d12)
+		//	return ResultError(Failure, "GfxSwapChainD3D12::Present: failed, invalid render target");
+
+		//// set barrier: render target -> present
+		//ID3D12Resource* d3dResBackBuffer = static_cast<GfxTextureD3D12*>(rt_d3d12->GetTargetBuffer())->GetD3DResource();
+		//D3D12_RESOURCE_BARRIER d3dResBarrier = {};
+		//d3dResBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		//d3dResBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		//d3dResBarrier.Transition.pResource = d3dResBackBuffer;
+		//d3dResBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		//d3dResBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		//d3dResBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+		//this->d3dCommandList->ResourceBarrier(1, &d3dResBarrier);
+
 		if (FAILED(this->dxgiSwapChain->Present(0, 0)))
 			return ResultError(Failure, "GfxSwapChainD3D12::Present: failed");
+
+		// move to next back buffer
+		this->backBufferIndex = (ur_uint)this->dxgiSwapChain->GetCurrentBackBufferIndex();
 
 		return Result(Success);
 	}

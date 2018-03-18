@@ -199,7 +199,7 @@ namespace UnlimRealms
 
 	private:
 
-		shared_ref<ID3D12CommandList> d3dCommandList;
+		shared_ref<ID3D12GraphicsCommandList> d3dCommandList;
 	};
 
 
