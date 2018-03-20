@@ -1059,7 +1059,7 @@ namespace UnlimRealms
 		case GfxUsage::Dynamic:
 			d3dHeapType = D3D12_HEAP_TYPE_UPLOAD;
 			break;
-		case GfxUsage::Staging:
+		case GfxUsage::Readback:
 			d3dHeapType = D3D12_HEAP_TYPE_READBACK;
 			break;
 		}
@@ -1071,7 +1071,7 @@ namespace UnlimRealms
 		D3D12_RESOURCE_STATES d3dStates = D3D12_RESOURCE_STATES(-1);
 		if (GfxUsage::Dynamic == gfxUsage)
 			d3dStates = D3D12_RESOURCE_STATE_GENERIC_READ;
-		else if (GfxUsage::Staging == gfxUsage)
+		else if (GfxUsage::Readback == gfxUsage)
 			d3dStates = D3D12_RESOURCE_STATE_COPY_DEST;
 		else if (gfxBindFlags & ur_uint(GfxBindFlag::RenderTarget))
 			d3dStates = D3D12_RESOURCE_STATE_RENDER_TARGET;

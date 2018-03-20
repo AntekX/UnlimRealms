@@ -63,7 +63,7 @@ namespace UnlimRealms
 		Default,
 		Immutable,
 		Dynamic,
-		Staging
+		Readback
 	};
 
 	enum class UR_DECL GfxBindFlag : ur_byte

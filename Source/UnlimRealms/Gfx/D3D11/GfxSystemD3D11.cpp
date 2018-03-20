@@ -1090,7 +1090,13 @@ namespace UnlimRealms
 
 	D3D11_USAGE GfxUsageToD3D11(GfxUsage usage)
 	{
-		return (D3D11_USAGE)usage;
+		switch (usage)
+		{
+		case GfxUsage::Default: return D3D11_USAGE_DEFAULT;
+		case GfxUsage::Immutable: return D3D11_USAGE_IMMUTABLE;
+		case GfxUsage::Dynamic: return D3D11_USAGE_DYNAMIC;
+		case GfxUsage::Readback: return D3D11_USAGE_STAGING;
+		}
 	}
 
 	D3D11_BIND_FLAG GfxBindFlagToD3D11(GfxBindFlag flag)
