@@ -318,22 +318,26 @@ namespace UnlimRealms
 
 	Result GfxSystemD3D12::CreateVertexShader(std::unique_ptr<GfxVertexShader> &gfxVertexShader)
 	{
-		return NotImplemented;
+		gfxVertexShader.reset(new GfxVertexShaderD3D12(*this));
+		return Result(Success);
 	}
 
 	Result GfxSystemD3D12::CreatePixelShader(std::unique_ptr<GfxPixelShader> &gfxPixelShader)
 	{
-		return NotImplemented;
+		gfxPixelShader.reset(new GfxPixelShaderD3D12(*this));
+		return Result(Success);
 	}
 
 	Result GfxSystemD3D12::CreateInputLayout(std::unique_ptr<GfxInputLayout> &gfxInputLayout)
 	{
-		return NotImplemented;
+		gfxInputLayout.reset(new GfxInputLayoutD3D12(*this));
+		return Result(Success);
 	}
 
 	Result GfxSystemD3D12::CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState)
 	{
-		return NotImplemented;
+		gfxPipelineState.reset(new GfxPipelineStateD3D12(*this));
+		return Result(Success);
 	}
 
 	GfxSystemD3D12::Descriptor::Descriptor(DescriptorHeap* heap) :
