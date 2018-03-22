@@ -942,9 +942,11 @@ namespace UnlimRealms
 		d3dSystem.AddCommandList(shared_ref<ID3D12CommandList>(this->d3dCommandList.get()));
 		d3dSystem.Render();
 		
+		// present
+		
 		if (FAILED(this->dxgiSwapChain->Present(0, 0)))
 			return ResultError(Failure, "GfxSwapChainD3D12::Present: failed");
-
+		
 		// move to next frame
 
 		this->backBufferIndex = (ur_uint)this->dxgiSwapChain->GetCurrentBackBufferIndex();
@@ -1012,7 +1014,63 @@ namespace UnlimRealms
 
 	Result GfxBufferD3D12::OnInitialize(const GfxResourceData *data)
 	{
-		return NotImplemented;
+		this->d3dResource.reset(ur_null);
+
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
+		if (ur_null == d3dDevice)
+			return ResultError(NotInitialized, "GfxBufferD3D12::OnInitialize: failed, device unavailable");
+
+		D3D12_RESOURCE_DESC d3dResDesc = {};
+		d3dResDesc = GfxBufferDescToD3D12ResDesc(this->GetDesc());
+
+		D3D12_HEAP_PROPERTIES d3dHeapProperties = {};
+		d3dHeapProperties.Type = GfxUsageToD3D12HeapType(this->GetDesc().Usage);
+		d3dHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		d3dHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		d3dHeapProperties.CreationNodeMask = 0;
+		d3dHeapProperties.VisibleNodeMask = 0;
+
+		D3D12_RESOURCE_STATES d3dResStates = GfxBindFlagsAndUsageToD3D12ResState(this->GetDesc().BindFlags, this->GetDesc().Usage);
+
+		HRESULT hr = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResDesc, d3dResStates, ur_null,
+			__uuidof(ID3D12Resource), this->d3dResource);
+		if (FAILED(hr))
+			return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed at CreateCommittedResource");
+
+		if (data != ur_null)
+		{
+			if (D3D12_HEAP_TYPE_UPLOAD == d3dHeapProperties.Type)
+			{
+				// if current resource is in Upload heap - fill it with initial data
+				
+				D3D12_RANGE d3dReadRange = {};
+				d3dReadRange.Begin = 0;
+				d3dReadRange.End = 0;
+
+				ur_byte* resBuffer;
+				hr = this->d3dResource->Map(0, &d3dReadRange, reinterpret_cast<void**>(&resBuffer));
+				if (FAILED(hr))
+					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to Map D3D resource");
+
+				memcpy(resBuffer, data->Ptr, std::min(data->RowPitch, this->GetDesc().Size));
+
+				this->d3dResource->Unmap(0, ur_null);
+			}
+			else
+			{
+				// create temporary resource in Upload heap & schedule a copy
+				// todo
+
+				/*GfxBufferDesc uploadBufferDesc = this->GetDesc();
+				uploadBufferDesc.Usage = GfxUsage::Dynamic;
+				std::unique_ptr<GfxBuffer> uploadBuffer;
+				this->GetGfxSystem().CreateBuffer(uploadBuffer);
+				uploadBuffer->Initialize(uploadBufferDesc, data);*/
+			}
+		}
+
+		return Result(Success);
 	}
 
 
@@ -1110,6 +1168,23 @@ namespace UnlimRealms
 		d3dDesc.SampleDesc.Quality = 0;
 		d3dDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		d3dDesc.Flags = GfxBindFlagsToD3D12ResFlags(desc.BindFlags);
+		return d3dDesc;
+	}
+
+	D3D12_RESOURCE_DESC GfxBufferDescToD3D12ResDesc(const GfxBufferDesc &desc)
+	{
+		D3D12_RESOURCE_DESC d3dDesc = {};
+		d3dDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		d3dDesc.Alignment = 0;
+		d3dDesc.Width = desc.Size;
+		d3dDesc.Height = 1;
+		d3dDesc.DepthOrArraySize = 1;
+		d3dDesc.MipLevels = 1;
+		d3dDesc.Format = DXGI_FORMAT_UNKNOWN;
+		d3dDesc.SampleDesc.Count = 1;
+		d3dDesc.SampleDesc.Quality = 0;
+		d3dDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		d3dDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 		return d3dDesc;
 	}
 

@@ -345,6 +345,10 @@ namespace UnlimRealms
 	protected:
 
 		virtual Result OnInitialize(const GfxResourceData *data);
+
+	private:
+
+		shared_ref<ID3D12Resource> d3dResource;
 	};
 
 
@@ -437,6 +441,8 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	extern UR_DECL D3D12_RESOURCE_DESC GfxTextureDescToD3D12ResDesc(const GfxTextureDesc &desc);
+
+	extern UR_DECL D3D12_RESOURCE_DESC GfxBufferDescToD3D12ResDesc(const GfxBufferDesc &desc);
 
 	extern UR_DECL D3D12_RESOURCE_FLAGS GfxBindFlagsToD3D12ResFlags(const ur_uint gfxFlags);
 
