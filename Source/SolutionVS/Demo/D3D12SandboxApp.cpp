@@ -50,6 +50,27 @@ int D3D12SandboxApp::Run()
 		res = gfxContext->Initialize();
 	}
 
+	// test buffer
+	std::unique_ptr<GfxBuffer> gfxBuffer;
+	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxBuffer)))
+	{
+		ur_uint bufferData[] = { 0, 1, 2, 3, 4 };
+		
+		GfxResourceData bufferDataDesc;
+		bufferDataDesc.Ptr = bufferData;
+		bufferDataDesc.RowPitch = sizeof(bufferData);
+		bufferDataDesc.SlicePitch = 0;
+
+		GfxBufferDesc bufferDesc;
+		bufferDesc.Size = bufferDataDesc.RowPitch;
+		bufferDesc.Usage = GfxUsage::Dynamic;
+		bufferDesc.BindFlags = ur_uint(GfxBindFlag::ShaderResource);
+		bufferDesc.AccessFlags = 0;
+		bufferDesc.StructureStride = 0;
+
+		res = gfxBuffer->Initialize(bufferDesc, &bufferDataDesc);
+	}
+
 	// Main message loop:
 	MSG msg;
 	ZeroMemory(&msg, sizeof(msg));

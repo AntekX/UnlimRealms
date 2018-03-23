@@ -1062,6 +1062,9 @@ namespace UnlimRealms
 				// create temporary resource in Upload heap & schedule a copy
 				// todo
 
+				// do transition into copy dest
+				//m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_texture.Get(), d3dResStates, D3D12_RESOURCE_STATE_COPY_DEST));
+
 				/*GfxBufferDesc uploadBufferDesc = this->GetDesc();
 				uploadBufferDesc.Usage = GfxUsage::Dynamic;
 				std::unique_ptr<GfxBuffer> uploadBuffer;
