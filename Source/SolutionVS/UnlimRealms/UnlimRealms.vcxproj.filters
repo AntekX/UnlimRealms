@@ -300,6 +300,9 @@
     <ClInclude Include="..\..\UnlimRealms\Gfx\DXGIUtils\DXGIUtils.h">
       <Filter>Gfx\DXGIUtils</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Core\Memory.h">
+      <Filter>Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -637,6 +640,9 @@
     </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\Gfx\DXGIUtils\DXGIUtils.cpp">
       <Filter>Gfx\DXGIUtils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Core\Memory.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

@@ -97,7 +97,6 @@ namespace UnlimRealms
 				{
 					dedicatedMemoryMax = dedicatedMemoryMb;
 					this->gfxAdapterIdx = ur_uint(idx);
-					break;
 				}
 			}
 			pAdapter = *(this->dxgiAdapters.begin() + this->gfxAdapterIdx);

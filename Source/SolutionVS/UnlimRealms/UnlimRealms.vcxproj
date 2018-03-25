@@ -226,6 +226,7 @@
     <ClInclude Include="..\..\UnlimRealms\Core\Composite.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\Core.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\Math.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\Memory.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\ResultTypes.h" />
     <ClInclude Include="..\..\UnlimRealms\GenericRender\GenericRender.h" />
     <ClInclude Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.h" />
@@ -350,6 +351,7 @@
     <ClCompile Include="..\..\UnlimRealms\Core\Algorithms.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Core\Composite.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Core\Memory.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Core\ResultTypes.cpp" />
     <ClCompile Include="..\..\UnlimRealms\GenericRender\GenericRender.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.cpp" />
