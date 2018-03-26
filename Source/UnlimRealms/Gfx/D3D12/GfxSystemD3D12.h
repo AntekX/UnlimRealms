@@ -19,6 +19,20 @@
 
 namespace UnlimRealms
 {
+
+	// forward declarations
+	class GfxSystemD3D12;
+	class GfxContextD3D12;
+	class GfxResourceD3D12;
+	class GfxTextureD3D12;
+	class GfxRenderTargetD3D12;
+	class GfxSwapChainD3D12;
+	class GfxBufferD3D12;
+	class GfxVertexShaderD3D12;
+	class GfxPixelShaderD3D12;
+	class GfxInputLayoutD3D12;
+	class GfxPipelineStateD3D12;
+
 	
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Direct3D12 graphics system
@@ -70,6 +84,8 @@ namespace UnlimRealms
 		inline ur_bool IsFrameComplete(ur_uint frameIndex);
 
 		inline ur_bool IsCurrentFrameComplete();
+
+		inline ur_uint CurrentFrameIndex() const;
 
 		inline WinCanvas* GetWinCanvas() const;
 
@@ -224,9 +240,41 @@ namespace UnlimRealms
 
 		virtual Result UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, UpdateBufferCallback callback);
 
+		
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// D3D12 specific functions
+
+		Result ResourceTransition(GfxResourceD3D12 *resource, D3D12_RESOURCE_STATES newResourceState);
+
 	private:
 
 		shared_ref<ID3D12GraphicsCommandList> d3dCommandList;
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Direct3D12 graphics resource
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	class UR_DECL GfxResourceD3D12 : public GfxEntity
+	{
+	public:
+
+		GfxResourceD3D12(GfxSystem &gfxSystem);
+
+		virtual ~GfxResourceD3D12();
+
+		Result Initialize(ID3D12Resource* d3dResource, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATES(-1));
+
+		Result Initialize(GfxResourceD3D12& resource);
+
+		inline ID3D12Resource* GetD3DResource() const;
+
+		inline D3D12_RESOURCE_STATES GetD3DResourceState();
+
+	private:
+
+		shared_ref<ID3D12Resource> d3dResource;
+		D3D12_RESOURCE_STATES d3dCurrentState;
 	};
 
 
@@ -241,10 +289,10 @@ namespace UnlimRealms
 
 		virtual ~GfxTextureD3D12();
 
-		Result Initialize(const GfxTextureDesc &desc, shared_ref<ID3D12Resource> &d3dTexture);
+		Result Initialize(const GfxTextureDesc &desc, GfxResourceD3D12 &resource);
 
-		inline ID3D12Resource* GetD3DResource() const;
-		
+		inline GfxResourceD3D12& GetResource();
+
 		inline GfxSystemD3D12::Descriptor* GetSRVDescriptor() const;
 
 	protected:
@@ -254,7 +302,7 @@ namespace UnlimRealms
 	private:
 
 		bool initializedFromD3DRes;
-		shared_ref<ID3D12Resource> d3dResource;
+		GfxResourceD3D12 resource;
 		std::unique_ptr<GfxSystemD3D12::Descriptor> srvDescriptor;
 	};
 
@@ -308,7 +356,7 @@ namespace UnlimRealms
 		{
 		public:
 
-			BackBuffer(GfxSystem &gfxSystem, shared_ref<ID3D12Resource> &dxgiSwapChainBuffer);
+			BackBuffer(GfxSystem &gfxSystem, shared_ref<ID3D12Resource> d3dSwapChainResource);
 
 			virtual ~BackBuffer();
 
@@ -318,7 +366,7 @@ namespace UnlimRealms
 
 		private:
 
-			shared_ref<ID3D12Resource> dxgiSwapChainBuffer;
+			GfxResourceD3D12 dxgiSwapChainBuffer;
 		};
 
 	private:
@@ -348,7 +396,7 @@ namespace UnlimRealms
 
 	private:
 
-		shared_ref<ID3D12Resource> d3dResource;
+		GfxResourceD3D12 resource;
 	};
 
 

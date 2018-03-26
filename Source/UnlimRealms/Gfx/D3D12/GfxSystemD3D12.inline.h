@@ -20,6 +20,11 @@ namespace UnlimRealms
 		return this->IsFrameComplete(this->frameIndex);
 	}
 
+	inline ur_uint GfxSystemD3D12::CurrentFrameIndex() const
+	{
+		return this->frameIndex;
+	}
+
 	inline WinCanvas* GfxSystemD3D12::GetWinCanvas() const
 	{
 		return this->winCanvas;
@@ -60,9 +65,19 @@ namespace UnlimRealms
 		return this->gpuHandle;
 	}
 
-	inline ID3D12Resource* GfxTextureD3D12::GetD3DResource() const
+	inline ID3D12Resource* GfxResourceD3D12::GetD3DResource() const
 	{
 		return this->d3dResource;
+	}
+
+	inline D3D12_RESOURCE_STATES GfxResourceD3D12::GetD3DResourceState()
+	{
+		return this->d3dCurrentState;
+	}
+
+	inline GfxResourceD3D12& GfxTextureD3D12::GetResource()
+	{
+		return this->resource;
 	}
 
 	inline GfxSystemD3D12::Descriptor* GfxTextureD3D12::GetSRVDescriptor() const

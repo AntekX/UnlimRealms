@@ -649,6 +649,53 @@ namespace UnlimRealms
 		return NotImplemented;
 	}
 
+	Result GfxContextD3D12::ResourceTransition(GfxResourceD3D12 *resource, D3D12_RESOURCE_STATES newResourceState)
+	{
+		if (ur_null == resource || ur_null == resource->GetD3DResource())
+			return Result(InvalidArgs);
+
+		ID3D12Resource *d3dResource = resource->GetD3DResource();
+		D3D12_RESOURCE_BARRIER d3dResBarrier = {};
+		d3dResBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		d3dResBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		d3dResBarrier.Transition.pResource = d3dResource;
+		d3dResBarrier.Transition.Subresource = resource->GetD3DResourceState();
+		d3dResBarrier.Transition.StateBefore = newResourceState;
+		d3dResBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+		this->d3dCommandList->ResourceBarrier(1, &d3dResBarrier);
+
+		return Result(Success);
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// GfxResourceD3D12
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+
+	GfxResourceD3D12::GfxResourceD3D12(GfxSystem &gfxSystem) :
+		GfxEntity(gfxSystem)
+	{
+		this->d3dCurrentState = D3D12_RESOURCE_STATES(-1);
+	}
+
+	GfxResourceD3D12::~GfxResourceD3D12()
+	{
+	}
+
+	Result GfxResourceD3D12::Initialize(ID3D12Resource *d3dResource, D3D12_RESOURCE_STATES initialState)
+	{
+		this->d3dResource.reset(d3dResource);
+		this->d3dCurrentState = initialState;
+		return Result(Success);
+	}
+
+	Result GfxResourceD3D12::Initialize(GfxResourceD3D12& resource)
+	{
+		this->d3dResource.reset(resource.GetD3DResource());
+		this->d3dCurrentState = resource.GetD3DResourceState();
+		return Result(Success);
+	}
+
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// GfxTextureD3D12
@@ -656,7 +703,8 @@ namespace UnlimRealms
 
 	GfxTextureD3D12::GfxTextureD3D12(GfxSystem &gfxSystem) :
 		GfxTexture(gfxSystem),
-		initializedFromD3DRes(false)
+		initializedFromD3DRes(false),
+		resource(gfxSystem)
 	{
 	}
 
@@ -664,13 +712,13 @@ namespace UnlimRealms
 	{
 	}
 
-	Result GfxTextureD3D12::Initialize(const GfxTextureDesc &desc, shared_ref<ID3D12Resource> &d3dTexture)
+	Result GfxTextureD3D12::Initialize(const GfxTextureDesc &desc, GfxResourceD3D12 &resource)
 	{
 		this->initializedFromD3DRes = true; // setting this flag to skip OnInitialize
 		GfxTexture::Initialize(desc, ur_null); // store desc in the base class, 
 		this->initializedFromD3DRes = false;
 
-		this->d3dResource.reset(ur_null);
+		this->resource.Initialize(ur_null);
 		this->srvDescriptor.reset(ur_null);
 
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
@@ -678,7 +726,7 @@ namespace UnlimRealms
 		if (ur_null == d3dDevice)
 			return ResultError(NotInitialized, "GfxTextureD3D12: failed to initialize, device unavailable");
 
-		this->d3dResource.reset(d3dTexture);
+		this->resource.Initialize(resource);
 
 		if (desc.BindFlags & ur_uint(GfxBindFlag::ShaderResource))
 		{
@@ -693,7 +741,7 @@ namespace UnlimRealms
 			srvDesc.Texture2D.MipLevels = -1;
 			srvDesc.Texture2D.MostDetailedMip = 0;
 		
-			d3dDevice->CreateShaderResourceView(d3dTexture.get(), &srvDesc, this->srvDescriptor->CpuHandle());
+			d3dDevice->CreateShaderResourceView(this->resource.GetD3DResource(), &srvDesc, this->srvDescriptor->CpuHandle());
 		}
 
 		return Result(Success);
@@ -706,7 +754,7 @@ namespace UnlimRealms
 		if (this->initializedFromD3DRes)
 			return Result(Success);
 
-		this->d3dResource.reset(ur_null);
+		this->resource.Initialize(ur_null);
 		this->srvDescriptor.reset(ur_null);
 
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
@@ -714,7 +762,7 @@ namespace UnlimRealms
 		if (ur_null == d3dDevice)
 			return ResultError(NotInitialized, "GfxTextureD3D12::OnInitialize: failed, device unavailable");
 
-		// todo: init sub resource data here
+		// todo: init sub resource data
 
 		D3D12_RESOURCE_DESC d3dResDesc = GfxTextureDescToD3D12ResDesc(this->GetDesc());
 		d3dResDesc.Format = GfxFormatToDXGI(this->GetDesc().Format, GfxFormatView::Typeless);
@@ -728,10 +776,15 @@ namespace UnlimRealms
 
 		D3D12_RESOURCE_STATES d3dResStates = GfxBindFlagsAndUsageToD3D12ResState(this->GetDesc().BindFlags, this->GetDesc().Usage);
 		
+		shared_ref<ID3D12Resource> d3dResource;
 		HRESULT hr = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResDesc, d3dResStates, ur_null,
-			__uuidof(ID3D12Resource), this->d3dResource);
+			__uuidof(ID3D12Resource), d3dResource);
 		if (FAILED(hr))
 			return ResultError(Failure, "GfxTextureD3D12::OnInitialize: failed at CreateCommittedResource");
+
+		Result res = this->resource.Initialize(d3dResource, d3dResStates);
+		if (Failed(res))
+			return ResultError(Failure, "GfxTextureD3D12::OnInitialize: failed to initialize GfxResourceD3D12");
 
 		return Result(Success);
 	}
@@ -774,7 +827,7 @@ namespace UnlimRealms
 			rtvDesc.Texture2D.MipSlice = 0;
 			rtvDesc.Texture2D.PlaneSlice = 0;
 			
-			d3dDevice->CreateRenderTargetView(d3dTargetBuffer->GetD3DResource(), &rtvDesc, this->rtvDescriptor->CpuHandle());
+			d3dDevice->CreateRenderTargetView(d3dTargetBuffer->GetResource().GetD3DResource(), &rtvDesc, this->rtvDescriptor->CpuHandle());
 		}
 
 		GfxTextureD3D12 *d3dDepthStencilBuffer = static_cast<GfxTextureD3D12*>(this->GetDepthStencilBuffer());
@@ -807,7 +860,7 @@ namespace UnlimRealms
 			dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
 			dsvDesc.Texture2D.MipSlice = 0;
 
-			d3dDevice->CreateDepthStencilView(d3dDepthStencilBuffer->GetD3DResource(), &dsvDesc, this->dsvDescriptor->CpuHandle());
+			d3dDevice->CreateDepthStencilView(d3dDepthStencilBuffer->GetResource().GetD3DResource(), &dsvDesc, this->dsvDescriptor->CpuHandle());
 		}
 
 		return Result(Success);
@@ -927,7 +980,7 @@ namespace UnlimRealms
 
 		// transition barrier: render target -> present
 		GfxRenderTargetD3D12 *currentFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
-		ID3D12Resource* currentFrameBuffer = static_cast<GfxTextureD3D12*>(currentFrameRT->GetTargetBuffer())->GetD3DResource();
+		ID3D12Resource* currentFrameBuffer = static_cast<GfxTextureD3D12*>(currentFrameRT->GetTargetBuffer())->GetResource().GetD3DResource();
 		D3D12_RESOURCE_BARRIER d3dResBarrier = {};
 		d3dResBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 		d3dResBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -953,7 +1006,7 @@ namespace UnlimRealms
 
 		// transition barrier: present -> render target
 		GfxRenderTargetD3D12 *newFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
-		ID3D12Resource* newFrameBuffer = static_cast<GfxTextureD3D12*>(newFrameRT->GetTargetBuffer())->GetD3DResource();
+		ID3D12Resource* newFrameBuffer = static_cast<GfxTextureD3D12*>(newFrameRT->GetTargetBuffer())->GetResource().GetD3DResource();
 		d3dResBarrier.Transition.pResource = newFrameBuffer;
 		d3dResBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
 		d3dResBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -973,10 +1026,11 @@ namespace UnlimRealms
 		return this->backBuffers[this->backBufferIndex].get();
 	}
 
-	GfxSwapChainD3D12::BackBuffer::BackBuffer(GfxSystem &gfxSystem, shared_ref<ID3D12Resource> &dxgiSwapChainBuffer) :
+	GfxSwapChainD3D12::BackBuffer::BackBuffer(GfxSystem &gfxSystem, shared_ref<ID3D12Resource> d3dSwapChainResource) :
 		GfxRenderTargetD3D12(gfxSystem),
-		dxgiSwapChainBuffer(dxgiSwapChainBuffer)
+		dxgiSwapChainBuffer(gfxSystem)
 	{
+		this->dxgiSwapChainBuffer.Initialize(d3dSwapChainResource.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 	}
 
 	GfxSwapChainD3D12::BackBuffer::~BackBuffer()
@@ -1003,7 +1057,8 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
 
 	GfxBufferD3D12::GfxBufferD3D12(GfxSystem &gfxSystem) :
-		GfxBuffer(gfxSystem)
+		GfxBuffer(gfxSystem),
+		resource(gfxSystem)
 	{
 	}
 
@@ -1013,8 +1068,6 @@ namespace UnlimRealms
 
 	Result GfxBufferD3D12::OnInitialize(const GfxResourceData *data)
 	{
-		this->d3dResource.reset(ur_null);
-
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
 		if (ur_null == d3dDevice)
@@ -1032,10 +1085,15 @@ namespace UnlimRealms
 
 		D3D12_RESOURCE_STATES d3dResStates = GfxBindFlagsAndUsageToD3D12ResState(this->GetDesc().BindFlags, this->GetDesc().Usage);
 
+		shared_ref<ID3D12Resource> d3dResource;
 		HRESULT hr = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResDesc, d3dResStates, ur_null,
-			__uuidof(ID3D12Resource), this->d3dResource);
+			__uuidof(ID3D12Resource), d3dResource);
 		if (FAILED(hr))
 			return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed at CreateCommittedResource");
+
+		Result res = this->resource.Initialize(d3dResource, d3dResStates);
+		if (Failed(res))
+			return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to initialize GfxResourceD3D12");
 
 		if (data != ur_null)
 		{
@@ -1048,13 +1106,13 @@ namespace UnlimRealms
 				d3dReadRange.End = 0;
 
 				ur_byte* resBuffer;
-				hr = this->d3dResource->Map(0, &d3dReadRange, reinterpret_cast<void**>(&resBuffer));
+				hr = this->resource.GetD3DResource()->Map(0, &d3dReadRange, reinterpret_cast<void**>(&resBuffer));
 				if (FAILED(hr))
 					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to Map D3D resource");
 
 				memcpy(resBuffer, data->Ptr, std::min(data->RowPitch, this->GetDesc().Size));
 
-				this->d3dResource->Unmap(0, ur_null);
+				this->resource.GetD3DResource()->Unmap(0, ur_null);
 			}
 			else
 			{

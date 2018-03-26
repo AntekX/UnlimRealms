@@ -35,6 +35,8 @@ namespace UnlimRealms
 		struct Heap
 		{
 			std::vector<ur_byte> buffer;
+			std::vector<Block> blocks;
+			ur_size highestOrder;
 		};
 
 		ur_size blockSize;
