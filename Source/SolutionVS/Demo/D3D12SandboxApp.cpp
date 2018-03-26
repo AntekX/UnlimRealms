@@ -101,7 +101,16 @@ int D3D12SandboxApp::Run()
 		{ // use context to draw
 			gfxContext->Begin();
 
-			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, ur_float4(0.0f, 0.0f, 1.0f, 1.0f), false, 0.0f, false, 0);
+			static const ur_float4 s_colors[] = {
+				{ 1.0f, 0.0f, 0.0f, 1.0f },
+				{ 0.0f, 1.0f, 0.0f, 1.0f },
+				{ 0.0f, 0.0f, 1.0f, 1.0f },
+				{ 1.0f, 1.0f, 0.0f, 1.0f },
+				{ 1.0f, 0.0f, 1.0f, 1.0f },
+			};
+			ur_uint colorIdx = static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->CurrentFrameIndex() % 5;
+
+			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, s_colors[colorIdx], false, 0.0f, false, 0);
 
 			gfxContext->End();
 		}
@@ -111,6 +120,9 @@ int D3D12SandboxApp::Run()
 
 		// present
 		gfxSwapChain->Present();
+
+		// limit framerate
+		Sleep(16);
 	}
 
 	// explicitly

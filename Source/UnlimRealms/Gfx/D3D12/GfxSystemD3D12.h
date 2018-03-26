@@ -244,7 +244,7 @@ namespace UnlimRealms
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// D3D12 specific functions
 
-		Result ResourceTransition(GfxResourceD3D12 *resource, D3D12_RESOURCE_STATES newResourceState);
+		Result ResourceTransition(GfxResourceD3D12 *resource, D3D12_RESOURCE_STATES newState);
 
 	private:
 
@@ -272,6 +272,8 @@ namespace UnlimRealms
 		inline D3D12_RESOURCE_STATES GetD3DResourceState();
 
 	private:
+
+		friend class GfxContextD3D12;
 
 		shared_ref<ID3D12Resource> d3dResource;
 		D3D12_RESOURCE_STATES d3dCurrentState;
@@ -375,7 +377,7 @@ namespace UnlimRealms
 		shared_ref<IDXGISwapChain3> dxgiSwapChain;
 		ur_uint backBufferIndex;
 		std::vector<std::unique_ptr<BackBuffer>> backBuffers;
-		shared_ref<ID3D12GraphicsCommandList> d3dCommandList;
+		GfxContextD3D12 gfxContext;
 	};
 
 

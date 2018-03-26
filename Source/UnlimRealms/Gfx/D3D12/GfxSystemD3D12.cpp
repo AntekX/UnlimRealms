@@ -151,19 +151,19 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GfxSystemD3D12::SetFrame(ur_uint frameIndex)
+	Result GfxSystemD3D12::SetFrame(ur_uint newFrameIndex)
 	{
 		// add signal command to the current frame's queue
-		ur_uint frameFenceValue = this->frameFenceValues[frameIndex];
+		ur_uint frameFenceValue = this->frameFenceValues[this->frameIndex];
 		this->d3dCommandQueue->Signal(this->d3dFrameFence, frameFenceValue);
 
 		// setup new frame
-		this->frameIndex = frameIndex;
+		this->frameIndex = newFrameIndex;
 		if (!this->IsFrameComplete(this->frameIndex))
 		{
 			this->WaitFrame(this->frameIndex);
 		}
-		this->frameFenceValues[frameIndex] = frameFenceValue + 1;
+		this->frameFenceValues[this->frameIndex] = frameFenceValue + 1;
 
 		// prepare frame resources
 		this->d3dCommandAllocators[this->frameIndex]->Reset();
@@ -649,21 +649,26 @@ namespace UnlimRealms
 		return NotImplemented;
 	}
 
-	Result GfxContextD3D12::ResourceTransition(GfxResourceD3D12 *resource, D3D12_RESOURCE_STATES newResourceState)
+	Result GfxContextD3D12::ResourceTransition(GfxResourceD3D12 *resource, D3D12_RESOURCE_STATES newState)
 	{
 		if (ur_null == resource || ur_null == resource->GetD3DResource())
 			return Result(InvalidArgs);
 
-		ID3D12Resource *d3dResource = resource->GetD3DResource();
-		D3D12_RESOURCE_BARRIER d3dResBarrier = {};
-		d3dResBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		d3dResBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		d3dResBarrier.Transition.pResource = d3dResource;
-		d3dResBarrier.Transition.Subresource = resource->GetD3DResourceState();
-		d3dResBarrier.Transition.StateBefore = newResourceState;
-		d3dResBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-		this->d3dCommandList->ResourceBarrier(1, &d3dResBarrier);
+		if (resource->d3dCurrentState != newState)
+		{
+			ID3D12Resource *d3dResource = resource->GetD3DResource();
+			D3D12_RESOURCE_BARRIER d3dResBarrier = {};
+			d3dResBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			d3dResBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			d3dResBarrier.Transition.pResource = d3dResource;
+			d3dResBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+			d3dResBarrier.Transition.StateBefore = resource->d3dCurrentState;
+			d3dResBarrier.Transition.StateAfter = newState;
+			this->d3dCommandList->ResourceBarrier(1, &d3dResBarrier);
 
+			resource->d3dCurrentState = newState;
+		}
+		
 		return Result(Success);
 	}
 
@@ -872,7 +877,8 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
 
 	GfxSwapChainD3D12::GfxSwapChainD3D12(GfxSystem &gfxSystem) :
-		GfxSwapChain(gfxSystem)
+		GfxSwapChain(gfxSystem),
+		gfxContext(gfxSystem)
 	{
 		memset(&this->dxgiChainDesc, 0, sizeof(this->dxgiChainDesc));
 		this->backBufferIndex = 0;
@@ -893,7 +899,6 @@ namespace UnlimRealms
 		d3dSystem.WaitGPU();
 
 		this->backBuffers.clear();
-		this->d3dCommandList.reset(ur_null);
 		this->dxgiSwapChain.reset(ur_null);
 
 		IDXGIFactory4 *dxgiFactory = d3dSystem.GetDXGIFactory();
@@ -956,14 +961,8 @@ namespace UnlimRealms
 		d3dSystem.InitializeFrameData(params.BufferCount);
 		d3dSystem.SetFrame(this->backBufferIndex);
 
-		// create command list to execute resource transitions
-		hr = d3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, d3dSystem.GetD3DCommandAllocator(), ur_null,
-			__uuidof(ID3D12GraphicsCommandList), this->d3dCommandList);
-		if (FAILED(hr))
-			return ResultError(Failure, "GfxSwapChainD3D12::Initialize: failed to create command list");
-		
-		// start in non-recording state
-		this->d3dCommandList->Close();
+		// initialize context to execute resource transitions
+		this->gfxContext.Initialize();
 
 		return Result(Success);
 	}
@@ -975,30 +974,22 @@ namespace UnlimRealms
 
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
-		
+
 		// finalize current frame
 
 		// transition barrier: render target -> present
 		GfxRenderTargetD3D12 *currentFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
-		ID3D12Resource* currentFrameBuffer = static_cast<GfxTextureD3D12*>(currentFrameRT->GetTargetBuffer())->GetResource().GetD3DResource();
-		D3D12_RESOURCE_BARRIER d3dResBarrier = {};
-		d3dResBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		d3dResBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		d3dResBarrier.Transition.pResource = currentFrameBuffer;
-		d3dResBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-		d3dResBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		d3dResBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-		HRESULT hr = this->d3dCommandList->Reset(d3dSystem.GetD3DCommandAllocator(), ur_null);
-		this->d3dCommandList->ResourceBarrier(1, &d3dResBarrier);
-		hr = this->d3dCommandList->Close();
-		d3dSystem.AddCommandList(shared_ref<ID3D12CommandList>(this->d3dCommandList.get()));
+		GfxResourceD3D12 &currentFrameBuffer = static_cast<GfxTextureD3D12*>(currentFrameRT->GetTargetBuffer())->GetResource();
+		this->gfxContext.Begin();
+		this->gfxContext.ResourceTransition(&currentFrameBuffer, D3D12_RESOURCE_STATE_PRESENT);
+		this->gfxContext.End();
 		d3dSystem.Render();
-		
+
 		// present
-		
-		if (FAILED(this->dxgiSwapChain->Present(0, 0)))
+
+		if (FAILED(this->dxgiSwapChain->Present(1, 0)))
 			return ResultError(Failure, "GfxSwapChainD3D12::Present: failed");
-		
+
 		// move to next frame
 
 		this->backBufferIndex = (ur_uint)this->dxgiSwapChain->GetCurrentBackBufferIndex();
@@ -1006,14 +997,10 @@ namespace UnlimRealms
 
 		// transition barrier: present -> render target
 		GfxRenderTargetD3D12 *newFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
-		ID3D12Resource* newFrameBuffer = static_cast<GfxTextureD3D12*>(newFrameRT->GetTargetBuffer())->GetResource().GetD3DResource();
-		d3dResBarrier.Transition.pResource = newFrameBuffer;
-		d3dResBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-		d3dResBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		hr = this->d3dCommandList->Reset(d3dSystem.GetD3DCommandAllocator(), ur_null);
-		this->d3dCommandList->ResourceBarrier(1, &d3dResBarrier);
-		hr = this->d3dCommandList->Close();
-		d3dSystem.AddCommandList(shared_ref<ID3D12CommandList>(this->d3dCommandList.get()));
+		GfxResourceD3D12 &newFrameBuffer = static_cast<GfxTextureD3D12*>(newFrameRT->GetTargetBuffer())->GetResource();
+		this->gfxContext.Begin();
+		this->gfxContext.ResourceTransition(&newFrameBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		this->gfxContext.End();
 
 		return Result(Success);
 	}
