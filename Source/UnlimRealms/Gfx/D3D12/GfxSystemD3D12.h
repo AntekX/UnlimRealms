@@ -79,7 +79,7 @@ namespace UnlimRealms
 
 		Result WaitGPU();
 
-		Result AddCommandList(shared_ref<ID3D12CommandList> &d3dCommandList);
+		Result AddCommandList(shared_ref<ID3D12CommandList> &d3dCommandList);		
 
 		inline ur_bool IsFrameComplete(ur_uint frameIndex);
 
@@ -96,6 +96,8 @@ namespace UnlimRealms
 		inline ID3D12CommandQueue* GetD3DCommandQueue() const;
 
 		inline ID3D12CommandAllocator* GetD3DCommandAllocator() const;
+
+		inline GfxContextD3D12* GetResourceContext() const;
 
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -185,6 +187,7 @@ namespace UnlimRealms
 		HANDLE frameFenceEvent;
 		ur_uint frameIndex;
 		ur_uint framesCount;
+		std::unique_ptr<GfxContextD3D12> resourceContext;
 	};
 
 
@@ -239,6 +242,9 @@ namespace UnlimRealms
 		virtual Result DrawIndexed(ur_uint indexCount, ur_uint indexOffset, ur_uint vertexOffset, ur_uint instanceCount, ur_uint instanceOffset);
 
 		virtual Result UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, UpdateBufferCallback callback);
+
+		// TODO: must be a common GfxContext function
+		//virtual Result CopySubresources(GfxResourceD3D12* dstResource, GfxResourceD3D12* srcResource);
 
 		
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -399,6 +405,7 @@ namespace UnlimRealms
 	private:
 
 		GfxResourceD3D12 resource;
+		std::unique_ptr<GfxResourceD3D12> uploadResource;
 	};
 
 

@@ -8,7 +8,7 @@
 #pragma once
 
 namespace UnlimRealms
-{
+{	
 
 	inline ur_bool GfxSystemD3D12::IsFrameComplete(ur_uint frameIndex)
 	{
@@ -49,6 +49,11 @@ namespace UnlimRealms
 	inline ID3D12CommandAllocator* GfxSystemD3D12::GetD3DCommandAllocator() const
 	{
 		return this->d3dCommandAllocators[this->frameIndex];
+	}
+
+	inline GfxContextD3D12* GfxSystemD3D12::GetResourceContext() const
+	{
+		return this->resourceContext.get();
 	}
 
 	inline GfxSystemD3D12::DescriptorHeap* GfxSystemD3D12::GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType)

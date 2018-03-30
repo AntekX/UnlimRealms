@@ -10,6 +10,7 @@
 #include "Sys/Log.h"
 #include "Sys/Windows/WinCanvas.h"
 #include "Gfx/D3D12/GfxSystemD3D12.h"
+#include "Gfx/D3D12/d3dx12.h"
 #include "Gfx/DXGIUtils/DXGIUtils.h"
 
 namespace UnlimRealms
@@ -253,6 +254,10 @@ namespace UnlimRealms
 		res = InitializeFrameData(defaultFramesCount);
 		if (Failed(res))
 			return ResultError(Failure, "GfxSystemD3D12: failed to initialize frame data");
+
+		// initialize resource context
+		this->resourceContext.reset(new GfxContextD3D12(*this));
+		this->resourceContext->Initialize();
 
 		return Result(Success);
 	}
@@ -976,7 +981,6 @@ namespace UnlimRealms
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
 
 		// finalize current frame
-
 		// transition barrier: render target -> present
 		GfxRenderTargetD3D12 *currentFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
 		GfxResourceD3D12 &currentFrameBuffer = static_cast<GfxTextureD3D12*>(currentFrameRT->GetTargetBuffer())->GetResource();
@@ -986,12 +990,10 @@ namespace UnlimRealms
 		d3dSystem.Render();
 
 		// present
-
 		if (FAILED(this->dxgiSwapChain->Present(1, 0)))
 			return ResultError(Failure, "GfxSwapChainD3D12::Present: failed");
 
 		// move to next frame
-
 		this->backBufferIndex = (ur_uint)this->dxgiSwapChain->GetCurrentBackBufferIndex();
 		d3dSystem.SetFrame(this->backBufferIndex);
 
@@ -1055,6 +1057,9 @@ namespace UnlimRealms
 
 	Result GfxBufferD3D12::OnInitialize(const GfxResourceData *data)
 	{
+		this->resource.Initialize(ur_null);
+		this->uploadResource.reset(ur_null);
+
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
 		if (ur_null == d3dDevice)
@@ -1103,17 +1108,28 @@ namespace UnlimRealms
 			}
 			else
 			{
-				// create temporary resource in Upload heap & schedule a copy
-				// todo
+				// create upload resource
+				shared_ref<ID3D12Resource> d3dUploadResource;
+				d3dHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+				D3D12_RESOURCE_STATES d3dUploadResState = D3D12_RESOURCE_STATE_GENERIC_READ;
+				hr = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResDesc, d3dUploadResState, ur_null,
+					__uuidof(ID3D12Resource), d3dUploadResource);
+				if (FAILED(hr))
+					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to create upload resource");
+				this->uploadResource.reset(new GfxResourceD3D12(this->GetGfxSystem()));
+				this->uploadResource->Initialize(d3dUploadResource, d3dUploadResState);
 
-				// do transition into copy dest
-				//m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_texture.Get(), d3dResStates, D3D12_RESOURCE_STATE_COPY_DEST));
+				D3D12_SUBRESOURCE_DATA d3dSubResData = {};
+				d3dSubResData.pData = data->Ptr;
+				d3dSubResData.RowPitch = data->RowPitch;
+				d3dSubResData.SlicePitch = 0;
 
-				/*GfxBufferDesc uploadBufferDesc = this->GetDesc();
-				uploadBufferDesc.Usage = GfxUsage::Dynamic;
-				std::unique_ptr<GfxBuffer> uploadBuffer;
-				this->GetGfxSystem().CreateBuffer(uploadBuffer);
-				uploadBuffer->Initialize(uploadBufferDesc, data);*/
+				// schedule a copy to destination resource
+				d3dSystem.GetResourceContext()->Begin();
+				d3dSystem.GetResourceContext()->ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
+				//UpdateSubresources(cmdList, this->resource.GetD3DResource(), d3dUploadResource, 0, 0, 1, d3dSubResData);
+				d3dSystem.GetResourceContext()->ResourceTransition(&this->resource, d3dResStates);
+				d3dSystem.GetResourceContext()->End();
 			}
 		}
 
