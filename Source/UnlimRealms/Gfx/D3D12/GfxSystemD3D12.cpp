@@ -654,6 +654,19 @@ namespace UnlimRealms
 		return NotImplemented;
 	}
 
+	Result GfxContextD3D12::UpdateResource(GfxResourceD3D12* dstResource, GfxResourceD3D12* srcResource)
+	{
+		if (ur_null == this->d3dCommandList.get())
+			return Result(NotInitialized);
+
+		if (ur_null == dstResource || ur_null == srcResource)
+			return Result(InvalidArgs);
+
+		this->d3dCommandList->CopyResource(dstResource->GetD3DResource(), srcResource->GetD3DResource());
+		
+		return Result(Success);
+	}
+
 	Result GfxContextD3D12::ResourceTransition(GfxResourceD3D12 *resource, D3D12_RESOURCE_STATES newState)
 	{
 		if (ur_null == resource || ur_null == resource->GetD3DResource())
@@ -1089,26 +1102,20 @@ namespace UnlimRealms
 
 		if (data != ur_null)
 		{
+			D3D12_SUBRESOURCE_DATA d3dSubresData = GfxResourceDataToD3D12(*data);
+
 			if (D3D12_HEAP_TYPE_UPLOAD == d3dHeapProperties.Type)
 			{
 				// if current resource is in Upload heap - fill it with initial data
-				
-				D3D12_RANGE d3dReadRange = {};
-				d3dReadRange.Begin = 0;
-				d3dReadRange.End = 0;
 
-				ur_byte* resBuffer;
-				hr = this->resource.GetD3DResource()->Map(0, &d3dReadRange, reinterpret_cast<void**>(&resBuffer));
+				hr = FillUploadResource(this->resource.GetD3DResource(), 0, 1, &d3dSubresData);
 				if (FAILED(hr))
-					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to Map D3D resource");
-
-				memcpy(resBuffer, data->Ptr, std::min(data->RowPitch, this->GetDesc().Size));
-
-				this->resource.GetD3DResource()->Unmap(0, ur_null);
+					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to fill upload resource");
 			}
 			else
 			{
-				// create upload resource
+				// create & fill upload resource
+
 				shared_ref<ID3D12Resource> d3dUploadResource;
 				d3dHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
 				D3D12_RESOURCE_STATES d3dUploadResState = D3D12_RESOURCE_STATE_GENERIC_READ;
@@ -1119,15 +1126,15 @@ namespace UnlimRealms
 				this->uploadResource.reset(new GfxResourceD3D12(this->GetGfxSystem()));
 				this->uploadResource->Initialize(d3dUploadResource, d3dUploadResState);
 
-				D3D12_SUBRESOURCE_DATA d3dSubResData = {};
-				d3dSubResData.pData = data->Ptr;
-				d3dSubResData.RowPitch = data->RowPitch;
-				d3dSubResData.SlicePitch = 0;
+				hr = FillUploadResource(this->uploadResource->GetD3DResource(), 0, 1, &d3dSubresData);
+				if (FAILED(hr))
+					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to fill upload resource");
 
 				// schedule a copy to destination resource
+
 				d3dSystem.GetResourceContext()->Begin();
 				d3dSystem.GetResourceContext()->ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
-				//UpdateSubresources(cmdList, this->resource.GetD3DResource(), d3dUploadResource, 0, 0, 1, d3dSubResData);
+				d3dSystem.GetResourceContext()->UpdateResource(&this->resource, this->uploadResource.get());
 				d3dSystem.GetResourceContext()->ResourceTransition(&this->resource, d3dResStates);
 				d3dSystem.GetResourceContext()->End();
 			}
@@ -1308,6 +1315,105 @@ namespace UnlimRealms
 		else if (gfxBindFlags & ur_uint(GfxBindFlag::StreamOutput))
 			d3dStates = D3D12_RESOURCE_STATE_STREAM_OUT;
 		return d3dStates;
+	}
+
+	D3D12_SUBRESOURCE_DATA GfxResourceDataToD3D12(const GfxResourceData& gfxData)
+	{
+		D3D12_SUBRESOURCE_DATA d3dSubResData = {};
+		d3dSubResData.pData = gfxData.Ptr;
+		d3dSubResData.RowPitch = gfxData.RowPitch;
+		d3dSubResData.SlicePitch = gfxData.SlicePitch;
+		return d3dSubResData;
+	}
+
+	HRESULT FillUploadResource(ID3D12Resource *uploadResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData)
+	{
+		if (ur_null == uploadResource || ur_null == srcData)
+			return E_INVALIDARG;
+
+		shared_ref<ID3D12Device> d3dDevice;
+		uploadResource->GetDevice(__uuidof(ID3D12Device), d3dDevice);
+
+		// fill descriptive structures
+
+		D3D12_RESOURCE_DESC resourceDesc = uploadResource->GetDesc();
+		ur_size descBufferSize = static_cast<ur_size>(sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) + sizeof(UINT) + sizeof(UINT64)) * numSubresources;
+		std::vector<ur_byte> descBuffer(descBufferSize);
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* pLayouts = reinterpret_cast<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(descBuffer.data());
+		UINT64* pRowSizesInBytes = reinterpret_cast<UINT64*>(pLayouts + numSubresources);
+		UINT* pNumRows = reinterpret_cast<UINT*>(pRowSizesInBytes + numSubresources);
+		const UINT64 baseOffset = 0;
+		UINT64 requiredSize = 0;
+		d3dDevice->GetCopyableFootprints(&resourceDesc, firstSubresource, numSubresources, baseOffset, pLayouts, pNumRows, pRowSizesInBytes, &requiredSize);
+
+		// do copy
+
+		ur_byte* pData;
+		HRESULT hr = uploadResource->Map(0, NULL, reinterpret_cast<void**>(&pData));
+		if (FAILED(hr))
+			return hr;
+
+		for (UINT i = 0; i < numSubresources; ++i)
+		{
+			D3D12_MEMCPY_DEST DestData = { pData + pLayouts[i].Offset, pLayouts[i].Footprint.RowPitch, pLayouts[i].Footprint.RowPitch * pNumRows[i] };
+			MemcpySubresource(&DestData, &srcData[i], (SIZE_T)pRowSizesInBytes[i], pNumRows[i], pLayouts[i].Footprint.Depth);
+		}
+		uploadResource->Unmap(0, NULL);
+
+		return S_OK;
+	}
+
+	HRESULT UpdateSubresources(ID3D12GraphicsCommandList* commandList, ID3D12Resource* dstResource, ID3D12Resource* uploadResource,
+		ur_uint dstSubresource, ur_uint srcSubresource, ur_uint numSubresources)
+	{
+		if (ur_null == commandList || ur_null == dstResource || ur_null == uploadResource)
+			return E_INVALIDARG;
+
+		shared_ref<ID3D12Device> d3dDevice;
+		commandList->GetDevice(__uuidof(ID3D12Device), d3dDevice);
+
+		// fill descriptive structures
+
+		D3D12_RESOURCE_DESC dstDesc = dstResource->GetDesc();
+		ur_size dstMemDescSize = static_cast<ur_size>(sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) + sizeof(UINT) + sizeof(UINT64)) * numSubresources;
+		std::vector<ur_byte> dstMemDescBuffer(dstMemDescSize);
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* dstLayouts = reinterpret_cast<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(dstMemDescBuffer.data());
+		UINT64* dstRowSizesInBytes = reinterpret_cast<UINT64*>(dstLayouts + numSubresources);
+		UINT* dstNumRows = reinterpret_cast<UINT*>(dstRowSizesInBytes + numSubresources);
+		const UINT64 dstBaseOffset = 0;
+		UINT64 dstRequiredSize = 0;
+		d3dDevice->GetCopyableFootprints(&dstDesc, dstSubresource, numSubresources, dstBaseOffset, dstLayouts, dstNumRows, dstRowSizesInBytes, &dstRequiredSize);
+
+		D3D12_RESOURCE_DESC srcDesc = uploadResource->GetDesc();
+		ur_size srcMemDescSize = dstMemDescSize;
+		std::vector<ur_byte> srcMemDescBuffer(srcMemDescSize);
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* srcLayouts = reinterpret_cast<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(srcMemDescBuffer.data());
+		UINT64* srcRowSizesInBytes = reinterpret_cast<UINT64*>(srcLayouts + numSubresources);
+		UINT* srcNumRows = reinterpret_cast<UINT*>(srcRowSizesInBytes + numSubresources);
+		const UINT64 srcBaseOffset = 0;
+		UINT64 srcRequiredSize = 0;
+		d3dDevice->GetCopyableFootprints(&srcDesc, srcSubresource, numSubresources, srcBaseOffset, srcLayouts, srcNumRows, srcRowSizesInBytes, &srcRequiredSize);
+
+		if (srcRequiredSize != dstRequiredSize)
+			return E_FAIL;
+
+		// schedule a copy
+
+		if (dstDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+		{
+			commandList->CopyBufferRegion(dstResource, 0, uploadResource, dstLayouts[0].Offset, dstLayouts[0].Footprint.Width);
+		}
+		else
+		{
+			for (UINT i = 0; i < numSubresources; ++i)
+			{
+				CD3DX12_TEXTURE_COPY_LOCATION dstLocation(dstResource, i + dstSubresource);
+				CD3DX12_TEXTURE_COPY_LOCATION srcLocation(uploadResource, srcLayouts[i]);
+				commandList->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
+			}
+		}
+
+		return S_OK;
 	}
 
 } // end namespace UnlimRealms

@@ -63,7 +63,7 @@ int D3D12SandboxApp::Run()
 
 		GfxBufferDesc bufferDesc;
 		bufferDesc.Size = bufferDataDesc.RowPitch;
-		bufferDesc.Usage = GfxUsage::Dynamic;
+		bufferDesc.Usage = GfxUsage::Default;
 		bufferDesc.BindFlags = ur_uint(GfxBindFlag::ShaderResource);
 		bufferDesc.AccessFlags = 0;
 		bufferDesc.StructureStride = 0;

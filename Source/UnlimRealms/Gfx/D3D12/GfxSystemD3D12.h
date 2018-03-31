@@ -243,12 +243,11 @@ namespace UnlimRealms
 
 		virtual Result UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, UpdateBufferCallback callback);
 
-		// TODO: must be a common GfxContext function
-		//virtual Result CopySubresources(GfxResourceD3D12* dstResource, GfxResourceD3D12* srcResource);
-
 		
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// D3D12 specific functions
+
+		Result UpdateResource(GfxResourceD3D12* dstResource, GfxResourceD3D12* srcResource);
 
 		Result ResourceTransition(GfxResourceD3D12 *resource, D3D12_RESOURCE_STATES newState);
 
@@ -506,6 +505,13 @@ namespace UnlimRealms
 	extern UR_DECL D3D12_HEAP_TYPE GfxUsageToD3D12HeapType(const GfxUsage gfxUsage);
 
 	extern UR_DECL D3D12_RESOURCE_STATES GfxBindFlagsAndUsageToD3D12ResState(ur_uint gfxBindFlags, const GfxUsage gfxUsage);
+
+	extern UR_DECL D3D12_SUBRESOURCE_DATA GfxResourceDataToD3D12(const GfxResourceData& gfxData);
+
+	extern UR_DECL HRESULT FillUploadResource(ID3D12Resource *uploadResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData);
+
+	extern UR_DECL HRESULT UpdateSubresources(ID3D12GraphicsCommandList* commandList, ID3D12Resource* dstResource, ID3D12Resource* uploadResource,
+		ur_uint dstSubresource, ur_uint srcSubresource, ur_uint numSubresources);
 
 } // end namespace UnlimRealms
 

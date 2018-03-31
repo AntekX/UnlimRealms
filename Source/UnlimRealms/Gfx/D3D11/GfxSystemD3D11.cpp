@@ -1097,6 +1097,7 @@ namespace UnlimRealms
 		case GfxUsage::Dynamic: return D3D11_USAGE_DYNAMIC;
 		case GfxUsage::Readback: return D3D11_USAGE_STAGING;
 		}
+		return D3D11_USAGE(-1);
 	}
 
 	D3D11_BIND_FLAG GfxBindFlagToD3D11(GfxBindFlag flag)

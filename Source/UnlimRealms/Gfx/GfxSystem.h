@@ -388,6 +388,8 @@ namespace UnlimRealms
 		GfxPixelShader *PixelShader;
 		ur_uint StencilRef;
 
+		// todo: adapt do d3d12 PSO
+
 	public:
 
 		GfxPipelineState(GfxSystem &gfxSystem);
