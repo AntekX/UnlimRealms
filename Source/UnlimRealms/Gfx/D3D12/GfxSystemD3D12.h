@@ -217,7 +217,7 @@ namespace UnlimRealms
 			bool clearDepth, const ur_float &depth,
 			bool clearStencil, const ur_uint &stencil);
 
-		virtual Result SetPipelineState(GfxPipelineState *state);
+		virtual Result SetPipelineStateObject(GfxPipelineStateObject *state);
 
 		virtual Result SetTexture(GfxTexture *texture, ur_uint slot);
 
@@ -415,6 +415,8 @@ namespace UnlimRealms
 
 		inline ID3D12PipelineState* GetD3DPipelineState() const;
 
+		inline D3D12_PRIMITIVE_TOPOLOGY GetD3DPrimitiveTopology() const;
+
 	protected:
 
 		virtual Result OnInitialize(const StateFlags& changedStates);
@@ -423,6 +425,8 @@ namespace UnlimRealms
 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC d3dPipelineDesc;
 		shared_ref<ID3D12PipelineState> d3dPipelineState;
+		D3D12_PRIMITIVE_TOPOLOGY d3dPrimitiveTopology;
+		std::vector<D3D12_INPUT_ELEMENT_DESC> d3dInputLayoutElements;
 	};
 
 
@@ -441,6 +445,34 @@ namespace UnlimRealms
 	extern UR_DECL D3D12_RESOURCE_STATES GfxBindFlagsAndUsageToD3D12ResState(ur_uint gfxBindFlags, const GfxUsage gfxUsage);
 
 	extern UR_DECL D3D12_SUBRESOURCE_DATA GfxResourceDataToD3D12(const GfxResourceData& gfxData);
+
+	extern UR_DECL D3D12_RENDER_TARGET_BLEND_DESC GfxBlendStateToD3D12(const GfxBlendState& state);
+
+	extern UR_DECL D3D12_BLEND GfxBlendFactorToD3D12(GfxBlendFactor blendFactor);
+
+	extern UR_DECL D3D12_BLEND_OP GfxBlendOpToD3D12(GfxBlendOp blendOp);
+
+	extern UR_DECL D3D12_RASTERIZER_DESC GfxRasterizerStateToD3D12(const GfxRasterizerState& state);
+
+	extern UR_DECL D3D12_FILL_MODE GfxFillModeToD3D12(GfxFillMode mode);
+
+	extern UR_DECL D3D12_CULL_MODE GfxCullModeToD3D12(GfxCullMode mode);
+
+	extern UR_DECL D3D12_DEPTH_STENCIL_DESC GfxDepthStencilStateToD3D12(const GfxDepthStencilState &state);
+
+	extern UR_DECL D3D12_COMPARISON_FUNC GfxCmpFuncToD3D12(GfxCmpFunc func);
+
+	extern UR_DECL D3D12_STENCIL_OP GfxStencilOpToD3D12(GfxStencilOp stencilOp);
+
+	extern UR_DECL D3D12_DEPTH_STENCILOP_DESC GfxDepthStencilOpDescToD3D12(const GfxDepthStencilOpDesc& desc);
+
+	extern UR_DECL LPCSTR GfxSemanticToD3D12(GfxSemantic semantic);
+
+	extern UR_DECL D3D12_INPUT_ELEMENT_DESC GfxInputElementToD3D12(const GfxInputElement &element);
+
+	extern UR_DECL D3D12_PRIMITIVE_TOPOLOGY GfxPrimitiveTopologyToD3D12(GfxPrimitiveTopology topology);
+
+	extern UR_DECL D3D12_PRIMITIVE_TOPOLOGY_TYPE GfxPrimitiveTopologyToD3D12Type(GfxPrimitiveTopology topology);
 
 	extern UR_DECL HRESULT FillUploadResource(ID3D12Resource *uploadResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData);
 

@@ -586,9 +586,19 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GfxContextD3D12::SetPipelineState(GfxPipelineState *state)
+	Result GfxContextD3D12::SetPipelineStateObject(GfxPipelineStateObject *state)
 	{
-		return NotImplemented;
+		if (ur_null == state)
+			return Result(InvalidArgs);
+
+		if (this->d3dCommandList.empty())
+			return ResultError(Failure, "GfxContextD3D12::SetPipelineStateObject: failed, d3d command list is not initialized");
+
+		GfxPipelineStateObjectD3D12 *pipelineStateD3D12 = static_cast<GfxPipelineStateObjectD3D12*>(state);
+		this->d3dCommandList->IASetPrimitiveTopology(pipelineStateD3D12->GetD3DPrimitiveTopology());
+		this->d3dCommandList->SetPipelineState(pipelineStateD3D12->GetD3DPipelineState());
+
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::SetTexture(GfxTexture *texture, ur_uint slot)
@@ -1134,7 +1144,17 @@ namespace UnlimRealms
 		GfxPipelineStateObject(gfxSystem)
 	{
 		this->d3dPipelineDesc = {};
-		// todo: init to default
+		this->d3dPipelineDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		this->d3dPipelineDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		this->d3dPipelineDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+		this->d3dPipelineDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		this->d3dPipelineDesc.NumRenderTargets = 1;
+		this->d3dPipelineDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		this->d3dPipelineDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+		this->d3dPipelineDesc.SampleDesc.Count = 1;
+		this->d3dPipelineDesc.SampleDesc.Quality = 0;
+
+		this->d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	}
 
 	GfxPipelineStateObjectD3D12::~GfxPipelineStateObjectD3D12()
@@ -1144,7 +1164,8 @@ namespace UnlimRealms
 
 	Result GfxPipelineStateObjectD3D12::OnInitialize(const StateFlags& changedStates)
 	{
-		if (changedStates == 0)
+		StateFlags updateFlags = (this->d3dPipelineState.empty() ? ~StateFlags(0) : changedStates);
+		if (updateFlags == 0)
 			return Result(Success);
 
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
@@ -1152,24 +1173,80 @@ namespace UnlimRealms
 		if (ur_null == d3dDevice)
 			return ResultError(NotInitialized, "GfxPipelineStateObjectD3D12::OnInitialize: failed, device unavailable");
 
-		if (this->GetVertexShader() != ur_null)
+		if (VertexShaderFlag & updateFlags)
 		{
-			d3dPipelineDesc.VS.pShaderBytecode = (void*)this->GetVertexShader()->GetByteCode();
-			d3dPipelineDesc.VS.BytecodeLength = (SIZE_T)this->GetVertexShader()->GetSizeInBytes();
+			if (this->GetVertexShader() != ur_null)
+			{
+				this->d3dPipelineDesc.VS.pShaderBytecode = (void*)this->GetVertexShader()->GetByteCode();
+				this->d3dPipelineDesc.VS.BytecodeLength = (SIZE_T)this->GetVertexShader()->GetSizeInBytes();
+			}
+			else
+			{
+				this->d3dPipelineDesc.VS.pShaderBytecode = ur_null;
+				this->d3dPipelineDesc.VS.BytecodeLength = 0;
+			}
 		}
-		if (this->GetPixelShader() != ur_null)
+		if (PixelShaderFlag & updateFlags)
 		{
-			d3dPipelineDesc.PS.pShaderBytecode = (void*)this->GetPixelShader()->GetByteCode();
-			d3dPipelineDesc.PS.BytecodeLength = (SIZE_T)this->GetPixelShader()->GetSizeInBytes();
+			if (this->GetPixelShader() != ur_null)
+			{
+				this->d3dPipelineDesc.PS.pShaderBytecode = (void*)this->GetPixelShader()->GetByteCode();
+				this->d3dPipelineDesc.PS.BytecodeLength = (SIZE_T)this->GetPixelShader()->GetSizeInBytes();
+			}
+			else
+			{
+				this->d3dPipelineDesc.PS.pShaderBytecode = ur_null;
+				this->d3dPipelineDesc.PS.BytecodeLength = 0;
+			}
 		}
-		/*D3D12_BLEND_DESC BlendState;
-		D3D12_RASTERIZER_DESC RasterizerState;
-		D3D12_DEPTH_STENCIL_DESC DepthStencilState;
-		D3D12_INPUT_LAYOUT_DESC InputLayout;
-		D3D12_PRIMITIVE_TOPOLOGY_TYPE PrimitiveTopologyType;
-		UINT NumRenderTargets;
-		DXGI_FORMAT RTVFormats[8];
-		DXGI_FORMAT DSVFormat;*/
+		if (BlendStateFlag & updateFlags)
+		{
+			for (ur_uint irt = 0; irt < MaxRenderTargets; ++irt)
+			{
+				this->d3dPipelineDesc.BlendState.RenderTarget[irt] = GfxBlendStateToD3D12(this->GetBlendState(irt));
+			}
+		}
+		if (RasterizerStateFlag & updateFlags)
+		{
+			this->d3dPipelineDesc.RasterizerState = GfxRasterizerStateToD3D12(this->GetRasterizerState());
+		}
+		if (DepthStencilStateFlag & updateFlags)
+		{
+			this->d3dPipelineDesc.DepthStencilState = GfxDepthStencilStateToD3D12(this->GetDepthStencilState());
+		}
+		if (InputLayoutFlag & updateFlags)
+		{
+			if (this->GetInputLayout() != ur_null)
+			{
+				this->d3dInputLayoutElements.resize(this->GetInputLayout()->GetElements().size());
+				for (ur_size i = 0; i < this->d3dInputLayoutElements.size(); ++i)
+				{
+					this->d3dInputLayoutElements[i] = GfxInputElementToD3D12(this->GetInputLayout()->GetElements()[i]);
+				}
+				this->d3dPipelineDesc.InputLayout.pInputElementDescs = this->d3dInputLayoutElements.data();
+				this->d3dPipelineDesc.InputLayout.NumElements = (UINT)this->d3dInputLayoutElements.size();
+			}
+			else
+			{
+				this->d3dInputLayoutElements.clear();
+				this->d3dPipelineDesc.InputLayout.pInputElementDescs = ur_null;
+				this->d3dPipelineDesc.InputLayout.NumElements = 0;
+			}
+		}
+		if (PrimitiveTopologyFlag & updateFlags)
+		{
+			this->d3dPipelineDesc.PrimitiveTopologyType = GfxPrimitiveTopologyToD3D12Type(this->GetPrimitiveTopology());
+			this->d3dPrimitiveTopology = GfxPrimitiveTopologyToD3D12(this->GetPrimitiveTopology());
+		}
+		if (RenderTargetFormatFlag & updateFlags)
+		{
+			this->d3dPipelineDesc.NumRenderTargets = (UINT)this->GetRenderTargetsNumber();
+			for (ur_uint i = 0; i < this->GetRenderTargetsNumber(); ++i)
+			{
+				this->d3dPipelineDesc.RTVFormats[i] = GfxFormatToDXGI(this->GetRenderTargetFormat(i), GfxFormatView::Unorm);
+			}
+			this->d3dPipelineDesc.DSVFormat = GfxFormatToDXGI(this->GetDepthStencilFormat(), GfxFormatView::Typeless);;
+		}
 
 		this->d3dPipelineState.reset(ur_null);
 		HRESULT hr = d3dDevice->CreateGraphicsPipelineState(&d3dPipelineDesc, __uuidof(ID3D12PipelineState), this->d3dPipelineState);
@@ -1284,6 +1361,203 @@ namespace UnlimRealms
 		d3dSubResData.RowPitch = gfxData.RowPitch;
 		d3dSubResData.SlicePitch = gfxData.SlicePitch;
 		return d3dSubResData;
+	}
+
+	D3D12_RENDER_TARGET_BLEND_DESC GfxBlendStateToD3D12(const GfxBlendState &state)
+	{
+		D3D12_RENDER_TARGET_BLEND_DESC d3dDesc = {};
+		d3dDesc.BlendEnable = (BOOL)state.BlendEnable;
+		d3dDesc.SrcBlend = GfxBlendFactorToD3D12(state.SrcBlend);
+		d3dDesc.DestBlend = GfxBlendFactorToD3D12(state.DstBlend);
+		d3dDesc.SrcBlendAlpha = GfxBlendFactorToD3D12(state.SrcBlendAlpha);
+		d3dDesc.DestBlendAlpha = GfxBlendFactorToD3D12(state.DstBlendAlpha);
+		d3dDesc.BlendOp = GfxBlendOpToD3D12(state.BlendOp);
+		d3dDesc.BlendOpAlpha = GfxBlendOpToD3D12(state.BlendOpAlpha);
+		d3dDesc.RenderTargetWriteMask = (UINT8)state.RenderTargetWriteMask;
+		d3dDesc.LogicOpEnable = FALSE;
+		d3dDesc.LogicOp = D3D12_LOGIC_OP(0);
+		return d3dDesc;
+	}
+
+	D3D12_BLEND GfxBlendFactorToD3D12(GfxBlendFactor blendFactor)
+	{
+		switch (blendFactor)
+		{
+		case GfxBlendFactor::Zero: return D3D12_BLEND_ZERO;
+		case GfxBlendFactor::One: return D3D12_BLEND_ONE;
+		case GfxBlendFactor::SrcColor: return D3D12_BLEND_SRC_COLOR;
+		case GfxBlendFactor::InvSrcColor: return D3D12_BLEND_INV_SRC_COLOR;
+		case GfxBlendFactor::SrcAlpha: return D3D12_BLEND_SRC_ALPHA;
+		case GfxBlendFactor::InvSrcAlpha: return D3D12_BLEND_INV_SRC_ALPHA;
+		case GfxBlendFactor::DstAlpha: return D3D12_BLEND_DEST_ALPHA;
+		case GfxBlendFactor::InvDstAlpha: return D3D12_BLEND_INV_DEST_ALPHA;
+		case GfxBlendFactor::DstColor: return D3D12_BLEND_DEST_COLOR;
+		case GfxBlendFactor::InvDstColor: return D3D12_BLEND_INV_DEST_COLOR;
+		}
+		return D3D12_BLEND(0);
+	}
+
+	D3D12_BLEND_OP GfxBlendOpToD3D12(GfxBlendOp blendOp)
+	{
+		switch (blendOp)
+		{
+		case GfxBlendOp::Add: return D3D12_BLEND_OP_ADD;
+		case GfxBlendOp::Subtract: return D3D12_BLEND_OP_SUBTRACT;
+		case GfxBlendOp::RevSubtract: return D3D12_BLEND_OP_REV_SUBTRACT;
+		case GfxBlendOp::Min: return D3D12_BLEND_OP_MIN;
+		case GfxBlendOp::Max: return D3D12_BLEND_OP_MAX;
+		}
+		return D3D12_BLEND_OP(0);
+	}
+
+	D3D12_RASTERIZER_DESC GfxRasterizerStateToD3D12(const GfxRasterizerState& state)
+	{
+		D3D12_RASTERIZER_DESC d3dDesc = {};
+		d3dDesc.FillMode = GfxFillModeToD3D12(state.FillMode);
+		d3dDesc.CullMode = GfxCullModeToD3D12(state.CullMode);
+		d3dDesc.DepthBias = (INT)state.DepthBias;
+		d3dDesc.DepthBiasClamp = (FLOAT)state.DepthBiasClamp;
+		d3dDesc.SlopeScaledDepthBias = (FLOAT)state.SlopeScaledDepthBias;
+		d3dDesc.DepthClipEnable = (BOOL)state.DepthClipEnable;
+		d3dDesc.MultisampleEnable = (BOOL)state.MultisampleEnable;
+		d3dDesc.AntialiasedLineEnable = FALSE;
+		d3dDesc.FrontCounterClockwise = FALSE;
+		d3dDesc.ForcedSampleCount = 0;
+		d3dDesc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+		return d3dDesc;
+	}
+
+	D3D12_FILL_MODE GfxFillModeToD3D12(GfxFillMode mode)
+	{
+		switch (mode)
+		{
+		case GfxFillMode::Wireframe: return D3D12_FILL_MODE_WIREFRAME;
+		case GfxFillMode::Solid: return D3D12_FILL_MODE_SOLID;
+		}
+		return D3D12_FILL_MODE(0);
+	}
+
+	D3D12_CULL_MODE GfxCullModeToD3D12(GfxCullMode mode)
+	{
+		switch (mode)
+		{
+		case GfxCullMode::None: return D3D12_CULL_MODE_NONE;
+		case GfxCullMode::CW: return D3D12_CULL_MODE_FRONT;
+		case GfxCullMode::CCW: return D3D12_CULL_MODE_BACK;
+		}
+		return D3D12_CULL_MODE(0);
+	}
+
+	D3D12_DEPTH_STENCIL_DESC GfxDepthStencilStateToD3D12(const GfxDepthStencilState &state)
+	{
+		D3D12_DEPTH_STENCIL_DESC d3dDesc = {};
+		d3dDesc.DepthEnable = (BOOL)state.DepthEnable;
+		d3dDesc.DepthWriteMask = (state.DepthWriteEnable ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO);
+		d3dDesc.DepthFunc = GfxCmpFuncToD3D12(state.DepthFunc);
+		d3dDesc.StencilEnable = (BOOL)state.StencilEnable;
+		d3dDesc.StencilReadMask = (UINT8)state.StencilReadMask;
+		d3dDesc.StencilWriteMask = (UINT8)state.StencilWriteMask;
+		d3dDesc.FrontFace = GfxDepthStencilOpDescToD3D12(state.FrontFace);
+		d3dDesc.BackFace = GfxDepthStencilOpDescToD3D12(state.BackFace);
+		return d3dDesc;
+	}
+
+	D3D12_COMPARISON_FUNC GfxCmpFuncToD3D12(GfxCmpFunc func)
+	{
+		switch (func)
+		{
+		case GfxCmpFunc::Never: return D3D12_COMPARISON_FUNC_NEVER;
+		case GfxCmpFunc::Less: return D3D12_COMPARISON_FUNC_LESS;
+		case GfxCmpFunc::Equal: return D3D12_COMPARISON_FUNC_EQUAL;
+		case GfxCmpFunc::LessEqual: return D3D12_COMPARISON_FUNC_LESS_EQUAL;
+		case GfxCmpFunc::Greater: return D3D12_COMPARISON_FUNC_GREATER;
+		case GfxCmpFunc::NotEqual: return D3D12_COMPARISON_FUNC_NOT_EQUAL;
+		case GfxCmpFunc::GreaterEqual: return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+		case GfxCmpFunc::Always: return D3D12_COMPARISON_FUNC_ALWAYS;
+		}
+		return D3D12_COMPARISON_FUNC(0);
+	}
+
+	D3D12_STENCIL_OP GfxStencilOpToD3D12(GfxStencilOp stencilOp)
+	{
+		switch (stencilOp)
+		{
+		case GfxStencilOp::Keep: return D3D12_STENCIL_OP_KEEP;
+		case GfxStencilOp::Zero: return D3D12_STENCIL_OP_ZERO;
+		case GfxStencilOp::Replace: return D3D12_STENCIL_OP_REPLACE;
+		case GfxStencilOp::IncrSat: return D3D12_STENCIL_OP_INCR_SAT;
+		case GfxStencilOp::DecrSat: return D3D12_STENCIL_OP_DECR_SAT;
+		case GfxStencilOp::Invert: return D3D12_STENCIL_OP_INVERT;
+		case GfxStencilOp::Incr: return D3D12_STENCIL_OP_INCR;
+		case GfxStencilOp::Decr: return D3D12_STENCIL_OP_DECR;
+		}
+		return D3D12_STENCIL_OP(0);
+	}
+
+	D3D12_DEPTH_STENCILOP_DESC GfxDepthStencilOpDescToD3D12(const GfxDepthStencilOpDesc& desc)
+	{
+		D3D12_DEPTH_STENCILOP_DESC d3dDesc = {};
+		d3dDesc.StencilFailOp = GfxStencilOpToD3D12(desc.StencilFailOp);
+		d3dDesc.StencilDepthFailOp = GfxStencilOpToD3D12(desc.StencilDepthFailOp);
+		d3dDesc.StencilPassOp = GfxStencilOpToD3D12(desc.StencilPassOp);
+		d3dDesc.StencilFunc = GfxCmpFuncToD3D12(desc.StencilFunc);
+		return d3dDesc;
+	}
+
+	LPCSTR GfxSemanticToD3D12(GfxSemantic semantic)
+	{
+		switch (semantic)
+		{
+		case GfxSemantic::Position: return "POSITION";
+		case GfxSemantic::TexCoord: return "TEXCOORD";
+		case GfxSemantic::Color: return "COLOR";
+		case GfxSemantic::Tangtent: return "TANGENT";
+		case GfxSemantic::Normal: return "NORMAL";
+		case GfxSemantic::Binormal: return "BINORMAL";
+		}
+		return "UNKNOWN";
+	}
+
+	D3D12_INPUT_ELEMENT_DESC GfxInputElementToD3D12(const GfxInputElement &element)
+	{
+		D3D12_INPUT_ELEMENT_DESC d3dDesc = {};
+		d3dDesc.SemanticName = GfxSemanticToD3D12(element.Semantic);
+		d3dDesc.SemanticIndex = element.SemanticIdx;
+		d3dDesc.Format = GfxFormatToDXGI(element.Format, element.FormatView);
+		d3dDesc.InputSlot = element.SlotIdx;
+		d3dDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+		d3dDesc.InputSlotClass = (element.InstanceStepRate > 0 ? D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA : D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA);
+		d3dDesc.InstanceDataStepRate = element.InstanceStepRate;
+		return d3dDesc;
+	}
+
+	D3D12_PRIMITIVE_TOPOLOGY GfxPrimitiveTopologyToD3D12(GfxPrimitiveTopology topology)
+	{
+		switch (topology)
+		{
+		case GfxPrimitiveTopology::PointList: return D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
+		case GfxPrimitiveTopology::LineList: return D3D_PRIMITIVE_TOPOLOGY_LINELIST;
+		case GfxPrimitiveTopology::LineStrip: return D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
+		case GfxPrimitiveTopology::TriangleList: return D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+		case GfxPrimitiveTopology::TriangleStrip: return D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+		}
+		return D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+	}
+
+	D3D12_PRIMITIVE_TOPOLOGY_TYPE GfxPrimitiveTopologyToD3D12Type(GfxPrimitiveTopology topology)
+	{
+		switch (topology)
+		{
+		case GfxPrimitiveTopology::PointList:
+			return D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
+		case GfxPrimitiveTopology::LineList:
+		case GfxPrimitiveTopology::LineStrip:
+			return D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+		case GfxPrimitiveTopology::TriangleList:
+		case GfxPrimitiveTopology::TriangleStrip:
+			return D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		}
+		return D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED;
 	}
 
 	HRESULT FillUploadResource(ID3D12Resource *uploadResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData)

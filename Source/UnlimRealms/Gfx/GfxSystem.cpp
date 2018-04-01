@@ -183,6 +183,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GfxContext::SetPipelineStateObject(GfxPipelineStateObject *state)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GfxContext::SetTexture(GfxTexture *texture, ur_uint slot)
 	{
 		return Result(NotImplemented);
@@ -628,6 +633,12 @@ namespace UnlimRealms
 		this->depthStencilState = GfxDepthStencilState::Default;
 		this->stencilRef = 0;
 		this->primitiveTopology = GfxPrimitiveTopology::TriangleList;
+		this->numRenderTargets = 1;
+		for (auto& rtFormat : this->renderTargetFormats)
+		{
+			rtFormat = GfxFormat::R8G8B8A8;
+		}
+		this->depthStencilFormat = GfxFormat::R24G8;
 		this->inputLayout = ur_null;
 		this->vertexShader = ur_null;
 		this->pixelShader = ur_null;
@@ -677,6 +688,18 @@ namespace UnlimRealms
 	{
 		this->primitiveTopology = primitiveTopology;
 		this->changedStates |= PrimitiveTopologyFlag;
+		return Result(Success);
+	}
+
+	Result GfxPipelineStateObject::SetRenderTargetFormat(ur_uint numRenderTargets, GfxFormat* RTFormats, GfxFormat DSFormat)
+	{
+		this->numRenderTargets = numRenderTargets;
+		for (ur_uint irt = 0; irt < numRenderTargets; ++irt)
+		{
+			this->renderTargetFormats[irt] = RTFormats[irt];
+		}
+		this->depthStencilFormat = DSFormat;
+		this->changedStates |= RenderTargetFormatFlag;
 		return Result(Success);
 	}
 

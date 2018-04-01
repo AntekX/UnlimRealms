@@ -95,6 +95,21 @@ namespace UnlimRealms
 		return this->primitiveTopology;
 	}
 
+	inline const ur_uint GfxPipelineStateObject::GetRenderTargetsNumber() const
+	{
+		return this->numRenderTargets;
+	}
+
+	inline const GfxFormat GfxPipelineStateObject::GetRenderTargetFormat(ur_uint rtIndex) const
+	{
+		return this->renderTargetFormats[rtIndex];
+	}
+
+	inline const GfxFormat GfxPipelineStateObject::GetDepthStencilFormat() const
+	{
+		return this->depthStencilFormat;
+	}
+
 	inline const ur_uint GfxPipelineStateObject::GetStencilRef() const
 	{
 		return this->stencilRef;

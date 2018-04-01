@@ -106,4 +106,9 @@ namespace UnlimRealms
 		return this->d3dPipelineState.get();
 	}
 
+	inline D3D12_PRIMITIVE_TOPOLOGY GfxPipelineStateObjectD3D12::GetD3DPrimitiveTopology() const
+	{
+		return this->d3dPrimitiveTopology;
+	}
+
 } // end namespace UnlimRealms

@@ -132,6 +132,8 @@ namespace UnlimRealms
 
 		virtual Result SetPipelineState(GfxPipelineState *state);
 
+		virtual Result SetPipelineStateObject(GfxPipelineStateObject *state);
+
 		virtual Result SetTexture(GfxTexture *texture, ur_uint slot);
 
 		virtual Result SetConstantBuffer(GfxBuffer *buffer, ur_uint slot);
@@ -437,6 +439,8 @@ namespace UnlimRealms
 
 		Result SetPrimitiveTopology(GfxPrimitiveTopology& primitiveTopology);
 
+		Result SetRenderTargetFormat(ur_uint numRenderTargets, GfxFormat* RTFormats, GfxFormat DSFormat);
+
 		Result SetInputLayout(GfxInputLayout* inputLayout);
 		
 		Result SetVertexShader(GfxVertexShader* vertexShader);
@@ -449,9 +453,15 @@ namespace UnlimRealms
 
 		inline const GfxDepthStencilState& GetDepthStencilState() const;
 
+		inline const ur_uint GetStencilRef() const;
+
 		inline const GfxPrimitiveTopology& GetPrimitiveTopology() const;
 
-		inline const ur_uint GetStencilRef() const;
+		inline const ur_uint GetRenderTargetsNumber() const;
+
+		inline const GfxFormat GetRenderTargetFormat(ur_uint rtIndex) const;
+
+		inline const GfxFormat GetDepthStencilFormat() const;
 
 		inline const GfxInputLayout* GetInputLayout() const;
 
@@ -468,9 +478,10 @@ namespace UnlimRealms
 			DepthStencilStateFlag	= 0x4,
 			StencilRefFlag			= 0x8,
 			PrimitiveTopologyFlag	= 0x10,
-			InputLayoutFlag			= 0x20,
-			VertexShaderFlag		= 0x40,
-			PixelShaderFlag			= 0x80
+			RenderTargetFormatFlag	= 0x20,
+			InputLayoutFlag			= 0x40,
+			VertexShaderFlag		= 0x80,
+			PixelShaderFlag			= 0x100
 		};
 		typedef ur_uint StateFlags;
 
@@ -483,6 +494,9 @@ namespace UnlimRealms
 		GfxDepthStencilState depthStencilState;
 		ur_uint stencilRef;
 		GfxPrimitiveTopology primitiveTopology;
+		ur_uint numRenderTargets;
+		GfxFormat renderTargetFormats[MaxRenderTargets];
+		GfxFormat depthStencilFormat;
 		GfxInputLayout* inputLayout;
 		GfxVertexShader* vertexShader;
 		GfxPixelShader* pixelShader;
