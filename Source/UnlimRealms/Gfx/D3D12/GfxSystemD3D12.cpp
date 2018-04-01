@@ -320,27 +320,9 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GfxSystemD3D12::CreateVertexShader(std::unique_ptr<GfxVertexShader> &gfxVertexShader)
+	Result GfxSystemD3D12::CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState)
 	{
-		gfxVertexShader.reset(new GfxVertexShaderD3D12(*this));
-		return Result(Success);
-	}
-
-	Result GfxSystemD3D12::CreatePixelShader(std::unique_ptr<GfxPixelShader> &gfxPixelShader)
-	{
-		gfxPixelShader.reset(new GfxPixelShaderD3D12(*this));
-		return Result(Success);
-	}
-
-	Result GfxSystemD3D12::CreateInputLayout(std::unique_ptr<GfxInputLayout> &gfxInputLayout)
-	{
-		gfxInputLayout.reset(new GfxInputLayoutD3D12(*this));
-		return Result(Success);
-	}
-
-	Result GfxSystemD3D12::CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState)
-	{
-		gfxPipelineState.reset(new GfxPipelineStateD3D12(*this));
+		gfxPipelineState.reset(new GfxPipelineStateObjectD3D12(*this));
 		return Result(Success);
 	}
 
@@ -1145,78 +1127,56 @@ namespace UnlimRealms
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// GfxVertexShaderD3D12
+	// GfxPipelineStateObjectD3D12
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
 
-	GfxVertexShaderD3D12::GfxVertexShaderD3D12(GfxSystem &gfxSystem) :
-		GfxVertexShader(gfxSystem)
+	GfxPipelineStateObjectD3D12::GfxPipelineStateObjectD3D12(GfxSystem &gfxSystem) :
+		GfxPipelineStateObject(gfxSystem)
 	{
+		this->d3dPipelineDesc = {};
+		// todo: init to default
 	}
 
-	GfxVertexShaderD3D12::~GfxVertexShaderD3D12()
+	GfxPipelineStateObjectD3D12::~GfxPipelineStateObjectD3D12()
 	{
+
 	}
 
-	Result GfxVertexShaderD3D12::OnInitialize()
+	Result GfxPipelineStateObjectD3D12::OnInitialize(const StateFlags& changedStates)
 	{
-		return NotImplemented;
-	}
+		if (changedStates == 0)
+			return Result(Success);
 
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
+		if (ur_null == d3dDevice)
+			return ResultError(NotInitialized, "GfxPipelineStateObjectD3D12::OnInitialize: failed, device unavailable");
 
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// GfxPixelShaderD3D12
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+		if (this->GetVertexShader() != ur_null)
+		{
+			d3dPipelineDesc.VS.pShaderBytecode = (void*)this->GetVertexShader()->GetByteCode();
+			d3dPipelineDesc.VS.BytecodeLength = (SIZE_T)this->GetVertexShader()->GetSizeInBytes();
+		}
+		if (this->GetPixelShader() != ur_null)
+		{
+			d3dPipelineDesc.PS.pShaderBytecode = (void*)this->GetPixelShader()->GetByteCode();
+			d3dPipelineDesc.PS.BytecodeLength = (SIZE_T)this->GetPixelShader()->GetSizeInBytes();
+		}
+		/*D3D12_BLEND_DESC BlendState;
+		D3D12_RASTERIZER_DESC RasterizerState;
+		D3D12_DEPTH_STENCIL_DESC DepthStencilState;
+		D3D12_INPUT_LAYOUT_DESC InputLayout;
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE PrimitiveTopologyType;
+		UINT NumRenderTargets;
+		DXGI_FORMAT RTVFormats[8];
+		DXGI_FORMAT DSVFormat;*/
 
-	GfxPixelShaderD3D12::GfxPixelShaderD3D12(GfxSystem &gfxSystem) :
-		GfxPixelShader(gfxSystem)
-	{
-	}
+		this->d3dPipelineState.reset(ur_null);
+		HRESULT hr = d3dDevice->CreateGraphicsPipelineState(&d3dPipelineDesc, __uuidof(ID3D12PipelineState), this->d3dPipelineState);
+		if (FAILED(hr))
+			return ResultError(NotInitialized, "GfxPipelineStateObjectD3D12::OnInitialize: failed to create d3d pipeline state");
 
-	GfxPixelShaderD3D12::~GfxPixelShaderD3D12()
-	{
-	}
-
-	Result GfxPixelShaderD3D12::OnInitialize()
-	{
-		return NotImplemented;
-	}
-
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// GfxInputLayoutD3D12
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
-
-	GfxInputLayoutD3D12::GfxInputLayoutD3D12(GfxSystem &gfxSystem) :
-		GfxInputLayout(gfxSystem)
-	{
-	}
-
-	GfxInputLayoutD3D12::~GfxInputLayoutD3D12()
-	{
-	}
-
-	Result GfxInputLayoutD3D12::OnInitialize(const GfxShader &shader, const GfxInputElement *elements, ur_uint count)
-	{
-		return NotImplemented;
-	}
-
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// GfxPipelineStateD3D12
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
-
-	GfxPipelineStateD3D12::GfxPipelineStateD3D12(GfxSystem &gfxSystem) :
-		GfxPipelineState(gfxSystem)
-	{
-	}
-
-	GfxPipelineStateD3D12::~GfxPipelineStateD3D12()
-	{
-	}
-
-	Result GfxPipelineStateD3D12::OnSetRenderState(const GfxRenderState &renderState)
-	{
-		return NotImplemented;
+		return Result(Success);
 	}
 
 

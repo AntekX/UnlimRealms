@@ -75,4 +75,44 @@ namespace UnlimRealms
 		return this->renderState;
 	}
 
+	inline const GfxBlendState& GfxPipelineStateObject::GetBlendState(ur_uint rtIndex) const
+	{
+		return this->blendState[rtIndex];
+	}
+
+	inline const GfxRasterizerState& GfxPipelineStateObject::GetRasterizerState() const
+	{
+		return this->rasterizerState;
+	}
+
+	inline const GfxDepthStencilState& GfxPipelineStateObject::GetDepthStencilState() const
+	{
+		return this->depthStencilState;
+	}
+
+	inline const GfxPrimitiveTopology& GfxPipelineStateObject::GetPrimitiveTopology() const
+	{
+		return this->primitiveTopology;
+	}
+
+	inline const ur_uint GfxPipelineStateObject::GetStencilRef() const
+	{
+		return this->stencilRef;
+	}
+
+	inline const GfxInputLayout* GfxPipelineStateObject::GetInputLayout() const
+	{
+		return this->inputLayout;
+	}
+
+	inline const GfxVertexShader* GfxPipelineStateObject::GetVertexShader() const
+	{
+		return this->vertexShader;
+	}
+
+	inline const GfxPixelShader* GfxPipelineStateObject::GetPixelShader() const
+	{
+		return this->pixelShader;
+	}
+
 } // end namespace UnlimRealms

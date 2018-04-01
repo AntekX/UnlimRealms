@@ -93,6 +93,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GfxSystem::CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState)
+	{
+		gfxPipelineState.reset(new GfxPipelineStateObject(*this));
+		return Result(Success);
+	}
+
 	
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// GfxEntity
@@ -603,6 +609,101 @@ namespace UnlimRealms
 
 	Result GfxPipelineState::OnSetRenderState(const GfxRenderState &renderState)
 	{
+		return Result(Success);
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// GfxPipelineStateObject
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GfxPipelineStateObject::GfxPipelineStateObject(GfxSystem &gfxSystem) :
+		GfxEntity(gfxSystem)
+	{
+		for (auto& state : this->blendState)
+		{
+			state = GfxBlendState::Default;
+		}
+		this->rasterizerState = GfxRasterizerState::Default;
+		this->depthStencilState = GfxDepthStencilState::Default;
+		this->stencilRef = 0;
+		this->primitiveTopology = GfxPrimitiveTopology::TriangleList;
+		this->inputLayout = ur_null;
+		this->vertexShader = ur_null;
+		this->pixelShader = ur_null;
+		this->changedStates = 0;
+	}
+
+	GfxPipelineStateObject::~GfxPipelineStateObject()
+	{
+	}
+
+	Result GfxPipelineStateObject::Initialize()
+	{
+		Result res = this->OnInitialize(this->changedStates);
+		this->changedStates = 0;
+		return res;
+	}
+
+	Result GfxPipelineStateObject::SetBlendState(const GfxBlendState& blendState, ur_uint rtIndex)
+	{
+		this->blendState[rtIndex] = blendState;
+		this->changedStates |= BlendStateFlag;
+		return Result(Success);
+	}
+
+	Result GfxPipelineStateObject::SetRasterizerState(const GfxRasterizerState& rasterizerState)
+	{
+		this->rasterizerState = rasterizerState;
+		this->changedStates |= RasterizerStateFlag;
+		return Result(Success);
+	}
+
+	Result GfxPipelineStateObject::SetDepthStencilState(const GfxDepthStencilState& depthStencilState)
+	{
+		this->depthStencilState = depthStencilState;
+		this->changedStates |= DepthStencilStateFlag;
+		return Result(Success);
+	}
+
+	Result GfxPipelineStateObject::SetStencilRef(ur_uint stencilRef)
+	{
+		this->stencilRef = stencilRef;
+		this->changedStates |= StencilRefFlag;
+		return Result(Success);
+	}
+
+	Result GfxPipelineStateObject::SetPrimitiveTopology(GfxPrimitiveTopology& primitiveTopology)
+	{
+		this->primitiveTopology = primitiveTopology;
+		this->changedStates |= PrimitiveTopologyFlag;
+		return Result(Success);
+	}
+
+	Result GfxPipelineStateObject::SetInputLayout(GfxInputLayout* inputLayout)
+	{
+		this->inputLayout = inputLayout;
+		this->changedStates |= InputLayoutFlag;
+		return Result(Success);
+	}
+
+	Result GfxPipelineStateObject::SetVertexShader(GfxVertexShader* vertexShader)
+	{
+		this->vertexShader = vertexShader;
+		this->changedStates |= VertexShaderFlag;
+		return Result(Success);
+	}
+
+	Result GfxPipelineStateObject::SetPixelShader(GfxPixelShader* pixelShader)
+	{
+		this->pixelShader = pixelShader;
+		this->changedStates |= PixelShaderFlag;
+		return Result(Success);
+	}
+
+	Result GfxPipelineStateObject::OnInitialize(const StateFlags& changedStates)
+	{
+		// nothing to do by default
 		return Result(Success);
 	}
 

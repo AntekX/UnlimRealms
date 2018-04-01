@@ -454,4 +454,41 @@ namespace UnlimRealms
 		ur_size SharedSystemMemory;
 	};
 
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// TODO: following code is WIP;
+	// related to D3D12 integration;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Gfx resource bindings description
+	// TEMP: similar to D3D12 root signature
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GfxBindingDesc
+	{
+		GfxSamplerState *SamplerStates;
+		ur_size SamplerStatesCount;
+		// todo: this structure is expected to describe all required resource bindings;
+		// d3d12 implementation of GfxBinding object will potentially manage root signature initialization &
+		// descriptors setup/update
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Gfx full pipeline state description
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GfxPipelineDesc
+	{
+		static const ur_uint MaxRenderTargets = 8;
+
+		//GfxInputLayoutDesc InputLayout;
+		GfxRasterizerState RasterizerState;
+		GfxDepthStencilState DepthStencilState;
+		ur_uint StencilRef;
+		GfxBlendState BlendState[MaxRenderTargets];
+		//GfxShaderDesc* VertexShader;
+		//GfxShaderDesc* PixelShader;
+
+		static const GfxPipelineDesc Default;
+	};
+
 } // end namespace UnlimRealms

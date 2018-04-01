@@ -59,13 +59,7 @@ namespace UnlimRealms
 
 		virtual Result CreateBuffer(std::unique_ptr<GfxBuffer> &gfxBuffer);
 
-		virtual Result CreateVertexShader(std::unique_ptr<GfxVertexShader> &gfxVertexShader);
-
-		virtual Result CreatePixelShader(std::unique_ptr<GfxPixelShader> &gfxPixelShader);
-
-		virtual Result CreateInputLayout(std::unique_ptr<GfxInputLayout> &gfxInputLayout);
-
-		virtual Result CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState);
+		virtual Result CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState);
 
 		Result InitializeFrameData(ur_uint framesCount);
 
@@ -409,86 +403,26 @@ namespace UnlimRealms
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Direct3D12 graphics vertex shader
+	// Direct3D12 graphics pipeline state object
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
-	class UR_DECL GfxVertexShaderD3D12 : public GfxVertexShader
+	class UR_DECL GfxPipelineStateObjectD3D12 : public GfxPipelineStateObject
 	{
 	public:
 
-		GfxVertexShaderD3D12(GfxSystem &gfxSystem);
+		GfxPipelineStateObjectD3D12(GfxSystem &gfxSystem);
 
-		virtual ~GfxVertexShaderD3D12();
+		virtual ~GfxPipelineStateObjectD3D12();
 
-	protected:
-
-		virtual Result OnInitialize();
-
-	private:
-
-		// todo
-	};
-
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Direct3D12 graphics pixel shader
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
-	class UR_DECL GfxPixelShaderD3D12 : public GfxPixelShader
-	{
-	public:
-
-		GfxPixelShaderD3D12(GfxSystem &gfxSystem);
-
-		virtual ~GfxPixelShaderD3D12();
+		inline ID3D12PipelineState* GetD3DPipelineState() const;
 
 	protected:
 
-		virtual Result OnInitialize();
+		virtual Result OnInitialize(const StateFlags& changedStates);
 
 	private:
 
-		// todo
-	};
-
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Direct3D12 graphics input layout
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
-	class UR_DECL GfxInputLayoutD3D12 : public GfxInputLayout
-	{
-	public:
-
-		GfxInputLayoutD3D12(GfxSystem &gfxSystem);
-
-		virtual ~GfxInputLayoutD3D12();
-
-	protected:
-
-		virtual Result OnInitialize(const GfxShader &shader, const GfxInputElement *elements, ur_uint count);
-
-	private:
-
-		// todo
-	};
-
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Direct3D12 graphics pipeline state
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
-	class UR_DECL GfxPipelineStateD3D12 : public GfxPipelineState
-	{
-	public:
-
-		GfxPipelineStateD3D12(GfxSystem &gfxSystem);
-
-		virtual ~GfxPipelineStateD3D12();
-
-	protected:
-
-		virtual Result OnSetRenderState(const GfxRenderState &renderState);
-
-	private:
-
-		// todo
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC d3dPipelineDesc;
+		shared_ref<ID3D12PipelineState> d3dPipelineState;
 	};
 
 

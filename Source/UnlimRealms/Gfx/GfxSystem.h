@@ -26,6 +26,7 @@ namespace UnlimRealms
 	class GfxPixelShader;
 	class GfxInputLayout;
 	class GfxPipelineState;
+	class GfxPipelineStateObject;
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,6 +61,8 @@ namespace UnlimRealms
 		virtual Result CreateInputLayout(std::unique_ptr<GfxInputLayout> &gfxInputLayout);
 
 		virtual Result CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState);
+
+		virtual Result CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState);
 
 		inline const ur_uint GetAdaptersCount() const;
 
@@ -388,8 +391,6 @@ namespace UnlimRealms
 		GfxPixelShader *PixelShader;
 		ur_uint StencilRef;
 
-		// todo: adapt do d3d12 PSO
-
 	public:
 
 		GfxPipelineState(GfxSystem &gfxSystem);
@@ -407,6 +408,85 @@ namespace UnlimRealms
 	private:
 
 		GfxRenderState renderState;
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Gfx pipeline state object
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	class UR_DECL GfxPipelineStateObject : public GfxEntity
+	{
+	public:
+
+		static const ur_uint MaxRenderTargets = 8;
+
+
+		GfxPipelineStateObject(GfxSystem &gfxSystem);
+
+		virtual ~GfxPipelineStateObject();
+
+		Result Initialize();
+
+		Result SetBlendState(const GfxBlendState& blendState, ur_uint rtIndex = 0);
+
+		Result SetRasterizerState(const GfxRasterizerState& rasterizerState);
+
+		Result SetDepthStencilState(const GfxDepthStencilState& depthStencilState);
+
+		Result SetStencilRef(ur_uint stencilRef);
+
+		Result SetPrimitiveTopology(GfxPrimitiveTopology& primitiveTopology);
+
+		Result SetInputLayout(GfxInputLayout* inputLayout);
+		
+		Result SetVertexShader(GfxVertexShader* vertexShader);
+		
+		Result SetPixelShader(GfxPixelShader* pixelShader);
+
+		inline const GfxBlendState& GetBlendState(ur_uint rtIndex = 0) const;
+
+		inline const GfxRasterizerState& GetRasterizerState() const;
+
+		inline const GfxDepthStencilState& GetDepthStencilState() const;
+
+		inline const GfxPrimitiveTopology& GetPrimitiveTopology() const;
+
+		inline const ur_uint GetStencilRef() const;
+
+		inline const GfxInputLayout* GetInputLayout() const;
+
+		inline const GfxVertexShader* GetVertexShader() const;
+
+		inline const GfxPixelShader* GetPixelShader() const;
+
+	protected:
+
+		enum StateFlag
+		{
+			BlendStateFlag			= 0x1,
+			RasterizerStateFlag		= 0x2,
+			DepthStencilStateFlag	= 0x4,
+			StencilRefFlag			= 0x8,
+			PrimitiveTopologyFlag	= 0x10,
+			InputLayoutFlag			= 0x20,
+			VertexShaderFlag		= 0x40,
+			PixelShaderFlag			= 0x80
+		};
+		typedef ur_uint StateFlags;
+
+		virtual Result OnInitialize(const StateFlags& changedStates);
+
+	private:
+
+		GfxBlendState blendState[MaxRenderTargets];
+		GfxRasterizerState rasterizerState;
+		GfxDepthStencilState depthStencilState;
+		ur_uint stencilRef;
+		GfxPrimitiveTopology primitiveTopology;
+		GfxInputLayout* inputLayout;
+		GfxVertexShader* vertexShader;
+		GfxPixelShader* pixelShader;
+		StateFlags changedStates;
 	};
 
 } // end namespace UnlimRealms
