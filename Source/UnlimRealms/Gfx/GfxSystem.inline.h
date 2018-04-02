@@ -130,4 +130,19 @@ namespace UnlimRealms
 		return this->pixelShader;
 	}
 
+	inline const std::vector<std::pair<ur_uint, GfxBuffer*>>& GfxResourceBinding::GetBuffers() const
+	{
+		return this->buffers;
+	}
+
+	inline const std::vector<std::pair<ur_uint, GfxTexture*>>& GfxResourceBinding::GetTextures() const
+	{
+		return this->textures;
+	}
+
+	inline const std::vector<std::pair<ur_uint, GfxSamplerState*>>& GfxResourceBinding::GetSamplers() const
+	{
+		return this->samplers;
+	}
+
 } // end namespace UnlimRealms

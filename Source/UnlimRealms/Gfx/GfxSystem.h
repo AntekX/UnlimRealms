@@ -27,6 +27,7 @@ namespace UnlimRealms
 	class GfxInputLayout;
 	class GfxPipelineState;
 	class GfxPipelineStateObject;
+	class GfxResourceBinding;
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -133,6 +134,8 @@ namespace UnlimRealms
 		virtual Result SetPipelineState(GfxPipelineState *state);
 
 		virtual Result SetPipelineStateObject(GfxPipelineStateObject *state);
+
+		virtual Result SetResourceBinding(GfxResourceBinding *binding);
 
 		virtual Result SetTexture(GfxTexture *texture, ur_uint slot);
 
@@ -501,6 +504,43 @@ namespace UnlimRealms
 		GfxVertexShader* vertexShader;
 		GfxPixelShader* pixelShader;
 		StateFlags changedStates;
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Gfx resource bindig description
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	class UR_DECL GfxResourceBinding : public GfxEntity
+	{
+	public:
+
+		GfxResourceBinding(GfxSystem &gfxSystem);
+
+		virtual ~GfxResourceBinding();
+
+		Result SetBuffer(ur_uint slot, GfxBuffer *buffer);
+
+		Result SetTexture(ur_uint slot, GfxTexture *texture);
+
+		Result SetSampler(ur_uint slot, GfxSamplerState *sampler);
+
+		Result Initialize();
+
+		inline const std::vector<std::pair<ur_uint, GfxBuffer*>>& GetBuffers() const;
+
+		inline const std::vector<std::pair<ur_uint, GfxTexture*>>& GetTextures() const;
+
+		inline const std::vector<std::pair<ur_uint, GfxSamplerState*>>& GetSamplers() const;
+
+	protected:
+
+		virtual Result OnInitialize();
+
+	private:
+
+		std::vector<std::pair<ur_uint, GfxBuffer*>> buffers;
+		std::vector<std::pair<ur_uint, GfxTexture*>> textures;
+		std::vector<std::pair<ur_uint, GfxSamplerState*>> samplers;
 	};
 
 } // end namespace UnlimRealms

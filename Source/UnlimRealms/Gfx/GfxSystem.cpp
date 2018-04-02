@@ -188,6 +188,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GfxContext::SetResourceBinding(GfxResourceBinding *binding)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GfxContext::SetTexture(GfxTexture *texture, ur_uint slot)
 	{
 		return Result(NotImplemented);
@@ -727,6 +732,48 @@ namespace UnlimRealms
 	Result GfxPipelineStateObject::OnInitialize(const StateFlags& changedStates)
 	{
 		// nothing to do by default
+		return Result(Success);
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// GfxResourceBinding
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GfxResourceBinding::GfxResourceBinding(GfxSystem &gfxSystem) :
+		GfxEntity(gfxSystem)
+	{
+	}
+
+	GfxResourceBinding::~GfxResourceBinding()
+	{
+	}
+
+	Result GfxResourceBinding::SetBuffer(ur_uint slot, GfxBuffer *buffer)
+	{
+		this->buffers.push_back(std::pair<ur_uint, GfxBuffer*>(slot, buffer));
+		return Result(Success);
+	}
+
+	Result GfxResourceBinding::SetTexture(ur_uint slot, GfxTexture *texture)
+	{
+		this->textures.push_back(std::pair<ur_uint, GfxTexture*>(slot, texture));
+		return Result(Success);
+	}
+
+	Result GfxResourceBinding::SetSampler(ur_uint slot, GfxSamplerState *sampler)
+	{
+		this->samplers.push_back(std::pair<ur_uint, GfxSamplerState*>(slot, sampler));
+		return Result(Success);
+	}
+
+	Result GfxResourceBinding::Initialize()
+	{
+		return OnInitialize();
+	}
+
+	Result GfxResourceBinding::OnInitialize()
+	{
 		return Result(Success);
 	}
 

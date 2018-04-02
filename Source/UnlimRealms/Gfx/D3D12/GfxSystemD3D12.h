@@ -173,7 +173,6 @@ namespace UnlimRealms
 		shared_ref<ID3D12CommandQueue> d3dCommandQueue;
 		std::vector<shared_ref<ID3D12CommandList>> d3dCommandLists;
 		std::mutex commandListsMutex;
-		ur_uint commandListsId;
 		std::vector<std::unique_ptr<DescriptorHeap>> descriptorHeaps;
 		std::vector<shared_ref<ID3D12CommandAllocator>> d3dCommandAllocators;
 		std::vector<ur_uint> frameFenceValues;
@@ -219,17 +218,11 @@ namespace UnlimRealms
 
 		virtual Result SetPipelineStateObject(GfxPipelineStateObject *state);
 
-		virtual Result SetTexture(GfxTexture *texture, ur_uint slot);
-
-		virtual Result SetConstantBuffer(GfxBuffer *buffer, ur_uint slot);
+		virtual Result SetResourceBinding(GfxResourceBinding *binding);
 
 		virtual Result SetVertexBuffer(GfxBuffer *buffer, ur_uint slot, ur_uint stride, ur_uint offset);
 
 		virtual Result SetIndexBuffer(GfxBuffer *buffer, ur_uint bitsPerIndex, ur_uint offset);
-
-		virtual Result SetVertexShader(GfxVertexShader *shader);
-
-		virtual Result SetPixelShader(GfxPixelShader *shader);
 
 		virtual Result Draw(ur_uint vertexCount, ur_uint vertexOffset, ur_uint instanceCount, ur_uint instanceOffset);
 
@@ -427,6 +420,47 @@ namespace UnlimRealms
 		shared_ref<ID3D12PipelineState> d3dPipelineState;
 		D3D12_PRIMITIVE_TOPOLOGY d3dPrimitiveTopology;
 		std::vector<D3D12_INPUT_ELEMENT_DESC> d3dInputLayoutElements;
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Direct3D12 resource binding
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	class UR_DECL GfxResourceBindingD3D12 : public GfxResourceBinding
+	{
+	public:
+
+		enum D3DRootSlot
+		{
+			D3DRootSlot_Table_CbvSrvUav = 0,
+			D3DRootSlot_Table_Sampler = 1,
+			D3DRootSlot_Table_Rtv = 2,
+			D3DRootSlot_Table_Dsv = 3,
+			D3DRootSlot_Count = 4
+		};
+
+
+		GfxResourceBindingD3D12(GfxSystem &gfxSystem);
+
+		virtual ~GfxResourceBindingD3D12();
+
+		inline ID3D12RootSignature* GetD3DRootSignature() const;
+
+		//inline D3D12_GPU_DESCRIPTOR_HANDLE GetD3DGPUHandleForRootTable(D3DRootSlot rootSlot) const;
+
+	protected:
+
+		virtual Result OnInitialize();
+
+	private:
+
+		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesCbvSrvUav;
+		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesSampler;
+		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesRtv;
+		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesDsv;
+		std::vector<D3D12_ROOT_PARAMETER> d3dRootParameters;
+		shared_ref<ID3D12RootSignature> d3dRootSignature;
+		shared_ref<ID3DBlob> d3dSerializedRootSignature;
 	};
 
 

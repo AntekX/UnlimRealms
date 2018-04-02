@@ -24,7 +24,6 @@ namespace UnlimRealms
 		GfxSystem(realm)
 	{
 		this->winCanvas = ur_null;
-		this->commandListsId = 0;
 		this->frameIndex = 0;
 		this->framesCount = 0;
 		this->frameFenceEvent = CreateEvent(ur_null, false, false, ur_null);
@@ -601,13 +600,17 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GfxContextD3D12::SetTexture(GfxTexture *texture, ur_uint slot)
+	Result GfxContextD3D12::SetResourceBinding(GfxResourceBinding *binding)
 	{
-		return NotImplemented;
-	}
+		// todo:
+		if (this->d3dCommandList.empty())
+			return ResultError(Failure, "GfxContextD3D12::SetResourceBinding: failed, d3d command list is not initialized");
 
-	Result GfxContextD3D12::SetConstantBuffer(GfxBuffer *buffer, ur_uint slot)
-	{
+		GfxResourceBindingD3D12 *resourceBindingD3D12 = static_cast<GfxResourceBindingD3D12*>(binding);
+		this->d3dCommandList->SetGraphicsRootSignature(resourceBindingD3D12->GetD3DRootSignature());
+		//this->d3dCommandList->SetDescriptorHeaps()
+		//this->d3dCommandList->SetGraphicsRootDescriptorTable(0, )
+
 		return NotImplemented;
 	}
 
@@ -617,16 +620,6 @@ namespace UnlimRealms
 	}
 
 	Result GfxContextD3D12::SetIndexBuffer(GfxBuffer *buffer, ur_uint bitsPerIndex, ur_uint offset)
-	{
-		return NotImplemented;
-	}
-
-	Result GfxContextD3D12::SetVertexShader(GfxVertexShader *shader)
-	{
-		return NotImplemented;
-	}
-
-	Result GfxContextD3D12::SetPixelShader(GfxPixelShader *shader)
 	{
 		return NotImplemented;
 	}
@@ -1252,6 +1245,101 @@ namespace UnlimRealms
 		HRESULT hr = d3dDevice->CreateGraphicsPipelineState(&d3dPipelineDesc, __uuidof(ID3D12PipelineState), this->d3dPipelineState);
 		if (FAILED(hr))
 			return ResultError(NotInitialized, "GfxPipelineStateObjectD3D12::OnInitialize: failed to create d3d pipeline state");
+
+		return Result(Success);
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// GfxResourceBindingD3D12
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+
+	GfxResourceBindingD3D12::GfxResourceBindingD3D12(GfxSystem &gfxSystem) :
+		GfxResourceBinding(gfxSystem)
+	{
+	}
+
+	GfxResourceBindingD3D12::~GfxResourceBindingD3D12()
+	{
+	}
+
+	template <typename TGfxResource, D3D12_DESCRIPTOR_RANGE_TYPE d3dDescriptorRangeType>
+	void InitializeRanges(const std::vector<std::pair<ur_uint, TGfxResource*>>& resourceBindings,
+		std::vector<D3D12_DESCRIPTOR_RANGE>& d3dDescriptorRanges)
+	{
+		if (resourceBindings.empty())
+			return;
+
+		// order records by slot index
+		std::multimap<ur_uint, ur_size> orderedMap;
+		for (ur_size idx = 0; idx < resourceBindings.size(); ++idx)
+		{
+			orderedMap.insert(std::pair<ur_uint, ur_size>(resourceBindings[idx].first, idx));
+		}
+
+		// calculate ranges
+		ur_uint baseRegister = ur_uint(-2);
+		for (auto& indirectRecord : orderedMap)
+		{
+			const auto& binding = resourceBindings[indirectRecord.second];
+			if (binding.first - baseRegister > 1)
+			{
+				// start new range
+				baseRegister = binding.first;
+				D3D12_DESCRIPTOR_RANGE range = CD3DX12_DESCRIPTOR_RANGE(d3dDescriptorRangeType, 0, UINT(baseRegister));
+				d3dDescriptorRanges.emplace_back(range);
+			}
+			++d3dDescriptorRanges.back().NumDescriptors;
+		}
+	}
+
+	Result GfxResourceBindingD3D12::OnInitialize()
+	{
+		// reset
+
+		this->d3dDesriptorRangesCbvSrvUav.clear();
+		this->d3dDesriptorRangesSampler.clear();
+		this->d3dDesriptorRangesRtv.clear();
+		this->d3dDesriptorRangesDsv.clear();
+		this->d3dRootParameters.clear();
+		this->d3dRootSignature.reset(ur_null);
+		this->d3dSerializedRootSignature.reset(ur_null);
+
+		// initialize descriptor table ranges
+
+		InitializeRanges<GfxBuffer, D3D12_DESCRIPTOR_RANGE_TYPE_CBV>(this->GetBuffers(), this->d3dDesriptorRangesCbvSrvUav);
+		InitializeRanges<GfxTexture, D3D12_DESCRIPTOR_RANGE_TYPE_SRV>(this->GetTextures(), this->d3dDesriptorRangesCbvSrvUav);
+		InitializeRanges<GfxSamplerState, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER>(this->GetSamplers(), this->d3dDesriptorRangesSampler);
+
+		// initialize root signature
+
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
+		if (ur_null == d3dDevice)
+			return ResultError(NotInitialized, "GfxResourceBindingD3D12::OnInitialize: failed, device unavailable");
+
+		this->d3dRootParameters.resize(D3DRootSlot_Count);
+		D3D12_ROOT_PARAMETER* rootParameter = &this->d3dRootParameters[D3DRootSlot_Table_CbvSrvUav];
+		rootParameter->ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameter->DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesCbvSrvUav.size();
+		rootParameter->DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesCbvSrvUav.data();
+		rootParameter->ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+		// todo: initialize other root tables
+
+		D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc = {};
+		d3dRootSignatureDesc.NumParameters = (UINT)d3dRootParameters.size();
+		d3dRootSignatureDesc.pParameters = d3dRootParameters.data();
+
+		shared_ref<ID3DBlob> d3dErrorBlob;
+		HRESULT hr = D3D12SerializeRootSignature(&d3dRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, this->d3dSerializedRootSignature, d3dErrorBlob);
+		if (FAILED(hr))
+			return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to serialize d3d root signature");
+
+		hr = d3dDevice->CreateRootSignature(0, this->d3dSerializedRootSignature.get(), this->d3dSerializedRootSignature->GetBufferSize(),
+			__uuidof(ID3D12RootSignature), this->d3dRootSignature);
+		if (FAILED(hr))
+			return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to create d3d root signature");
 
 		return Result(Success);
 	}

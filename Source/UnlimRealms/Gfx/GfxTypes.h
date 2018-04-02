@@ -472,23 +472,4 @@ namespace UnlimRealms
 		// descriptors setup/update
 	};
 
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Gfx full pipeline state description
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	struct UR_DECL GfxPipelineDesc
-	{
-		static const ur_uint MaxRenderTargets = 8;
-
-		//GfxInputLayoutDesc InputLayout;
-		GfxRasterizerState RasterizerState;
-		GfxDepthStencilState DepthStencilState;
-		ur_uint StencilRef;
-		GfxBlendState BlendState[MaxRenderTargets];
-		//GfxShaderDesc* VertexShader;
-		//GfxShaderDesc* PixelShader;
-
-		static const GfxPipelineDesc Default;
-	};
-
 } // end namespace UnlimRealms

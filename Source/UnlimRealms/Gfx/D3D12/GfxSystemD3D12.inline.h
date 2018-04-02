@@ -111,4 +111,9 @@ namespace UnlimRealms
 		return this->d3dPrimitiveTopology;
 	}
 
+	inline ID3D12RootSignature* GfxResourceBindingD3D12::GetD3DRootSignature() const
+	{
+		return this->d3dRootSignature.get();
+	}
+
 } // end namespace UnlimRealms
