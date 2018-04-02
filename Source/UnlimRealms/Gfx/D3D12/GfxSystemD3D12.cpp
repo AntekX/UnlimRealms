@@ -1458,7 +1458,7 @@ namespace UnlimRealms
 				{
 					descriptorsCount += ur_size(d3dDescriptorTable.pDescriptorRanges[irange].NumDescriptors);
 				}
-				D3D12_DESCRIPTOR_HEAP_TYPE d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE(tableSlotId); // D3DRootSlotmust be in sync with D3D12_DESCRIPTOR_HEAP_TYPE!
+				D3D12_DESCRIPTOR_HEAP_TYPE d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE(tableSlotId); // D3DRootSlotmust must be in sync with D3D12_DESCRIPTOR_HEAP_TYPE!
 				d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->AcquireDescriptors(tableDescriptorSet, descriptorsCount);
 			}
 		}
