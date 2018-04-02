@@ -61,14 +61,29 @@ namespace UnlimRealms
 		return this->descriptorHeaps[ur_size(heapType)].get();
 	}
 
+	inline ur_size GfxSystemD3D12::DescriptorSet::GetDescriptorCount() const
+	{
+		return this->descriptorCount;
+	}
+
+	inline D3D12_CPU_DESCRIPTOR_HANDLE GfxSystemD3D12::DescriptorSet::FirstCpuHandle() const
+	{
+		return this->firstCpuHandle;
+	}
+
+	inline D3D12_GPU_DESCRIPTOR_HANDLE GfxSystemD3D12::DescriptorSet::FirstGpuHandle() const
+	{
+		return this->firstGpuHandle;
+	}
+
 	inline D3D12_CPU_DESCRIPTOR_HANDLE GfxSystemD3D12::Descriptor::CpuHandle() const
 	{
-		return this->cpuHandle;
+		return this->FirstCpuHandle();
 	}
 
 	inline D3D12_GPU_DESCRIPTOR_HANDLE GfxSystemD3D12::Descriptor::GpuHandle() const
 	{
-		return this->gpuHandle;
+		return this->FirstGpuHandle();
 	}
 
 	inline ID3D12Resource* GfxResourceD3D12::GetD3DResource() const

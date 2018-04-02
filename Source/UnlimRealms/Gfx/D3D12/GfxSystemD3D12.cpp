@@ -325,42 +325,42 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	GfxSystemD3D12::Descriptor::Descriptor(DescriptorHeap* heap) :
-		heap(heap)
-	{
-		this->cpuHandle.ptr = 0;
-		this->gpuHandle.ptr = 0;
-		this->heapIdx = ur_size(-1);
-	}
-
-	GfxSystemD3D12::Descriptor::~Descriptor()
-	{
-		if (this->heap != ur_null)
-		{
-			this->heap->ReleaseDescriptor(*this);
-		}
-	}
-
 	GfxSystemD3D12::DescriptorHeap::DescriptorHeap(GfxSystemD3D12& gfxSystem, D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType) :
 		GfxEntity(gfxSystem),
 		d3dHeapType(d3dHeapType)
 	{
 		this->d3dDescriptorSize = 0;
-		this->currentPageIdx = 0;
 		this->firstFreePageIdx = 0;
 	}
 	
 	GfxSystemD3D12::DescriptorHeap::~DescriptorHeap()
 	{
-		// detach extrenal links
-		for (auto& descriptor : this->descriptors)
+		// detach extrenal handles
+		for (auto& descriptorHandle : this->descriptorSets)
 		{
-			descriptor->heap = ur_null;
+			descriptorHandle->heap = ur_null;
 		}
 	}
 
 	Result GfxSystemD3D12::DescriptorHeap::AcquireDescriptor(std::unique_ptr<Descriptor>& descriptor)
 	{
+		std::unique_ptr<DescriptorSet> descriptorSet(new Descriptor());
+		Result res = this->AcquireDescriptors(*descriptorSet, 1);
+		descriptor.reset(static_cast<Descriptor*>(descriptorSet.release()));
+		return res;
+	}
+
+	Result GfxSystemD3D12::DescriptorHeap::AcquireDescriptors(std::unique_ptr<DescriptorSet>& descriptorSet, ur_size descriptorsCount)
+	{
+		descriptorSet.reset(new DescriptorSet());
+		return this->AcquireDescriptors(*descriptorSet, 1);
+	}
+
+	Result GfxSystemD3D12::DescriptorHeap::AcquireDescriptors(DescriptorSet& descriptorSet, ur_size descriptorsCount)
+	{
+		if (0 == descriptorsCount || descriptorsCount > DescriptorsPerHeap)
+			return Result(InvalidArgs);
+
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
 		if (ur_null == d3dDevice)
@@ -368,17 +368,33 @@ namespace UnlimRealms
 
 		std::lock_guard<std::mutex> lockModify(this->modifyMutex);
 
-		if (this->currentPageIdx < this->pagePool.size() && this->pagePool[this->currentPageIdx]->freeRanges.empty())
+		ur_size currentPageIdx = ur_size(-1);
+		ur_size currentRangeIdx = ur_size(-1);
+		if (this->firstFreePageIdx < this->pagePool.size())
 		{
-			if (this->firstFreePageIdx < this->currentPageIdx)
+			for (ur_size pageIdx = this->firstFreePageIdx; pageIdx < this->pagePool.size(); ++pageIdx)
 			{
-				// reuse some previously released page
-				this->currentPageIdx = this->firstFreePageIdx;
+				auto& pageRanges = this->pagePool[pageIdx]->freeRanges;
+				if (!pageRanges.empty())
+				{
+					// try finding a free range of sufficient size in current page
+					for (ur_size rangeIdx = 0; rangeIdx < pageRanges.size(); ++rangeIdx)
+					{
+						if (pageRanges[rangeIdx].size() >= descriptorsCount)
+						{
+							currentPageIdx = pageIdx;
+							currentRangeIdx = rangeIdx;
+							break; // found
+						}
+					}
+				}
+				if (currentRangeIdx != ur_size(-1))
+					break;
 			}
-			else
+			if (currentRangeIdx == ur_size(-1))
 			{
 				// new page is required
-				this->firstFreePageIdx = this->currentPageIdx + 1;
+				this->firstFreePageIdx = this->pagePool.size();
 			}
 		}
 
@@ -410,7 +426,8 @@ namespace UnlimRealms
 
 			this->pagePool.push_back(std::move(newPage));
 			this->firstFreePageIdx = this->pagePool.size() - 1;
-			this->currentPageIdx = this->firstFreePageIdx;
+			currentPageIdx = this->firstFreePageIdx;
+			currentRangeIdx = 0;
 			
 			if (0 == this->d3dDescriptorSize)
 			{
@@ -419,84 +436,136 @@ namespace UnlimRealms
 		}
 
 		// grab some page memory
-		Page& currentPage = *this->pagePool[this->currentPageIdx].get();
-		Range& currentRange = currentPage.freeRanges.back();
-		ur_size currentOffset = currentRange.first;
-		currentRange.first += 1; // move to next record in range
-		if (currentRange.first == currentRange.second)
+		Page& currentPage = *this->pagePool[currentPageIdx].get();
+		Range& currentRange = currentPage.freeRanges[currentRangeIdx];
+		ur_size currentOffset = currentRange.start;
+		currentRange.start += descriptorsCount; // decrease range
+		assert(currentRange.start <= currentRange.end); // must never be reached
+		if (currentRange.start == currentRange.end)
 		{
 			// release exhausted range
-			currentPage.freeRanges.pop_back();
+			currentPage.freeRanges.erase(currentPage.freeRanges.begin() + currentRangeIdx);
+		}
+		if (currentPage.freeRanges.empty())
+		{
+			// find next page with free range(s) available
+			do
+			{
+				++this->firstFreePageIdx;
+			} while (this->firstFreePageIdx < this->pagePool.size() && !this->pagePool[this->firstFreePageIdx]->freeRanges.empty());
 		}
 
 		// initialize descriptor
 		ID3D12DescriptorHeap* currentHeap = currentPage.d3dHeap;
 		SIZE_T currentHeapCPUStart = currentHeap->GetCPUDescriptorHandleForHeapStart().ptr;
 		UINT64 currentHeapGPUStart = currentHeap->GetGPUDescriptorHandleForHeapStart().ptr;
-		descriptor.reset( new Descriptor(this));
-		descriptor->cpuHandle.ptr = currentHeapCPUStart + this->d3dDescriptorSize * currentOffset;
-		descriptor->gpuHandle.ptr = currentHeapGPUStart + this->d3dDescriptorSize * currentOffset;
-		descriptor->heapIdx = currentOffset + this->currentPageIdx * DescriptorsPerHeap;
-		this->descriptors.push_back(descriptor.get());
+		descriptorSet.descriptorCount = descriptorsCount;
+		descriptorSet.firstCpuHandle.ptr = currentHeapCPUStart + currentOffset * this->d3dDescriptorSize;
+		descriptorSet.firstGpuHandle.ptr = currentHeapGPUStart + currentOffset * this->d3dDescriptorSize;
+		descriptorSet.pagePoolPos = currentOffset + currentPageIdx * DescriptorsPerHeap;
+		descriptorSet.descriptorListPos = this->descriptorSets.size();
+		this->descriptorSets.push_back(&descriptorSet);
 
 		return Result(Success);
 	}
 
 	Result GfxSystemD3D12::DescriptorHeap::ReleaseDescriptor(Descriptor& descriptor)
 	{
+		return this->ReleaseDescriptors(static_cast<DescriptorSet&>(descriptor));
+	}
+
+	Result GfxSystemD3D12::DescriptorHeap::ReleaseDescriptors(DescriptorSet& descriptorSet)
+	{
 		std::lock_guard<std::mutex> lockModify(this->modifyMutex);
+
+		// remove from descriptors registry
+		if (descriptorSet.descriptorListPos + 1 < this->descriptorSets.size())
+		{
+			// replace with the last descriptor
+			ur_size replacePos = descriptorSet.descriptorListPos;
+			this->descriptorSets[replacePos] = this->descriptorSets.back();
+			this->descriptorSets[replacePos]->descriptorListPos = replacePos;
+		}
+		this->descriptorSets.pop_back();
 		
-		ur_size pageIdx = descriptor.heapIdx / DescriptorsPerHeap;
-		ur_size offset = descriptor.heapIdx % DescriptorsPerHeap;
+		ur_size pageIdx = descriptorSet.pagePoolPos / DescriptorsPerHeap;
+		ur_size releaseStart = descriptorSet.pagePoolPos % DescriptorsPerHeap;
+		ur_size releaseEnd = releaseStart + descriptorSet.descriptorCount - 1;
 		Page& page = *this->pagePool[pageIdx].get();
 		
 		// rearrange free ranges: try adding released item to exiting range, merge ranges or create new range
 		for (ur_size ir = 0; ir < page.freeRanges.size(); ++ir)
 		{
 			Range& range = page.freeRanges[ir];
-			if (offset + 1 < range.first)
+			if (releaseEnd + 1 < range.start)
 			{
-				page.freeRanges.insert(page.freeRanges.begin() + ir, Range(offset,offset));
+				page.freeRanges.insert(page.freeRanges.begin() + ir, Range(releaseStart, releaseEnd));
 				break;
 			}
-			if (offset + 1 == range.first)
+			if (releaseEnd + 1 == range.start)
 			{
-				range.first = offset;
+				range.start = releaseStart;
 				Range* prevRange = (ir > 0 ? &page.freeRanges[ir - 1] : ur_null);
-				if (prevRange && prevRange->second + 1 == offset)
+				if (prevRange && prevRange->end + 1 == releaseStart)
 				{
-					range.first = prevRange->first;
+					range.start = prevRange->start;
 					page.freeRanges.erase(page.freeRanges.begin() + ir - 1);
 				}
 				break;
 			}
-			if (range.second + 1 == offset)
+			if (range.end + 1 == releaseStart)
 			{
-				range.second = offset;
+				range.end = releaseEnd;
 				Range* nextRange = (ir + 1 < page.freeRanges.size() ? &page.freeRanges[ir + 1] : ur_null);
-				if (nextRange && nextRange->first == offset + 1)
+				if (nextRange && nextRange->start == releaseEnd + 1)
 				{
-					range.second = nextRange->second;
+					range.end = nextRange->end;
 					page.freeRanges.erase(page.freeRanges.begin() + ir + 1);
 				}
 				break;
 			}
 			if (ir + 1 == page.freeRanges.size())
 			{
-				page.freeRanges.insert(page.freeRanges.begin() + ir, Range(offset, offset));
+				page.freeRanges.insert(page.freeRanges.begin() + ir, Range(releaseStart, releaseEnd));
 				break;
 			}
 		}
 
 		// note: do not remove empty page to preserve ordering and indexing (following pages can still be referenced by other descriptor(s));
 		// however, d3d heap memory can be released & reacquired on demand
-		if (page.freeRanges.front().second - page.freeRanges.front().first + 1 == DescriptorsPerHeap)
+		if (page.freeRanges.front().end - page.freeRanges.front().start + 1 == DescriptorsPerHeap)
 		{
 			// consider releasing d3d heap here
 		}
 		this->firstFreePageIdx = std::min(pageIdx, this->firstFreePageIdx);
 
 		return Result(Success);
+	}
+
+	GfxSystemD3D12::DescriptorSet::DescriptorSet()
+	{
+		this->descriptorCount = 0;
+		this->firstCpuHandle.ptr = 0;
+		this->firstGpuHandle.ptr = 0;
+		this->heap = ur_null;
+		this->pagePoolPos = ur_size(-1);
+		this->descriptorListPos = ur_size(-1);
+	}
+
+	GfxSystemD3D12::DescriptorSet::~DescriptorSet()
+	{
+		if (this->heap != ur_null)
+		{
+			this->heap->ReleaseDescriptors(*this);
+		}
+	}
+
+	GfxSystemD3D12::Descriptor::Descriptor()
+	{
+	}
+
+	GfxSystemD3D12::Descriptor::~Descriptor()
+	{
 	}
 
 
@@ -1308,6 +1377,10 @@ namespace UnlimRealms
 
 	Result GfxResourceBindingD3D12::OnInitialize()
 	{
+		// todo: check whether layout is changed;
+		// if it is - reinitialize root tables and signature object;
+		// if not - simply copy new resource(s) decriptor(s) into corresponding table descriptor heap(s)
+
 		// reset
 
 		this->d3dDesriptorRangesCbvSrvUav.clear();
@@ -1369,6 +1442,28 @@ namespace UnlimRealms
 			__uuidof(ID3D12RootSignature), this->d3dRootSignature);
 		if (FAILED(hr))
 			return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to create d3d root signature");
+
+		// reserve descriptors per non empty root table;
+		// this gpu memory location will be used to store shader visible descriptors in an ordered manner (correspnding to table ranges layout);
+		// to be able to bind different resources to the same layout - ID3D12Device::CopyDescriptors is used to copy descriptors from random heap(s) locations into root table heap region;
+		this->tableDescriptorSets.resize(D3DRootSlot_Count);
+		for (ur_size tableSlotId = 0; tableSlotId < D3DRootSlot_Count; ++tableSlotId)
+		{
+			auto& tableDescriptorSet = this->tableDescriptorSets[tableSlotId];
+			const auto& d3dDescriptorTable = this->d3dRootParameters[tableSlotId].DescriptorTable;
+			if (d3dDescriptorTable.NumDescriptorRanges > 0)
+			{
+				ur_size descriptorsCount = 0;
+				for (UINT irange = 0; irange < d3dDescriptorTable.NumDescriptorRanges; ++irange)
+				{
+					descriptorsCount += ur_size(d3dDescriptorTable.pDescriptorRanges[irange].NumDescriptors);
+				}
+				D3D12_DESCRIPTOR_HEAP_TYPE d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE(tableSlotId); // D3DRootSlotmust be in sync with D3D12_DESCRIPTOR_HEAP_TYPE!
+				d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->AcquireDescriptors(tableDescriptorSet, descriptorsCount);
+			}
+		}
+
+		tableDescriptorSets[0]->FirstGpuHandle();
 
 		return Result(Success);
 	}

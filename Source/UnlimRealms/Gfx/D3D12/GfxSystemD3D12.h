@@ -99,27 +99,8 @@ namespace UnlimRealms
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		
 		class UR_DECL DescriptorHeap;
-
-		class UR_DECL Descriptor
-		{
-			friend class DescriptorHeap;
-		public:
-
-			Descriptor(DescriptorHeap* heap);
-
-			~Descriptor();
-
-			inline D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle() const;
-			
-			inline D3D12_GPU_DESCRIPTOR_HANDLE GpuHandle() const;
-
-		private:
-
-			D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
-			D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
-			DescriptorHeap* heap;
-			ur_size heapIdx;
-		};
+		class UR_DECL DescriptorSet;
+		class UR_DECL Descriptor;
 
 		class UR_DECL DescriptorHeap : public GfxEntity
 		{
@@ -131,13 +112,26 @@ namespace UnlimRealms
 
 			Result AcquireDescriptor(std::unique_ptr<Descriptor>& descriptor);
 
+			Result AcquireDescriptors(std::unique_ptr<DescriptorSet>& descriptorSet, ur_size descriptorsCount);
+
 			Result ReleaseDescriptor(Descriptor& descriptor);
+
+			Result ReleaseDescriptors(DescriptorSet& descriptorSet);
 
 		private:
 
+			Result AcquireDescriptors(DescriptorSet& descriptorSet, ur_size descriptorsCount);
+
 			static const ur_size DescriptorsPerHeap = 256;
 
-			typedef std::pair<ur_size, ur_size> Range;
+			struct Range
+			{
+				ur_size start;
+				ur_size end;
+				Range() : start(0), end(0) {}
+				Range(ur_size start, ur_size end) : start(start), end(end) {}
+				inline ur_size size() const { return end - start; }
+			};
 
 			struct Page : public NonCopyable
 			{
@@ -148,10 +142,47 @@ namespace UnlimRealms
 			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType;
 			std::mutex modifyMutex;
 			std::vector<std::unique_ptr<Page>> pagePool;
-			std::vector<Descriptor*> descriptors;
+			std::vector<DescriptorSet*> descriptorSets;
 			ur_uint32 d3dDescriptorSize;
-			ur_size currentPageIdx;
 			ur_size firstFreePageIdx;
+		};
+
+		class UR_DECL DescriptorSet
+		{
+		public:
+
+			DescriptorSet();
+
+			~DescriptorSet();
+
+			inline ur_size GetDescriptorCount() const;
+
+			inline D3D12_CPU_DESCRIPTOR_HANDLE FirstCpuHandle() const;
+
+			inline D3D12_GPU_DESCRIPTOR_HANDLE FirstGpuHandle() const;
+
+		private:
+
+			friend class DescriptorHeap;
+			ur_size descriptorCount;
+			D3D12_CPU_DESCRIPTOR_HANDLE firstCpuHandle;
+			D3D12_GPU_DESCRIPTOR_HANDLE firstGpuHandle;
+			DescriptorHeap* heap;
+			ur_size pagePoolPos;
+			ur_size descriptorListPos;
+		};
+
+		class UR_DECL Descriptor : public DescriptorSet
+		{
+		public:
+
+			Descriptor();
+
+			~Descriptor();
+
+			inline D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle() const;
+
+			inline D3D12_GPU_DESCRIPTOR_HANDLE GpuHandle() const;
 		};
 
 		inline DescriptorHeap* GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType);
@@ -447,7 +478,7 @@ namespace UnlimRealms
 
 		inline ID3D12RootSignature* GetD3DRootSignature() const;
 
-		//inline D3D12_GPU_DESCRIPTOR_HANDLE GetD3DGPUHandleForRootTable(D3DRootSlot rootSlot) const;
+		//inline D3D12_GPU_DESCRIPTOR_HANDLE GetD3DRootTableGPUHandle(D3DRootSlot rootSlot) const;
 
 	protected:
 
@@ -462,6 +493,7 @@ namespace UnlimRealms
 		std::vector<D3D12_ROOT_PARAMETER> d3dRootParameters;
 		shared_ref<ID3D12RootSignature> d3dRootSignature;
 		shared_ref<ID3DBlob> d3dSerializedRootSignature;
+		std::vector<std::unique_ptr<GfxSystemD3D12::DescriptorSet>> tableDescriptorSets;
 	};
 
 
