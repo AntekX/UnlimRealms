@@ -346,7 +346,8 @@ namespace UnlimRealms
 		d3dHeapType(d3dHeapType)
 	{
 		this->d3dDescriptorSize = 0;
-		this->currentPageIdx = ur_size(-1);
+		this->currentPageIdx = 0;
+		this->firstFreePageIdx = 0;
 	}
 	
 	GfxSystemD3D12::DescriptorHeap::~DescriptorHeap()
@@ -367,8 +368,21 @@ namespace UnlimRealms
 
 		std::lock_guard<std::mutex> lockModify(this->modifyMutex);
 
-		if (this->pagePool.empty() ||
-			this->pagePool[currentPageIdx]->freeRanges.empty())
+		if (this->currentPageIdx < this->pagePool.size() && this->pagePool[this->currentPageIdx]->freeRanges.empty())
+		{
+			if (this->firstFreePageIdx < this->currentPageIdx)
+			{
+				// reuse some previously released page
+				this->currentPageIdx = this->firstFreePageIdx;
+			}
+			else
+			{
+				// new page is required
+				this->firstFreePageIdx = this->currentPageIdx + 1;
+			}
+		}
+
+		if (this->firstFreePageIdx >= this->pagePool.size())
 		{
 			// create new D3D heap
 			
@@ -395,7 +409,8 @@ namespace UnlimRealms
 			newPage->freeRanges.push_back(Range(0, DescriptorsPerHeap - 1));
 
 			this->pagePool.push_back(std::move(newPage));
-			this->currentPageIdx = this->pagePool.size() - 1;
+			this->firstFreePageIdx = this->pagePool.size() - 1;
+			this->currentPageIdx = this->firstFreePageIdx;
 			
 			if (0 == this->d3dDescriptorSize)
 			{
@@ -407,12 +422,8 @@ namespace UnlimRealms
 		Page& currentPage = *this->pagePool[this->currentPageIdx].get();
 		Range& currentRange = currentPage.freeRanges.back();
 		ur_size currentOffset = currentRange.first;
-		if (currentRange.first < currentRange.second)
-		{
-			// move to next record
-			currentRange.first += 1;
-		}
-		else
+		currentRange.first += 1; // move to next record in range
+		if (currentRange.first == currentRange.second)
 		{
 			// release exhausted range
 			currentPage.freeRanges.pop_back();
@@ -477,11 +488,13 @@ namespace UnlimRealms
 			}
 		}
 
-		// released empty page
+		// note: do not remove empty page to preserve ordering and indexing (following pages can still be referenced by other descriptor(s));
+		// however, d3d heap memory can be released & reacquired on demand
 		if (page.freeRanges.front().second - page.freeRanges.front().first + 1 == DescriptorsPerHeap)
 		{
-			this->pagePool.erase(this->pagePool.begin() + pageIdx);
+			// consider releasing d3d heap here
 		}
+		this->firstFreePageIdx = std::min(pageIdx, this->firstFreePageIdx);
 
 		return Result(Success);
 	}
@@ -1325,7 +1338,23 @@ namespace UnlimRealms
 		rootParameter->DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesCbvSrvUav.data();
 		rootParameter->ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-		// todo: initialize other root tables
+		rootParameter = &this->d3dRootParameters[D3DRootSlot_Table_Sampler];
+		rootParameter->ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameter->DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesSampler.size();
+		rootParameter->DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesSampler.data();
+		rootParameter->ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+		rootParameter = &this->d3dRootParameters[D3DRootSlot_Table_Rtv];
+		rootParameter->ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameter->DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesRtv.size();
+		rootParameter->DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesRtv.data();
+		rootParameter->ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+		rootParameter = &this->d3dRootParameters[D3DRootSlot_Table_Dsv];
+		rootParameter->ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameter->DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesDsv.size();
+		rootParameter->DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesDsv.data();
+		rootParameter->ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 		D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc = {};
 		d3dRootSignatureDesc.NumParameters = (UINT)d3dRootParameters.size();

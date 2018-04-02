@@ -151,6 +151,7 @@ namespace UnlimRealms
 			std::vector<Descriptor*> descriptors;
 			ur_uint32 d3dDescriptorSize;
 			ur_size currentPageIdx;
+			ur_size firstFreePageIdx;
 		};
 
 		inline DescriptorHeap* GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType);
