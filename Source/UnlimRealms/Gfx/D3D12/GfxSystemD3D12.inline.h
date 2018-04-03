@@ -96,6 +96,11 @@ namespace UnlimRealms
 		return this->d3dCurrentState;
 	}
 
+	inline GfxResourceD3D12& GfxBufferD3D12::GetResource()
+	{
+		return this->resource;
+	}
+
 	inline GfxResourceD3D12& GfxTextureD3D12::GetResource()
 	{
 		return this->resource;

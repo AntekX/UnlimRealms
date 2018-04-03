@@ -638,17 +638,46 @@ namespace UnlimRealms
 	{
 		// todo: support DS
 
+		if (this->d3dCommandList.empty())
+			return ResultError(Failure, "GfxContextD3D12::SetRenderTarget: failed, d3d command list is not initialized");
+
 		GfxRenderTargetD3D12* rtD3D12 = static_cast<GfxRenderTargetD3D12*>(rt);
 		UINT numRTs = (rtD3D12 != ur_null && rtD3D12->GetRTVDescriptor() != ur_null ? 1 : 0);
 		const D3D12_CPU_DESCRIPTOR_HANDLE d3dRTDescriptors[] = { numRTs > 0 ? rtD3D12->GetRTVDescriptor()->CpuHandle() : D3D12_CPU_DESCRIPTOR_HANDLE() };
 		this->d3dCommandList->OMSetRenderTargets(numRTs, d3dRTDescriptors, FALSE, ur_null);
+
+		if (rt != ur_null)
+		{
+			GfxTexture *rtTex = rt->GetTargetBuffer();
+			if (ur_null == rtTex && ds != ur_null) rtTex = ds->GetDepthStencilBuffer();
+			if (rtTex != ur_null)
+			{
+				GfxViewPort gfxViewPort = {
+					0.0f, 0.0f, (ur_float)rtTex->GetDesc().Width, (ur_float)rtTex->GetDesc().Height, 0.0f, 1.0f
+				};
+				this->SetViewPort(&gfxViewPort);
+			}
+		}
 
 		return Result(Success);
 	}
 
 	Result GfxContextD3D12::SetViewPort(const GfxViewPort *viewPort)
 	{
-		return NotImplemented;
+		if (this->d3dCommandList.empty())
+			return ResultError(Failure, "GfxContextD3D12::SetViewPort: failed, d3d command list is not initialized");
+
+		this->d3dCommandList->RSSetViewports(1, viewPort != ur_null ?
+			&GfxViewPortToD3D12(*viewPort) : ur_null);
+
+		//  temp: set scissor rect right here
+		if (viewPort != ur_null)
+		{
+			D3D12_RECT d3dRect = { LONG(viewPort->X), LONG(viewPort->Y), LONG(viewPort->X + viewPort->Width), LONG(viewPort->Y + viewPort->Height) };
+			this->d3dCommandList->RSSetScissorRects(1, &d3dRect);
+		}
+
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::GetViewPort(GfxViewPort &viewPort)
@@ -713,7 +742,24 @@ namespace UnlimRealms
 
 	Result GfxContextD3D12::SetVertexBuffer(GfxBuffer *buffer, ur_uint slot, ur_uint stride, ur_uint offset)
 	{
-		return NotImplemented;
+		if (this->d3dCommandList.empty())
+			return ResultError(Failure, "GfxContextD3D12::SetVertexBuffer: failed, d3d command list is not initialized");
+
+		GfxBufferD3D12* bufferD3D12 = static_cast<GfxBufferD3D12*>(buffer);
+		if (bufferD3D12 != ur_null && bufferD3D12->GetResource().GetD3DResource() != ur_null)
+		{
+			D3D12_VERTEX_BUFFER_VIEW d3dVBV;
+			d3dVBV.BufferLocation = bufferD3D12->GetResource().GetD3DResource()->GetGPUVirtualAddress();
+			d3dVBV.StrideInBytes = stride;
+			d3dVBV.SizeInBytes = buffer->GetDesc().Size;
+			this->d3dCommandList->IASetVertexBuffers(slot, 1, &d3dVBV);
+		}
+		else
+		{
+			this->d3dCommandList->IASetVertexBuffers(slot, 0, ur_null);
+		}
+
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::SetIndexBuffer(GfxBuffer *buffer, ur_uint bitsPerIndex, ur_uint offset)
@@ -1799,6 +1845,18 @@ namespace UnlimRealms
 			return D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		}
 		return D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED;
+	}
+
+	D3D12_VIEWPORT GfxViewPortToD3D12(const GfxViewPort &viewPort)
+	{
+		D3D12_VIEWPORT d3dViewPort;
+		d3dViewPort.TopLeftX = viewPort.X;
+		d3dViewPort.TopLeftY = viewPort.Y;
+		d3dViewPort.Width = viewPort.Width;
+		d3dViewPort.Height = viewPort.Height;
+		d3dViewPort.MinDepth = viewPort.DepthMin;
+		d3dViewPort.MaxDepth = viewPort.DepthMax;
+		return d3dViewPort;
 	}
 
 	HRESULT FillUploadResource(ID3D12Resource *uploadResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData)
