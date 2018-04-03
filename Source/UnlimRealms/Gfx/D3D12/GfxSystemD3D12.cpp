@@ -319,6 +319,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GfxSystemD3D12::CreateResourceBinding(std::unique_ptr<GfxResourceBinding> &gfxBinding)
+	{
+		gfxBinding.reset(new GfxResourceBindingD3D12(*this));
+		return Result(Success);
+	}
+
 	Result GfxSystemD3D12::CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState)
 	{
 		gfxPipelineState.reset(new GfxPipelineStateObjectD3D12(*this));
@@ -462,6 +468,7 @@ namespace UnlimRealms
 		descriptorSet.descriptorCount = descriptorsCount;
 		descriptorSet.firstCpuHandle.ptr = currentHeapCPUStart + currentOffset * this->d3dDescriptorSize;
 		descriptorSet.firstGpuHandle.ptr = currentHeapGPUStart + currentOffset * this->d3dDescriptorSize;
+		descriptorSet.heap = this;
 		descriptorSet.pagePoolPos = currentOffset + currentPageIdx * DescriptorsPerHeap;
 		descriptorSet.descriptorListPos = this->descriptorSets.size();
 		this->descriptorSets.push_back(&descriptorSet);
@@ -629,7 +636,14 @@ namespace UnlimRealms
 
 	Result GfxContextD3D12::SetRenderTarget(GfxRenderTarget *rt, GfxRenderTarget *ds)
 	{
-		return NotImplemented;
+		// todo: support DS
+
+		GfxRenderTargetD3D12* rtD3D12 = static_cast<GfxRenderTargetD3D12*>(rt);
+		UINT numRTs = (rtD3D12 != ur_null && rtD3D12->GetRTVDescriptor() != ur_null ? 1 : 0);
+		const D3D12_CPU_DESCRIPTOR_HANDLE d3dRTDescriptors[] = { numRTs > 0 ? rtD3D12->GetRTVDescriptor()->CpuHandle() : D3D12_CPU_DESCRIPTOR_HANDLE() };
+		this->d3dCommandList->OMSetRenderTargets(numRTs, d3dRTDescriptors, FALSE, ur_null);
+
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::SetViewPort(const GfxViewPort *viewPort)
@@ -684,16 +698,17 @@ namespace UnlimRealms
 
 	Result GfxContextD3D12::SetResourceBinding(GfxResourceBinding *binding)
 	{
-		// todo:
 		if (this->d3dCommandList.empty())
 			return ResultError(Failure, "GfxContextD3D12::SetResourceBinding: failed, d3d command list is not initialized");
 
 		GfxResourceBindingD3D12 *resourceBindingD3D12 = static_cast<GfxResourceBindingD3D12*>(binding);
 		this->d3dCommandList->SetGraphicsRootSignature(resourceBindingD3D12->GetD3DRootSignature());
+
+		// todo: descriptor tables & corresponding heaps
 		//this->d3dCommandList->SetDescriptorHeaps()
 		//this->d3dCommandList->SetGraphicsRootDescriptorTable(0, )
 
-		return NotImplemented;
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::SetVertexBuffer(GfxBuffer *buffer, ur_uint slot, ur_uint stride, ur_uint offset)
@@ -708,7 +723,12 @@ namespace UnlimRealms
 
 	Result GfxContextD3D12::Draw(ur_uint vertexCount, ur_uint vertexOffset, ur_uint instanceCount, ur_uint instanceOffset)
 	{
-		return NotImplemented;
+		if (this->d3dCommandList.empty())
+			return ResultError(Failure, "GfxContextD3D12::Draw: failed, d3d command list is not initialized");
+
+		this->d3dCommandList->DrawInstanced((UINT)vertexCount, (UINT)instanceCount, (UINT)vertexOffset, (UINT)instanceOffset);
+
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::DrawIndexed(ur_uint indexCount, ur_uint indexOffset, ur_uint vertexOffset, ur_uint instanceCount, ur_uint instanceOffset)
@@ -1248,6 +1268,18 @@ namespace UnlimRealms
 		if (ur_null == d3dDevice)
 			return ResultError(NotInitialized, "GfxPipelineStateObjectD3D12::OnInitialize: failed, device unavailable");
 
+		if (BindingStateFlag & updateFlags)
+		{
+			if (this->GetBinding() != ur_null)
+			{
+				const GfxResourceBindingD3D12* bindingD3D12 = static_cast<const GfxResourceBindingD3D12*>(this->GetBinding());
+				this->d3dPipelineDesc.pRootSignature = bindingD3D12->GetD3DRootSignature();
+			}
+			else
+			{
+				this->d3dPipelineDesc.pRootSignature = ur_null;
+			}
+		}
 		if (VertexShaderFlag & updateFlags)
 		{
 			if (this->GetVertexShader() != ur_null)
@@ -1320,7 +1352,7 @@ namespace UnlimRealms
 			{
 				this->d3dPipelineDesc.RTVFormats[i] = GfxFormatToDXGI(this->GetRenderTargetFormat(i), GfxFormatView::Unorm);
 			}
-			this->d3dPipelineDesc.DSVFormat = GfxFormatToDXGI(this->GetDepthStencilFormat(), GfxFormatView::Typeless);;
+			this->d3dPipelineDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;//GfxFormatToDXGI(this->GetDepthStencilFormat(), GfxFormatView::Typeless);;
 		}
 
 		this->d3dPipelineState.reset(ur_null);
@@ -1385,8 +1417,6 @@ namespace UnlimRealms
 
 		this->d3dDesriptorRangesCbvSrvUav.clear();
 		this->d3dDesriptorRangesSampler.clear();
-		this->d3dDesriptorRangesRtv.clear();
-		this->d3dDesriptorRangesDsv.clear();
 		this->d3dRootParameters.clear();
 		this->d3dRootSignature.reset(ur_null);
 		this->d3dSerializedRootSignature.reset(ur_null);
@@ -1404,41 +1434,41 @@ namespace UnlimRealms
 		if (ur_null == d3dDevice)
 			return ResultError(NotInitialized, "GfxResourceBindingD3D12::OnInitialize: failed, device unavailable");
 
-		this->d3dRootParameters.resize(D3DRootSlot_Count);
-		D3D12_ROOT_PARAMETER* rootParameter = &this->d3dRootParameters[D3DRootSlot_Table_CbvSrvUav];
-		rootParameter->ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameter->DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesCbvSrvUav.size();
-		rootParameter->DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesCbvSrvUav.data();
-		rootParameter->ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		if (!this->d3dDesriptorRangesCbvSrvUav.empty())
+		{
+			this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
+			D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
+			rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+			rootParameter.DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesCbvSrvUav.size();
+			rootParameter.DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesCbvSrvUav.data();
+			rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		}
 
-		rootParameter = &this->d3dRootParameters[D3DRootSlot_Table_Sampler];
-		rootParameter->ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameter->DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesSampler.size();
-		rootParameter->DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesSampler.data();
-		rootParameter->ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-		rootParameter = &this->d3dRootParameters[D3DRootSlot_Table_Rtv];
-		rootParameter->ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameter->DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesRtv.size();
-		rootParameter->DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesRtv.data();
-		rootParameter->ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-		rootParameter = &this->d3dRootParameters[D3DRootSlot_Table_Dsv];
-		rootParameter->ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameter->DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesDsv.size();
-		rootParameter->DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesDsv.data();
-		rootParameter->ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		if (!this->d3dDesriptorRangesSampler.empty())
+		{
+			this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
+			D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
+			rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+			rootParameter.DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesSampler.size();
+			rootParameter.DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesSampler.data();
+			rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		}
 
 		D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc = {};
 		d3dRootSignatureDesc.NumParameters = (UINT)d3dRootParameters.size();
 		d3dRootSignatureDesc.pParameters = d3dRootParameters.data();
+		d3dRootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
+		rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		//d3dRootSignatureDesc = rootSignatureDesc;
 
 		shared_ref<ID3DBlob> d3dErrorBlob;
 		HRESULT hr = D3D12SerializeRootSignature(&d3dRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, this->d3dSerializedRootSignature, d3dErrorBlob);
 		if (FAILED(hr))
 			return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to serialize d3d root signature");
 
-		hr = d3dDevice->CreateRootSignature(0, this->d3dSerializedRootSignature.get(), this->d3dSerializedRootSignature->GetBufferSize(),
+		hr = d3dDevice->CreateRootSignature(0, this->d3dSerializedRootSignature->GetBufferPointer(), this->d3dSerializedRootSignature->GetBufferSize(),
 			__uuidof(ID3D12RootSignature), this->d3dRootSignature);
 		if (FAILED(hr))
 			return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to create d3d root signature");
@@ -1446,24 +1476,23 @@ namespace UnlimRealms
 		// reserve descriptors per non empty root table;
 		// this gpu memory location will be used to store shader visible descriptors in an ordered manner (correspnding to table ranges layout);
 		// to be able to bind different resources to the same layout - ID3D12Device::CopyDescriptors is used to copy descriptors from random heap(s) locations into root table heap region;
-		this->tableDescriptorSets.resize(D3DRootSlot_Count);
-		for (ur_size tableSlotId = 0; tableSlotId < D3DRootSlot_Count; ++tableSlotId)
+		this->tableDescriptorSets.resize(this->d3dRootParameters.size());
+		for (ur_size tableIdx = 0; tableIdx < this->d3dRootParameters.size(); ++tableIdx)
 		{
-			auto& tableDescriptorSet = this->tableDescriptorSets[tableSlotId];
-			const auto& d3dDescriptorTable = this->d3dRootParameters[tableSlotId].DescriptorTable;
-			if (d3dDescriptorTable.NumDescriptorRanges > 0)
+			auto& tableDescriptorSet = this->tableDescriptorSets[tableIdx];
+			const auto& d3dDescriptorTable = this->d3dRootParameters[tableIdx].DescriptorTable;
+			D3D12_DESCRIPTOR_HEAP_TYPE d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE(-1);
+			ur_size descriptorsCount = 0;
+			for (UINT irange = 0; irange < d3dDescriptorTable.NumDescriptorRanges; ++irange)
 			{
-				ur_size descriptorsCount = 0;
-				for (UINT irange = 0; irange < d3dDescriptorTable.NumDescriptorRanges; ++irange)
-				{
-					descriptorsCount += ur_size(d3dDescriptorTable.pDescriptorRanges[irange].NumDescriptors);
-				}
-				D3D12_DESCRIPTOR_HEAP_TYPE d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE(tableSlotId); // D3DRootSlotmust must be in sync with D3D12_DESCRIPTOR_HEAP_TYPE!
-				d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->AcquireDescriptors(tableDescriptorSet, descriptorsCount);
+				descriptorsCount += ur_size(d3dDescriptorTable.pDescriptorRanges[irange].NumDescriptors);
+				if (d3dDescriptorTable.pDescriptorRanges[irange].RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
+					d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+				else
+					d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 			}
+			d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->AcquireDescriptors(tableDescriptorSet, descriptorsCount);
 		}
-
-		tableDescriptorSets[0]->FirstGpuHandle();
 
 		return Result(Success);
 	}

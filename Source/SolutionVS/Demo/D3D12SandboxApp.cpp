@@ -9,6 +9,7 @@
 #include "Sys/Windows/WinInput.h"
 #include "Gfx/D3D12/GfxSystemD3D12.h"
 #include "Gfx/D3D11/GfxSystemD3D11.h" // for test purpose
+#include "Resources/Resources.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
@@ -50,26 +51,75 @@ int D3D12SandboxApp::Run()
 		res = gfxContext->Initialize();
 	}
 
-	// test buffer
-	std::unique_ptr<GfxBuffer> gfxBuffer;
-	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxBuffer)))
+	// initialize test rendering primitive
+	std::unique_ptr<GfxVertexShader> gfxVS;
+	std::unique_ptr<GfxPixelShader> gfxPS;
+	CreateVertexShaderFromFile(realm, gfxVS, "sample_vs.cso");
+	CreatePixelShaderFromFile(realm, gfxPS, "sample_ps.cso");
+
+	std::unique_ptr<GfxInputLayout> gfxIL;
+	if (Succeeded(realm.GetGfxSystem()->CreateInputLayout(gfxIL)))
 	{
-		ur_uint bufferData[] = { 0, 1, 2, 3, 4 };
-		
+		GfxInputElement elements[] = {
+			{ GfxSemantic::Position, 0, 0, GfxFormat::R32G32B32, GfxFormatView::Float, 0 },
+			{ GfxSemantic::Color, 0, 0, GfxFormat::R8G8B8A8, GfxFormatView::Unorm, 0 },
+			{ GfxSemantic::TexCoord, 0, 0, GfxFormat::R32G32, GfxFormatView::Float, 0 },
+		};
+		res = gfxIL->Initialize(*gfxVS.get(), elements, ur_array_size(elements));
+	}
+
+	struct Vertex
+	{
+		ur_float3 pos;
+		ur_float4 color;
+		ur_float2 tex;
+	};
+	std::unique_ptr<GfxBuffer> gfxVB;
+	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxVB)))
+	{
+		Vertex bufferData[] = {
+			{ { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
+			{ {  0.0f,  1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
+			{ {  0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } }
+		};
+
 		GfxResourceData bufferDataDesc;
 		bufferDataDesc.Ptr = bufferData;
 		bufferDataDesc.RowPitch = sizeof(bufferData);
-		bufferDataDesc.SlicePitch = 0;
+		bufferDataDesc.SlicePitch = bufferDataDesc.RowPitch;
 
-		GfxBufferDesc bufferDesc;
+		GfxBufferDesc bufferDesc = {};
 		bufferDesc.Size = bufferDataDesc.RowPitch;
 		bufferDesc.Usage = GfxUsage::Default;
-		bufferDesc.BindFlags = ur_uint(GfxBindFlag::ShaderResource);
-		bufferDesc.AccessFlags = 0;
-		bufferDesc.StructureStride = 0;
+		bufferDesc.BindFlags = ur_uint(GfxBindFlag::VertexBuffer);
 
-		res = gfxBuffer->Initialize(bufferDesc, &bufferDataDesc);
+		gfxVB->Initialize(bufferDesc, &bufferDataDesc);
 	}
+
+	GfxRasterizerState gfxRasterizer = GfxRasterizerState::Default;
+	gfxRasterizer.CullMode = GfxCullMode::None;
+
+	GfxDepthStencilState gfxDepthStencil = GfxDepthStencilState::Default;
+	gfxDepthStencil.DepthEnable = false;
+	gfxDepthStencil.DepthWriteEnable = false;
+
+	// declare binding matching used shader registers
+	std::unique_ptr<GfxResourceBinding> gfxBinding;
+	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding);
+	gfxBinding->SetBuffer(0, ur_null); 
+	gfxBinding->SetTexture(0, ur_null);
+	gfxBinding->SetSampler(0, ur_null);
+	gfxBinding->Initialize();
+
+	std::unique_ptr<GfxPipelineStateObject> gfxPSO;
+	realm.GetGfxSystem()->CreatePipelineStateObject(gfxPSO);
+	gfxPSO->SetResourceBinding(gfxBinding.get());
+	gfxPSO->SetPixelShader(gfxPS.get());
+	gfxPSO->SetVertexShader(gfxVS.get());
+	gfxPSO->SetInputLayout(gfxIL.get());
+	gfxPSO->SetRasterizerState(gfxRasterizer);
+	gfxPSO->SetDepthStencilState(gfxDepthStencil);
+	gfxPSO->Initialize();
 
 	// Main message loop:
 	MSG msg;
@@ -108,9 +158,16 @@ int D3D12SandboxApp::Run()
 				{ 1.0f, 1.0f, 0.0f, 1.0f },
 				{ 1.0f, 0.0f, 1.0f, 1.0f },
 			};
-			ur_uint colorIdx = static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->CurrentFrameIndex() % 5;
+			ur_uint colorIdx = 2;// static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->CurrentFrameIndex() % 5;
 
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, s_colors[colorIdx], false, 0.0f, false, 0);
+			
+			// draw test primitive
+			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
+			gfxContext->SetPipelineStateObject(gfxPSO.get());
+			gfxContext->SetResourceBinding(gfxBinding.get());
+			gfxContext->SetVertexBuffer(gfxVB.get(), 0, sizeof(Vertex), 0);
+			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 0, 0);
 
 			gfxContext->End();
 		}

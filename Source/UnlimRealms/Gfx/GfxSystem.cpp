@@ -93,13 +93,19 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GfxSystem::CreateResourceBinding(std::unique_ptr<GfxResourceBinding> &gfxBinding)
+	{
+		gfxBinding.reset(new GfxResourceBinding(*this));
+		return Result(Success);
+	}
+
 	Result GfxSystem::CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState)
 	{
 		gfxPipelineState.reset(new GfxPipelineStateObject(*this));
 		return Result(Success);
 	}
 
-	
+
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// GfxEntity
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
@@ -238,13 +244,13 @@ namespace UnlimRealms
 		std::function<Result(GfxResourceData*)> copyFunc = [&](GfxResourceData *dstData) -> Result {
 			if (ur_null == buffer || ur_null == dstData || ur_null == srcData)
 				return ResultError(InvalidArgs, "GfxContext::UpdateBuffer: failed, invalid args");
-			
+
 			ur_uint copySize = (size > 0 ? size : buffer->GetDesc().Size);
 			if (offset + copySize > buffer->GetDesc().Size)
 				return ResultError(InvalidArgs, "GfxContext::UpdateBuffer: failed to copy data, invalid offset/size");
-			
+
 			memcpy((ur_byte*)dstData->Ptr + offset, srcData->Ptr, copySize);
-			
+
 			return Result(Success);
 		};
 
@@ -260,7 +266,7 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// GfxTexture
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
-	
+
 	GfxTexture::GfxTexture(GfxSystem &gfxSystem) :
 		GfxEntity(gfxSystem)
 	{
@@ -335,7 +341,7 @@ namespace UnlimRealms
 			dsDesc.BindFlags = ur_uint(GfxBindFlag::DepthStencil) | ur_uint(GfxBindFlag::ShaderResource);
 			dsDesc.Format = dsFormat;
 			dsDesc.FormatView = GfxFormatView::Unorm;
-			
+
 			res = this->InitializeDepthStencil(newDepthStencilBuffer, dsDesc);
 			if (Failed(res))
 				return ResultError(res.Code, "GfxRenderTarget: failed to initialize depth stencil buffer");
@@ -538,7 +544,7 @@ namespace UnlimRealms
 
 	Result GfxVertexShader::OnInitialize()
 	{
-		return Result(NotImplemented);
+		return Result(Success);
 	}
 
 
@@ -557,7 +563,7 @@ namespace UnlimRealms
 
 	Result GfxPixelShader::OnInitialize()
 	{
-		return Result(NotImplemented);
+		return Result(Success);
 	}
 
 
@@ -589,7 +595,7 @@ namespace UnlimRealms
 
 	Result GfxInputLayout::OnInitialize(const GfxShader &shader, const GfxInputElement *elements, ur_uint count)
 	{
-		return Result(NotImplemented);
+		return Result(Success);
 	}
 
 
@@ -630,6 +636,7 @@ namespace UnlimRealms
 	GfxPipelineStateObject::GfxPipelineStateObject(GfxSystem &gfxSystem) :
 		GfxEntity(gfxSystem)
 	{
+		this->binding = ur_null;
 		for (auto& state : this->blendState)
 		{
 			state = GfxBlendState::Default;
@@ -654,11 +661,11 @@ namespace UnlimRealms
 	{
 	}
 
-	Result GfxPipelineStateObject::Initialize()
+	Result GfxPipelineStateObject::SetResourceBinding(GfxResourceBinding* binding)
 	{
-		Result res = this->OnInitialize(this->changedStates);
-		this->changedStates = 0;
-		return res;
+		this->binding = binding;
+		this->changedStates |= BindingStateFlag;
+		return Result(Success);
 	}
 
 	Result GfxPipelineStateObject::SetBlendState(const GfxBlendState& blendState, ur_uint rtIndex)
@@ -727,6 +734,13 @@ namespace UnlimRealms
 		this->pixelShader = pixelShader;
 		this->changedStates |= PixelShaderFlag;
 		return Result(Success);
+	}
+
+	Result GfxPipelineStateObject::Initialize()
+	{
+		Result res = this->OnInitialize(this->changedStates);
+		this->changedStates = 0;
+		return res;
 	}
 
 	Result GfxPipelineStateObject::OnInitialize(const StateFlags& changedStates)

@@ -63,6 +63,8 @@ namespace UnlimRealms
 
 		virtual Result CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState);
 
+		virtual Result CreateResourceBinding(std::unique_ptr<GfxResourceBinding> &gfxBinding);
+
 		virtual Result CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState);
 
 		inline const ur_uint GetAdaptersCount() const;
@@ -430,7 +432,7 @@ namespace UnlimRealms
 
 		virtual ~GfxPipelineStateObject();
 
-		Result Initialize();
+		Result SetResourceBinding(GfxResourceBinding* binding);
 
 		Result SetBlendState(const GfxBlendState& blendState, ur_uint rtIndex = 0);
 
@@ -449,6 +451,10 @@ namespace UnlimRealms
 		Result SetVertexShader(GfxVertexShader* vertexShader);
 		
 		Result SetPixelShader(GfxPixelShader* pixelShader);
+
+		Result Initialize();
+
+		inline const GfxResourceBinding* GetBinding() const;
 
 		inline const GfxBlendState& GetBlendState(ur_uint rtIndex = 0) const;
 
@@ -476,15 +482,16 @@ namespace UnlimRealms
 
 		enum StateFlag
 		{
-			BlendStateFlag			= 0x1,
-			RasterizerStateFlag		= 0x2,
-			DepthStencilStateFlag	= 0x4,
-			StencilRefFlag			= 0x8,
-			PrimitiveTopologyFlag	= 0x10,
-			RenderTargetFormatFlag	= 0x20,
-			InputLayoutFlag			= 0x40,
-			VertexShaderFlag		= 0x80,
-			PixelShaderFlag			= 0x100
+			BindingStateFlag		= 0x1,
+			BlendStateFlag			= 0x2,
+			RasterizerStateFlag		= 0x4,
+			DepthStencilStateFlag	= 0x8,
+			StencilRefFlag			= 0x10,
+			PrimitiveTopologyFlag	= 0x20,
+			RenderTargetFormatFlag	= 0x40,
+			InputLayoutFlag			= 0x80,
+			VertexShaderFlag		= 0x100,
+			PixelShaderFlag			= 0x200
 		};
 		typedef ur_uint StateFlags;
 
@@ -492,6 +499,7 @@ namespace UnlimRealms
 
 	private:
 
+		GfxResourceBinding* binding;
 		GfxBlendState blendState[MaxRenderTargets];
 		GfxRasterizerState rasterizerState;
 		GfxDepthStencilState depthStencilState;

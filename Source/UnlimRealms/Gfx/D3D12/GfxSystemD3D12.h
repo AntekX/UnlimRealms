@@ -58,6 +58,8 @@ namespace UnlimRealms
 		virtual Result CreateSwapChain(std::unique_ptr<GfxSwapChain> &gfxSwapChain);
 
 		virtual Result CreateBuffer(std::unique_ptr<GfxBuffer> &gfxBuffer);
+		
+		virtual Result CreateResourceBinding(std::unique_ptr<GfxResourceBinding> &gfxBinding);
 
 		virtual Result CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState);
 
@@ -462,16 +464,6 @@ namespace UnlimRealms
 	{
 	public:
 
-		enum D3DRootSlot
-		{
-			D3DRootSlot_Table_CbvSrvUav = 0,
-			D3DRootSlot_Table_Sampler = 1,
-			D3DRootSlot_Table_Rtv = 2,
-			D3DRootSlot_Table_Dsv = 3,
-			D3DRootSlot_Count = 4
-		};
-
-
 		GfxResourceBindingD3D12(GfxSystem &gfxSystem);
 
 		virtual ~GfxResourceBindingD3D12();
@@ -488,8 +480,6 @@ namespace UnlimRealms
 
 		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesCbvSrvUav;
 		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesSampler;
-		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesRtv;
-		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesDsv;
 		std::vector<D3D12_ROOT_PARAMETER> d3dRootParameters;
 		shared_ref<ID3D12RootSignature> d3dRootSignature;
 		shared_ref<ID3DBlob> d3dSerializedRootSignature;

@@ -21,7 +21,8 @@ PS_INPUT main(VS_INPUT input)
 {
 	PS_INPUT output;
 
-	output.pos = mul(ViewProj, float4(input.pos.xyz, 1.0f));
+	//output.pos = mul(ViewProj, float4(input.pos.xyz, 1.0f));
+	output.pos = float4(input.pos.xyz, 1.0f);
 	output.col = input.col;
 	output.uv = input.uv;
 

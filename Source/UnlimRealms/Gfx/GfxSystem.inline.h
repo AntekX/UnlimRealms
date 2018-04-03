@@ -75,6 +75,11 @@ namespace UnlimRealms
 		return this->renderState;
 	}
 
+	inline const GfxResourceBinding* GfxPipelineStateObject::GetBinding() const
+	{
+		return this->binding;
+	}
+
 	inline const GfxBlendState& GfxPipelineStateObject::GetBlendState(ur_uint rtIndex) const
 	{
 		return this->blendState[rtIndex];
