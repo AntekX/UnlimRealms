@@ -1,7 +1,7 @@
-cbuffer Common : register(b0)
-{
-	float4x4 ViewProj;
-};
+//cbuffer Common : register(b0)
+//{
+//	float4x4 ViewProj;
+//};
 
 struct VS_INPUT
 {

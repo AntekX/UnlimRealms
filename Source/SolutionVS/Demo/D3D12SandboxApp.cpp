@@ -41,7 +41,8 @@ int D3D12SandboxApp::Run()
 	std::unique_ptr<GfxSwapChain> gfxSwapChain;
 	if (Succeeded(realm.GetGfxSystem()->CreateSwapChain(gfxSwapChain)))
 	{
-		res = gfxSwapChain->Initialize(canvasWidth, canvasHeight);
+		res = gfxSwapChain->Initialize(canvasWidth, canvasHeight,
+			false, GfxFormat::R8G8B8A8, true, GfxFormat::R24G8, 2);
 	}
 
 	// create gfx context
@@ -71,16 +72,16 @@ int D3D12SandboxApp::Run()
 	struct Vertex
 	{
 		ur_float3 pos;
-		ur_float4 color;
+		ur_uint32 color;
 		ur_float2 tex;
 	};
 	std::unique_ptr<GfxBuffer> gfxVB;
 	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxVB)))
 	{
 		Vertex bufferData[] = {
-			{ { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
-			{ {  0.0f,  1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
-			{ {  0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } }
+			{ { -0.5f, -0.5f, 0.0f }, Vector4ToRGBA32<ur_float4>({ 1.0f, 0.0f, 0.0f, 1.0f }), { 0.0f, 0.0f } },
+			{ {  0.0f,  1.0f, 0.0f }, Vector4ToRGBA32<ur_float4>({ 0.0f, 1.0f, 0.0f, 1.0f }), { 0.0f, 0.0f } },
+			{ {  0.5f, -0.5f, 0.0f }, Vector4ToRGBA32<ur_float4>({ 0.0f, 0.0f, 1.0f, 1.0f }), { 0.0f, 0.0f } }
 		};
 
 		GfxResourceData bufferDataDesc;
@@ -106,9 +107,9 @@ int D3D12SandboxApp::Run()
 	// declare binding matching used shader registers
 	std::unique_ptr<GfxResourceBinding> gfxBinding;
 	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding);
-	gfxBinding->SetBuffer(0, ur_null); 
-	gfxBinding->SetTexture(0, ur_null);
-	gfxBinding->SetSampler(0, ur_null);
+	//gfxBinding->SetBuffer(0, ur_null); 
+	//gfxBinding->SetTexture(0, ur_null);
+	//gfxBinding->SetSampler(0, ur_null);
 	gfxBinding->Initialize();
 
 	std::unique_ptr<GfxPipelineStateObject> gfxPSO;
@@ -152,28 +153,33 @@ int D3D12SandboxApp::Run()
 			gfxContext->Begin();
 
 			static const ur_float4 s_colors[] = {
+				{ 0.2f, 0.4f, 0.8f, 1.0f },
 				{ 1.0f, 0.0f, 0.0f, 1.0f },
 				{ 0.0f, 1.0f, 0.0f, 1.0f },
 				{ 0.0f, 0.0f, 1.0f, 1.0f },
 				{ 1.0f, 1.0f, 0.0f, 1.0f },
 				{ 1.0f, 0.0f, 1.0f, 1.0f },
 			};
-			ur_uint colorIdx = 2;// static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->CurrentFrameIndex() % 5;
+			ur_uint colorIdx = 0;// static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->CurrentFrameIndex() % 6;
 
+			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, s_colors[colorIdx], false, 0.0f, false, 0);
 			
 			// draw test primitive
-			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
 			gfxContext->SetPipelineStateObject(gfxPSO.get());
 			gfxContext->SetResourceBinding(gfxBinding.get());
 			gfxContext->SetVertexBuffer(gfxVB.get(), 0, sizeof(Vertex), 0);
-			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 0, 0);
+			gfxContext->End();
+			realm.GetGfxSystem()->Render();
+			gfxContext->Begin();
+			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 1, 0);
 
 			gfxContext->End();
 		}
 
 		// execute command lists
 		realm.GetGfxSystem()->Render();
+		static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->WaitCurrentFrame();
 
 		// present
 		gfxSwapChain->Present();

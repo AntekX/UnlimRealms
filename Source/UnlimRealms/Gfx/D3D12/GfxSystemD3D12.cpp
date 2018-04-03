@@ -719,8 +719,8 @@ namespace UnlimRealms
 			return ResultError(Failure, "GfxContextD3D12::SetPipelineStateObject: failed, d3d command list is not initialized");
 
 		GfxPipelineStateObjectD3D12 *pipelineStateD3D12 = static_cast<GfxPipelineStateObjectD3D12*>(state);
-		this->d3dCommandList->IASetPrimitiveTopology(pipelineStateD3D12->GetD3DPrimitiveTopology());
 		this->d3dCommandList->SetPipelineState(pipelineStateD3D12->GetD3DPipelineState());
+		this->d3dCommandList->IASetPrimitiveTopology(pipelineStateD3D12->GetD3DPrimitiveTopology());
 
 		return Result(Success);
 	}
@@ -1115,6 +1115,14 @@ namespace UnlimRealms
 		// initialize context to execute resource transitions
 		this->gfxContext.Initialize();
 
+		// set current frame buffer to render target state
+		GfxRenderTargetD3D12 *crntFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
+		GfxResourceD3D12 &crntFrameResource = static_cast<GfxTextureD3D12*>(crntFrameRT->GetTargetBuffer())->GetResource();
+		this->gfxContext.Begin();
+		this->gfxContext.ResourceTransition(&crntFrameResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		this->gfxContext.End();
+		this->GetGfxSystem().Render();
+
 		return Result(Success);
 	}
 
@@ -1165,7 +1173,7 @@ namespace UnlimRealms
 		GfxRenderTargetD3D12(gfxSystem),
 		dxgiSwapChainBuffer(gfxSystem)
 	{
-		this->dxgiSwapChainBuffer.Initialize(d3dSwapChainResource.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+		this->dxgiSwapChainBuffer.Initialize(d3dSwapChainResource.get(), D3D12_RESOURCE_STATE_COMMON);
 	}
 
 	GfxSwapChainD3D12::BackBuffer::~BackBuffer()
@@ -1504,10 +1512,6 @@ namespace UnlimRealms
 		d3dRootSignatureDesc.NumParameters = (UINT)d3dRootParameters.size();
 		d3dRootSignatureDesc.pParameters = d3dRootParameters.data();
 		d3dRootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-		//d3dRootSignatureDesc = rootSignatureDesc;
 
 		shared_ref<ID3DBlob> d3dErrorBlob;
 		HRESULT hr = D3D12SerializeRootSignature(&d3dRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, this->d3dSerializedRootSignature, d3dErrorBlob);
