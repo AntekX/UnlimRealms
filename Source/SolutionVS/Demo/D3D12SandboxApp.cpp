@@ -63,7 +63,7 @@ int D3D12SandboxApp::Run()
 	{
 		GfxInputElement elements[] = {
 			{ GfxSemantic::Position, 0, 0, GfxFormat::R32G32B32, GfxFormatView::Float, 0 },
-			{ GfxSemantic::Color, 0, 0, GfxFormat::R8G8B8A8, GfxFormatView::Unorm, 0 },
+			{ GfxSemantic::Color, 0, 0, GfxFormat::R32G32B32A32, GfxFormatView::Float, 0 },
 			{ GfxSemantic::TexCoord, 0, 0, GfxFormat::R32G32, GfxFormatView::Float, 0 },
 		};
 		res = gfxIL->Initialize(*gfxVS.get(), elements, ur_array_size(elements));
@@ -72,26 +72,26 @@ int D3D12SandboxApp::Run()
 	struct Vertex
 	{
 		ur_float3 pos;
-		ur_uint32 color;
+		ur_float4 color;
 		ur_float2 tex;
 	};
 	std::unique_ptr<GfxBuffer> gfxVB;
 	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxVB)))
 	{
 		Vertex bufferData[] = {
-			{ { -0.5f, -0.5f, 0.0f }, Vector4ToRGBA32<ur_float4>({ 1.0f, 0.0f, 0.0f, 1.0f }), { 0.0f, 0.0f } },
-			{ {  0.0f,  1.0f, 0.0f }, Vector4ToRGBA32<ur_float4>({ 0.0f, 1.0f, 0.0f, 1.0f }), { 0.0f, 0.0f } },
-			{ {  0.5f, -0.5f, 0.0f }, Vector4ToRGBA32<ur_float4>({ 0.0f, 0.0f, 1.0f, 1.0f }), { 0.0f, 0.0f } }
+			{ { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
+			{ {  0.0f,  1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
+			{ {  0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 0.0f, 0.0f } }
 		};
 
 		GfxResourceData bufferDataDesc;
 		bufferDataDesc.Ptr = bufferData;
 		bufferDataDesc.RowPitch = sizeof(bufferData);
-		bufferDataDesc.SlicePitch = bufferDataDesc.RowPitch;
+		bufferDataDesc.SlicePitch = 0;
 
 		GfxBufferDesc bufferDesc = {};
 		bufferDesc.Size = bufferDataDesc.RowPitch;
-		bufferDesc.Usage = GfxUsage::Default;
+		bufferDesc.Usage = GfxUsage::Dynamic;
 		bufferDesc.BindFlags = ur_uint(GfxBindFlag::VertexBuffer);
 
 		gfxVB->Initialize(bufferDesc, &bufferDataDesc);
@@ -150,7 +150,12 @@ int D3D12SandboxApp::Run()
 		realm.GetInput()->Update();
 
 		{ // use context to draw
-			gfxContext->Begin();
+			//gfxContext->Begin();
+			static_cast<GfxContextD3D12*>(gfxContext.get())->GetD3DCommandList()->Reset(
+				static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->GetD3DCommandAllocator(),
+				static_cast<GfxPipelineStateObjectD3D12*>(gfxPSO.get())->GetD3DPipelineState());
+
+			gfxContext->SetResourceBinding(gfxBinding.get());
 
 			static const ur_float4 s_colors[] = {
 				{ 0.2f, 0.4f, 0.8f, 1.0f },
@@ -162,17 +167,28 @@ int D3D12SandboxApp::Run()
 			};
 			ur_uint colorIdx = 0;// static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->CurrentFrameIndex() % 6;
 
+			// finalize current frame
+			// transition barrier: render target -> present
+			GfxRenderTargetD3D12 *currentFrameRT = static_cast<GfxRenderTargetD3D12*>(gfxSwapChain->GetTargetBuffer());
+			GfxResourceD3D12 &currentFrameBuffer = static_cast<GfxTextureD3D12*>(currentFrameRT->GetTargetBuffer())->GetResource();
+			static_cast<GfxContextD3D12*>(gfxContext.get())->ResourceTransition(&currentFrameBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
+			//gfxContext->SetPipelineStateObject(gfxPSO.get());
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, s_colors[colorIdx], false, 0.0f, false, 0);
+			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, s_colors[colorIdx + 1], false, 0.0f, false, 0);
 			
 			// draw test primitive
-			gfxContext->SetPipelineStateObject(gfxPSO.get());
-			gfxContext->SetResourceBinding(gfxBinding.get());
+			static_cast<GfxContextD3D12*>(gfxContext.get())->GetD3DCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			gfxContext->SetVertexBuffer(gfxVB.get(), 0, sizeof(Vertex), 0);
-			gfxContext->End();
-			realm.GetGfxSystem()->Render();
-			gfxContext->Begin();
 			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 1, 0);
+			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 1, 0);
+			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 1, 0);
+
+			// transition barrier: present -> render target
+			GfxRenderTargetD3D12 *newFrameRT = static_cast<GfxRenderTargetD3D12*>(gfxSwapChain->GetTargetBuffer());
+			GfxResourceD3D12 &newFrameBuffer = static_cast<GfxTextureD3D12*>(newFrameRT->GetTargetBuffer())->GetResource();
+			static_cast<GfxContextD3D12*>(gfxContext.get())->ResourceTransition(&newFrameBuffer, D3D12_RESOURCE_STATE_PRESENT);
 
 			gfxContext->End();
 		}

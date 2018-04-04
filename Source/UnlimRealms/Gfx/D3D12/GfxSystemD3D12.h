@@ -31,7 +31,7 @@ namespace UnlimRealms
 	class GfxVertexShaderD3D12;
 	class GfxPixelShaderD3D12;
 	class GfxInputLayoutD3D12;
-	class GfxPipelineStateD3D12;
+	class GfxPipelineStateObjectD3D12;
 
 	
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -271,6 +271,8 @@ namespace UnlimRealms
 		Result UpdateResource(GfxResourceD3D12* dstResource, GfxResourceD3D12* srcResource);
 
 		Result ResourceTransition(GfxResourceD3D12 *resource, D3D12_RESOURCE_STATES newState);
+
+		inline ID3D12GraphicsCommandList* GetD3DCommandList() const;
 
 	private:
 

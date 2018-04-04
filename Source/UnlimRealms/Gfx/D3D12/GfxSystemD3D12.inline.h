@@ -33,22 +33,22 @@ namespace UnlimRealms
 
 	inline IDXGIFactory4* GfxSystemD3D12::GetDXGIFactory() const
 	{
-		return this->dxgiFactory;
+		return this->dxgiFactory.get();
 	}
 
 	inline ID3D12Device* GfxSystemD3D12::GetD3DDevice() const
 	{
-		return this->d3dDevice;
+		return this->d3dDevice.get();
 	}
 
 	inline ID3D12CommandQueue* GfxSystemD3D12::GetD3DCommandQueue() const
 	{
-		return this->d3dCommandQueue;
+		return this->d3dCommandQueue.get();
 	}
 
 	inline ID3D12CommandAllocator* GfxSystemD3D12::GetD3DCommandAllocator() const
 	{
-		return this->d3dCommandAllocators[this->frameIndex];
+		return this->d3dCommandAllocators[this->frameIndex].get();
 	}
 
 	inline GfxContextD3D12* GfxSystemD3D12::GetResourceContext() const
@@ -86,9 +86,14 @@ namespace UnlimRealms
 		return this->FirstGpuHandle();
 	}
 
+	inline ID3D12GraphicsCommandList* GfxContextD3D12::GetD3DCommandList() const
+	{
+		return this->d3dCommandList.get();
+	}
+
 	inline ID3D12Resource* GfxResourceD3D12::GetD3DResource() const
 	{
-		return this->d3dResource;
+		return this->d3dResource.get();
 	}
 
 	inline D3D12_RESOURCE_STATES GfxResourceD3D12::GetD3DResourceState()
