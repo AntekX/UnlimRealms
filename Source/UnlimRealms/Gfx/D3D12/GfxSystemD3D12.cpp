@@ -1134,14 +1134,14 @@ namespace UnlimRealms
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
 
-		//// finalize current frame
-		//// transition barrier: render target -> present
-		//GfxRenderTargetD3D12 *currentFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
-		//GfxResourceD3D12 &currentFrameBuffer = static_cast<GfxTextureD3D12*>(currentFrameRT->GetTargetBuffer())->GetResource();
-		//this->gfxContext.Begin();
-		//this->gfxContext.ResourceTransition(&currentFrameBuffer, D3D12_RESOURCE_STATE_PRESENT);
-		//this->gfxContext.End();
-		//d3dSystem.Render();
+		// finalize current frame
+		// transition barrier: render target -> present
+		GfxRenderTargetD3D12 *currentFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
+		GfxResourceD3D12 &currentFrameBuffer = static_cast<GfxTextureD3D12*>(currentFrameRT->GetTargetBuffer())->GetResource();
+		this->gfxContext.Begin();
+		this->gfxContext.ResourceTransition(&currentFrameBuffer, D3D12_RESOURCE_STATE_PRESENT);
+		this->gfxContext.End();
+		d3dSystem.Render();
 
 		// present
 		if (FAILED(this->dxgiSwapChain->Present(1, 0)))
@@ -1152,11 +1152,11 @@ namespace UnlimRealms
 		d3dSystem.SetFrame(this->backBufferIndex);
 
 		// transition barrier: present -> render target
-		//GfxRenderTargetD3D12 *newFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
-		//GfxResourceD3D12 &newFrameBuffer = static_cast<GfxTextureD3D12*>(newFrameRT->GetTargetBuffer())->GetResource();
-		//this->gfxContext.Begin();
-		//this->gfxContext.ResourceTransition(&newFrameBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
-		//this->gfxContext.End();
+		GfxRenderTargetD3D12 *newFrameRT = static_cast<GfxRenderTargetD3D12*>(this->GetTargetBuffer());
+		GfxResourceD3D12 &newFrameBuffer = static_cast<GfxTextureD3D12*>(newFrameRT->GetTargetBuffer())->GetResource();
+		this->gfxContext.Begin();
+		this->gfxContext.ResourceTransition(&newFrameBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		this->gfxContext.End();
 
 		return Result(Success);
 	}

@@ -126,6 +126,11 @@ namespace UnlimRealms
 		return this->dsvDescriptor.get();
 	}
 
+	inline IDXGISwapChain3* GfxSwapChainD3D12::GetDXGISwapChain() const
+	{
+		return this->dxgiSwapChain;
+	}
+
 	inline ID3D12PipelineState* GfxPipelineStateObjectD3D12::GetD3DPipelineState() const
 	{
 		return this->d3dPipelineState.get();

@@ -380,6 +380,8 @@ namespace UnlimRealms
 
 		virtual GfxRenderTarget* GetTargetBuffer();
 
+		inline IDXGISwapChain3* GetDXGISwapChain() const;
+
 	protected:
 
 		class UR_DECL BackBuffer : public GfxRenderTargetD3D12

@@ -155,6 +155,7 @@ int D3D12SandboxApp::Run()
 				static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->GetD3DCommandAllocator(),
 				static_cast<GfxPipelineStateObjectD3D12*>(gfxPSO.get())->GetD3DPipelineState());
 
+			gfxContext->SetPipelineStateObject(gfxPSO.get());
 			gfxContext->SetResourceBinding(gfxBinding.get());
 
 			static const ur_float4 s_colors[] = {
@@ -167,28 +168,15 @@ int D3D12SandboxApp::Run()
 			};
 			ur_uint colorIdx = 0;// static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->CurrentFrameIndex() % 6;
 
-			// finalize current frame
-			// transition barrier: render target -> present
-			GfxRenderTargetD3D12 *currentFrameRT = static_cast<GfxRenderTargetD3D12*>(gfxSwapChain->GetTargetBuffer());
-			GfxResourceD3D12 &currentFrameBuffer = static_cast<GfxTextureD3D12*>(currentFrameRT->GetTargetBuffer())->GetResource();
-			static_cast<GfxContextD3D12*>(gfxContext.get())->ResourceTransition(&currentFrameBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
-			//gfxContext->SetPipelineStateObject(gfxPSO.get());
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, s_colors[colorIdx], false, 0.0f, false, 0);
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, s_colors[colorIdx + 1], false, 0.0f, false, 0);
 			
 			// draw test primitive
-			static_cast<GfxContextD3D12*>(gfxContext.get())->GetD3DCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			gfxContext->SetVertexBuffer(gfxVB.get(), 0, sizeof(Vertex), 0);
 			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 1, 0);
 			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 1, 0);
 			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 1, 0);
-
-			// transition barrier: present -> render target
-			GfxRenderTargetD3D12 *newFrameRT = static_cast<GfxRenderTargetD3D12*>(gfxSwapChain->GetTargetBuffer());
-			GfxResourceD3D12 &newFrameBuffer = static_cast<GfxTextureD3D12*>(newFrameRT->GetTargetBuffer())->GetResource();
-			static_cast<GfxContextD3D12*>(gfxContext.get())->ResourceTransition(&newFrameBuffer, D3D12_RESOURCE_STATE_PRESENT);
 
 			gfxContext->End();
 		}

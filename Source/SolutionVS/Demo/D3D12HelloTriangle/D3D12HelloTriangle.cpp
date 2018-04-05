@@ -23,12 +23,17 @@
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
-D3D12HelloTriangle::D3D12HelloTriangle(HWND hwnd, UINT width, UINT height, std::wstring name) :
+D3D12HelloTriangle::D3D12HelloTriangle(Realm& realm, HWND hwnd, UINT width, UINT height, std::wstring name) :
 	DXSample(hwnd, width, height, name),
-	m_frameIndex(0),
+	m_realm(realm),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
-	m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
-	m_rtvDescriptorSize(0)
+	m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height))
+#if (USE_GFX_LIB)
+	
+#else
+	, m_frameIndex(0)
+	, m_rtvDescriptorSize(0)
+#endif
 {
 }
 
@@ -41,6 +46,34 @@ void D3D12HelloTriangle::OnInit(HWND hwnd)
 // Load the rendering pipeline dependencies.
 void D3D12HelloTriangle::LoadPipeline(HWND hwnd)
 {
+#if (USE_GFX_LIB)
+
+	// create gfx system
+	std::unique_ptr<GfxSystemD3D12> gfx(new GfxSystemD3D12(m_realm));
+	Result res = gfx->Initialize(m_realm.GetCanvas());
+	m_realm.SetGfxSystem(std::move(gfx));
+
+	// create swap chain
+	ur_uint canvasWidth = m_realm.GetCanvas()->GetClientBound().Width();
+	ur_uint canvasHeight = m_realm.GetCanvas()->GetClientBound().Height();
+	std::unique_ptr<GfxSwapChain> gfxSwapChain;
+	if (Succeeded(m_realm.GetGfxSystem()->CreateSwapChain(gfxSwapChain)))
+	{
+		res = gfxSwapChain->Initialize(canvasWidth, canvasHeight,
+			false, GfxFormat::R8G8B8A8, true, GfxFormat::R24G8, FrameCount);
+		m_gfxSwapChain.reset(static_cast<GfxSwapChainD3D12*>(gfxSwapChain.release()));
+	}
+
+	// create gfx context
+	std::unique_ptr<GfxContext> gfxContext;
+	if (Succeeded(m_realm.GetGfxSystem()->CreateContext(gfxContext)))
+	{
+		res = gfxContext->Initialize();
+		m_gfxContext.reset(static_cast<GfxContextD3D12*>(gfxContext.release()));
+	}
+
+#else
+
 	UINT dxgiFactoryFlags = 0;
 
 #if defined(_DEBUG)
@@ -143,11 +176,22 @@ void D3D12HelloTriangle::LoadPipeline(HWND hwnd)
 	}
 
 	ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)));
+#endif
 }
 
 // Load the sample assets.
 void D3D12HelloTriangle::LoadAssets()
 {
+	ID3D12Device* device = ur_null;
+	ID3D12CommandAllocator* commandAllocator = ur_null;
+#if (USE_GFX_LIB)
+	GfxSystemD3D12* gfxSysytem = static_cast<GfxSystemD3D12*>(m_realm.GetGfxSystem());
+	device = gfxSysytem->GetD3DDevice();
+	commandAllocator = gfxSysytem->GetD3DCommandAllocator();
+#else
+	device = m_device.Get();
+	commandAllocator = m_commandAllocator.Get();
+#endif
 	// Create an empty root signature.
 	{
 		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
@@ -156,7 +200,7 @@ void D3D12HelloTriangle::LoadAssets()
 		ComPtr<ID3DBlob> signature;
 		ComPtr<ID3DBlob> error;
 		ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
-		ThrowIfFailed(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
+		ThrowIfFailed(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
 	}
 
 	// Create the pipeline state, which includes compiling and loading shaders.
@@ -196,15 +240,17 @@ void D3D12HelloTriangle::LoadAssets()
 		psoDesc.NumRenderTargets = 1;
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.SampleDesc.Count = 1;
-		ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
+		ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
 	}
 
+#if (!USE_GFX_LIB)
 	// Create the command list.
-	ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
+	ThrowIfFailed(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator, m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 
 	// Command lists are created in the recording state, but there is nothing
 	// to record yet. The main loop expects it to be closed, so close it now.
 	ThrowIfFailed(m_commandList->Close());
+#endif
 
 	// Create the vertex buffer.
 	{
@@ -216,13 +262,28 @@ void D3D12HelloTriangle::LoadAssets()
 			{ { -0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
 		};
 
+#if (USE_GFX_LIB)
+		m_realm.GetGfxSystem()->CreateBuffer(m_gfxVertexBuffer);
+		
+		GfxResourceData bufferDataDesc;
+		bufferDataDesc.Ptr = triangleVertices;
+		bufferDataDesc.RowPitch = sizeof(triangleVertices);
+		bufferDataDesc.SlicePitch = 0;
+
+		GfxBufferDesc bufferDesc = {};
+		bufferDesc.Size = bufferDataDesc.RowPitch;
+		bufferDesc.Usage = GfxUsage::Default;
+		bufferDesc.BindFlags = ur_uint(GfxBindFlag::VertexBuffer);
+
+		m_gfxVertexBuffer->Initialize(bufferDesc, &bufferDataDesc);
+#else
 		const UINT vertexBufferSize = sizeof(triangleVertices);
 
 		// Note: using upload heaps to transfer static data like vert buffers is not 
 		// recommended. Every time the GPU needs it, the upload heap will be marshalled 
 		// over. Please read up on Default Heap usage. An upload heap is used here for 
 		// code simplicity and because there are very few verts to actually transfer.
-		ThrowIfFailed(m_device->CreateCommittedResource(
+		ThrowIfFailed(device->CreateCommittedResource(
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
 			D3D12_HEAP_FLAG_NONE,
 			&CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize),
@@ -241,11 +302,13 @@ void D3D12HelloTriangle::LoadAssets()
 		m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
 		m_vertexBufferView.StrideInBytes = sizeof(Vertex);
 		m_vertexBufferView.SizeInBytes = vertexBufferSize;
+#endif
 	}
 
+#if (!USE_GFX_LIB)
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
 	{
-		ThrowIfFailed(m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
+		ThrowIfFailed(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
 		m_fenceValue = 1;
 
 		// Create an event handle to use for frame synchronization.
@@ -260,6 +323,7 @@ void D3D12HelloTriangle::LoadAssets()
 		// complete before continuing.
 		WaitForPreviousFrame();
 	}
+#endif
 }
 
 // Update frame-based values.
@@ -270,30 +334,77 @@ void D3D12HelloTriangle::OnUpdate()
 // Render the scene.
 void D3D12HelloTriangle::OnRender()
 {
+	ID3D12CommandQueue* commandQueue = nullptr;
+	IDXGISwapChain3* swapChain = nullptr;
+#if (USE_GFX_LIB)
+	GfxSystemD3D12* gfxSysytem = static_cast<GfxSystemD3D12*>(m_realm.GetGfxSystem());
+	swapChain = static_cast<GfxSwapChainD3D12*>(m_gfxSwapChain.get())->GetDXGISwapChain();
+	commandQueue = gfxSysytem->GetD3DCommandQueue();
+#else
+	commandQueue = m_commandQueue.Get();
+	swapChain = m_swapChain.Get();
+#endif
+
 	// Record all the commands we need to render the scene into the command list.
 	PopulateCommandList();
 
 	// Execute the command list.
+#if (USE_GFX_LIB)
+	m_realm.GetGfxSystem()->Render();
+#else
 	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
-	m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+	commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+#endif
 
 	// Present the frame.
-	ThrowIfFailed(m_swapChain->Present(1, 0));
+#if (USE_GFX_LIB)
+	m_gfxSwapChain->Present();
+#else
+	ThrowIfFailed(swapChain->Present(1, 0));
+#endif
 
 	WaitForPreviousFrame();
 }
 
 void D3D12HelloTriangle::OnDestroy()
 {
+#if (USE_GFX_LIB)
+	m_gfxContext.reset(nullptr);
+	m_gfxSwapChain.reset(nullptr);
+#else
 	// Ensure that the GPU is no longer referencing resources that are about to be
 	// cleaned up by the destructor.
 	WaitForPreviousFrame();
 
 	CloseHandle(m_fenceEvent);
+#endif
 }
 
 void D3D12HelloTriangle::PopulateCommandList()
 {
+#if (USE_GFX_LIB)
+	GfxSystemD3D12* gfxSystem = static_cast<GfxSystemD3D12*>(m_realm.GetGfxSystem());
+
+	m_gfxContext->Begin();
+
+	// Set necessary state.
+	m_gfxContext->GetD3DCommandList()->SetPipelineState(m_pipelineState.Get());
+	m_gfxContext->GetD3DCommandList()->SetGraphicsRootSignature(m_rootSignature.Get());
+	m_gfxContext->GetD3DCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	// Set RT
+	m_gfxContext->SetRenderTarget(m_gfxSwapChain->GetTargetBuffer());
+
+	// Record commands.
+	const ur_float4 clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
+	m_gfxContext->ClearTarget(m_gfxSwapChain->GetTargetBuffer(), true, clearColor, false, 1.0f, false, 0);
+	m_gfxContext->SetVertexBuffer(m_gfxVertexBuffer.get(), 0, sizeof(Vertex), 0);
+	m_gfxContext->Draw(3, 0, 1, 0);
+
+	m_gfxContext->End();
+
+#else
+
 	// Command list allocators can only be reset when the associated 
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
@@ -326,10 +437,12 @@ void D3D12HelloTriangle::PopulateCommandList()
 	m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
 
 	ThrowIfFailed(m_commandList->Close());
+#endif
 }
 
 void D3D12HelloTriangle::WaitForPreviousFrame()
 {
+#if (!USE_GFX_LIB)
 	// WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
 	// This is code implemented as such for simplicity. The D3D12HelloFrameBuffering
 	// sample illustrates how to use fences for efficient resource usage and to
@@ -348,6 +461,7 @@ void D3D12HelloTriangle::WaitForPreviousFrame()
 	}
 
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+#endif
 }
 
 int D3D12HelloTriangleApp::Run()
@@ -368,7 +482,7 @@ int D3D12HelloTriangleApp::Run()
 	realm.SetInput(std::move(input));
 
 	// create sample
-	D3D12HelloTriangle sample(winCanvas->GetHwnd(), (UINT)winCanvas->GetClientBound().Width(), (UINT)winCanvas->GetClientBound().Height(), L"D3D12HelloTriangle");
+	D3D12HelloTriangle sample(realm, winCanvas->GetHwnd(), (UINT)winCanvas->GetClientBound().Width(), (UINT)winCanvas->GetClientBound().Height(), L"D3D12HelloTriangle");
 	sample.OnInit(winCanvas->GetHwnd());
 
 	// Main message loop:
@@ -389,6 +503,8 @@ int D3D12HelloTriangleApp::Run()
 		sample.OnUpdate();
 		sample.OnRender();
 	}
+
+	sample.OnDestroy();
 
 	return 0;
 }
