@@ -108,7 +108,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WIN_x64;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -142,7 +142,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_WIN_x64;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -156,6 +156,9 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="D3D12HelloTriangle\D3D12HelloTriangle.h" />
+    <ClInclude Include="D3D12HelloTriangle\DXSample.h" />
+    <ClInclude Include="D3D12HelloTriangle\DXSampleHelper.h" />
     <ClInclude Include="D3D12SandboxApp.h" />
     <ClInclude Include="Demo.h" />
     <ClInclude Include="Resource.h" />
@@ -164,6 +167,8 @@
     <ClInclude Include="VoxelPlanetApp.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="D3D12HelloTriangle\D3D12HelloTriangle.cpp" />
+    <ClCompile Include="D3D12HelloTriangle\DXSample.cpp" />
     <ClCompile Include="D3D12SandboxApp.cpp" />
     <ClCompile Include="Demo.cpp" />
     <ClCompile Include="stdafx.cpp">

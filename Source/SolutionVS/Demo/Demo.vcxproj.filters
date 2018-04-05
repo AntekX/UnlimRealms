@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="D3D12HelloTriangle">
+      <UniqueIdentifier>{9672c714-25c5-49d3-b1cd-68b588c05418}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
@@ -36,6 +39,15 @@
     <ClInclude Include="VoxelPlanetApp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="D3D12HelloTriangle\D3D12HelloTriangle.h">
+      <Filter>D3D12HelloTriangle</Filter>
+    </ClInclude>
+    <ClInclude Include="D3D12HelloTriangle\DXSample.h">
+      <Filter>D3D12HelloTriangle</Filter>
+    </ClInclude>
+    <ClInclude Include="D3D12HelloTriangle\DXSampleHelper.h">
+      <Filter>D3D12HelloTriangle</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -49,6 +61,12 @@
     </ClCompile>
     <ClCompile Include="VoxelPlanetApp.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D3D12HelloTriangle\D3D12HelloTriangle.cpp">
+      <Filter>D3D12HelloTriangle</Filter>
+    </ClCompile>
+    <ClCompile Include="D3D12HelloTriangle\DXSample.cpp">
+      <Filter>D3D12HelloTriangle</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

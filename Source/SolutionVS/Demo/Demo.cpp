@@ -5,6 +5,7 @@
 #include "Demo.h"
 #include "VoxelPlanetApp.h"
 #include "D3D12SandboxApp.h"
+#include "D3D12HelloTriangle/D3D12HelloTriangle.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -12,7 +13,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_ int       nCmdShow)
 {
 	//VoxelPlanetApp demoApp;
-	D3D12SandboxApp demoApp;
+	//D3D12SandboxApp demoApp;
+	D3D12HelloTriangleApp demoApp;
 	
 	return demoApp.Run();
 }
