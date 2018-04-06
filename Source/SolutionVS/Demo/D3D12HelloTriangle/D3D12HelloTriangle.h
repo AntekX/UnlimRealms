@@ -54,18 +54,30 @@ private:
 		XMFLOAT4 color;
 	};
 
+	struct GfxVertex
+	{
+		ur_float3 position;
+		ur_float4 color;
+		ur_float2 tex;
+	};
+
 	Realm& m_realm;
 
 	// Pipeline objects.
 	CD3DX12_VIEWPORT m_viewport;
-	CD3DX12_RECT m_scissorRect;
-	ComPtr<ID3D12RootSignature> m_rootSignature;
-	ComPtr<ID3D12PipelineState> m_pipelineState;
+	CD3DX12_RECT m_scissorRect;	
 #if (USE_GFX_LIB)
 	std::unique_ptr<GfxSwapChainD3D12> m_gfxSwapChain;
 	std::unique_ptr<GfxContextD3D12> m_gfxContext;
 	std::unique_ptr<GfxBuffer> m_gfxVertexBuffer;
+	std::unique_ptr<GfxInputLayout> m_gfxInputLayout;
+	std::unique_ptr<GfxVertexShader> m_gfxVertexShader;
+	std::unique_ptr<GfxPixelShader> m_gfxPixelShader;
+	std::unique_ptr<GfxResourceBinding> m_gfxBinding;
+	std::unique_ptr<GfxPipelineStateObject> m_gfxPipelineState;
 #else
+	ComPtr<ID3D12RootSignature> m_rootSignature;
+	ComPtr<ID3D12PipelineState> m_pipelineState;
 	ComPtr<IDXGISwapChain3> m_swapChain;
 	ComPtr<ID3D12Device> m_device;
 	ComPtr<ID3D12Resource> m_renderTargets[FrameCount];

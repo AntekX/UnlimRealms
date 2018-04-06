@@ -512,6 +512,17 @@ namespace UnlimRealms
 	{
 	}
 
+	Result GfxShader::Initialize(ur_byte *byteCode, ur_size sizeInBytes)
+	{
+		std::unique_ptr<ur_byte[]> byteCodeCopy;
+		if (byteCode != ur_null && sizeInBytes > 0)
+		{
+			byteCodeCopy.reset(new ur_byte[sizeInBytes]);
+			memcpy(byteCodeCopy.get(), byteCode, sizeInBytes);
+		}
+		return this->Initialize(byteCodeCopy, sizeInBytes);
+	}
+
 	Result GfxShader::Initialize(std::unique_ptr<ur_byte[]> &byteCode, ur_size sizeInBytes)
 	{
 		this->byteCode = std::move(byteCode);
@@ -696,7 +707,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GfxPipelineStateObject::SetPrimitiveTopology(GfxPrimitiveTopology& primitiveTopology)
+	Result GfxPipelineStateObject::SetPrimitiveTopology(GfxPrimitiveTopology primitiveTopology)
 	{
 		this->primitiveTopology = primitiveTopology;
 		this->changedStates |= PrimitiveTopologyFlag;

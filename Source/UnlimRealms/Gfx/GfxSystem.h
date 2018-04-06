@@ -309,6 +309,8 @@ namespace UnlimRealms
 		
 		virtual ~GfxShader();
 
+		Result Initialize(ur_byte *byteCode, ur_size sizeInBytes);
+
 		Result Initialize(std::unique_ptr<ur_byte[]> &byteCode, ur_size sizeInBytes);
 
 		inline const ur_byte* GetByteCode() const;
@@ -442,7 +444,7 @@ namespace UnlimRealms
 
 		Result SetStencilRef(ur_uint stencilRef);
 
-		Result SetPrimitiveTopology(GfxPrimitiveTopology& primitiveTopology);
+		Result SetPrimitiveTopology(GfxPrimitiveTopology primitiveTopology);
 
 		Result SetRenderTargetFormat(ur_uint numRenderTargets, GfxFormat* RTFormats, GfxFormat DSFormat);
 
@@ -454,7 +456,7 @@ namespace UnlimRealms
 
 		Result Initialize();
 
-		inline const GfxResourceBinding* GetBinding() const;
+		inline const GfxResourceBinding* GetResourceBinding() const;
 
 		inline const GfxBlendState& GetBlendState(ur_uint rtIndex = 0) const;
 

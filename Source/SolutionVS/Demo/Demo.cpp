@@ -13,8 +13,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_ int       nCmdShow)
 {
 	//VoxelPlanetApp demoApp;
-	//D3D12SandboxApp demoApp;
-	D3D12HelloTriangleApp demoApp;
+	D3D12SandboxApp demoApp;
+	//D3D12HelloTriangleApp demoApp;
 	
 	return demoApp.Run();
 }

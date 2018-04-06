@@ -11,5 +11,6 @@ float4 main(PS_INPUT input) : SV_Target
 {
 	/*float4 out_col = input.col * texture0.Sample(sampler0, input.uv);
 	return (out_col - 0.5) * 2.0;*/
-	return float4(1.0, 0.0, 0.0, 1.0);
+	return float4(input.col.xyz, 1.0);
+	//return float4(input.uv.xy, 0.0, 1.0);
 }

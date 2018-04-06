@@ -636,26 +636,31 @@ namespace UnlimRealms
 
 	Result GfxContextD3D12::SetRenderTarget(GfxRenderTarget *rt, GfxRenderTarget *ds)
 	{
-		// todo: support DS
-
 		if (this->d3dCommandList.empty())
 			return ResultError(Failure, "GfxContextD3D12::SetRenderTarget: failed, d3d command list is not initialized");
 
-		GfxRenderTargetD3D12* rtD3D12 = static_cast<GfxRenderTargetD3D12*>(rt);
-		UINT numRTs = (rtD3D12 != ur_null && rtD3D12->GetRTVDescriptor() != ur_null ? 1 : 0);
-		const D3D12_CPU_DESCRIPTOR_HANDLE d3dRTDescriptors[] = { numRTs > 0 ? rtD3D12->GetRTVDescriptor()->CpuHandle() : D3D12_CPU_DESCRIPTOR_HANDLE() };
-		this->d3dCommandList->OMSetRenderTargets(numRTs, d3dRTDescriptors, FALSE, ur_null);
+		GfxRenderTargetD3D12 *rtD3D12 = static_cast<GfxRenderTargetD3D12*>(rt);
+		GfxSystemD3D12::Descriptor *rtDescriptor = (rtD3D12 != ur_null ? rtD3D12->GetRTVDescriptor() : ur_null);
+		UINT numRTs = (rtDescriptor != ur_null ? 1 : 0);
+		D3D12_CPU_DESCRIPTOR_HANDLE *d3dRTDescriptors = (rtDescriptor != ur_null ? &rtDescriptor->CpuHandle() : ur_null);
 
+		GfxRenderTargetD3D12 *dsD3D12 = static_cast<GfxRenderTargetD3D12*>(ds);
+		GfxSystemD3D12::Descriptor *dsDescriptor = (dsD3D12 != ur_null ? dsD3D12->GetDSVDescriptor() : ur_null);
+		D3D12_CPU_DESCRIPTOR_HANDLE *d3dDSDecsriptor = { dsDescriptor != ur_null ? &dsDescriptor->CpuHandle() : ur_null };
+
+		this->d3dCommandList->OMSetRenderTargets(numRTs, d3dRTDescriptors, FALSE, d3dDSDecsriptor);
+
+		// set default view port & scrissor rect
 		if (rt != ur_null)
 		{
 			GfxTexture *rtTex = rt->GetTargetBuffer();
 			if (ur_null == rtTex && ds != ur_null) rtTex = ds->GetDepthStencilBuffer();
 			if (rtTex != ur_null)
 			{
-				GfxViewPort gfxViewPort = {
-					0.0f, 0.0f, (ur_float)rtTex->GetDesc().Width, (ur_float)rtTex->GetDesc().Height, 0.0f, 1.0f
-				};
-				this->SetViewPort(&gfxViewPort);
+				GfxViewPort viewPort = { 0.0f, 0.0f, (ur_float)rtTex->GetDesc().Width, (ur_float)rtTex->GetDesc().Height, 0.0f, 1.0f };
+				this->SetViewPort(&viewPort);
+				RectI scissorRect = { ur_int(viewPort.X), ur_int(viewPort.Y), ur_int(viewPort.X + viewPort.Width), ur_int(viewPort.Y + viewPort.Height) };
+				this->SetScissorRect(&scissorRect);
 			}
 		}
 
@@ -670,13 +675,6 @@ namespace UnlimRealms
 		this->d3dCommandList->RSSetViewports(1, viewPort != ur_null ?
 			&GfxViewPortToD3D12(*viewPort) : ur_null);
 
-		//  temp: set scissor rect right here
-		if (viewPort != ur_null)
-		{
-			D3D12_RECT d3dRect = { LONG(viewPort->X), LONG(viewPort->Y), LONG(viewPort->X + viewPort->Width), LONG(viewPort->Y + viewPort->Height) };
-			this->d3dCommandList->RSSetScissorRects(1, &d3dRect);
-		}
-
 		return Result(Success);
 	}
 
@@ -687,7 +685,15 @@ namespace UnlimRealms
 
 	Result GfxContextD3D12::SetScissorRect(const RectI *rect)
 	{
-		return NotImplemented;
+		if (this->d3dCommandList.empty())
+			return ResultError(Failure, "GfxContextD3D12::SetScissorRect: failed, d3d command list is not initialized");
+		
+		ur_uint numRects = (rect != ur_null ? 1 : 0);
+		D3D12_RECT d3dRect;
+		if (numRects > 0) d3dRect = RectIToD3D12(*rect);
+		this->d3dCommandList->RSSetScissorRects(numRects, (numRects > 0 ? &d3dRect : ur_null));
+
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::ClearTarget(GfxRenderTarget *rt,
@@ -698,14 +704,23 @@ namespace UnlimRealms
 		if (ur_null == rt)
 			return Result(InvalidArgs);
 
-		GfxRenderTargetD3D12 *rt_d3d12 = static_cast<GfxRenderTargetD3D12*>(rt);
+		GfxRenderTargetD3D12 *rtD3D12 = static_cast<GfxRenderTargetD3D12*>(rt);
 
 		if (clearColor)
 		{
-			this->d3dCommandList->ClearRenderTargetView(rt_d3d12->GetRTVDescriptor()->CpuHandle(), &color.x, 0, ur_null);
+			if (ur_null == rtD3D12->GetRTVDescriptor())
+				return Result(InvalidArgs);
+			
+			this->d3dCommandList->ClearRenderTargetView(rtD3D12->GetRTVDescriptor()->CpuHandle(), &color.x, 0, ur_null);
 		}
 
-		// todo: clear depth & stencil
+		ur_uint d3dFlags = (clearDepth ? D3D12_CLEAR_FLAG_DEPTH : 0) | (clearStencil ? D3D12_CLEAR_FLAG_STENCIL : 0);
+		if (d3dFlags != 0)
+		{
+			if (ur_null == rtD3D12->GetDSVDescriptor())
+				return Result(InvalidArgs);
+			this->d3dCommandList->ClearDepthStencilView(rtD3D12->GetDSVDescriptor()->CpuHandle(), D3D12_CLEAR_FLAGS(d3dFlags), depth, stencil, 0, ur_null);
+		}
 
 		return Result(Success);
 	}
@@ -779,7 +794,12 @@ namespace UnlimRealms
 
 	Result GfxContextD3D12::DrawIndexed(ur_uint indexCount, ur_uint indexOffset, ur_uint vertexOffset, ur_uint instanceCount, ur_uint instanceOffset)
 	{
-		return NotImplemented;
+		if (this->d3dCommandList.empty())
+			return ResultError(Failure, "GfxContextD3D12::DrawIndexed: failed, d3d command list is not initialized");
+
+		this->d3dCommandList->DrawIndexedInstanced((UINT)indexCount, (UINT)instanceCount, (UINT)indexOffset, (UINT)vertexOffset, (UINT)instanceOffset);
+
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, UpdateBufferCallback callback)
@@ -1325,9 +1345,9 @@ namespace UnlimRealms
 
 		if (BindingStateFlag & updateFlags)
 		{
-			if (this->GetBinding() != ur_null)
+			if (this->GetResourceBinding() != ur_null)
 			{
-				const GfxResourceBindingD3D12* bindingD3D12 = static_cast<const GfxResourceBindingD3D12*>(this->GetBinding());
+				const GfxResourceBindingD3D12* bindingD3D12 = static_cast<const GfxResourceBindingD3D12*>(this->GetResourceBinding());
 				this->d3dPipelineDesc.pRootSignature = bindingD3D12->GetD3DRootSignature();
 			}
 			else
@@ -1862,6 +1882,16 @@ namespace UnlimRealms
 		d3dViewPort.MinDepth = viewPort.DepthMin;
 		d3dViewPort.MaxDepth = viewPort.DepthMax;
 		return d3dViewPort;
+	}
+
+	D3D12_RECT RectIToD3D12(const RectI &rect)
+	{
+		D3D12_RECT d3dRect;
+		d3dRect.left = (LONG)rect.Min.x;
+		d3dRect.right = (LONG)rect.Max.x;
+		d3dRect.top = (LONG)rect.Min.y;
+		d3dRect.bottom = (LONG)rect.Max.y;
+		return d3dRect;
 	}
 
 	HRESULT FillUploadResource(ID3D12Resource *uploadResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData)

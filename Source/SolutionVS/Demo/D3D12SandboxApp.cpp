@@ -45,7 +45,7 @@ int D3D12SandboxApp::Run()
 			false, GfxFormat::R8G8B8A8, true, GfxFormat::R24G8, 2);
 	}
 
-	// create gfx context
+	// create graphics context
 	std::unique_ptr<GfxContext> gfxContext;
 	if (Succeeded(realm.GetGfxSystem()->CreateContext(gfxContext)))
 	{
@@ -150,16 +150,10 @@ int D3D12SandboxApp::Run()
 		realm.GetInput()->Update();
 
 		{ // use context to draw
-			//gfxContext->Begin();
-			static_cast<GfxContextD3D12*>(gfxContext.get())->GetD3DCommandList()->Reset(
-				static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->GetD3DCommandAllocator(),
-				static_cast<GfxPipelineStateObjectD3D12*>(gfxPSO.get())->GetD3DPipelineState());
-
-			gfxContext->SetPipelineStateObject(gfxPSO.get());
-			gfxContext->SetResourceBinding(gfxBinding.get());
+			gfxContext->Begin();
 
 			static const ur_float4 s_colors[] = {
-				{ 0.2f, 0.4f, 0.8f, 1.0f },
+				{ 0.0f, 0.2f, 0.4f, 1.0f },
 				{ 1.0f, 0.0f, 0.0f, 1.0f },
 				{ 0.0f, 1.0f, 0.0f, 1.0f },
 				{ 0.0f, 0.0f, 1.0f, 1.0f },
@@ -170,12 +164,11 @@ int D3D12SandboxApp::Run()
 
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, s_colors[colorIdx], false, 0.0f, false, 0);
-			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, s_colors[colorIdx + 1], false, 0.0f, false, 0);
 			
 			// draw test primitive
+			gfxContext->SetPipelineStateObject(gfxPSO.get());
+			gfxContext->SetResourceBinding(gfxBinding.get());
 			gfxContext->SetVertexBuffer(gfxVB.get(), 0, sizeof(Vertex), 0);
-			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 1, 0);
-			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 1, 0);
 			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 1, 0);
 
 			gfxContext->End();
@@ -183,7 +176,6 @@ int D3D12SandboxApp::Run()
 
 		// execute command lists
 		realm.GetGfxSystem()->Render();
-		static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->WaitCurrentFrame();
 
 		// present
 		gfxSwapChain->Present();

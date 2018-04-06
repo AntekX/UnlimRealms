@@ -193,6 +193,12 @@ void D3D12HelloTriangle::LoadAssets()
 	commandAllocator = m_commandAllocator.Get();
 #endif
 	// Create an empty root signature.
+	ID3D12RootSignature* rootSignature = nullptr;
+#if (USE_GFX_LIB)
+	gfxSysytem->CreateResourceBinding(m_gfxBinding);
+	m_gfxBinding->Initialize();
+	rootSignature = static_cast<GfxResourceBindingD3D12*>(m_gfxBinding.get())->GetD3DRootSignature();
+#else
 	{
 		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
@@ -201,7 +207,9 @@ void D3D12HelloTriangle::LoadAssets()
 		ComPtr<ID3DBlob> error;
 		ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
 		ThrowIfFailed(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
+		rootSignature = m_rootSignature.Get();
 	}
+#endif
 
 	// Create the pipeline state, which includes compiling and loading shaders.
 	{
@@ -218,17 +226,50 @@ void D3D12HelloTriangle::LoadAssets()
 		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"shaders.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
 		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"shaders.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
 
+		// Describe and create the graphics pipeline state object (PSO).
+#if (USE_GFX_LIB)
+		gfxSysytem->CreateVertexShader(m_gfxVertexShader);
+		CreateVertexShaderFromFile(m_realm, m_gfxVertexShader, "sample_vs.cso");
+		
+		gfxSysytem->CreatePixelShader(m_gfxPixelShader);
+		CreatePixelShaderFromFile(m_realm, m_gfxPixelShader, "sample_ps.cso");
+
+		gfxSysytem->CreateInputLayout(m_gfxInputLayout);
+		GfxInputElement gfxInputElements[] = {
+			{ GfxSemantic::Position, 0, 0, GfxFormat::R32G32B32, GfxFormatView::Float, 0 },
+			{ GfxSemantic::Color, 0, 0, GfxFormat::R32G32B32A32, GfxFormatView::Float, 0 },
+			{ GfxSemantic::TexCoord, 0, 0, GfxFormat::R32G32, GfxFormatView::Float, 0 }
+		};		
+		m_gfxInputLayout->Initialize(*m_gfxVertexShader.get(), gfxInputElements, _countof(gfxInputElements));
+
+		GfxRasterizerState gfxRasterizer = GfxRasterizerState::Default;
+		gfxRasterizer.CullMode = GfxCullMode::None;
+
+		GfxDepthStencilState gfxDepthStencil = GfxDepthStencilState::Default;
+		gfxDepthStencil.DepthEnable = false;
+		gfxDepthStencil.StencilEnable = false;
+		
+		gfxSysytem->CreatePipelineStateObject(m_gfxPipelineState);
+		m_gfxPipelineState->SetResourceBinding(m_gfxBinding.get());
+		m_gfxPipelineState->SetInputLayout(m_gfxInputLayout.get());
+		m_gfxPipelineState->SetVertexShader(m_gfxVertexShader.get());
+		m_gfxPipelineState->SetPixelShader(m_gfxPixelShader.get());
+		m_gfxPipelineState->SetRasterizerState(gfxRasterizer);
+		m_gfxPipelineState->SetBlendState(GfxBlendState::Default);
+		m_gfxPipelineState->SetDepthStencilState(gfxDepthStencil);
+		m_gfxPipelineState->SetPrimitiveTopology(GfxPrimitiveTopology::TriangleList);
+		m_gfxPipelineState->Initialize();
+#else
 		// Define the vertex input layout.
 		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
 		{
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 		};
 
-		// Describe and create the graphics pipeline state object (PSO).
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = m_rootSignature.Get();
+		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };		
+		psoDesc.pRootSignature = rootSignature;
 		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
 		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
@@ -241,6 +282,7 @@ void D3D12HelloTriangle::LoadAssets()
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.SampleDesc.Count = 1;
 		ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
+#endif
 	}
 
 #if (!USE_GFX_LIB)
@@ -253,17 +295,18 @@ void D3D12HelloTriangle::LoadAssets()
 #endif
 
 	// Create the vertex buffer.
-	{
-		// Define the geometry for a triangle.
-		Vertex triangleVertices[] =
-		{
-			{ { 0.0f, 0.25f * m_aspectRatio, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-			{ { 0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-			{ { -0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
-		};
-
+	{		
 #if (USE_GFX_LIB)
+
 		m_realm.GetGfxSystem()->CreateBuffer(m_gfxVertexBuffer);
+
+		// Define the geometry for a triangle.
+		GfxVertex triangleVertices[] =
+		{
+			{ { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0, 0.0 } },
+			{ {  0.0f,  0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 0.5, 1.0 } },
+			{ {  0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0, 0.0 } }
+		};
 		
 		GfxResourceData bufferDataDesc;
 		bufferDataDesc.Ptr = triangleVertices;
@@ -277,6 +320,13 @@ void D3D12HelloTriangle::LoadAssets()
 
 		m_gfxVertexBuffer->Initialize(bufferDesc, &bufferDataDesc);
 #else
+		// Define the geometry for a triangle.
+		Vertex triangleVertices[] =
+		{
+			{ { 0.0f, 0.25f * m_aspectRatio, 0.0f },{ 1.0f, 0.0f, 0.0f, 1.0f } },
+		{ { 0.25f, -0.25f * m_aspectRatio, 0.0f },{ 0.0f, 1.0f, 0.0f, 1.0f } },
+		{ { -0.25f, -0.25f * m_aspectRatio, 0.0f },{ 0.0f, 0.0f, 1.0f, 1.0f } }
+		};
 		const UINT vertexBufferSize = sizeof(triangleVertices);
 
 		// Note: using upload heaps to transfer static data like vert buffers is not 
@@ -388,9 +438,8 @@ void D3D12HelloTriangle::PopulateCommandList()
 	m_gfxContext->Begin();
 
 	// Set necessary state.
-	m_gfxContext->GetD3DCommandList()->SetPipelineState(m_pipelineState.Get());
-	m_gfxContext->GetD3DCommandList()->SetGraphicsRootSignature(m_rootSignature.Get());
-	m_gfxContext->GetD3DCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_gfxContext->SetPipelineStateObject(m_gfxPipelineState.get());
+	m_gfxContext->SetResourceBinding(m_gfxBinding.get());
 
 	// Set RT
 	m_gfxContext->SetRenderTarget(m_gfxSwapChain->GetTargetBuffer());
@@ -398,7 +447,7 @@ void D3D12HelloTriangle::PopulateCommandList()
 	// Record commands.
 	const ur_float4 clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
 	m_gfxContext->ClearTarget(m_gfxSwapChain->GetTargetBuffer(), true, clearColor, false, 1.0f, false, 0);
-	m_gfxContext->SetVertexBuffer(m_gfxVertexBuffer.get(), 0, sizeof(Vertex), 0);
+	m_gfxContext->SetVertexBuffer(m_gfxVertexBuffer.get(), 0, sizeof(GfxVertex), 0);
 	m_gfxContext->Draw(3, 0, 1, 0);
 
 	m_gfxContext->End();

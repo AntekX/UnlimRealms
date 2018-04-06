@@ -539,6 +539,8 @@ namespace UnlimRealms
 
 	extern UR_DECL D3D12_VIEWPORT GfxViewPortToD3D12(const GfxViewPort &viewPort);
 
+	extern UR_DECL D3D12_RECT RectIToD3D12(const RectI &rect);
+
 	extern UR_DECL HRESULT FillUploadResource(ID3D12Resource *uploadResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData);
 
 	extern UR_DECL HRESULT UpdateSubresources(ID3D12GraphicsCommandList* commandList, ID3D12Resource* dstResource, ID3D12Resource* uploadResource,
