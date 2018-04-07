@@ -315,6 +315,7 @@ void D3D12HelloTriangle::LoadAssets()
 
 		GfxBufferDesc bufferDesc = {};
 		bufferDesc.Size = bufferDataDesc.RowPitch;
+		bufferDesc.ElementSize = sizeof(GfxVertex);
 		bufferDesc.Usage = GfxUsage::Default;
 		bufferDesc.BindFlags = ur_uint(GfxBindFlag::VertexBuffer);
 
@@ -447,7 +448,7 @@ void D3D12HelloTriangle::PopulateCommandList()
 	// Record commands.
 	const ur_float4 clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
 	m_gfxContext->ClearTarget(m_gfxSwapChain->GetTargetBuffer(), true, clearColor, false, 1.0f, false, 0);
-	m_gfxContext->SetVertexBuffer(m_gfxVertexBuffer.get(), 0, sizeof(GfxVertex), 0);
+	m_gfxContext->SetVertexBuffer(m_gfxVertexBuffer.get(), 0);
 	m_gfxContext->Draw(3, 0, 1, 0);
 
 	m_gfxContext->End();

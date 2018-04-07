@@ -61,6 +61,14 @@ namespace UnlimRealms
 		return this->descriptorHeaps[ur_size(heapType)].get();
 	}
 
+	inline ID3D12DescriptorHeap* GfxSystemD3D12::DescriptorHeap::GetD3DDescriptorHeap(DescriptorSet& descriptorSet)
+	{
+		if (descriptorSet.heap != this)
+			return ur_null;
+		ur_size pageIdx = descriptorSet.pagePoolPos / DescriptorsPerHeap;
+		return this->pagePool[descriptorSet.shaderVisible][pageIdx]->d3dHeap;
+	}
+
 	inline ur_size GfxSystemD3D12::DescriptorSet::GetDescriptorCount() const
 	{
 		return this->descriptorCount;
@@ -104,6 +112,26 @@ namespace UnlimRealms
 	inline GfxResourceD3D12& GfxBufferD3D12::GetResource()
 	{
 		return this->resource;
+	}
+
+	inline const D3D12_VERTEX_BUFFER_VIEW& GfxBufferD3D12::GetD3DViewVB() const
+	{
+		return this->d3dVBView;
+	}
+
+	inline const D3D12_INDEX_BUFFER_VIEW& GfxBufferD3D12::GetD3DViewIB() const
+	{
+		return this->d3dIBView;
+	}
+
+	inline const D3D12_CONSTANT_BUFFER_VIEW_DESC& GfxBufferD3D12::GetD3DViewCB() const
+	{
+		return this->d3dCBView;
+	}
+
+	inline GfxSystemD3D12::Descriptor* GfxBufferD3D12::GetViewDescriptor() const
+	{
+		return this->viewDescriptor.get();
 	}
 
 	inline GfxResourceD3D12& GfxTextureD3D12::GetResource()

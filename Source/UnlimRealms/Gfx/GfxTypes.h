@@ -159,10 +159,10 @@ namespace UnlimRealms
 	struct UR_DECL GfxBufferDesc
 	{
 		ur_uint Size;
+		ur_uint ElementSize;
 		GfxUsage Usage;
 		ur_uint BindFlags;
 		ur_uint AccessFlags;
-		ur_uint StructureStride;
 	};
 
 

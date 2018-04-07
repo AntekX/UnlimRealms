@@ -143,9 +143,9 @@ namespace UnlimRealms
 
 		virtual Result SetConstantBuffer(GfxBuffer *buffer, ur_uint slot);
 
-		virtual Result SetVertexBuffer(GfxBuffer *buffer, ur_uint slot, ur_uint stride, ur_uint offset);
+		virtual Result SetVertexBuffer(GfxBuffer *buffer, ur_uint slot);
 
-		virtual Result SetIndexBuffer(GfxBuffer *buffer, ur_uint bitsPerIndex, ur_uint offset);
+		virtual Result SetIndexBuffer(GfxBuffer *buffer);
 
 		virtual Result SetVertexShader(GfxVertexShader *shader);
 
@@ -281,6 +281,7 @@ namespace UnlimRealms
 
 		Result Initialize(
 			ur_uint sizeInBytes,
+			ur_uint elementSizeInBytes,
 			GfxUsage usage = GfxUsage::Default,
 			ur_uint bindFlags = ur_uint(0),
 			ur_uint accessFlags = ur_uint(0),

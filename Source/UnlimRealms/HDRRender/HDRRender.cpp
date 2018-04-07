@@ -62,7 +62,7 @@ namespace UnlimRealms
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(gfxObjects->constantsCB);
 		if (Succeeded(res))
 		{
-			res = gfxObjects->constantsCB->Initialize(sizeof(ConstantsCB), GfxUsage::Dynamic,
+			res = gfxObjects->constantsCB->Initialize(sizeof(ConstantsCB), 0, GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))

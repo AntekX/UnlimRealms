@@ -209,12 +209,12 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GfxContext::SetVertexBuffer(GfxBuffer *buffer, ur_uint slot, ur_uint stride, ur_uint offset)
+	Result GfxContext::SetVertexBuffer(GfxBuffer *buffer, ur_uint slot)
 	{
 		return Result(NotImplemented);
 	}
 
-	Result GfxContext::SetIndexBuffer(GfxBuffer *buffer, ur_uint bitsPerIndex, ur_uint offset)
+	Result GfxContext::SetIndexBuffer(GfxBuffer *buffer)
 	{
 		return Result(NotImplemented);
 	}
@@ -477,6 +477,7 @@ namespace UnlimRealms
 
 	Result GfxBuffer::Initialize(
 		ur_uint sizeInBytes,
+		ur_uint elementSizeInBytes,
 		GfxUsage usage,
 		ur_uint bindFlags,
 		ur_uint accessFlags,
@@ -484,10 +485,10 @@ namespace UnlimRealms
 	{
 		GfxBufferDesc desc;
 		desc.Size = sizeInBytes;
+		desc.ElementSize = elementSizeInBytes;
 		desc.Usage = usage;
 		desc.BindFlags = bindFlags;
 		desc.AccessFlags = accessFlags;
-		desc.StructureStride = 0;
 
 		return this->Initialize(desc, data);
 	}

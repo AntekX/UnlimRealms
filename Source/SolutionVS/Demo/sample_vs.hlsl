@@ -1,7 +1,7 @@
-//cbuffer Common : register(b0)
-//{
-//	float4x4 ViewProj;
-//};
+cbuffer Common : register(b0)
+{
+	float4x4 Transform;
+};
 
 struct VS_INPUT
 {
@@ -21,8 +21,8 @@ PS_INPUT main(VS_INPUT input)
 {
 	PS_INPUT output;
 
-	//output.pos = mul(ViewProj, float4(input.pos.xyz, 1.0f));
-	output.pos = float4(input.pos.xyz, 1.0f);
+	output.pos = mul(Transform, float4(input.pos.xyz, 1.0f));
+	//output.pos = float4(input.pos.xyz, 1.0f);
 	output.col = input.col;
 	output.uv = input.uv;
 

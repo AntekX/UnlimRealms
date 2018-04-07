@@ -348,21 +348,21 @@ namespace UnlimRealms
 		}
 	}
 
-	Result GfxSystemD3D12::DescriptorHeap::AcquireDescriptor(std::unique_ptr<Descriptor>& descriptor)
+	Result GfxSystemD3D12::DescriptorHeap::AcquireDescriptor(std::unique_ptr<Descriptor>& descriptor, ur_bool shaderVisible)
 	{
 		std::unique_ptr<DescriptorSet> descriptorSet(new Descriptor());
-		Result res = this->AcquireDescriptors(*descriptorSet, 1);
+		Result res = this->AcquireDescriptors(*descriptorSet, 1, shaderVisible);
 		descriptor.reset(static_cast<Descriptor*>(descriptorSet.release()));
 		return res;
 	}
 
-	Result GfxSystemD3D12::DescriptorHeap::AcquireDescriptors(std::unique_ptr<DescriptorSet>& descriptorSet, ur_size descriptorsCount)
+	Result GfxSystemD3D12::DescriptorHeap::AcquireDescriptors(std::unique_ptr<DescriptorSet>& descriptorSet, ur_size descriptorsCount, ur_bool shaderVisible)
 	{
 		descriptorSet.reset(new DescriptorSet());
-		return this->AcquireDescriptors(*descriptorSet, 1);
+		return this->AcquireDescriptors(*descriptorSet, 1, shaderVisible);
 	}
 
-	Result GfxSystemD3D12::DescriptorHeap::AcquireDescriptors(DescriptorSet& descriptorSet, ur_size descriptorsCount)
+	Result GfxSystemD3D12::DescriptorHeap::AcquireDescriptors(DescriptorSet& descriptorSet, ur_size descriptorsCount, ur_bool shaderVisible)
 	{
 		if (0 == descriptorsCount || descriptorsCount > DescriptorsPerHeap)
 			return Result(InvalidArgs);
@@ -374,13 +374,15 @@ namespace UnlimRealms
 
 		std::lock_guard<std::mutex> lockModify(this->modifyMutex);
 
+		auto& pagePool = this->pagePool[shaderVisible];
+
 		ur_size currentPageIdx = ur_size(-1);
 		ur_size currentRangeIdx = ur_size(-1);
-		if (this->firstFreePageIdx < this->pagePool.size())
+		if (this->firstFreePageIdx < pagePool.size())
 		{
-			for (ur_size pageIdx = this->firstFreePageIdx; pageIdx < this->pagePool.size(); ++pageIdx)
+			for (ur_size pageIdx = this->firstFreePageIdx; pageIdx < pagePool.size(); ++pageIdx)
 			{
-				auto& pageRanges = this->pagePool[pageIdx]->freeRanges;
+				auto& pageRanges = pagePool[pageIdx]->freeRanges;
 				if (!pageRanges.empty())
 				{
 					// try finding a free range of sufficient size in current page
@@ -400,25 +402,18 @@ namespace UnlimRealms
 			if (currentRangeIdx == ur_size(-1))
 			{
 				// new page is required
-				this->firstFreePageIdx = this->pagePool.size();
+				this->firstFreePageIdx = pagePool.size();
 			}
 		}
 
-		if (this->firstFreePageIdx >= this->pagePool.size())
+		if (this->firstFreePageIdx >= pagePool.size())
 		{
 			// create new D3D heap
 			
 			D3D12_DESCRIPTOR_HEAP_DESC heapDesc;
 			heapDesc.Type = this->d3dHeapType;
 			heapDesc.NumDescriptors = (UINT)DescriptorsPerHeap;
-			heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-			switch (this->d3dHeapType)
-			{
-			case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
-			case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
-				heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-				break;
-			}
+			heapDesc.Flags = (shaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
 			heapDesc.NodeMask = 0;
 
 			shared_ref<ID3D12DescriptorHeap> d3dHeap;
@@ -430,8 +425,8 @@ namespace UnlimRealms
 			newPage->d3dHeap = d3dHeap;
 			newPage->freeRanges.push_back(Range(0, DescriptorsPerHeap - 1));
 
-			this->pagePool.push_back(std::move(newPage));
-			this->firstFreePageIdx = this->pagePool.size() - 1;
+			pagePool.push_back(std::move(newPage));
+			this->firstFreePageIdx = pagePool.size() - 1;
 			currentPageIdx = this->firstFreePageIdx;
 			currentRangeIdx = 0;
 			
@@ -442,7 +437,7 @@ namespace UnlimRealms
 		}
 
 		// grab some page memory
-		Page& currentPage = *this->pagePool[currentPageIdx].get();
+		Page& currentPage = *pagePool[currentPageIdx].get();
 		Range& currentRange = currentPage.freeRanges[currentRangeIdx];
 		ur_size currentOffset = currentRange.start;
 		currentRange.start += descriptorsCount; // decrease range
@@ -458,7 +453,7 @@ namespace UnlimRealms
 			do
 			{
 				++this->firstFreePageIdx;
-			} while (this->firstFreePageIdx < this->pagePool.size() && !this->pagePool[this->firstFreePageIdx]->freeRanges.empty());
+			} while (this->firstFreePageIdx < pagePool.size() && !pagePool[this->firstFreePageIdx]->freeRanges.empty());
 		}
 
 		// initialize descriptor
@@ -466,6 +461,7 @@ namespace UnlimRealms
 		SIZE_T currentHeapCPUStart = currentHeap->GetCPUDescriptorHandleForHeapStart().ptr;
 		UINT64 currentHeapGPUStart = currentHeap->GetGPUDescriptorHandleForHeapStart().ptr;
 		descriptorSet.descriptorCount = descriptorsCount;
+		descriptorSet.shaderVisible = shaderVisible;
 		descriptorSet.firstCpuHandle.ptr = currentHeapCPUStart + currentOffset * this->d3dDescriptorSize;
 		descriptorSet.firstGpuHandle.ptr = currentHeapGPUStart + currentOffset * this->d3dDescriptorSize;
 		descriptorSet.heap = this;
@@ -498,7 +494,9 @@ namespace UnlimRealms
 		ur_size pageIdx = descriptorSet.pagePoolPos / DescriptorsPerHeap;
 		ur_size releaseStart = descriptorSet.pagePoolPos % DescriptorsPerHeap;
 		ur_size releaseEnd = releaseStart + descriptorSet.descriptorCount - 1;
-		Page& page = *this->pagePool[pageIdx].get();
+		auto& pagePool = this->pagePool[descriptorSet.shaderVisible];
+		auto& page = *pagePool[pageIdx].get();
+		descriptorSet.heap = ur_null; // detach descriptor set from this heap
 		
 		// rearrange free ranges: try adding released item to exiting range, merge ranges or create new range
 		for (ur_size ir = 0; ir < page.freeRanges.size(); ++ir)
@@ -746,40 +744,32 @@ namespace UnlimRealms
 			return ResultError(Failure, "GfxContextD3D12::SetResourceBinding: failed, d3d command list is not initialized");
 
 		GfxResourceBindingD3D12 *resourceBindingD3D12 = static_cast<GfxResourceBindingD3D12*>(binding);
-		this->d3dCommandList->SetGraphicsRootSignature(resourceBindingD3D12->GetD3DRootSignature());
-
-		// todo: descriptor tables & corresponding heaps
-		//this->d3dCommandList->SetDescriptorHeaps()
-		//this->d3dCommandList->SetGraphicsRootDescriptorTable(0, )
+		resourceBindingD3D12->SetOnD3D12Context(this);
 
 		return Result(Success);
 	}
 
-	Result GfxContextD3D12::SetVertexBuffer(GfxBuffer *buffer, ur_uint slot, ur_uint stride, ur_uint offset)
+	Result GfxContextD3D12::SetVertexBuffer(GfxBuffer *buffer, ur_uint slot)
 	{
 		if (this->d3dCommandList.empty())
 			return ResultError(Failure, "GfxContextD3D12::SetVertexBuffer: failed, d3d command list is not initialized");
 
 		GfxBufferD3D12* bufferD3D12 = static_cast<GfxBufferD3D12*>(buffer);
-		if (bufferD3D12 != ur_null && bufferD3D12->GetResource().GetD3DResource() != ur_null)
-		{
-			D3D12_VERTEX_BUFFER_VIEW d3dVBV;
-			d3dVBV.BufferLocation = bufferD3D12->GetResource().GetD3DResource()->GetGPUVirtualAddress();
-			d3dVBV.StrideInBytes = stride;
-			d3dVBV.SizeInBytes = buffer->GetDesc().Size;
-			this->d3dCommandList->IASetVertexBuffers(slot, 1, &d3dVBV);
-		}
-		else
-		{
-			this->d3dCommandList->IASetVertexBuffers(slot, 0, ur_null);
-		}
+		UINT numViews = (bufferD3D12 != ur_null ? 1 : 0);
+		this->d3dCommandList->IASetVertexBuffers(slot, numViews, (numViews > 0 ? &bufferD3D12->GetD3DViewVB() : ur_null));
 
 		return Result(Success);
 	}
 
-	Result GfxContextD3D12::SetIndexBuffer(GfxBuffer *buffer, ur_uint bitsPerIndex, ur_uint offset)
+	Result GfxContextD3D12::SetIndexBuffer(GfxBuffer *buffer)
 	{
-		return NotImplemented;
+		if (this->d3dCommandList.empty())
+			return ResultError(Failure, "GfxContextD3D12::SetIndexBuffer: failed, d3d command list is not initialized");
+
+		GfxBufferD3D12* bufferD3D12 = static_cast<GfxBufferD3D12*>(buffer);
+		this->d3dCommandList->IASetIndexBuffer(bufferD3D12 != ur_null ? &bufferD3D12->GetD3DViewIB() : ur_null);
+		
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::Draw(ur_uint vertexCount, ur_uint vertexOffset, ur_uint instanceCount, ur_uint instanceOffset)
@@ -1233,6 +1223,7 @@ namespace UnlimRealms
 	{
 		this->resource.Initialize(ur_null);
 		this->uploadResource.reset(ur_null);
+		this->viewDescriptor.reset(ur_null);
 
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
@@ -1299,6 +1290,39 @@ namespace UnlimRealms
 				d3dSystem.GetResourceContext()->ResourceTransition(&this->resource, d3dResStates);
 				d3dSystem.GetResourceContext()->End();
 			}
+		}
+
+		// initialize buffer view
+		if (ur_uint(GfxBindFlag::VertexBuffer) & this->GetDesc().BindFlags)
+		{
+			this->d3dVBView.BufferLocation = this->resource.GetD3DResource()->GetGPUVirtualAddress();
+			this->d3dVBView.SizeInBytes = (UINT)d3dResDesc.Width;
+			this->d3dVBView.StrideInBytes = (UINT)this->GetDesc().ElementSize;
+		}
+		else if (ur_uint(GfxBindFlag::IndexBuffer) & this->GetDesc().BindFlags)
+		{
+			DXGI_FORMAT ibFormat = DXGI_FORMAT_UNKNOWN;
+			switch (this->GetDesc().ElementSize)
+			{
+			case 2: ibFormat = DXGI_FORMAT_R16_UINT; break;
+			case 4: ibFormat = DXGI_FORMAT_R32_UINT; break;
+			}
+			if (DXGI_FORMAT_UNKNOWN == ibFormat)
+				return ResultError(Failure, "GfxBufferD3D12::OnInitialize: invalid index buffer format");
+
+			this->d3dIBView.BufferLocation = this->resource.GetD3DResource()->GetGPUVirtualAddress();
+			this->d3dIBView.SizeInBytes = (UINT)d3dResDesc.Width;
+			this->d3dIBView.Format = ibFormat;
+		}
+		else if (ur_uint(GfxBindFlag::ConstantBuffer) & this->GetDesc().BindFlags)
+		{
+			Result res = d3dSystem.GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AcquireDescriptor(this->viewDescriptor);
+			if (Failed(res))
+				return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to acquire CBV descriptor");
+
+			this->d3dCBView.BufferLocation = this->resource.GetD3DResource()->GetGPUVirtualAddress();
+			this->d3dCBView.SizeInBytes = (UINT)d3dResDesc.Width;
+			d3dDevice->CreateConstantBufferView(&this->d3dCBView, this->viewDescriptor->CpuHandle());
 		}
 
 		return Result(Success);
@@ -1495,6 +1519,10 @@ namespace UnlimRealms
 		this->d3dRootParameters.clear();
 		this->d3dRootSignature.reset(ur_null);
 		this->d3dSerializedRootSignature.reset(ur_null);
+		this->tableDescriptorSets.clear();
+		this->d3dTableDescriptorHeaps.clear();
+		this->tableIndexCbvSrvUav = ur_size(-1);
+		this->tableIndexSampler = ur_size(-1);
 
 		// initialize descriptor table ranges
 
@@ -1511,6 +1539,7 @@ namespace UnlimRealms
 
 		if (!this->d3dDesriptorRangesCbvSrvUav.empty())
 		{
+			this->tableIndexCbvSrvUav = this->d3dRootParameters.size();
 			this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
 			D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
 			rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -1521,6 +1550,7 @@ namespace UnlimRealms
 
 		if (!this->d3dDesriptorRangesSampler.empty())
 		{
+			this->tableIndexSampler = this->d3dRootParameters.size();
 			this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
 			D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
 			rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -1548,10 +1578,11 @@ namespace UnlimRealms
 		// this gpu memory location will be used to store shader visible descriptors in an ordered manner (correspnding to table ranges layout);
 		// to be able to bind different resources to the same layout - ID3D12Device::CopyDescriptors is used to copy descriptors from random heap(s) locations into root table heap region;
 		this->tableDescriptorSets.resize(this->d3dRootParameters.size());
-		for (ur_size tableIdx = 0; tableIdx < this->d3dRootParameters.size(); ++tableIdx)
+		std::set<ID3D12DescriptorHeap*> uniqueTableHeaps;
+		for (ur_size rootTableIdx = 0; rootTableIdx < this->d3dRootParameters.size(); ++rootTableIdx)
 		{
-			auto& tableDescriptorSet = this->tableDescriptorSets[tableIdx];
-			const auto& d3dDescriptorTable = this->d3dRootParameters[tableIdx].DescriptorTable;
+			auto& tableDescriptorSet = this->tableDescriptorSets[rootTableIdx];
+			const auto& d3dDescriptorTable = this->d3dRootParameters[rootTableIdx].DescriptorTable;
 			D3D12_DESCRIPTOR_HEAP_TYPE d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE(-1);
 			ur_size descriptorsCount = 0;
 			for (UINT irange = 0; irange < d3dDescriptorTable.NumDescriptorRanges; ++irange)
@@ -1562,8 +1593,52 @@ namespace UnlimRealms
 				else
 					d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 			}
-			d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->AcquireDescriptors(tableDescriptorSet, descriptorsCount);
+			d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->AcquireDescriptors(tableDescriptorSet, descriptorsCount, true);
+			uniqueTableHeaps.insert(d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->GetD3DDescriptorHeap(*tableDescriptorSet.get()));
 		}
+		this->d3dTableDescriptorHeaps.reserve(uniqueTableHeaps.size());
+		for (auto& tableHeap : uniqueTableHeaps)
+		{
+			this->d3dTableDescriptorHeaps.emplace_back(tableHeap);
+		}
+
+		return Result(Success);
+	}
+
+	Result GfxResourceBindingD3D12::SetOnD3D12Context(GfxContextD3D12* gfxContextD3D12)
+	{
+		if (ur_null == gfxContextD3D12)
+			return Result(InvalidArgs);
+
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
+		if (ur_null == d3dDevice)
+			return ResultError(NotInitialized, "GfxResourceBindingD3D12::SetOnD3D12Context: failed, device unavailable");
+
+		ID3D12GraphicsCommandList *d3dCommandList = gfxContextD3D12->GetD3DCommandList();
+		d3dCommandList->SetGraphicsRootSignature(this->d3dRootSignature.get());
+		d3dCommandList->SetDescriptorHeaps((UINT)this->d3dTableDescriptorHeaps.size(), this->d3dTableDescriptorHeaps.data());
+		for (ur_size rootTableIdx = 0; rootTableIdx < this->d3dRootParameters.size(); ++rootTableIdx)
+		{
+			d3dCommandList->SetGraphicsRootDescriptorTable((UINT)rootTableIdx, this->tableDescriptorSets[rootTableIdx]->FirstGpuHandle());
+		}
+
+		// copy resource(s) descriptor(s) to corresponding shader visible table(s)
+
+		if (!this->GetBuffers().empty())
+		{
+			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+			UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
+			D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexCbvSrvUav]->FirstCpuHandle();
+			for (ur_size bufferIdx = 0; bufferIdx < this->GetBuffers().size(); ++bufferIdx)
+			{
+				GfxBufferD3D12 *bufferD3D12 = static_cast<GfxBufferD3D12*>(this->GetBuffers()[bufferIdx].second);
+				d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, bufferD3D12->GetViewDescriptor()->CpuHandle(), d3dHeapType);
+				descritorsTableHandle.ptr += d3dDescriptorSize;
+			}
+		}
+
+		// todo: support all other resources
 
 		return Result(Success);
 	}
@@ -1604,6 +1679,13 @@ namespace UnlimRealms
 		d3dDesc.SampleDesc.Quality = 0;
 		d3dDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 		d3dDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+		// align size where required
+		if (ur_uint(GfxBindFlag::ConstantBuffer) & desc.BindFlags)
+		{
+			d3dDesc.Width = (d3dDesc.Width + 255) & ~255; // CB size must be 256-byte aligned
+		}
+
 		return d3dDesc;
 	}
 

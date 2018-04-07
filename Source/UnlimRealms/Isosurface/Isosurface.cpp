@@ -1633,7 +1633,7 @@ namespace UnlimRealms
 		if (Succeeded(res))
 		{
 			GfxResourceData gfxRes = { vertexBuffer.data(), (ur_uint)vertexBuffer.size() * sizeof(Isosurface::Vertex), 0 };
-			res = gfxVB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::VertexBuffer, 0, &gfxRes);
+			res = gfxVB->Initialize(gfxRes.RowPitch, sizeof(Isosurface::Vertex), GfxUsage::Immutable, (ur_uint)GfxBindFlag::VertexBuffer, 0, &gfxRes);
 		}
 		if (Failed(res))
 			return Result(Failure);
@@ -1644,7 +1644,7 @@ namespace UnlimRealms
 		if (Succeeded(res))
 		{
 			GfxResourceData gfxRes = { indexBuffer.data(), (ur_uint)indexBuffer.size() * sizeof(Isosurface::Index), 0 };
-			res = gfxIB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::IndexBuffer, 0, &gfxRes);
+			res = gfxIB->Initialize(gfxRes.RowPitch, sizeof(Isosurface::Index), GfxUsage::Immutable, (ur_uint)GfxBindFlag::IndexBuffer, 0, &gfxRes);
 		}
 		if (Failed(res))
 			return Result(Failure);
@@ -1698,8 +1698,8 @@ namespace UnlimRealms
 				{
 					const ur_uint indexCount = (gfxIB.get() ? gfxIB->GetDesc().Size / sizeof(Isosurface::Index) : 0);
 					this->stats.primitivesRendered += indexCount / 3;
-					gfxContext.SetVertexBuffer(gfxVB.get(), 0, sizeof(Isosurface::Vertex), 0);
-					gfxContext.SetIndexBuffer(gfxIB.get(), sizeof(Isosurface::Index) * 8, 0);
+					gfxContext.SetVertexBuffer(gfxVB.get(), 0);
+					gfxContext.SetIndexBuffer(gfxIB.get());
 					gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
 				}
 			}
@@ -1917,7 +1917,7 @@ namespace UnlimRealms
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects.CB);
 		if (Succeeded(res))
 		{
-			res = this->gfxObjects.CB->Initialize(sizeof(CommonCB), GfxUsage::Dynamic,
+			res = this->gfxObjects.CB->Initialize(sizeof(CommonCB), 0, GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))

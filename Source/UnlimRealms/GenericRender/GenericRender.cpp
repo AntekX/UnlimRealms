@@ -135,7 +135,7 @@ namespace UnlimRealms
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects->CB);
 		if (Succeeded(res))
 		{
-			res = this->gfxObjects->CB->Initialize(sizeof(CommonCB), GfxUsage::Dynamic,
+			res = this->gfxObjects->CB->Initialize(sizeof(CommonCB), 0, GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
@@ -145,7 +145,7 @@ namespace UnlimRealms
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects->VB);
 		if (Succeeded(res))
 		{
-			res = this->gfxObjects->VB->Initialize(sizeof(Vertex), GfxUsage::Dynamic,
+			res = this->gfxObjects->VB->Initialize(sizeof(Vertex), sizeof(Vertex), GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::VertexBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
@@ -155,7 +155,7 @@ namespace UnlimRealms
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects->IB);
 		if (Succeeded(res))
 		{
-			res = this->gfxObjects->IB->Initialize(sizeof(Index), GfxUsage::Dynamic,
+			res = this->gfxObjects->IB->Initialize(sizeof(Index), sizeof(Index), GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::IndexBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
@@ -172,7 +172,7 @@ namespace UnlimRealms
 				{ { +1.0f, -1.0f, 0.0f }, 0xffffffff, { 1.0f, 1.0f } }
 			};
 			GfxResourceData gfxResData = { quadVertices, sizeof(quadVertices), 0 };
-			res = this->gfxObjects->quadVB->Initialize(gfxResData.RowPitch, GfxUsage::Immutable,
+			res = this->gfxObjects->quadVB->Initialize(gfxResData.RowPitch, sizeof(Vertex), GfxUsage::Immutable,
 				(ur_uint)GfxBindFlag::VertexBuffer, 0, &gfxResData);
 		}
 		if (Failed(res))
@@ -468,8 +468,8 @@ namespace UnlimRealms
 
 		// draw batches
 		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
-		gfxContext.SetVertexBuffer(this->gfxObjects->VB.get(), 0, sizeof(Vertex), 0);
-		gfxContext.SetIndexBuffer(this->gfxObjects->IB.get(), sizeof(Index) * 8, 0);
+		gfxContext.SetVertexBuffer(this->gfxObjects->VB.get(), 0);
+		gfxContext.SetIndexBuffer(this->gfxObjects->IB.get());
 		gfxContext.SetTexture(this->gfxObjects->atlas.get(), 0);
 		ur_uint vbOfs = 0, ibOfs = 0;
 		for (ur_uint i = 0; i < (ur_uint)PrimitiveType::Count; ++i)
@@ -507,7 +507,7 @@ namespace UnlimRealms
 		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
 
 		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
-		gfxContext.SetVertexBuffer(this->gfxObjects->quadVB.get(), 0, sizeof(Vertex), 0);
+		gfxContext.SetVertexBuffer(this->gfxObjects->quadVB.get(), 0);
 		gfxContext.SetTexture(texture != ur_null ? texture : this->gfxObjects->atlas.get(), 0);
 		gfxContext.SetPipelineState(pipelineState);
 		gfxContext.Draw(4, 0, 0, 0);

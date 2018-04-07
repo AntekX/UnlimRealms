@@ -69,32 +69,42 @@ int D3D12SandboxApp::Run()
 		res = gfxIL->Initialize(*gfxVS.get(), elements, ur_array_size(elements));
 	}
 
-	struct Vertex
-	{
-		ur_float3 pos;
-		ur_float4 color;
-		ur_float2 tex;
-	};
 	std::unique_ptr<GfxBuffer> gfxVB;
 	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxVB)))
 	{
-		Vertex bufferData[] = {
+		struct Vertex
+		{
+			ur_float3 pos;
+			ur_float4 color;
+			ur_float2 tex;
+		} bufferData[] = {
 			{ { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
 			{ {  0.0f,  1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
 			{ {  0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 0.0f, 0.0f } }
 		};
-
 		GfxResourceData bufferDataDesc;
 		bufferDataDesc.Ptr = bufferData;
 		bufferDataDesc.RowPitch = sizeof(bufferData);
 		bufferDataDesc.SlicePitch = 0;
 
-		GfxBufferDesc bufferDesc = {};
-		bufferDesc.Size = bufferDataDesc.RowPitch;
-		bufferDesc.Usage = GfxUsage::Dynamic;
-		bufferDesc.BindFlags = ur_uint(GfxBindFlag::VertexBuffer);
+		gfxVB->Initialize(sizeof(bufferData), sizeof(Vertex), GfxUsage::Dynamic, ur_uint(GfxBindFlag::VertexBuffer), 0, &bufferDataDesc);
+	}
 
-		gfxVB->Initialize(bufferDesc, &bufferDataDesc);
+	struct Constants
+	{
+		ur_float4x4 Transform;
+	} cbData = { ur_float4x4::Identity };
+	std::unique_ptr<GfxBuffer> gfxCB;
+	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxCB)))
+	{
+		ur_float4x4::Translation(cbData.Transform, 0.5f, 0.0f, 0.0f);
+
+		GfxResourceData bufferDataDesc;
+		bufferDataDesc.Ptr = &cbData;
+		bufferDataDesc.RowPitch = sizeof(Constants);
+		bufferDataDesc.SlicePitch = 0;
+
+		gfxCB->Initialize(sizeof(Constants), 0, GfxUsage::Dynamic, ur_uint(GfxBindFlag::ConstantBuffer), ur_uint(GfxAccessFlag::Write), &bufferDataDesc);
 	}
 
 	GfxRasterizerState gfxRasterizer = GfxRasterizerState::Default;
@@ -107,7 +117,7 @@ int D3D12SandboxApp::Run()
 	// declare binding matching used shader registers
 	std::unique_ptr<GfxResourceBinding> gfxBinding;
 	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding);
-	//gfxBinding->SetBuffer(0, ur_null); 
+	gfxBinding->SetBuffer(0, gfxCB.get());
 	//gfxBinding->SetTexture(0, ur_null);
 	//gfxBinding->SetSampler(0, ur_null);
 	gfxBinding->Initialize();
@@ -152,24 +162,15 @@ int D3D12SandboxApp::Run()
 		{ // use context to draw
 			gfxContext->Begin();
 
-			static const ur_float4 s_colors[] = {
-				{ 0.0f, 0.2f, 0.4f, 1.0f },
-				{ 1.0f, 0.0f, 0.0f, 1.0f },
-				{ 0.0f, 1.0f, 0.0f, 1.0f },
-				{ 0.0f, 0.0f, 1.0f, 1.0f },
-				{ 1.0f, 1.0f, 0.0f, 1.0f },
-				{ 1.0f, 0.0f, 1.0f, 1.0f },
-			};
-			ur_uint colorIdx = 0;// static_cast<GfxSystemD3D12*>(realm.GetGfxSystem())->CurrentFrameIndex() % 6;
-
+			// prepare RT
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
-			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, s_colors[colorIdx], false, 0.0f, false, 0);
+			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, { 0.0f, 0.2f, 0.4f, 1.0f }, false, 0.0f, false, 0);
 			
 			// draw test primitive
 			gfxContext->SetPipelineStateObject(gfxPSO.get());
 			gfxContext->SetResourceBinding(gfxBinding.get());
-			gfxContext->SetVertexBuffer(gfxVB.get(), 0, sizeof(Vertex), 0);
-			gfxContext->Draw(gfxVB->GetDesc().Size / sizeof(Vertex), 0, 1, 0);
+			gfxContext->SetVertexBuffer(gfxVB.get(), 0);
+			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, 1, 0);
 
 			gfxContext->End();
 		}

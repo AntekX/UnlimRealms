@@ -461,7 +461,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GfxContextD3D11::SetVertexBuffer(GfxBuffer *buffer, ur_uint slot, ur_uint stride, ur_uint offset)
+	Result GfxContextD3D11::SetVertexBuffer(GfxBuffer *buffer, ur_uint slot)
 	{
 		if (this->d3dContext.empty())
 			return ResultError(Failure, "GfxContextD3D11::SetVertexBuffer: failed, device context is not ready");
@@ -469,16 +469,19 @@ namespace UnlimRealms
 		GfxBufferD3D11 *gfxBufferD3D11 = static_cast<GfxBufferD3D11*>(buffer);
 		ur_uint numBuffers = (gfxBufferD3D11 != ur_null ? 1 : 0);
 		ID3D11Buffer* buffers[] = { gfxBufferD3D11 != ur_null ? gfxBufferD3D11->GetD3DBuffer() : ur_null };
-		this->d3dContext->IASetVertexBuffers(slot, numBuffers, buffers, &stride, &offset);
+		ur_uint strides[] = { gfxBufferD3D11 != ur_null ? gfxBufferD3D11->GetDesc().ElementSize : 0};
+		ur_uint offsets[] = { 0 };
+		this->d3dContext->IASetVertexBuffers(slot, numBuffers, buffers, strides, offsets);
 
 		return Result(Success);
 	}
 
-	Result GfxContextD3D11::SetIndexBuffer(GfxBuffer *buffer, ur_uint bitsPerIndex, ur_uint offset)
+	Result GfxContextD3D11::SetIndexBuffer(GfxBuffer *buffer)
 	{
 		if (this->d3dContext.empty())
 			return ResultError(Failure, "GfxContextD3D11::SetIndexBuffer: failed, device context is not ready");
 
+		ur_uint bitsPerIndex = (buffer != ur_null ? buffer->GetDesc().ElementSize * 8 : 0);
 		DXGI_FORMAT indexFmt = GfxBitsPerIndexToDXGIFormat(bitsPerIndex);
 		if (DXGI_FORMAT_UNKNOWN == indexFmt)
 			return ResultError(Failure, "GfxContextD3D11::SetIndexBuffer: invalid bits per index valaue");
@@ -486,7 +489,7 @@ namespace UnlimRealms
 		GfxBufferD3D11 *gfxBufferD3D11 = static_cast<GfxBufferD3D11*>(buffer);
 		this->d3dContext->IASetIndexBuffer(
 			gfxBufferD3D11 != ur_null ? gfxBufferD3D11->GetD3DBuffer() : ur_null,
-			indexFmt, offset);
+			indexFmt, 0);
 
 		return Result(Success);
 	}
@@ -1200,7 +1203,7 @@ namespace UnlimRealms
 		d3dDesc.BindFlags = GfxBindFlagsToD3D11(desc.BindFlags);
 		d3dDesc.CPUAccessFlags = GfxAccessFlagsToD3D11_CPUAccessFlags(desc.AccessFlags);
 		d3dDesc.MiscFlags = 0;
-		d3dDesc.StructureByteStride = desc.StructureStride;
+		d3dDesc.StructureByteStride = 0; // use ElementSize here if buffer is a StructuredBuffer
 		return d3dDesc;
 	}
 

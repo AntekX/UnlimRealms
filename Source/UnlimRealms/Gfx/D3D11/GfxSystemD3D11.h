@@ -130,9 +130,9 @@ namespace UnlimRealms
 
 		virtual Result SetConstantBuffer(GfxBuffer *buffer, ur_uint slot);
 
-		virtual Result SetVertexBuffer(GfxBuffer *buffer, ur_uint slot, ur_uint stride, ur_uint offset);
+		virtual Result SetVertexBuffer(GfxBuffer *buffer, ur_uint slot);
 
-		virtual Result SetIndexBuffer(GfxBuffer *buffer, ur_uint bitsPerIndex, ur_uint offset);
+		virtual Result SetIndexBuffer(GfxBuffer *buffer);
 
 		virtual Result SetVertexShader(GfxVertexShader *shader);
 

@@ -156,7 +156,7 @@ namespace UnlimRealms
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxCB);
 		if (Succeeded(res))
 		{
-			res = this->gfxCB->Initialize(sizeof(VertexTransformCB), GfxUsage::Dynamic,
+			res = this->gfxCB->Initialize(sizeof(VertexTransformCB), 0, GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
@@ -166,7 +166,7 @@ namespace UnlimRealms
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxVB);
 		if (Succeeded(res))
 		{
-			res = this->gfxVB->Initialize(5000 * sizeof(ImDrawVert), GfxUsage::Dynamic,
+			res = this->gfxVB->Initialize(5000 * sizeof(ImDrawVert), sizeof(ImDrawVert), GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::VertexBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
@@ -176,7 +176,7 @@ namespace UnlimRealms
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxIB);
 		if (Succeeded(res))
 		{
-			res = this->gfxIB->Initialize(10000 * sizeof(ImDrawIdx), GfxUsage::Dynamic,
+			res = this->gfxIB->Initialize(10000 * sizeof(ImDrawIdx), sizeof(ImDrawIdx), GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::IndexBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
@@ -344,8 +344,8 @@ namespace UnlimRealms
 		// setup pipeline
 		gfxContext.SetPipelineState(this->gfxPipelineState.get());
 		gfxContext.SetConstantBuffer(this->gfxCB.get(), 0);
-		gfxContext.SetVertexBuffer(this->gfxVB.get(), 0, sizeof(ImDrawVert), 0);
-		gfxContext.SetIndexBuffer(this->gfxIB.get(), sizeof(ImDrawIdx) * 8, 0);
+		gfxContext.SetVertexBuffer(this->gfxVB.get(), 0);
+		gfxContext.SetIndexBuffer(this->gfxIB.get());
 
 		// draw command lists
 		ur_uint vbOfs = 0;

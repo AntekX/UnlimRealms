@@ -112,17 +112,19 @@ namespace UnlimRealms
 
 			~DescriptorHeap();
 
-			Result AcquireDescriptor(std::unique_ptr<Descriptor>& descriptor);
+			Result AcquireDescriptor(std::unique_ptr<Descriptor>& descriptor, ur_bool shaderVisible = false);
 
-			Result AcquireDescriptors(std::unique_ptr<DescriptorSet>& descriptorSet, ur_size descriptorsCount);
+			Result AcquireDescriptors(std::unique_ptr<DescriptorSet>& descriptorSet, ur_size descriptorsCount, ur_bool shaderVisible = false);
 
 			Result ReleaseDescriptor(Descriptor& descriptor);
 
 			Result ReleaseDescriptors(DescriptorSet& descriptorSet);
 
+			inline ID3D12DescriptorHeap* GetD3DDescriptorHeap(DescriptorSet& descriptorSet);
+
 		private:
 
-			Result AcquireDescriptors(DescriptorSet& descriptorSet, ur_size descriptorsCount);
+			Result AcquireDescriptors(DescriptorSet& descriptorSet, ur_size descriptorsCount, ur_bool shaderVisible = false);
 
 			static const ur_size DescriptorsPerHeap = 256;
 
@@ -143,7 +145,7 @@ namespace UnlimRealms
 
 			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType;
 			std::mutex modifyMutex;
-			std::vector<std::unique_ptr<Page>> pagePool;
+			std::vector<std::unique_ptr<Page>> pagePool[2]; // 0 - cpu read/write; 1 - cpu write, gpu read heaps;
 			std::vector<DescriptorSet*> descriptorSets;
 			ur_uint32 d3dDescriptorSize;
 			ur_size firstFreePageIdx;
@@ -167,6 +169,7 @@ namespace UnlimRealms
 
 			friend class DescriptorHeap;
 			ur_size descriptorCount;
+			ur_bool shaderVisible;
 			D3D12_CPU_DESCRIPTOR_HANDLE firstCpuHandle;
 			D3D12_GPU_DESCRIPTOR_HANDLE firstGpuHandle;
 			DescriptorHeap* heap;
@@ -254,9 +257,9 @@ namespace UnlimRealms
 
 		virtual Result SetResourceBinding(GfxResourceBinding *binding);
 
-		virtual Result SetVertexBuffer(GfxBuffer *buffer, ur_uint slot, ur_uint stride, ur_uint offset);
+		virtual Result SetVertexBuffer(GfxBuffer *buffer, ur_uint slot);
 
-		virtual Result SetIndexBuffer(GfxBuffer *buffer, ur_uint bitsPerIndex, ur_uint offset);
+		virtual Result SetIndexBuffer(GfxBuffer *buffer);
 
 		virtual Result Draw(ur_uint vertexCount, ur_uint vertexOffset, ur_uint instanceCount, ur_uint instanceOffset);
 
@@ -424,6 +427,14 @@ namespace UnlimRealms
 
 		inline GfxResourceD3D12& GetResource();
 
+		inline const D3D12_VERTEX_BUFFER_VIEW& GetD3DViewVB() const;
+
+		inline const D3D12_INDEX_BUFFER_VIEW& GetD3DViewIB() const;
+
+		inline const D3D12_CONSTANT_BUFFER_VIEW_DESC& GetD3DViewCB() const;
+
+		inline GfxSystemD3D12::Descriptor* GetViewDescriptor() const;
+
 	protected:
 
 		virtual Result OnInitialize(const GfxResourceData *data);
@@ -432,6 +443,12 @@ namespace UnlimRealms
 
 		GfxResourceD3D12 resource;
 		std::unique_ptr<GfxResourceD3D12> uploadResource;
+		union {
+			D3D12_VERTEX_BUFFER_VIEW d3dVBView;
+			D3D12_INDEX_BUFFER_VIEW d3dIBView;
+			D3D12_CONSTANT_BUFFER_VIEW_DESC d3dCBView;
+		};
+		std::unique_ptr<GfxSystemD3D12::Descriptor> viewDescriptor;
 	};
 
 
@@ -474,9 +491,9 @@ namespace UnlimRealms
 
 		virtual ~GfxResourceBindingD3D12();
 
-		inline ID3D12RootSignature* GetD3DRootSignature() const;
+		Result SetOnD3D12Context(GfxContextD3D12* gfxContextD3D12);
 
-		//inline D3D12_GPU_DESCRIPTOR_HANDLE GetD3DRootTableGPUHandle(D3DRootSlot rootSlot) const;
+		inline ID3D12RootSignature* GetD3DRootSignature() const;
 
 	protected:
 
@@ -490,6 +507,9 @@ namespace UnlimRealms
 		shared_ref<ID3D12RootSignature> d3dRootSignature;
 		shared_ref<ID3DBlob> d3dSerializedRootSignature;
 		std::vector<std::unique_ptr<GfxSystemD3D12::DescriptorSet>> tableDescriptorSets;
+		std::vector<ID3D12DescriptorHeap*> d3dTableDescriptorHeaps;
+		ur_size tableIndexCbvSrvUav;
+		ur_size tableIndexSampler;
 	};
 
 

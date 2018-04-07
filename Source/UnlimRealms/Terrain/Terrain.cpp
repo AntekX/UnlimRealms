@@ -156,7 +156,7 @@ namespace UnlimRealms
 		res = realm.GetGfxSystem()->CreateBuffer(objects.commonCB);
 		if (Succeeded(res))
 		{
-			res = objects.commonCB->Initialize(sizeof(CommonCB), GfxUsage::Dynamic,
+			res = objects.commonCB->Initialize(sizeof(CommonCB), 0, GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
@@ -178,7 +178,7 @@ namespace UnlimRealms
 				}
 			}
 			GfxResourceData gfxRes = { vertices.data(), (ur_uint)vertices.size() * sizeof(Vertex), 0 };
-			res = objects.patchVB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::VertexBuffer, 0, &gfxRes);
+			res = objects.patchVB->Initialize(gfxRes.RowPitch, sizeof(Vertex), GfxUsage::Immutable, (ur_uint)GfxBindFlag::VertexBuffer, 0, &gfxRes);
 		}
 		if (Failed(res))
 			return LogResult(Failure, realm.GetLog(), Log::Error, "Terrain::SimpleGrid::CreateGfxObjects: failed to initialize vertex buffer");
@@ -204,7 +204,7 @@ namespace UnlimRealms
 				}
 			}
 			GfxResourceData gfxRes = { indices.data(), (ur_uint)indices.size() * sizeof(Index), 0 };
-			res = objects.patchIB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::IndexBuffer, 0, &gfxRes);
+			res = objects.patchIB->Initialize(gfxRes.RowPitch, sizeof(Index), GfxUsage::Immutable, (ur_uint)GfxBindFlag::IndexBuffer, 0, &gfxRes);
 		}
 		if (Failed(res))
 			return LogResult(Failure, realm.GetLog(), Log::Error, "Terrain::SimpleGrid::CreateGfxObjects: failed to initialize index buffer");

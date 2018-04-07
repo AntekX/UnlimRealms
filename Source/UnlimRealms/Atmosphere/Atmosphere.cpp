@@ -132,7 +132,7 @@ namespace UnlimRealms
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects.CB);
 		if (Succeeded(res))
 		{
-			res = this->gfxObjects.CB->Initialize(sizeof(CommonCB), GfxUsage::Dynamic,
+			res = this->gfxObjects.CB->Initialize(sizeof(CommonCB), 0, GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
@@ -152,7 +152,7 @@ namespace UnlimRealms
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects.lightShaftsCB);
 		if (Succeeded(res))
 		{
-			res = this->gfxObjects.lightShaftsCB->Initialize(sizeof(LightShaftsCB), GfxUsage::Dynamic,
+			res = this->gfxObjects.lightShaftsCB->Initialize(sizeof(LightShaftsCB), 0, GfxUsage::Dynamic,
 				(ur_uint)GfxBindFlag::ConstantBuffer, (ur_uint)GfxAccessFlag::Write);
 		}
 		if (Failed(res))
@@ -232,7 +232,7 @@ namespace UnlimRealms
 		if (Succeeded(res))
 		{
 			GfxResourceData gfxRes = { vertices.data(), (ur_uint)vertices.size() * sizeof(Atmosphere::Vertex), 0 };
-			res = this->gfxObjects.VB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::VertexBuffer, 0, &gfxRes);
+			res = this->gfxObjects.VB->Initialize(gfxRes.RowPitch, sizeof(Atmosphere::Vertex), GfxUsage::Immutable, (ur_uint)GfxBindFlag::VertexBuffer, 0, &gfxRes);
 		}
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateMesh: failed to initialize VB");
@@ -242,7 +242,7 @@ namespace UnlimRealms
 		if (Succeeded(res))
 		{
 			GfxResourceData gfxRes = { indices.data(), (ur_uint)indices.size() * sizeof(Atmosphere::Index), 0 };
-			res = this->gfxObjects.IB->Initialize(gfxRes.RowPitch, GfxUsage::Immutable, (ur_uint)GfxBindFlag::IndexBuffer, 0, &gfxRes);
+			res = this->gfxObjects.IB->Initialize(gfxRes.RowPitch, sizeof(Atmosphere::Index), GfxUsage::Immutable, (ur_uint)GfxBindFlag::IndexBuffer, 0, &gfxRes);
 		}
 		if (Failed(res))
 			return Result(Failure);
@@ -270,8 +270,8 @@ namespace UnlimRealms
 
 		// draw
 		const ur_uint indexCount = this->gfxObjects.IB->GetDesc().Size / sizeof(Atmosphere::Index);
-		gfxContext.SetVertexBuffer(this->gfxObjects.VB.get(), 0, sizeof(Atmosphere::Vertex), 0);
-		gfxContext.SetIndexBuffer(this->gfxObjects.IB.get(), sizeof(Atmosphere::Index) * 8, 0);
+		gfxContext.SetVertexBuffer(this->gfxObjects.VB.get(), 0);
+		gfxContext.SetIndexBuffer(this->gfxObjects.IB.get());
 		gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
 
 		return Success;
