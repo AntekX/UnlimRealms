@@ -1,6 +1,7 @@
+static const uint InstanceCount = 16;
 cbuffer Common : register(b0)
 {
-	float4x4 Transform;
+	float4x4 Transform[InstanceCount];
 };
 
 struct VS_INPUT
@@ -17,13 +18,25 @@ struct PS_INPUT
 	float2 uv	: TEXCOORD0;
 };
 
-PS_INPUT main(VS_INPUT input)
+static const uint ColorsCount = 7;
+static const float3 Colors[ColorsCount] = {
+	{ 0, 0, 1 },
+	{ 0, 1, 0 },
+	{ 0, 1, 1 },
+	{ 1, 0, 0 },
+	{ 1, 0, 1 },
+	{ 1, 1, 0 },
+	{ 1, 1, 1 }
+};
+
+PS_INPUT main(VS_INPUT input, uint instanceID : SV_InstanceID, uint vertexID : SV_VertexID)
 {
 	PS_INPUT output;
 
-	output.pos = mul(Transform, float4(input.pos.xyz, 1.0f));
+	output.pos = mul(Transform[instanceID], float4(input.pos.xyz, 1.0f));
 	//output.pos = float4(input.pos.xyz, 1.0f);
 	output.col = input.col;
+	output.col.xyz = Colors[(instanceID + vertexID) % ColorsCount] * 0.5 + 0.5;
 	output.uv = input.uv;
 
 	return output;

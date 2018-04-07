@@ -10,6 +10,6 @@ Texture2D texture0	: register(t0);
 float4 main(PS_INPUT input) : SV_Target
 {
 	float4 texColor = texture0.Sample(sampler0, input.uv);
-	return float4(texColor.xyz, 1.0);
+	return float4(texColor.xyz * input.col.xyz, 1.0);
 	//return float4(input.col.xyz, 1.0);
 }

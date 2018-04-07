@@ -91,9 +91,10 @@ int D3D12SandboxApp::Run()
 		gfxVB->Initialize(sizeof(bufferData), sizeof(Vertex), GfxUsage::Dynamic, ur_uint(GfxBindFlag::VertexBuffer), 0, &bufferDataDesc);
 	}
 
+	const ur_uint InstanceCount = 16;
 	struct Constants
 	{
-		ur_float4x4 Transform;
+		ur_float4x4 Transform[InstanceCount];
 	};
 	Constants cbData = { ur_float4x4::Identity };
 	GfxResourceData cbResData = { &cbData, sizeof(Constants) , 0};
@@ -105,7 +106,8 @@ int D3D12SandboxApp::Run()
 
 	std::unique_ptr<GfxTexture> gfxTexture;
 	realm.GetGfxSystem()->CreateTexture(gfxTexture);
-	CreateTextureFromFile(realm, gfxTexture, "Res/Rock_desert_03_FWD.dds");
+	//CreateTextureFromFile(realm, gfxTexture, "Res/Rock_desert_03_FWD.dds");
+	CreateTextureFromFile(realm, gfxTexture, "Res/testimage.dds");
 
 	GfxSamplerState gfxSampler = GfxSamplerState::Default;
 	gfxSampler.AddressU = GfxTextureAddressMode::Wrap;
@@ -138,9 +140,16 @@ int D3D12SandboxApp::Run()
 
 	// animation
 	ClockTime timer = Clock::now();
-	ur_float movePos = 0.0f;
-	ur_float moveDir = 1.0f;
-	ur_float moveSpeed = 0.5;
+	const ur_float moveSpeed = 0.75f;
+	ur_float2 movePos[InstanceCount];
+	ur_float2 moveDir[InstanceCount];
+	for (ur_uint i = 0; i < InstanceCount; ++i)
+	{
+		movePos[i] = { 0.0f, 0.0f };
+		moveDir[i].x = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f;
+		moveDir[i].y = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f;
+		moveDir[i].Normalize();
+	}
 
 	// Main message loop:
 	MSG msg;
@@ -181,28 +190,39 @@ int D3D12SandboxApp::Run()
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, { 0.0f, 0.2f, 0.4f, 1.0f }, false, 0.0f, false, 0);
 
-			// animate primitive
+			// animate primitives
 			ClockTime timeNow = Clock::now();
 			auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(timeNow - timer);
 			timer = timeNow;
 			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f; // to seconds
-			movePos = movePos + moveDir * moveSpeed * elapsedTime;
-			while (movePos > 1.0f || movePos < -1.0f)
+			for (ur_uint i = 0; i < InstanceCount; ++i)
 			{
-				movePos = moveDir * 2.0f - movePos;
-				moveDir *= -1.0f;
+				movePos[i] = movePos[i] + moveDir[i] * moveSpeed * elapsedTime;
+				if (movePos[i].x > 1.0f || movePos[i].x < -1.0f)
+				{
+					movePos[i].x = movePos[i].x / abs(movePos[i].x);
+					moveDir[i].x *= -1.0f;
+					moveDir[i].y = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f + moveDir[i].y;
+					moveDir[i].Normalize();
+				}
+				if (movePos[i].y > 1.0f || movePos[i].y < -1.0f)
+				{
+					movePos[i].y = movePos[i].y / abs(movePos[i].y);
+					moveDir[i].y *= -1.0f;
+					moveDir[i].x = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f + moveDir[i].x;
+					moveDir[i].Normalize();
+				}
+				cbData.Transform[i] = ur_float4x4::Identity;
+				cbData.Transform[i] = cbData.Transform[i].Multiply(ur_float4x4::Scaling(1.0f, ur_float(canvasWidth) / canvasHeight, 1.0f));
+				cbData.Transform[i] = cbData.Transform[i].Multiply(ur_float4x4::Translation(movePos[i].x, movePos[i].y, 0.0f));
 			}
-			cbData.Transform = ur_float4x4::Identity;
-			//cbData.Transform = cbData.Transform.Multiply(ur_float4x4::RotationAxis(ur_float3::K, movePos * MathConst<ur_float>::Pi));
-			cbData.Transform = cbData.Transform.Multiply(ur_float4x4::Scaling(1.0f, ur_float(canvasWidth) / canvasHeight, 1.0f));
-			cbData.Transform = cbData.Transform.Multiply(ur_float4x4::Translation(movePos, 0.0f, 0.0f));
 			gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, false, &cbResData, 0, 0);
 			
-			// draw test primitive
+			// draw primitives
 			gfxContext->SetPipelineStateObject(gfxPSO.get());
 			gfxContext->SetResourceBinding(gfxBinding.get());
 			gfxContext->SetVertexBuffer(gfxVB.get(), 0);
-			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, 1, 0);
+			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount, 0);
 
 			gfxContext->End();
 		}
