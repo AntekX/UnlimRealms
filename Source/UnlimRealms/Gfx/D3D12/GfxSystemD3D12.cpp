@@ -794,6 +794,33 @@ namespace UnlimRealms
 
 	Result GfxContextD3D12::UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, UpdateBufferCallback callback)
 	{
+		if (this->d3dCommandList.empty())
+			return ResultError(Failure, "GfxContextD3D12::UpdateBuffer: failed, d3d command list is not initialized");
+
+		GfxBufferD3D12 *gfxBufferD3D12 = static_cast<GfxBufferD3D12*>(buffer);
+		if (ur_null == gfxBufferD3D12 || ur_null == gfxBufferD3D12->GetResource().GetD3DResource())
+			return ResultError(InvalidArgs, "GfxContextD3D12::UpdateBuffer: failed, invalid buffer");
+
+		// todo: support doNotWait option
+
+		ID3D12Resource *d3dResource = gfxBufferD3D12->GetResource().GetD3DResource();
+		D3D12_RANGE readRange;
+		readRange.Begin = 0;
+		readRange.End = (GfxGPUAccess::Read == gpuAccess || GfxGPUAccess::ReadWrite == gpuAccess ? gfxBufferD3D12->GetDesc().Size : 0);
+		ur_byte* resourceDataPtr;
+		HRESULT hr = d3dResource->Map(0, &readRange, reinterpret_cast<void**>(&resourceDataPtr));
+		if (FAILED(hr))
+			return ResultError(InvalidArgs, "GfxContextD3D12::UpdateBuffer: failed to map d3d resource");
+
+		GfxResourceData mappedData;
+		mappedData.Ptr = resourceDataPtr;
+		mappedData.RowPitch = gfxBufferD3D12->GetDesc().Size;
+		mappedData.SlicePitch = mappedData.RowPitch;
+		
+		callback(&mappedData);
+
+		d3dResource->Unmap(0, ur_null);
+
 		return NotImplemented;
 	}
 
@@ -1068,8 +1095,8 @@ namespace UnlimRealms
 		if (ur_null == d3dSystem.GetWinCanvas())
 			return ResultError(NotInitialized, "GfxSwapChainD3D12::Initialize: failed, canvas not initialized");
 
-		this->dxgiChainDesc.Width = params.BufferWidth;
-		this->dxgiChainDesc.Height = params.BufferHeight;
+		this->dxgiChainDesc.Width = std::max(params.BufferWidth, ur_uint(1));
+		this->dxgiChainDesc.Height = std::max(params.BufferHeight, ur_uint(1));
 		this->dxgiChainDesc.Format = GfxFormatToDXGI(params.BufferFormat, GfxFormatView::Unorm);
 		this->dxgiChainDesc.Stereo = false;
 		this->dxgiChainDesc.SampleDesc.Count = params.MutisampleCount;
@@ -1090,8 +1117,8 @@ namespace UnlimRealms
 		dxgiSwapChain1->QueryInterface(__uuidof(IDXGISwapChain3), this->dxgiSwapChain);
 
 		GfxTextureDesc desc;
-		desc.Width = params.BufferWidth;
-		desc.Height = params.BufferHeight;
+		desc.Width = (ur_uint)this->dxgiChainDesc.Width;
+		desc.Height = (ur_uint)this->dxgiChainDesc.Height;
 		desc.Levels = 1;
 		desc.Format = params.BufferFormat;
 		desc.FormatView = GfxFormatView::Unorm;

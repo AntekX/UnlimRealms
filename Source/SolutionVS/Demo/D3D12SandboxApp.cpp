@@ -42,7 +42,7 @@ int D3D12SandboxApp::Run()
 	if (Succeeded(realm.GetGfxSystem()->CreateSwapChain(gfxSwapChain)))
 	{
 		res = gfxSwapChain->Initialize(canvasWidth, canvasHeight,
-			false, GfxFormat::R8G8B8A8, true, GfxFormat::R24G8, 2);
+			false, GfxFormat::R8G8B8A8, true, GfxFormat::R24G8, 3);
 	}
 
 	// create graphics context
@@ -93,18 +93,13 @@ int D3D12SandboxApp::Run()
 	struct Constants
 	{
 		ur_float4x4 Transform;
-	} cbData = { ur_float4x4::Identity };
+	};
+	Constants cbData = { ur_float4x4::Identity };
+	GfxResourceData cbResData = { &cbData, sizeof(Constants) , 0};
 	std::unique_ptr<GfxBuffer> gfxCB;
 	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxCB)))
 	{
-		ur_float4x4::Translation(cbData.Transform, 0.5f, 0.0f, 0.0f);
-
-		GfxResourceData bufferDataDesc;
-		bufferDataDesc.Ptr = &cbData;
-		bufferDataDesc.RowPitch = sizeof(Constants);
-		bufferDataDesc.SlicePitch = 0;
-
-		gfxCB->Initialize(sizeof(Constants), 0, GfxUsage::Dynamic, ur_uint(GfxBindFlag::ConstantBuffer), ur_uint(GfxAccessFlag::Write), &bufferDataDesc);
+		gfxCB->Initialize(sizeof(Constants), 0, GfxUsage::Dynamic, ur_uint(GfxBindFlag::ConstantBuffer), ur_uint(GfxAccessFlag::Write), &cbResData);
 	}
 
 	GfxRasterizerState gfxRasterizer = GfxRasterizerState::Default;
@@ -132,12 +127,19 @@ int D3D12SandboxApp::Run()
 	gfxPSO->SetDepthStencilState(gfxDepthStencil);
 	gfxPSO->Initialize();
 
+	// animation
+	ClockTime timer = Clock::now();
+	ur_float movePos = 0.0f;
+	ur_float moveDir = 1.0f;
+	ur_float moveSpeed = 0.5;
+
 	// Main message loop:
 	MSG msg;
 	ZeroMemory(&msg, sizeof(msg));
 	while (msg.message != WM_QUIT)
 	{
 		// process messages first
+		ClockTime timeBefore = Clock::now();
 		while (PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE) && msg.message != WM_QUIT)
 		{
 			TranslateMessage(&msg);
@@ -146,6 +148,8 @@ int D3D12SandboxApp::Run()
 			WinInput *winInput = static_cast<WinInput*>(realm.GetInput());
 			winInput->ProcessMsg(msg);
 		}
+		auto timeDelta = Clock::now() - timeBefore;
+		timer += timeDelta; // skip input delay
 
 		// update swap chain resolution to match the canvas size
 		if (canvasWidth != realm.GetCanvas()->GetClientBound().Width() ||
@@ -153,7 +157,8 @@ int D3D12SandboxApp::Run()
 		{
 			canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 			canvasHeight = realm.GetCanvas()->GetClientBound().Height();
-			gfxSwapChain->Initialize(canvasWidth, canvasHeight);
+			gfxSwapChain->Initialize(canvasWidth, canvasHeight,
+				false, GfxFormat::R8G8B8A8, true, GfxFormat::R24G8, 3);
 		}
 
 		// update sub systems
@@ -165,6 +170,20 @@ int D3D12SandboxApp::Run()
 			// prepare RT
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, { 0.0f, 0.2f, 0.4f, 1.0f }, false, 0.0f, false, 0);
+
+			// animate primitive
+			ClockTime timeNow = Clock::now();
+			auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(timeNow - timer);
+			timer = timeNow;
+			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f; // to seconds
+			movePos = movePos + moveDir * moveSpeed * elapsedTime;
+			while (movePos > 1.0f || movePos < -1.0f)
+			{
+				movePos = moveDir * 2.0f - movePos;
+				moveDir *= -1.0f;
+			}
+			ur_float4x4::Translation(cbData.Transform, movePos, 0.0f, 0.0f);
+			gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, false, &cbResData, 0, 0);
 			
 			// draw test primitive
 			gfxContext->SetPipelineStateObject(gfxPSO.get());
@@ -180,9 +199,6 @@ int D3D12SandboxApp::Run()
 
 		// present
 		gfxSwapChain->Present();
-
-		// limit framerate
-		Sleep(16);
 	}
 
 	// explicitly
