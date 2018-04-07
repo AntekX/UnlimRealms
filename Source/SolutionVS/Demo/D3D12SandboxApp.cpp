@@ -10,6 +10,7 @@
 #include "Gfx/D3D12/GfxSystemD3D12.h"
 #include "Gfx/D3D11/GfxSystemD3D11.h" // for test purpose
 #include "Resources/Resources.h"
+#include "Core/Math.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
@@ -78,9 +79,9 @@ int D3D12SandboxApp::Run()
 			ur_float4 color;
 			ur_float2 tex;
 		} bufferData[] = {
-			{ { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
-			{ {  0.0f,  1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
-			{ {  0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 0.0f, 0.0f } }
+			{ { -0.25f, -0.25f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 2.0f } },
+			{ {  0.00f,  0.25f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+			{ {  0.25f, -0.25f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 2.0f, 2.0f } }
 		};
 		GfxResourceData bufferDataDesc;
 		bufferDataDesc.Ptr = bufferData;
@@ -102,6 +103,14 @@ int D3D12SandboxApp::Run()
 		gfxCB->Initialize(sizeof(Constants), 0, GfxUsage::Dynamic, ur_uint(GfxBindFlag::ConstantBuffer), ur_uint(GfxAccessFlag::Write), &cbResData);
 	}
 
+	std::unique_ptr<GfxTexture> gfxTexture;
+	realm.GetGfxSystem()->CreateTexture(gfxTexture);
+	CreateTextureFromFile(realm, gfxTexture, "Res/Rock_desert_03_FWD.dds");
+
+	GfxSamplerState gfxSampler = GfxSamplerState::Default;
+	gfxSampler.AddressU = GfxTextureAddressMode::Wrap;
+	gfxSampler.AddressV = GfxTextureAddressMode::Wrap;
+
 	GfxRasterizerState gfxRasterizer = GfxRasterizerState::Default;
 	gfxRasterizer.CullMode = GfxCullMode::None;
 
@@ -113,8 +122,8 @@ int D3D12SandboxApp::Run()
 	std::unique_ptr<GfxResourceBinding> gfxBinding;
 	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding);
 	gfxBinding->SetBuffer(0, gfxCB.get());
-	//gfxBinding->SetTexture(0, ur_null);
-	//gfxBinding->SetSampler(0, ur_null);
+	gfxBinding->SetTexture(0, gfxTexture.get());
+	gfxBinding->SetSampler(0, &gfxSampler);
 	gfxBinding->Initialize();
 
 	std::unique_ptr<GfxPipelineStateObject> gfxPSO;
@@ -147,6 +156,7 @@ int D3D12SandboxApp::Run()
 			// forward msg to WinInput system
 			WinInput *winInput = static_cast<WinInput*>(realm.GetInput());
 			winInput->ProcessMsg(msg);
+			break;
 		}
 		auto timeDelta = Clock::now() - timeBefore;
 		timer += timeDelta; // skip input delay
@@ -182,7 +192,10 @@ int D3D12SandboxApp::Run()
 				movePos = moveDir * 2.0f - movePos;
 				moveDir *= -1.0f;
 			}
-			ur_float4x4::Translation(cbData.Transform, movePos, 0.0f, 0.0f);
+			cbData.Transform = ur_float4x4::Identity;
+			//cbData.Transform = cbData.Transform.Multiply(ur_float4x4::RotationAxis(ur_float3::K, movePos * MathConst<ur_float>::Pi));
+			cbData.Transform = cbData.Transform.Multiply(ur_float4x4::Scaling(1.0f, ur_float(canvasWidth) / canvasHeight, 1.0f));
+			cbData.Transform = cbData.Transform.Multiply(ur_float4x4::Translation(movePos, 0.0f, 0.0f));
 			gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, false, &cbResData, 0, 0);
 			
 			// draw test primitive
@@ -201,7 +214,19 @@ int D3D12SandboxApp::Run()
 		gfxSwapChain->Present();
 	}
 
-	// explicitly
+	// explicitly wait for GPU for now
+	GfxSystemD3D12 *gfxSystemD3D12 = dynamic_cast<GfxSystemD3D12*>(realm.GetGfxSystem());
+	if (gfxSystemD3D12 != ur_null)
+	{
+		gfxSystemD3D12->WaitGPU();
+	}
+
+	// explicitly release resources
+	gfxPSO.reset(ur_null);
+	gfxBinding.reset(ur_null);
+	gfxVB.reset(ur_null);
+	gfxCB.reset(ur_null);
+	gfxContext.reset(ur_null);
 	gfxSwapChain.reset(ur_null);
 
 	return 0;

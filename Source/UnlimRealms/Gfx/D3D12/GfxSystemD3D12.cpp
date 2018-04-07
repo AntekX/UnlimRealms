@@ -933,6 +933,8 @@ namespace UnlimRealms
 			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 			srvDesc.Texture2D.MipLevels = -1;
 			srvDesc.Texture2D.MostDetailedMip = 0;
+			srvDesc.Texture2D.PlaneSlice = 0;
+			srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 		
 			d3dDevice->CreateShaderResourceView(this->resource.GetD3DResource(), &srvDesc, this->srvDescriptor->CpuHandle());
 		}
@@ -949,6 +951,7 @@ namespace UnlimRealms
 
 		this->resource.Initialize(ur_null);
 		this->srvDescriptor.reset(ur_null);
+		this->uploadResource.reset(ur_null);
 
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
@@ -978,6 +981,66 @@ namespace UnlimRealms
 		Result res = this->resource.Initialize(d3dResource, d3dResStates);
 		if (Failed(res))
 			return ResultError(Failure, "GfxTextureD3D12::OnInitialize: failed to initialize GfxResourceD3D12");
+
+		if (data != ur_null)
+		{
+			std::vector<D3D12_SUBRESOURCE_DATA> d3dSubresData;
+			d3dSubresData.resize(this->GetDesc().Levels);
+			for (ur_uint ilvl = 0; ilvl < this->GetDesc().Levels; ++ilvl)
+			{
+				d3dSubresData[ilvl] = GfxResourceDataToD3D12(data[ilvl]);
+			}
+
+			// create & fill upload resource
+
+			shared_ref<ID3D12Resource> d3dUploadResource;
+			d3dHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+			D3D12_RESOURCE_STATES d3dUploadResState = D3D12_RESOURCE_STATE_GENERIC_READ;
+			const UINT64 uploadBufferSize = GetRequiredIntermediateSize(this->resource.GetD3DResource(), 0, (UINT)this->GetDesc().Levels);
+			D3D12_RESOURCE_DESC d3dUploadResDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
+			hr = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dUploadResDesc, d3dUploadResState, ur_null,
+				__uuidof(ID3D12Resource), d3dUploadResource);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxTextureD3D12::OnInitialize: failed to create upload resource");
+			this->uploadResource.reset(new GfxResourceD3D12(this->GetGfxSystem()));
+			this->uploadResource->Initialize(d3dUploadResource, d3dUploadResState);
+
+			hr = FillUploadBuffer(this->uploadResource->GetD3DResource(), this->resource.GetD3DResource(), 0, this->GetDesc().Levels, d3dSubresData.data());
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxTextureD3D12::OnInitialize: failed to fill upload resource");
+
+			// schedule a copy to destination resource
+
+			d3dSystem.GetResourceContext()->Begin();
+			d3dSystem.GetResourceContext()->ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
+			
+			hr = UpdateTextureSubresources(d3dSystem.GetResourceContext()->GetD3DCommandList(),
+				this->resource.GetD3DResource(), this->uploadResource->GetD3DResource(),
+				0, 0, this->GetDesc().Levels);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxTextureD3D12::OnInitialize: failed to update texture sub resource(s)");
+
+			d3dSystem.GetResourceContext()->ResourceTransition(&this->resource, d3dResStates);
+			d3dSystem.GetResourceContext()->End();
+		}
+
+		if (this->GetDesc().BindFlags & ur_uint(GfxBindFlag::ShaderResource))
+		{
+			Result res = d3dSystem.GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AcquireDescriptor(this->srvDescriptor);
+			if (Failed(res))
+				return ResultError(NotInitialized, "GfxTextureD3D12::Initialize: failed to acquire SRV descriptor");
+
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			srvDesc.Format = GfxFormatToDXGI(this->GetDesc().Format, this->GetDesc().FormatView);
+			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+			srvDesc.Texture2D.MipLevels = -1;
+			srvDesc.Texture2D.MostDetailedMip = 0;
+			srvDesc.Texture2D.PlaneSlice = 0;
+			srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+
+			d3dDevice->CreateShaderResourceView(this->resource.GetD3DResource(), &srvDesc, this->srvDescriptor->CpuHandle());
+		}
 
 		return Result(Success);
 	}
@@ -1287,7 +1350,7 @@ namespace UnlimRealms
 			{
 				// if current resource is in Upload heap - fill it with initial data
 
-				hr = FillUploadResource(this->resource.GetD3DResource(), 0, 1, &d3dSubresData);
+				hr = FillUploadBuffer(this->resource.GetD3DResource(), ur_null, 0, 1, &d3dSubresData);
 				if (FAILED(hr))
 					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to fill upload resource");
 			}
@@ -1305,7 +1368,7 @@ namespace UnlimRealms
 				this->uploadResource.reset(new GfxResourceD3D12(this->GetGfxSystem()));
 				this->uploadResource->Initialize(d3dUploadResource, d3dUploadResState);
 
-				hr = FillUploadResource(this->uploadResource->GetD3DResource(), 0, 1, &d3dSubresData);
+				hr = FillUploadBuffer(this->uploadResource->GetD3DResource(), ur_null, 0, 1, &d3dSubresData);
 				if (FAILED(hr))
 					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to fill upload resource");
 
@@ -1629,6 +1692,22 @@ namespace UnlimRealms
 			this->d3dTableDescriptorHeaps.emplace_back(tableHeap);
 		}
 
+		// initialize samplaers descriptor set
+		// todo: consider implementing SamplerStateObject which can store descritptor for D3D12 implementation and can be reuased across bindings
+		// temp: create immputable samplers right on shader visible descriptors table
+		if (!this->GetSamplers().empty())
+		{
+			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+			UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
+			D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexSampler]->FirstCpuHandle();
+			for (ur_size samplerIdx = 0; samplerIdx < this->GetSamplers().size(); ++samplerIdx)
+			{
+				const GfxSamplerState &gfxSamplerState = *this->GetSamplers()[samplerIdx].second;
+				d3dDevice->CreateSampler(&GfxSamplerStateToD3D12(gfxSamplerState), descritorsTableHandle);
+				descritorsTableHandle.ptr += d3dDescriptorSize;
+			}
+		}
+
 		return Result(Success);
 	}
 
@@ -1664,6 +1743,31 @@ namespace UnlimRealms
 				descritorsTableHandle.ptr += d3dDescriptorSize;
 			}
 		}
+
+		if (!this->GetTextures().empty())
+		{
+			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+			UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
+			D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexCbvSrvUav]->FirstCpuHandle();
+			descritorsTableHandle.ptr += d3dDescriptorSize * this->GetBuffers().size();
+			for (ur_size textureIdx = 0; textureIdx < this->GetTextures().size(); ++textureIdx)
+			{
+				GfxTextureD3D12 *textureD3D12 = static_cast<GfxTextureD3D12*>(this->GetTextures()[textureIdx].second);
+				d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, textureD3D12->GetSRVDescriptor()->CpuHandle(), d3dHeapType);
+				descritorsTableHandle.ptr += d3dDescriptorSize;
+			}
+		}
+
+		/*if (!this->GetSamplers().empty())
+		{
+			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+			UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
+			D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexSampler]->FirstCpuHandle();
+			for (ur_size samplerIdx = 0; samplerIdx < this->GetSamplers().size(); ++samplerIdx)
+			{
+				descritorsTableHandle.ptr += d3dDescriptorSize;
+			}
+		}*/
 
 		// todo: support all other resources
 
@@ -2003,7 +2107,53 @@ namespace UnlimRealms
 		return d3dRect;
 	}
 
-	HRESULT FillUploadResource(ID3D12Resource *uploadResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData)
+	D3D12_FILTER GfxFilterToD3D12(GfxFilter minFilter, GfxFilter magFilter, GfxFilter mipFilter)
+	{
+		if (GfxFilter::Point == minFilter && GfxFilter::Point == magFilter && GfxFilter::Point == magFilter) return D3D12_FILTER_MIN_MAG_MIP_POINT;
+		if (GfxFilter::Point == minFilter && GfxFilter::Point == magFilter && GfxFilter::Linear == magFilter) return D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR;
+		if (GfxFilter::Point == minFilter && GfxFilter::Linear == magFilter && GfxFilter::Point == magFilter) return D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
+		if (GfxFilter::Point == minFilter && GfxFilter::Linear == magFilter && GfxFilter::Linear == magFilter) return D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR;
+		if (GfxFilter::Linear == minFilter && GfxFilter::Point == magFilter && GfxFilter::Point == magFilter) return D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+		if (GfxFilter::Linear == minFilter && GfxFilter::Point == magFilter && GfxFilter::Linear == magFilter) return D3D12_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
+		if (GfxFilter::Linear == minFilter && GfxFilter::Linear == magFilter && GfxFilter::Point == magFilter) return D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+		if (GfxFilter::Linear == minFilter && GfxFilter::Linear == magFilter && GfxFilter::Linear == magFilter) return D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		if (GfxFilter::Anisotropic == minFilter || GfxFilter::Anisotropic == magFilter || GfxFilter::Anisotropic == magFilter) return D3D12_FILTER_ANISOTROPIC;
+		return (D3D12_FILTER)0;
+	}
+
+	D3D12_TEXTURE_ADDRESS_MODE GfxTextureAddressModeToD3D12(GfxTextureAddressMode mode)
+	{
+		switch (mode)
+		{
+		case GfxTextureAddressMode::Wrap: return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		case GfxTextureAddressMode::Mirror: return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+		case GfxTextureAddressMode::Clamp: return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		case GfxTextureAddressMode::Border: return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		case GfxTextureAddressMode::MirrorOnce: return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
+		}
+		return (D3D12_TEXTURE_ADDRESS_MODE)0;
+	}
+
+	D3D12_SAMPLER_DESC GfxSamplerStateToD3D12(const GfxSamplerState &state)
+	{
+		D3D12_SAMPLER_DESC desc;
+		desc.Filter = GfxFilterToD3D12(state.MinFilter, state.MagFilter, state.MipFilter);
+		desc.AddressU = GfxTextureAddressModeToD3D12(state.AddressU);
+		desc.AddressV = GfxTextureAddressModeToD3D12(state.AddressV);
+		desc.AddressW = GfxTextureAddressModeToD3D12(state.AddressW);
+		desc.MipLODBias = (FLOAT)state.MipLodBias;
+		desc.MaxAnisotropy = (UINT)state.MaxAnisotropy;
+		desc.ComparisonFunc = GfxCmpFuncToD3D12(state.CmpFunc);
+		desc.BorderColor[0] = (FLOAT)state.BorderColor.x;
+		desc.BorderColor[1] = (FLOAT)state.BorderColor.y;
+		desc.BorderColor[2] = (FLOAT)state.BorderColor.z;
+		desc.BorderColor[3] = (FLOAT)state.BorderColor.w;
+		desc.MinLOD = (FLOAT)state.MipLodMin;
+		desc.MaxLOD = (FLOAT)state.MipLodMax;
+		return desc;
+	}
+
+	HRESULT FillUploadBuffer(ID3D12Resource *uploadResource, ID3D12Resource *destinationResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData)
 	{
 		if (ur_null == uploadResource || ur_null == srcData)
 			return E_INVALIDARG;
@@ -2013,7 +2163,7 @@ namespace UnlimRealms
 
 		// fill descriptive structures
 
-		D3D12_RESOURCE_DESC resourceDesc = uploadResource->GetDesc();
+		D3D12_RESOURCE_DESC resourceDesc = (destinationResource != ur_null ? destinationResource->GetDesc() : uploadResource->GetDesc());
 		ur_size descBufferSize = static_cast<ur_size>(sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) + sizeof(UINT) + sizeof(UINT64)) * numSubresources;
 		std::vector<ur_byte> descBuffer(descBufferSize);
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* pLayouts = reinterpret_cast<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(descBuffer.data());
@@ -2035,12 +2185,13 @@ namespace UnlimRealms
 			D3D12_MEMCPY_DEST DestData = { pData + pLayouts[i].Offset, pLayouts[i].Footprint.RowPitch, pLayouts[i].Footprint.RowPitch * pNumRows[i] };
 			MemcpySubresource(&DestData, &srcData[i], (SIZE_T)pRowSizesInBytes[i], pNumRows[i], pLayouts[i].Footprint.Depth);
 		}
+		
 		uploadResource->Unmap(0, NULL);
 
 		return S_OK;
 	}
 
-	HRESULT UpdateSubresources(ID3D12GraphicsCommandList* commandList, ID3D12Resource* dstResource, ID3D12Resource* uploadResource,
+	HRESULT UpdateTextureSubresources(ID3D12GraphicsCommandList* commandList, ID3D12Resource* dstResource, ID3D12Resource* uploadResource,
 		ur_uint dstSubresource, ur_uint srcSubresource, ur_uint numSubresources)
 	{
 		if (ur_null == commandList || ur_null == dstResource || ur_null == uploadResource)
@@ -2061,33 +2212,13 @@ namespace UnlimRealms
 		UINT64 dstRequiredSize = 0;
 		d3dDevice->GetCopyableFootprints(&dstDesc, dstSubresource, numSubresources, dstBaseOffset, dstLayouts, dstNumRows, dstRowSizesInBytes, &dstRequiredSize);
 
-		D3D12_RESOURCE_DESC srcDesc = uploadResource->GetDesc();
-		ur_size srcMemDescSize = dstMemDescSize;
-		std::vector<ur_byte> srcMemDescBuffer(srcMemDescSize);
-		D3D12_PLACED_SUBRESOURCE_FOOTPRINT* srcLayouts = reinterpret_cast<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(srcMemDescBuffer.data());
-		UINT64* srcRowSizesInBytes = reinterpret_cast<UINT64*>(srcLayouts + numSubresources);
-		UINT* srcNumRows = reinterpret_cast<UINT*>(srcRowSizesInBytes + numSubresources);
-		const UINT64 srcBaseOffset = 0;
-		UINT64 srcRequiredSize = 0;
-		d3dDevice->GetCopyableFootprints(&srcDesc, srcSubresource, numSubresources, srcBaseOffset, srcLayouts, srcNumRows, srcRowSizesInBytes, &srcRequiredSize);
-
-		if (srcRequiredSize != dstRequiredSize)
-			return E_FAIL;
-
 		// schedule a copy
 
-		if (dstDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+		for (UINT i = 0; i < numSubresources; ++i)
 		{
-			commandList->CopyBufferRegion(dstResource, 0, uploadResource, dstLayouts[0].Offset, dstLayouts[0].Footprint.Width);
-		}
-		else
-		{
-			for (UINT i = 0; i < numSubresources; ++i)
-			{
-				CD3DX12_TEXTURE_COPY_LOCATION dstLocation(dstResource, i + dstSubresource);
-				CD3DX12_TEXTURE_COPY_LOCATION srcLocation(uploadResource, srcLayouts[i]);
-				commandList->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
-			}
+			CD3DX12_TEXTURE_COPY_LOCATION dstLocation(dstResource, i + dstSubresource);
+			CD3DX12_TEXTURE_COPY_LOCATION srcLocation(uploadResource, dstLayouts[i]);
+			commandList->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
 		}
 
 		return S_OK;

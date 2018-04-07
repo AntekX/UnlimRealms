@@ -337,6 +337,7 @@ namespace UnlimRealms
 		bool initializedFromD3DRes;
 		GfxResourceD3D12 resource;
 		std::unique_ptr<GfxSystemD3D12::Descriptor> srvDescriptor;
+		std::unique_ptr<GfxResourceD3D12> uploadResource;
 	};
 
 
@@ -501,6 +502,7 @@ namespace UnlimRealms
 
 	private:
 
+		std::unique_ptr<GfxSystemD3D12::DescriptorSet> samplerDescriptorSet;
 		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesCbvSrvUav;
 		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesSampler;
 		std::vector<D3D12_ROOT_PARAMETER> d3dRootParameters;
@@ -561,9 +563,15 @@ namespace UnlimRealms
 
 	extern UR_DECL D3D12_RECT RectIToD3D12(const RectI &rect);
 
-	extern UR_DECL HRESULT FillUploadResource(ID3D12Resource *uploadResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData);
+	extern UR_DECL D3D12_FILTER GfxFilterToD3D12(GfxFilter minFilter, GfxFilter magFilter, GfxFilter mipFilter);
 
-	extern UR_DECL HRESULT UpdateSubresources(ID3D12GraphicsCommandList* commandList, ID3D12Resource* dstResource, ID3D12Resource* uploadResource,
+	extern UR_DECL D3D12_TEXTURE_ADDRESS_MODE GfxTextureAddressModeToD3D12(GfxTextureAddressMode mode);
+
+	extern UR_DECL D3D12_SAMPLER_DESC GfxSamplerStateToD3D12(const GfxSamplerState &state);
+
+	extern UR_DECL HRESULT FillUploadBuffer(ID3D12Resource *uploadResource, ID3D12Resource *destinationResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData);
+
+	extern UR_DECL HRESULT UpdateTextureSubresources(ID3D12GraphicsCommandList* commandList, ID3D12Resource* dstResource, ID3D12Resource* uploadResource,
 		ur_uint dstSubresource, ur_uint srcSubresource, ur_uint numSubresources);
 
 } // end namespace UnlimRealms
