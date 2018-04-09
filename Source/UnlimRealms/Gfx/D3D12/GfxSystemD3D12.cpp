@@ -1692,9 +1692,9 @@ namespace UnlimRealms
 			this->d3dTableDescriptorHeaps.emplace_back(tableHeap);
 		}
 
-		// initialize samplaers descriptor set
-		// todo: consider implementing SamplerStateObject which can store descritptor for D3D12 implementation and can be reuased across bindings
-		// temp: create immputable samplers right on shader visible descriptors table
+		// initialize samplers descriptor set
+		// todo: consider implementing SamplerStateObject which can store descritptor for D3D12 implementation and can be reused across bindings
+		// temp: create immutable samplers right on shader visible descriptors table
 		if (!this->GetSamplers().empty())
 		{
 			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -1731,7 +1731,7 @@ namespace UnlimRealms
 
 		// copy resource(s) descriptor(s) to corresponding shader visible table(s)
 
-		if (!this->GetBuffers().empty())
+		if (this->tableIndexCbvSrvUav != ur_size(-1))
 		{
 			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 			UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
@@ -1739,21 +1739,19 @@ namespace UnlimRealms
 			for (ur_size bufferIdx = 0; bufferIdx < this->GetBuffers().size(); ++bufferIdx)
 			{
 				GfxBufferD3D12 *bufferD3D12 = static_cast<GfxBufferD3D12*>(this->GetBuffers()[bufferIdx].second);
-				d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, bufferD3D12->GetViewDescriptor()->CpuHandle(), d3dHeapType);
+				if (bufferD3D12 != ur_null && bufferD3D12->GetViewDescriptor() != ur_null)
+				{
+					d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, bufferD3D12->GetViewDescriptor()->CpuHandle(), d3dHeapType);
+				}
 				descritorsTableHandle.ptr += d3dDescriptorSize;
 			}
-		}
-
-		if (!this->GetTextures().empty())
-		{
-			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-			UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
-			D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexCbvSrvUav]->FirstCpuHandle();
-			descritorsTableHandle.ptr += d3dDescriptorSize * this->GetBuffers().size();
 			for (ur_size textureIdx = 0; textureIdx < this->GetTextures().size(); ++textureIdx)
 			{
 				GfxTextureD3D12 *textureD3D12 = static_cast<GfxTextureD3D12*>(this->GetTextures()[textureIdx].second);
-				d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, textureD3D12->GetSRVDescriptor()->CpuHandle(), d3dHeapType);
+				if (textureD3D12 != ur_null && textureD3D12->GetSRVDescriptor() != ur_null)
+				{
+					d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, textureD3D12->GetSRVDescriptor()->CpuHandle(), d3dHeapType);
+				}
 				descritorsTableHandle.ptr += d3dDescriptorSize;
 			}
 		}
