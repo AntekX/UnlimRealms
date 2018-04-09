@@ -124,7 +124,7 @@ int D3D12SandboxApp::Run()
 	std::unique_ptr<GfxResourceBinding> gfxBinding;
 	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding);
 	gfxBinding->SetBuffer(0, gfxCB.get());
-	gfxBinding->SetTexture(0, /*gfxTexture.get()*/ur_null);
+	gfxBinding->SetTexture(0, gfxTexture.get());
 	gfxBinding->SetSampler(0, &gfxSampler);
 	gfxBinding->Initialize();
 
