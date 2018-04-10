@@ -93,8 +93,6 @@ namespace UnlimRealms
 
 		inline ID3D12CommandAllocator* GetD3DCommandAllocator() const;
 
-		inline GfxContextD3D12* GetResourceContext() const;
-
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Descriptor & Descriptors Heap
@@ -217,7 +215,6 @@ namespace UnlimRealms
 		HANDLE frameFenceEvent;
 		ur_uint frameIndex;
 		ur_uint framesCount;
-		std::unique_ptr<GfxContextD3D12> resourceContext;
 	};
 
 

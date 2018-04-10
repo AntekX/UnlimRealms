@@ -254,10 +254,6 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "GfxSystemD3D12: failed to initialize frame data");
 
-		// initialize resource context
-		this->resourceContext.reset(new GfxContextD3D12(*this));
-		this->resourceContext->Initialize();
-
 		return Result(Success);
 	}
 
@@ -958,8 +954,6 @@ namespace UnlimRealms
 		if (ur_null == d3dDevice)
 			return ResultError(NotInitialized, "GfxTextureD3D12::OnInitialize: failed, device unavailable");
 
-		// todo: init sub resource data
-
 		D3D12_RESOURCE_DESC d3dResDesc = GfxTextureDescToD3D12ResDesc(this->GetDesc());
 		d3dResDesc.Format = GfxFormatToDXGI(this->GetDesc().Format, GfxFormatView::Typeless);
 
@@ -1011,17 +1005,19 @@ namespace UnlimRealms
 
 			// schedule a copy to destination resource
 
-			d3dSystem.GetResourceContext()->Begin();
-			d3dSystem.GetResourceContext()->ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
+			GfxContextD3D12 uploadContext(this->GetGfxSystem());
+			uploadContext.Initialize();
+			uploadContext.Begin();
+			uploadContext.ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
 			
-			hr = UpdateTextureSubresources(d3dSystem.GetResourceContext()->GetD3DCommandList(),
+			hr = UpdateTextureSubresources(uploadContext.GetD3DCommandList(),
 				this->resource.GetD3DResource(), this->uploadResource->GetD3DResource(),
 				0, 0, this->GetDesc().Levels);
 			if (FAILED(hr))
 				return ResultError(Failure, "GfxTextureD3D12::OnInitialize: failed to update texture sub resource(s)");
 
-			d3dSystem.GetResourceContext()->ResourceTransition(&this->resource, d3dResStates);
-			d3dSystem.GetResourceContext()->End();
+			uploadContext.ResourceTransition(&this->resource, d3dResStates);
+			uploadContext.End();
 		}
 
 		if (this->GetDesc().BindFlags & ur_uint(GfxBindFlag::ShaderResource))
@@ -1374,11 +1370,15 @@ namespace UnlimRealms
 
 				// schedule a copy to destination resource
 
-				d3dSystem.GetResourceContext()->Begin();
-				d3dSystem.GetResourceContext()->ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
-				d3dSystem.GetResourceContext()->UpdateResource(&this->resource, this->uploadResource.get());
-				d3dSystem.GetResourceContext()->ResourceTransition(&this->resource, d3dResStates);
-				d3dSystem.GetResourceContext()->End();
+				GfxContextD3D12 uploadContext(this->GetGfxSystem());
+				uploadContext.Initialize();
+				uploadContext.Begin();
+				uploadContext.ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
+				
+				uploadContext.UpdateResource(&this->resource, this->uploadResource.get());
+				
+				uploadContext.ResourceTransition(&this->resource, d3dResStates);
+				uploadContext.End();
 			}
 		}
 

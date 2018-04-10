@@ -51,11 +51,6 @@ namespace UnlimRealms
 		return this->d3dCommandAllocators[this->frameIndex].get();
 	}
 
-	inline GfxContextD3D12* GfxSystemD3D12::GetResourceContext() const
-	{
-		return this->resourceContext.get();
-	}
-
 	inline GfxSystemD3D12::DescriptorHeap* GfxSystemD3D12::GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType)
 	{
 		return this->descriptorHeaps[ur_size(heapType)].get();

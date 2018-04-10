@@ -96,8 +96,9 @@ int D3D12SandboxApp::Run()
 	struct Constants
 	{
 		ur_float4x4 Transform[InstanceCount];
+		ur_float4 Desc;
 	};
-	Constants cbData = { ur_float4x4::Identity };
+	Constants cbData = { ur_float4x4::Identity, { 0.0f, 0.0f, 0.0f, 0.0f } };
 	GfxResourceData cbResData = { &cbData, sizeof(Constants) , 0};
 	std::unique_ptr<GfxBuffer> gfxCB;
 	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxCB)))
@@ -106,8 +107,10 @@ int D3D12SandboxApp::Run()
 	}
 
 	std::unique_ptr<GfxTexture> gfxTexture;
-	realm.GetGfxSystem()->CreateTexture(gfxTexture);
 	CreateTextureFromFile(realm, gfxTexture, "../Res/testimage.dds");
+
+	std::unique_ptr<GfxTexture> gfxTexture2;
+	CreateTextureFromFile(realm, gfxTexture2, "../Res/testimage2.dds");
 
 	GfxSamplerState gfxSampler = GfxSamplerState::Default;
 	gfxSampler.AddressU = GfxTextureAddressMode::Wrap;
