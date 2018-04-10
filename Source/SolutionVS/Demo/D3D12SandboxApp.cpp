@@ -79,9 +79,10 @@ int D3D12SandboxApp::Run()
 			ur_float4 color;
 			ur_float2 tex;
 		} bufferData[] = {
-			{ { -0.25f, -0.25f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 2.0f } },
-			{ {  0.00f,  0.25f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
-			{ {  0.25f, -0.25f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 2.0f, 2.0f } }
+			{ { -1.0f, -1.0f,  0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 1.0f } },
+			{ { -1.0f,  1.0f,  0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
+			{ {  1.0f, -1.0f,  0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 1.0f } },
+			{ {  1.0f,  1.0f,  0.0f }, { 1.0f, 1.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }
 		};
 		GfxResourceData bufferDataDesc;
 		bufferDataDesc.Ptr = bufferData;
@@ -106,8 +107,7 @@ int D3D12SandboxApp::Run()
 
 	std::unique_ptr<GfxTexture> gfxTexture;
 	realm.GetGfxSystem()->CreateTexture(gfxTexture);
-	//CreateTextureFromFile(realm, gfxTexture, "Res/Rock_desert_03_FWD.dds");
-	CreateTextureFromFile(realm, gfxTexture, "Res/testimage.dds");
+	CreateTextureFromFile(realm, gfxTexture, "../Res/testimage.dds");
 
 	GfxSamplerState gfxSampler = GfxSamplerState::Default;
 	gfxSampler.AddressU = GfxTextureAddressMode::Wrap;
@@ -136,10 +136,12 @@ int D3D12SandboxApp::Run()
 	gfxPSO->SetInputLayout(gfxIL.get());
 	gfxPSO->SetRasterizerState(gfxRasterizer);
 	gfxPSO->SetDepthStencilState(gfxDepthStencil);
+	gfxPSO->SetPrimitiveTopology(GfxPrimitiveTopology::TriangleStrip);
 	gfxPSO->Initialize();
 
 	// animation
 	ClockTime timer = Clock::now();
+	const ur_float spriteScale = 0.15f;
 	const ur_float moveSpeed = 0.75f;
 	ur_float2 movePos[InstanceCount];
 	ur_float2 moveDir[InstanceCount];
@@ -213,8 +215,8 @@ int D3D12SandboxApp::Run()
 					moveDir[i].Normalize();
 				}
 				cbData.Transform[i] = ur_float4x4::Identity;
-				cbData.Transform[i] = cbData.Transform[i].Multiply(ur_float4x4::Scaling(1.0f, ur_float(canvasWidth) / canvasHeight, 1.0f));
-				cbData.Transform[i] = cbData.Transform[i].Multiply(ur_float4x4::Translation(movePos[i].x, movePos[i].y, 0.0f));
+				cbData.Transform[i].Multiply(ur_float4x4::Scaling(spriteScale * (moveDir[i].x < 0.0f ? 1.0f : -1.0f), spriteScale * ur_float(canvasWidth) / canvasHeight, 1.0f));
+				cbData.Transform[i].Multiply(ur_float4x4::Translation(movePos[i].x, movePos[i].y, 0.0f));
 			}
 			gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, false, &cbResData, 0, 0);
 			
