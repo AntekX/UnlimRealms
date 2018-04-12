@@ -1309,7 +1309,7 @@ namespace UnlimRealms
 	{
 		this->resource.Initialize(ur_null);
 		this->uploadResource.reset(ur_null);
-		this->viewDescriptor.reset(ur_null);
+		this->descriptor.reset(ur_null);
 
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
@@ -1406,13 +1406,13 @@ namespace UnlimRealms
 		}
 		else if (ur_uint(GfxBindFlag::ConstantBuffer) & this->GetDesc().BindFlags)
 		{
-			Result res = d3dSystem.GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AcquireDescriptor(this->viewDescriptor);
+			Result res = d3dSystem.GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AcquireDescriptor(this->descriptor);
 			if (Failed(res))
 				return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to acquire CBV descriptor");
 
 			this->d3dCBView.BufferLocation = this->resource.GetD3DResource()->GetGPUVirtualAddress();
 			this->d3dCBView.SizeInBytes = (UINT)d3dResDesc.Width;
-			d3dDevice->CreateConstantBufferView(&this->d3dCBView, this->viewDescriptor->CpuHandle());
+			d3dDevice->CreateConstantBufferView(&this->d3dCBView, this->descriptor->CpuHandle());
 		}
 
 		return Result(Success);
@@ -1739,9 +1739,9 @@ namespace UnlimRealms
 			for (ur_size bufferIdx = 0; bufferIdx < this->GetBuffers().size(); ++bufferIdx)
 			{
 				GfxBufferD3D12 *bufferD3D12 = static_cast<GfxBufferD3D12*>(this->GetBuffers()[bufferIdx].second);
-				if (bufferD3D12 != ur_null && bufferD3D12->GetViewDescriptor() != ur_null)
+				if (bufferD3D12 != ur_null && bufferD3D12->GetDescriptor() != ur_null)
 				{
-					d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, bufferD3D12->GetViewDescriptor()->CpuHandle(), d3dHeapType);
+					d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, bufferD3D12->GetDescriptor()->CpuHandle(), d3dHeapType);
 				}
 				descritorsTableHandle.ptr += d3dDescriptorSize;
 			}

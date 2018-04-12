@@ -124,9 +124,9 @@ namespace UnlimRealms
 		return this->d3dCBView;
 	}
 
-	inline GfxSystemD3D12::Descriptor* GfxBufferD3D12::GetViewDescriptor() const
+	inline GfxSystemD3D12::Descriptor* GfxBufferD3D12::GetDescriptor() const
 	{
-		return this->viewDescriptor.get();
+		return this->descriptor.get();
 	}
 
 	inline GfxResourceD3D12& GfxTextureD3D12::GetResource()

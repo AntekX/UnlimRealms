@@ -431,7 +431,7 @@ namespace UnlimRealms
 
 		inline const D3D12_CONSTANT_BUFFER_VIEW_DESC& GetD3DViewCB() const;
 
-		inline GfxSystemD3D12::Descriptor* GetViewDescriptor() const;
+		inline GfxSystemD3D12::Descriptor* GetDescriptor() const;
 
 	protected:
 
@@ -446,7 +446,7 @@ namespace UnlimRealms
 			D3D12_INDEX_BUFFER_VIEW d3dIBView;
 			D3D12_CONSTANT_BUFFER_VIEW_DESC d3dCBView;
 		};
-		std::unique_ptr<GfxSystemD3D12::Descriptor> viewDescriptor;
+		std::unique_ptr<GfxSystemD3D12::Descriptor> descriptor;
 	};
 
 
