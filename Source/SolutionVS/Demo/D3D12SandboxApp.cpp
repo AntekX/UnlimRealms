@@ -92,7 +92,7 @@ int D3D12SandboxApp::Run()
 		gfxVB->Initialize(sizeof(bufferData), sizeof(Vertex), GfxUsage::Dynamic, ur_uint(GfxBindFlag::VertexBuffer), 0, &bufferDataDesc);
 	}
 
-	const ur_uint InstanceCount = 16;
+	const ur_uint InstanceCount = 24;
 	struct Constants
 	{
 		ur_float4x4 Transform[InstanceCount];
@@ -155,6 +155,39 @@ int D3D12SandboxApp::Run()
 		moveDir[i].y = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f;
 		moveDir[i].Normalize();
 	}
+
+	// test: explicit resources for another draw call with modified CB
+	Constants cbData2;
+	memset(&cbData2, 0, sizeof(Constants));
+	cbData2.Desc = ur_float4(InstanceCount / 3, 4.0f, 5.0f, 6.0f);
+	GfxResourceData cbResData2 = { &cbData2, sizeof(Constants) , 0 };
+	std::unique_ptr<GfxBuffer> gfxCB2;
+	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxCB2)))
+	{
+		gfxCB2->Initialize(sizeof(Constants), 0, GfxUsage::Dynamic, ur_uint(GfxBindFlag::ConstantBuffer), ur_uint(GfxAccessFlag::Write), &cbResData2);
+	}
+	std::unique_ptr<GfxResourceBinding> gfxBinding2;
+	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding2);
+	gfxBinding2->SetBuffer(0, gfxCB2.get());
+	gfxBinding2->SetTexture(0, gfxTexture.get());
+	gfxBinding2->SetSampler(0, &gfxSampler);
+	gfxBinding2->Initialize();
+
+	Constants cbData3;
+	memset(&cbData3, 0, sizeof(Constants));
+	cbData3.Desc.x = ur_float(InstanceCount / 3 * 2);
+	GfxResourceData cbResData3 = { &cbData3, sizeof(Constants) , 0 };
+	std::unique_ptr<GfxBuffer> gfxCB3;
+	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxCB3)))
+	{
+		gfxCB3->Initialize(sizeof(Constants), 0, GfxUsage::Dynamic, ur_uint(GfxBindFlag::ConstantBuffer), ur_uint(GfxAccessFlag::Write), &cbResData3);
+	}
+	std::unique_ptr<GfxResourceBinding> gfxBinding3;
+	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding3);
+	gfxBinding3->SetBuffer(0, gfxCB3.get());
+	gfxBinding3->SetTexture(0, gfxTexture.get());
+	gfxBinding3->SetSampler(0, &gfxSampler);
+	gfxBinding3->Initialize();
 
 	// Main message loop:
 	MSG msg;
@@ -221,13 +254,26 @@ int D3D12SandboxApp::Run()
 				cbData.Transform[i].Multiply(ur_float4x4::Scaling(spriteScale * (moveDir[i].x < 0.0f ? 1.0f : -1.0f), spriteScale * ur_float(canvasWidth) / canvasHeight, 1.0f));
 				cbData.Transform[i].Multiply(ur_float4x4::Translation(movePos[i].x, movePos[i].y, 0.0f));
 			}
+			cbData.Desc = ur_float4(0.0f, 1.0f, 2.0f, 3.0f);
 			gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, false, &cbResData, 0, 0);
 			
 			// draw primitives
 			gfxContext->SetPipelineStateObject(gfxPSO.get());
 			gfxContext->SetResourceBinding(gfxBinding.get());
 			gfxContext->SetVertexBuffer(gfxVB.get(), 0);
-			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount, 0);
+			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
+
+			memcpy(&cbData2, &cbData, sizeof(cbData2));
+			cbData2.Desc.x = ur_float(InstanceCount / 3);
+			gfxContext->UpdateBuffer(gfxCB2.get(), GfxGPUAccess::Write, false, &cbResData2, 0, 0);
+			gfxContext->SetResourceBinding(gfxBinding2.get());
+			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
+
+			memcpy(&cbData3, &cbData, sizeof(cbData3));
+			cbData3.Desc.x = ur_float(InstanceCount / 3 * 2);
+			gfxContext->UpdateBuffer(gfxCB3.get(), GfxGPUAccess::Write, false, &cbResData3, 0, 0);
+			gfxContext->SetResourceBinding(gfxBinding3.get());
+			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
 
 			gfxContext->End();
 		}

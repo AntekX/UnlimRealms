@@ -355,7 +355,7 @@ namespace UnlimRealms
 	Result GfxSystemD3D12::DescriptorHeap::AcquireDescriptors(std::unique_ptr<DescriptorSet>& descriptorSet, ur_size descriptorsCount, ur_bool shaderVisible)
 	{
 		descriptorSet.reset(new DescriptorSet());
-		return this->AcquireDescriptors(*descriptorSet, 1, shaderVisible);
+		return this->AcquireDescriptors(*descriptorSet, descriptorsCount, shaderVisible);
 	}
 
 	Result GfxSystemD3D12::DescriptorHeap::AcquireDescriptors(DescriptorSet& descriptorSet, ur_size descriptorsCount, ur_bool shaderVisible)

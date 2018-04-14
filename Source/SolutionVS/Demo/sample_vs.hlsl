@@ -1,4 +1,4 @@
-static const uint InstanceCount = 16;
+static const uint InstanceCount = 24;
 cbuffer Common : register(b0)
 {
 	float4x4 Transform[InstanceCount];
@@ -37,7 +37,8 @@ PS_INPUT main(VS_INPUT input, uint instanceID : SV_InstanceID, uint vertexID : S
 	output.pos = mul(Transform[instanceID + uint(Desc.x)], float4(input.pos.xyz, 1.0f));
 	//output.pos = float4(input.pos.xyz, 1.0f);
 	output.col = input.col;
-	output.col.xyz = Colors[(instanceID + vertexID) % ColorsCount] * 0.5 + 0.5;
+	//output.col.xyz = Colors[(instanceID + vertexID) % ColorsCount] * 0.5 + 0.5;
+	output.col.xyz = Colors[uint(Desc.x / (InstanceCount / 3))];
 	output.uv = input.uv;
 
 	return output;
