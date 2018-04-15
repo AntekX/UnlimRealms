@@ -12,7 +12,7 @@ namespace UnlimRealms
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// COM helpers
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <class T>
 	class shared_ref
@@ -108,19 +108,23 @@ namespace UnlimRealms
 			return (T*)this->ref;
 		}
 
+		#define Assert_NonNullPointerOverride assert(this->ref == ur_null && "shared_ref: exposing pointer to non null pointer, possible memory leak in case of override")
 		operator T**() const
 		{
+			Assert_NonNullPointerOverride;
 			return (T**)&this->ref;
 		}
 
 		template <class B>
 		operator B**() const
 		{
+			Assert_NonNullPointerOverride;
 			return (B**)&this->ref;
 		}
 
 		operator void**() const
 		{
+			Assert_NonNullPointerOverride;
 			return (void**)&this->ref;
 		}
 	};
