@@ -133,9 +133,10 @@ namespace UnlimRealms
 
 		this->frameIndex = 0;
 		this->framesCount = std::max(framesCount, ur_uint(1));
-		this->d3dCommandAllocators.resize(framesCount);
-		this->d3dCommandAllocators.shrink_to_fit();
+		this->d3dCommandAllocators.clear();
+		this->d3dFrameFence.reset(ur_null);
 
+		this->d3dCommandAllocators.resize(framesCount);
 		for (ur_size iframe = 0; iframe < framesCount; ++iframe)
 		{
 			HRESULT hr = this->d3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), this->d3dCommandAllocators[iframe]);
@@ -145,7 +146,9 @@ namespace UnlimRealms
 
 		this->frameFenceValues.resize(framesCount);
 		memset(this->frameFenceValues.data(), 0, this->frameFenceValues.size() * sizeof(ur_uint));
-		this->d3dDevice->CreateFence(this->frameFenceValues[this->frameIndex], D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), this->d3dFrameFence);
+		HRESULT hr = this->d3dDevice->CreateFence(this->frameFenceValues[this->frameIndex], D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), this->d3dFrameFence);
+		if (FAILED(hr))
+			return ResultError(Failure, "GfxSystemD3D12::InitializeFrameData: failed to create frame fence");
 		++this->frameFenceValues[this->frameIndex];
 
 		return Result(Success);
