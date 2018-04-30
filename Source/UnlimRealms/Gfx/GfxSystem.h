@@ -387,7 +387,7 @@ namespace UnlimRealms
 		std::vector<GfxInputElement> elements;
 	};
 
-
+	
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Gfx pipeline state full description
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
@@ -537,21 +537,53 @@ namespace UnlimRealms
 
 		Result Initialize();
 
-		inline const std::vector<std::pair<ur_uint, GfxBuffer*>>& GetBuffers() const;
-
-		inline const std::vector<std::pair<ur_uint, GfxTexture*>>& GetTextures() const;
-
-		inline const std::vector<std::pair<ur_uint, GfxSamplerState*>>& GetSamplers() const;
-
 	protected:
 
 		virtual Result OnInitialize();
 
+		enum class State
+		{
+			Unused,
+			UsedModified,
+			UsedUnmodified
+		};
+
+		static const ur_uint RespurceRangeReserveSize = 8;
+
+		template <typename TResource>
+		struct ResourceRange
+		{
+			ur_uint slotFrom;
+			ur_uint slotTo;
+			State rangeState;
+			State commonSlotsState;
+			struct Slot
+			{
+				State state;
+				TResource* resource;
+			};
+			std::vector<Slot> slots;
+
+			ResourceRange();
+
+			Result SetResource(ur_uint slot, TResource* resource);
+			
+			void OnInitialized();
+
+			inline ur_bool IsValid() const;
+		};
+
+		inline const ResourceRange<GfxBuffer>& GetBufferRange() const;
+
+		inline const ResourceRange<GfxTexture>& GetTextureRange() const;
+
+		inline const ResourceRange<GfxSamplerState>& GetSamplerRange() const;
+
 	private:
 
-		std::vector<std::pair<ur_uint, GfxBuffer*>> buffers;
-		std::vector<std::pair<ur_uint, GfxTexture*>> textures;
-		std::vector<std::pair<ur_uint, GfxSamplerState*>> samplers;
+		ResourceRange<GfxBuffer> bufferRange;
+		ResourceRange<GfxTexture> textureRange;
+		ResourceRange<GfxSamplerState> samplerRange;
 	};
 
 } // end namespace UnlimRealms

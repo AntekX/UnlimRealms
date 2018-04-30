@@ -777,25 +777,28 @@ namespace UnlimRealms
 
 	Result GfxResourceBinding::SetBuffer(ur_uint slot, GfxBuffer *buffer)
 	{
-		this->buffers.push_back(std::pair<ur_uint, GfxBuffer*>(slot, buffer));
-		return Result(Success);
+		return this->bufferRange.SetResource(slot, buffer);
 	}
 
 	Result GfxResourceBinding::SetTexture(ur_uint slot, GfxTexture *texture)
 	{
-		this->textures.push_back(std::pair<ur_uint, GfxTexture*>(slot, texture));
-		return Result(Success);
+		return this->textureRange.SetResource(slot, texture);
 	}
 
 	Result GfxResourceBinding::SetSampler(ur_uint slot, GfxSamplerState *sampler)
 	{
-		this->samplers.push_back(std::pair<ur_uint, GfxSamplerState*>(slot, sampler));
-		return Result(Success);
+		return this->samplerRange.SetResource(slot, sampler);
 	}
 
 	Result GfxResourceBinding::Initialize()
 	{
-		return OnInitialize();
+		Result res = this->OnInitialize();
+		
+		this->bufferRange.OnInitialized();
+		this->textureRange.OnInitialized();
+		this->samplerRange.OnInitialized();
+		
+		return res;
 	}
 
 	Result GfxResourceBinding::OnInitialize()

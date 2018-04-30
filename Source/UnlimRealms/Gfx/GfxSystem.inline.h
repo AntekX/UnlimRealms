@@ -135,19 +135,92 @@ namespace UnlimRealms
 		return this->pixelShader;
 	}
 
-	inline const std::vector<std::pair<ur_uint, GfxBuffer*>>& GfxResourceBinding::GetBuffers() const
+	template <typename TResource>
+	GfxResourceBinding::ResourceRange<TResource>::ResourceRange()
 	{
-		return this->buffers;
+		this->slotFrom = ur_uint(-1);
+		this->slotTo = 0;
+		this->rangeState = State::Unused;
+		this->commonSlotsState = State::Unused;
+		this->slots.reserve(RespurceRangeReserveSize);
 	}
 
-	inline const std::vector<std::pair<ur_uint, GfxTexture*>>& GfxResourceBinding::GetTextures() const
+	template <typename TResource>
+	Result GfxResourceBinding::ResourceRange<TResource>::SetResource(ur_uint slot, TResource* resource)
 	{
-		return this->textures;
+		ur_uint setSlotFrom = std::min(slot, this->slotFrom);
+		ur_uint setSlotTo = std::max(slot, this->slotTo);
+		ur_uint rangeSize = setSlotTo - setSlotFrom + 1;
+		if (setSlotFrom < this->slotFrom)
+		{
+			if (this->IsValid())
+			{
+				std::vector<Slot> crntSlots;
+				crntSlots.resize(this->slots.size());
+				this->slots.resize(rangeSize, { State::Unused , ur_null });
+				memcpy(this->slots.data() + (this->slotFrom - setSlotFrom), crntSlots.data(), sizeof(Slot) * crntSlots.size());
+			}
+			this->slotFrom = setSlotFrom;
+			this->rangeState = State::UsedModified;
+		}
+		if (setSlotTo > this->slotTo)
+		{
+			this->slotTo = setSlotTo;
+			this->rangeState = State::UsedModified;
+		}
+		if (rangeSize > this->slots.size())
+		{
+			this->slots.resize(rangeSize, { State::Unused , ur_null });
+		}
+
+		Slot& slotEntry = this->slots[slot - this->slotFrom];
+		if (State::Unused == slotEntry.state) this->rangeState = State::UsedModified;
+		slotEntry.state = State::UsedModified;
+		slotEntry.resource = resource;
+
+		this->commonSlotsState = State::UsedModified;
+
+		return Success;
 	}
 
-	inline const std::vector<std::pair<ur_uint, GfxSamplerState*>>& GfxResourceBinding::GetSamplers() const
+	template <typename TResource>
+	void GfxResourceBinding::ResourceRange<TResource>::OnInitialized()
 	{
-		return this->samplers;
+		if (this->rangeState != State::Unused)
+		{
+			this->rangeState = State::UsedUnmodified;
+		}
+		if (this->commonSlotsState != State::Unused)
+		{
+			this->commonSlotsState = State::UsedUnmodified;
+			ur_uint usedRangeSize = this->slotTo - this->slotFrom + 1;
+			for (ur_uint i = 0; i < usedRangeSize; ++i)
+			{
+				if (this->slots[i].state != State::Unused)
+					this->slots[i].state = State::UsedUnmodified;
+			}
+		}
+	}
+
+	template <typename TResource>
+	inline ur_bool GfxResourceBinding::ResourceRange<TResource>::IsValid() const
+	{
+		return (this->slotTo >= this->slotFrom);
+	}
+
+	inline const GfxResourceBinding::ResourceRange<GfxBuffer>& GfxResourceBinding::GetBufferRange() const
+	{
+		return this->bufferRange;
+	}
+
+	inline const GfxResourceBinding::ResourceRange<GfxTexture>& GfxResourceBinding::GetTextureRange() const
+	{
+		return this->textureRange;
+	}
+
+	inline const GfxResourceBinding::ResourceRange<GfxSamplerState>& GfxResourceBinding::GetSamplerRange() const
+	{
+		return this->samplerRange;
 	}
 
 } // end namespace UnlimRealms

@@ -169,4 +169,30 @@ namespace UnlimRealms
 		return this->d3dRootSignature.get();
 	}
 
+	template <typename TGfxResource, D3D12_DESCRIPTOR_RANGE_TYPE d3dDescriptorRangeType>
+	void GfxResourceBindingD3D12::InitializeRanges(
+		const GfxResourceBinding::ResourceRange<TGfxResource>& resourceRange,
+		std::vector<D3D12_DESCRIPTOR_RANGE>& d3dDescriptorRanges)
+	{
+		if (!resourceRange.IsValid())
+			return;
+
+		// calculate ranges
+		ur_uint baseRegister = ur_uint(-2);
+		for (ur_uint slotIdx = resourceRange.slotFrom; slotIdx <= resourceRange.slotTo; ++slotIdx)
+		{
+			if (State::Unused == resourceRange.slots[slotIdx - resourceRange.slotFrom].state)
+				continue;
+
+			if (slotIdx - baseRegister > 1)
+			{
+				// start new range
+				baseRegister = slotIdx;
+				D3D12_DESCRIPTOR_RANGE range = CD3DX12_DESCRIPTOR_RANGE(d3dDescriptorRangeType, 0, UINT(baseRegister));
+				d3dDescriptorRanges.emplace_back(range);
+			}
+			++d3dDescriptorRanges.back().NumDescriptors;
+		}
+	}
+
 } // end namespace UnlimRealms

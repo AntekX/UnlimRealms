@@ -1569,145 +1569,170 @@ namespace UnlimRealms
 	{
 	}
 
-	template <typename TGfxResource, D3D12_DESCRIPTOR_RANGE_TYPE d3dDescriptorRangeType>
-	void InitializeRanges(const std::vector<std::pair<ur_uint, TGfxResource*>>& resourceBindings,
-		std::vector<D3D12_DESCRIPTOR_RANGE>& d3dDescriptorRanges)
-	{
-		if (resourceBindings.empty())
-			return;
-
-		// order records by slot index
-		std::multimap<ur_uint, ur_size> orderedMap;
-		for (ur_size idx = 0; idx < resourceBindings.size(); ++idx)
-		{
-			orderedMap.insert(std::pair<ur_uint, ur_size>(resourceBindings[idx].first, idx));
-		}
-
-		// calculate ranges
-		ur_uint baseRegister = ur_uint(-2);
-		for (auto& indirectRecord : orderedMap)
-		{
-			const auto& binding = resourceBindings[indirectRecord.second];
-			if (binding.first - baseRegister > 1)
-			{
-				// start new range
-				baseRegister = binding.first;
-				D3D12_DESCRIPTOR_RANGE range = CD3DX12_DESCRIPTOR_RANGE(d3dDescriptorRangeType, 0, UINT(baseRegister));
-				d3dDescriptorRanges.emplace_back(range);
-			}
-			++d3dDescriptorRanges.back().NumDescriptors;
-		}
-	}
-
 	Result GfxResourceBindingD3D12::OnInitialize()
 	{
 		// todo: check whether layout is changed;
 		// if it is - reinitialize root tables and signature object;
 		// if not - simply copy new resource(s) decriptor(s) into corresponding table descriptor heap(s)
 
-		// reset
-
-		this->d3dDesriptorRangesCbvSrvUav.clear();
-		this->d3dDesriptorRangesSampler.clear();
-		this->d3dRootParameters.clear();
-		this->d3dRootSignature.reset(ur_null);
-		this->d3dSerializedRootSignature.reset(ur_null);
-		this->tableDescriptorSets.clear();
-		this->d3dTableDescriptorHeaps.clear();
-		this->tableIndexCbvSrvUav = ur_size(-1);
-		this->tableIndexSampler = ur_size(-1);
-
-		// initialize descriptor table ranges
-
-		InitializeRanges<GfxBuffer, D3D12_DESCRIPTOR_RANGE_TYPE_CBV>(this->GetBuffers(), this->d3dDesriptorRangesCbvSrvUav);
-		InitializeRanges<GfxTexture, D3D12_DESCRIPTOR_RANGE_TYPE_SRV>(this->GetTextures(), this->d3dDesriptorRangesCbvSrvUav);
-		InitializeRanges<GfxSamplerState, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER>(this->GetSamplers(), this->d3dDesriptorRangesSampler);
-
-		// initialize root signature
-
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
 		if (ur_null == d3dDevice)
 			return ResultError(NotInitialized, "GfxResourceBindingD3D12::OnInitialize: failed, device unavailable");
 
-		if (!this->d3dDesriptorRangesCbvSrvUav.empty())
+		if (State::UsedModified == this->GetBufferRange().rangeState ||
+			State::UsedModified == this->GetTextureRange().rangeState ||
+			State::UsedModified == this->GetSamplerRange().rangeState)
 		{
-			this->tableIndexCbvSrvUav = this->d3dRootParameters.size();
-			this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
-			D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
-			rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-			rootParameter.DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesCbvSrvUav.size();
-			rootParameter.DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesCbvSrvUav.data();
-			rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-		}
+			// reset
 
-		if (!this->d3dDesriptorRangesSampler.empty())
-		{
-			this->tableIndexSampler = this->d3dRootParameters.size();
-			this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
-			D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
-			rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-			rootParameter.DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesSampler.size();
-			rootParameter.DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesSampler.data();
-			rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-		}
+			this->d3dDesriptorRangesCbvSrvUav.clear();
+			this->d3dDesriptorRangesSampler.clear();
+			this->d3dRootParameters.clear();
+			this->d3dRootSignature.reset(ur_null);
+			this->d3dSerializedRootSignature.reset(ur_null);
+			this->tableDescriptorSets.clear();
+			this->d3dTableDescriptorHeaps.clear();
+			this->tableIndexCbvSrvUav = ur_size(-1);
+			this->tableIndexSampler = ur_size(-1);
 
-		D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc = {};
-		d3dRootSignatureDesc.NumParameters = (UINT)d3dRootParameters.size();
-		d3dRootSignatureDesc.pParameters = d3dRootParameters.data();
-		d3dRootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+			// initialize descriptor table ranges
 
-		shared_ref<ID3DBlob> d3dErrorBlob;
-		HRESULT hr = D3D12SerializeRootSignature(&d3dRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, this->d3dSerializedRootSignature, d3dErrorBlob);
-		if (FAILED(hr))
-			return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to serialize d3d root signature");
+			InitializeRanges<GfxBuffer, D3D12_DESCRIPTOR_RANGE_TYPE_CBV>(this->GetBufferRange(), this->d3dDesriptorRangesCbvSrvUav);
+			InitializeRanges<GfxTexture, D3D12_DESCRIPTOR_RANGE_TYPE_SRV>(this->GetTextureRange(), this->d3dDesriptorRangesCbvSrvUav);
+			InitializeRanges<GfxSamplerState, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER>(this->GetSamplerRange(), this->d3dDesriptorRangesSampler);
 
-		hr = d3dDevice->CreateRootSignature(0, this->d3dSerializedRootSignature->GetBufferPointer(), this->d3dSerializedRootSignature->GetBufferSize(),
-			__uuidof(ID3D12RootSignature), this->d3dRootSignature);
-		if (FAILED(hr))
-			return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to create d3d root signature");
+			// initialize root signature
 
-		// reserve descriptors per non empty root table;
-		// this gpu memory location will be used to store shader visible descriptors in an ordered manner (correspnding to table ranges layout);
-		// to be able to bind different resources to the same layout - ID3D12Device::CopyDescriptors is used to copy descriptors from random heap(s) locations into root table heap region;
-		this->tableDescriptorSets.resize(this->d3dRootParameters.size());
-		std::set<ID3D12DescriptorHeap*> uniqueTableHeaps;
-		for (ur_size rootTableIdx = 0; rootTableIdx < this->d3dRootParameters.size(); ++rootTableIdx)
-		{
-			auto& tableDescriptorSet = this->tableDescriptorSets[rootTableIdx];
-			const auto& d3dDescriptorTable = this->d3dRootParameters[rootTableIdx].DescriptorTable;
-			D3D12_DESCRIPTOR_HEAP_TYPE d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE(-1);
-			ur_size descriptorsCount = 0;
-			for (UINT irange = 0; irange < d3dDescriptorTable.NumDescriptorRanges; ++irange)
+			if (!this->d3dDesriptorRangesCbvSrvUav.empty())
 			{
-				descriptorsCount += ur_size(d3dDescriptorTable.pDescriptorRanges[irange].NumDescriptors);
-				if (d3dDescriptorTable.pDescriptorRanges[irange].RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
-					d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-				else
-					d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+				this->tableIndexCbvSrvUav = this->d3dRootParameters.size();
+				this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
+				D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
+				rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+				rootParameter.DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesCbvSrvUav.size();
+				rootParameter.DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesCbvSrvUav.data();
+				rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 			}
-			d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->AcquireDescriptors(tableDescriptorSet, descriptorsCount, true);
-			uniqueTableHeaps.insert(d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->GetD3DDescriptorHeap(*tableDescriptorSet.get()));
-		}
-		this->d3dTableDescriptorHeaps.reserve(uniqueTableHeaps.size());
-		for (auto& tableHeap : uniqueTableHeaps)
+
+			if (!this->d3dDesriptorRangesSampler.empty())
+			{
+				this->tableIndexSampler = this->d3dRootParameters.size();
+				this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
+				D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
+				rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+				rootParameter.DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesSampler.size();
+				rootParameter.DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesSampler.data();
+				rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+			}
+
+			D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc = {};
+			d3dRootSignatureDesc.NumParameters = (UINT)d3dRootParameters.size();
+			d3dRootSignatureDesc.pParameters = d3dRootParameters.data();
+			d3dRootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+			shared_ref<ID3DBlob> d3dErrorBlob;
+			HRESULT hr = D3D12SerializeRootSignature(&d3dRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, this->d3dSerializedRootSignature, d3dErrorBlob);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to serialize d3d root signature");
+
+			hr = d3dDevice->CreateRootSignature(0, this->d3dSerializedRootSignature->GetBufferPointer(), this->d3dSerializedRootSignature->GetBufferSize(),
+				__uuidof(ID3D12RootSignature), this->d3dRootSignature);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to create d3d root signature");
+
+			// reserve descriptors per non empty root table;
+			// this gpu memory location will be used to store shader visible descriptors in an ordered manner (correspnding to table ranges layout);
+			// to be able to bind different resources to the same layout - ID3D12Device::CopyDescriptors is used to copy descriptors from random heap(s) locations into root table heap region;
+			this->tableDescriptorSets.resize(this->d3dRootParameters.size());
+			std::set<ID3D12DescriptorHeap*> uniqueTableHeaps;
+			for (ur_size rootTableIdx = 0; rootTableIdx < this->d3dRootParameters.size(); ++rootTableIdx)
+			{
+				auto& tableDescriptorSet = this->tableDescriptorSets[rootTableIdx];
+				const auto& d3dDescriptorTable = this->d3dRootParameters[rootTableIdx].DescriptorTable;
+				D3D12_DESCRIPTOR_HEAP_TYPE d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE(-1);
+				ur_size descriptorsCount = 0;
+				for (UINT irange = 0; irange < d3dDescriptorTable.NumDescriptorRanges; ++irange)
+				{
+					descriptorsCount += ur_size(d3dDescriptorTable.pDescriptorRanges[irange].NumDescriptors);
+					if (d3dDescriptorTable.pDescriptorRanges[irange].RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
+						d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+					else
+						d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+				}
+				d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->AcquireDescriptors(tableDescriptorSet, descriptorsCount, true);
+				uniqueTableHeaps.insert(d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->GetD3DDescriptorHeap(*tableDescriptorSet.get()));
+			}
+			this->d3dTableDescriptorHeaps.reserve(uniqueTableHeaps.size());
+			for (auto& tableHeap : uniqueTableHeaps)
+			{
+				this->d3dTableDescriptorHeaps.emplace_back(tableHeap);
+			}
+		} // end (re)initialize
+
+		
+		// copy resource(s) descriptor(s) to corresponding shader visible table(s)
+
+		if (State::UsedModified == this->GetBufferRange().commonSlotsState ||
+			State::UsedModified == this->GetTextureRange().commonSlotsState)
 		{
-			this->d3dTableDescriptorHeaps.emplace_back(tableHeap);
+			if (this->tableIndexCbvSrvUav != ur_size(-1))
+			{
+				D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+				UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
+				D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexCbvSrvUav]->FirstCpuHandle();
+				const auto& bufferRange = this->GetBufferRange();
+				for (ur_size slotIdx = bufferRange.slotFrom; slotIdx <= bufferRange.slotTo; ++slotIdx)
+				{
+					auto& slot = bufferRange.slots[slotIdx - bufferRange.slotFrom];
+					if (State::Unused == slot.state)
+						continue;
+					GfxBufferD3D12 *bufferD3D12 = static_cast<GfxBufferD3D12*>(slot.resource);
+					if (State::UsedModified == slot.state && bufferD3D12 != ur_null && bufferD3D12->GetDescriptor() != ur_null)
+					{
+						d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, bufferD3D12->GetDescriptor()->CpuHandle(), d3dHeapType);
+					}
+					descritorsTableHandle.ptr += d3dDescriptorSize;
+				}
+				const auto& textureRange = this->GetTextureRange();
+				for (ur_size slotIdx = textureRange.slotFrom; slotIdx <= textureRange.slotTo; ++slotIdx)
+				{
+					auto& slot = textureRange.slots[slotIdx - bufferRange.slotFrom];
+					if (State::Unused == slot.state)
+						continue;
+					GfxTextureD3D12 *textureD3D12 = static_cast<GfxTextureD3D12*>(slot.resource);
+					if (State::UsedModified == slot.state && textureD3D12 != ur_null && textureD3D12->GetSRVDescriptor() != ur_null)
+					{
+						d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, textureD3D12->GetSRVDescriptor()->CpuHandle(), d3dHeapType);
+					}
+					descritorsTableHandle.ptr += d3dDescriptorSize;
+				}
+			}
 		}
 
-		// initialize samplers descriptor set
-		// todo: consider implementing SamplerStateObject which can store descritptor for D3D12 implementation and can be reused across bindings
-		// temp: create immutable samplers right on shader visible descriptors table
-		if (!this->GetSamplers().empty())
+		if (State::UsedModified == this->GetSamplerRange().commonSlotsState)
 		{
-			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-			UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
-			D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexSampler]->FirstCpuHandle();
-			for (ur_size samplerIdx = 0; samplerIdx < this->GetSamplers().size(); ++samplerIdx)
+			// initialize samplers descriptor set
+			// todo: consider implementing SamplerStateObject which can store descritptor for D3D12 implementation and can be reused across bindings
+			// temp: create immutable samplers right on shader visible descriptors table
+			if (this->GetSamplerRange().IsValid())
 			{
-				const GfxSamplerState &gfxSamplerState = *this->GetSamplers()[samplerIdx].second;
-				d3dDevice->CreateSampler(&GfxSamplerStateToD3D12(gfxSamplerState), descritorsTableHandle);
-				descritorsTableHandle.ptr += d3dDescriptorSize;
+				D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+				UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
+				D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexSampler]->FirstCpuHandle();
+				auto& samplerRange = this->GetSamplerRange();
+				for (ur_size slotIdx = samplerRange.slotFrom; slotIdx <= samplerRange.slotTo; ++slotIdx)
+				{
+					auto& slot = samplerRange.slots[slotIdx - samplerRange.slotFrom];
+					if (State::Unused == slot.state)
+						continue;
+					const GfxSamplerState* gfxSamplerState = slot.resource;
+					if (State::UsedModified == slot.state && gfxSamplerState != ur_null)
+					{
+						d3dDevice->CreateSampler(&GfxSamplerStateToD3D12(*gfxSamplerState), descritorsTableHandle);
+					}
+					descritorsTableHandle.ptr += d3dDescriptorSize;
+				}
 			}
 		}
 
@@ -1731,46 +1756,6 @@ namespace UnlimRealms
 		{
 			d3dCommandList->SetGraphicsRootDescriptorTable((UINT)rootTableIdx, this->tableDescriptorSets[rootTableIdx]->FirstGpuHandle());
 		}
-
-		// copy resource(s) descriptor(s) to corresponding shader visible table(s)
-
-		if (this->tableIndexCbvSrvUav != ur_size(-1))
-		{
-			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-			UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
-			D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexCbvSrvUav]->FirstCpuHandle();
-			for (ur_size bufferIdx = 0; bufferIdx < this->GetBuffers().size(); ++bufferIdx)
-			{
-				GfxBufferD3D12 *bufferD3D12 = static_cast<GfxBufferD3D12*>(this->GetBuffers()[bufferIdx].second);
-				if (bufferD3D12 != ur_null && bufferD3D12->GetDescriptor() != ur_null)
-				{
-					d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, bufferD3D12->GetDescriptor()->CpuHandle(), d3dHeapType);
-				}
-				descritorsTableHandle.ptr += d3dDescriptorSize;
-			}
-			for (ur_size textureIdx = 0; textureIdx < this->GetTextures().size(); ++textureIdx)
-			{
-				GfxTextureD3D12 *textureD3D12 = static_cast<GfxTextureD3D12*>(this->GetTextures()[textureIdx].second);
-				if (textureD3D12 != ur_null && textureD3D12->GetSRVDescriptor() != ur_null)
-				{
-					d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, textureD3D12->GetSRVDescriptor()->CpuHandle(), d3dHeapType);
-				}
-				descritorsTableHandle.ptr += d3dDescriptorSize;
-			}
-		}
-
-		/*if (!this->GetSamplers().empty())
-		{
-			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-			UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
-			D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexSampler]->FirstCpuHandle();
-			for (ur_size samplerIdx = 0; samplerIdx < this->GetSamplers().size(); ++samplerIdx)
-			{
-				descritorsTableHandle.ptr += d3dDescriptorSize;
-			}
-		}*/
-
-		// todo: support all other resources
 
 		return Result(Success);
 	}
