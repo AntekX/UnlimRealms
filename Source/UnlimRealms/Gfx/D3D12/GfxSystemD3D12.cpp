@@ -318,6 +318,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GfxSystemD3D12::CreateSampler(std::unique_ptr<GfxSampler> &gfxSampler)
+	{
+		gfxSampler.reset(new GfxSamplerD3D12(*this));
+		return Result(Success);
+	}
+
 	Result GfxSystemD3D12::CreateResourceBinding(std::unique_ptr<GfxResourceBinding> &gfxBinding)
 	{
 		gfxBinding.reset(new GfxResourceBindingD3D12(*this));
@@ -1426,6 +1432,38 @@ namespace UnlimRealms
 	// GfxPipelineStateObjectD3D12
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
 
+	GfxSamplerD3D12::GfxSamplerD3D12(GfxSystem &gfxSystem) :
+		GfxSampler(gfxSystem)
+	{
+	}
+
+	GfxSamplerD3D12::~GfxSamplerD3D12()
+	{
+	}
+
+	Result GfxSamplerD3D12::OnInitialize(const GfxSamplerState& state)
+	{
+		this->descriptor.reset(ur_null);
+
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
+		if (ur_null == d3dDevice)
+			return ResultError(NotInitialized, "GfxSamplerD3D12::OnInitialize: failed, device unavailable");
+
+		Result res = d3dSystem.GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER)->AcquireDescriptor(this->descriptor);
+		if (Failed(res))
+			return ResultError(Failure, "GfxSamplerD3D12::OnInitialize: failed to acquire sampler descriptor");
+
+		d3dDevice->CreateSampler(&GfxSamplerStateToD3D12(state), this->descriptor->CpuHandle());
+
+		return Result(Success);
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// GfxPipelineStateObjectD3D12
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+
 	GfxPipelineStateObjectD3D12::GfxPipelineStateObjectD3D12(GfxSystem &gfxSystem) :
 		GfxPipelineStateObject(gfxSystem)
 	{
@@ -1600,7 +1638,7 @@ namespace UnlimRealms
 
 			InitializeRanges<GfxBuffer, D3D12_DESCRIPTOR_RANGE_TYPE_CBV>(this->GetBufferRange(), this->d3dDesriptorRangesCbvSrvUav);
 			InitializeRanges<GfxTexture, D3D12_DESCRIPTOR_RANGE_TYPE_SRV>(this->GetTextureRange(), this->d3dDesriptorRangesCbvSrvUav);
-			InitializeRanges<GfxSamplerState, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER>(this->GetSamplerRange(), this->d3dDesriptorRangesSampler);
+			InitializeRanges<GfxSampler, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER>(this->GetSamplerRange(), this->d3dDesriptorRangesSampler);
 
 			// initialize root signature
 
@@ -1678,9 +1716,9 @@ namespace UnlimRealms
 		{
 			if (this->tableIndexCbvSrvUav != ur_size(-1))
 			{
+				D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexCbvSrvUav]->FirstCpuHandle();
 				D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 				UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
-				D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexCbvSrvUav]->FirstCpuHandle();
 				const auto& bufferRange = this->GetBufferRange();
 				for (ur_size slotIdx = bufferRange.slotFrom; slotIdx <= bufferRange.slotTo; ++slotIdx)
 				{
@@ -1712,24 +1750,21 @@ namespace UnlimRealms
 
 		if (State::UsedModified == this->GetSamplerRange().commonSlotsState)
 		{
-			// initialize samplers descriptor set
-			// todo: consider implementing SamplerStateObject which can store descritptor for D3D12 implementation and can be reused across bindings
-			// temp: create immutable samplers right on shader visible descriptors table
-			if (this->GetSamplerRange().IsValid())
+			if (this->tableIndexSampler != ur_size(-1))
 			{
-				D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-				UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
 				D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexSampler]->FirstCpuHandle();
-				auto& samplerRange = this->GetSamplerRange();
+				D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+				UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
+				const auto& samplerRange = this->GetSamplerRange();
 				for (ur_size slotIdx = samplerRange.slotFrom; slotIdx <= samplerRange.slotTo; ++slotIdx)
 				{
 					auto& slot = samplerRange.slots[slotIdx - samplerRange.slotFrom];
 					if (State::Unused == slot.state)
 						continue;
-					const GfxSamplerState* gfxSamplerState = slot.resource;
-					if (State::UsedModified == slot.state && gfxSamplerState != ur_null)
+					GfxSamplerD3D12 *samplerD3D12 = static_cast<GfxSamplerD3D12*>(slot.resource);
+					if (State::UsedModified == slot.state && samplerD3D12 != ur_null && samplerD3D12->GetDescriptor() != ur_null)
 					{
-						d3dDevice->CreateSampler(&GfxSamplerStateToD3D12(*gfxSamplerState), descritorsTableHandle);
+						d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, samplerD3D12->GetDescriptor()->CpuHandle(), d3dHeapType);
 					}
 					descritorsTableHandle.ptr += d3dDescriptorSize;
 				}

@@ -129,6 +129,11 @@ namespace UnlimRealms
 		return this->descriptor.get();
 	}
 
+	inline GfxSystemD3D12::Descriptor* GfxSamplerD3D12::GetDescriptor() const
+	{
+		return this->descriptor.get();
+	}
+
 	inline GfxResourceD3D12& GfxTextureD3D12::GetResource()
 	{
 		return this->resource;

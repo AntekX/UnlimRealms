@@ -65,9 +65,14 @@ namespace UnlimRealms
 		return this->sizeInBytes;
 	}
 
-	inline const std::vector<GfxInputElement> GfxInputLayout::GetElements() const
+	inline const std::vector<GfxInputElement>& GfxInputLayout::GetElements() const
 	{
 		return this->elements;
+	}
+
+	inline const GfxSamplerState& GfxSampler::GetState() const
+	{
+		return this->state;
 	}
 
 	inline const GfxRenderState& GfxPipelineState::GetRenderState()
@@ -218,7 +223,7 @@ namespace UnlimRealms
 		return this->textureRange;
 	}
 
-	inline const GfxResourceBinding::ResourceRange<GfxSamplerState>& GfxResourceBinding::GetSamplerRange() const
+	inline const GfxResourceBinding::ResourceRange<GfxSampler>& GfxResourceBinding::GetSamplerRange() const
 	{
 		return this->samplerRange;
 	}

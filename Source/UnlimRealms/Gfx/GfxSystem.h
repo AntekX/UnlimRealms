@@ -25,6 +25,7 @@ namespace UnlimRealms
 	class GfxVertexShader;
 	class GfxPixelShader;
 	class GfxInputLayout;
+	class GfxSampler;
 	class GfxPipelineState;
 	class GfxPipelineStateObject;
 	class GfxResourceBinding;
@@ -59,13 +60,15 @@ namespace UnlimRealms
 
 		virtual Result CreatePixelShader(std::unique_ptr<GfxPixelShader> &gfxPixelShader);
 
-		virtual Result CreateInputLayout(std::unique_ptr<GfxInputLayout> &gfxInputLayout);
+		virtual Result CreateInputLayout(std::unique_ptr<GfxInputLayout> &gfxInputLayout); // TODO: deprecated, to be removed
 
-		virtual Result CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState);
+		virtual Result CreateSampler(std::unique_ptr<GfxSampler> &gfxSampler); // TODO: support in DX11
 
-		virtual Result CreateResourceBinding(std::unique_ptr<GfxResourceBinding> &gfxBinding);
+		virtual Result CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState); // TODO: deprecated, to be removed
 
-		virtual Result CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState);
+		virtual Result CreateResourceBinding(std::unique_ptr<GfxResourceBinding> &gfxBinding); // TODO: support in DX11
+
+		virtual Result CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState); // TODO: support in DX11
 
 		inline const ur_uint GetAdaptersCount() const;
 
@@ -376,7 +379,7 @@ namespace UnlimRealms
 
 		Result Initialize(const GfxShader &shader, const GfxInputElement *elements, ur_uint count);
 
-		inline const std::vector<GfxInputElement> GetElements() const;
+		inline const std::vector<GfxInputElement>& GetElements() const;
 
 	protected:
 
@@ -387,10 +390,36 @@ namespace UnlimRealms
 		std::vector<GfxInputElement> elements;
 	};
 
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Gfx sampler
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GfxSampler : public GfxEntity
+	{
+	public:
+
+		GfxSampler(GfxSystem &gfxSystem);
+
+		virtual ~GfxSampler();
+
+		Result Initialize(const GfxSamplerState& state);
+
+		inline const GfxSamplerState& GetState() const;
+
+	protected:
+
+		virtual Result OnInitialize(const GfxSamplerState& state);
+
+	private:
+
+		GfxSamplerState state;
+	};
+
 	
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Gfx pipeline state full description
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	// TODO: depricated, to be reomoved
 	class UR_DECL GfxPipelineState : public GfxEntity
 	{	
 	public:
@@ -529,11 +558,11 @@ namespace UnlimRealms
 
 		virtual ~GfxResourceBinding();
 
-		Result SetBuffer(ur_uint slot, GfxBuffer *buffer);
+		Result SetBuffer(ur_uint slot, GfxBuffer* buffer);
 
-		Result SetTexture(ur_uint slot, GfxTexture *texture);
+		Result SetTexture(ur_uint slot, GfxTexture* texture);
 
-		Result SetSampler(ur_uint slot, GfxSamplerState *sampler);
+		Result SetSampler(ur_uint slot, GfxSampler* sampler);
 
 		Result Initialize();
 
@@ -577,13 +606,13 @@ namespace UnlimRealms
 
 		inline const ResourceRange<GfxTexture>& GetTextureRange() const;
 
-		inline const ResourceRange<GfxSamplerState>& GetSamplerRange() const;
+		inline const ResourceRange<GfxSampler>& GetSamplerRange() const;
 
 	private:
 
 		ResourceRange<GfxBuffer> bufferRange;
 		ResourceRange<GfxTexture> textureRange;
-		ResourceRange<GfxSamplerState> samplerRange;
+		ResourceRange<GfxSampler> samplerRange;
 	};
 
 } // end namespace UnlimRealms

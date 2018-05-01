@@ -112,9 +112,14 @@ int D3D12SandboxApp::Run()
 	std::unique_ptr<GfxTexture> gfxTexture2;
 	CreateTextureFromFile(realm, gfxTexture2, "../Res/testimage2.dds");
 
-	GfxSamplerState gfxSampler = GfxSamplerState::Default;
-	gfxSampler.AddressU = GfxTextureAddressMode::Wrap;
-	gfxSampler.AddressV = GfxTextureAddressMode::Wrap;
+	std::unique_ptr<GfxSampler> gfxSampler;
+	if (Succeeded(realm.GetGfxSystem()->CreateSampler(gfxSampler)))
+	{
+		GfxSamplerState gfxSamplerState = GfxSamplerState::Default;
+		gfxSamplerState.AddressU = GfxTextureAddressMode::Wrap;
+		gfxSamplerState.AddressV = GfxTextureAddressMode::Wrap;
+		gfxSampler->Initialize(gfxSamplerState);
+	}
 
 	GfxRasterizerState gfxRasterizer = GfxRasterizerState::Default;
 	gfxRasterizer.CullMode = GfxCullMode::None;
@@ -128,7 +133,7 @@ int D3D12SandboxApp::Run()
 	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding);
 	gfxBinding->SetBuffer(0, gfxCB.get());
 	gfxBinding->SetTexture(0, gfxTexture.get());
-	gfxBinding->SetSampler(0, &gfxSampler);
+	gfxBinding->SetSampler(0, gfxSampler.get());
 	gfxBinding->Initialize();
 
 	std::unique_ptr<GfxPipelineStateObject> gfxPSO;
@@ -145,7 +150,7 @@ int D3D12SandboxApp::Run()
 	// animation
 	ClockTime timer = Clock::now();
 	const ur_float spriteScale = 0.15f;
-	const ur_float moveSpeed = 0.75f;
+	const ur_float moveSpeed = 0.5f;
 	ur_float2 movePos[InstanceCount];
 	ur_float2 moveDir[InstanceCount];
 	for (ur_uint i = 0; i < InstanceCount; ++i)
@@ -170,7 +175,7 @@ int D3D12SandboxApp::Run()
 	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding2);
 	gfxBinding2->SetBuffer(0, gfxCB2.get());
 	gfxBinding2->SetTexture(0, gfxTexture.get());
-	gfxBinding2->SetSampler(0, &gfxSampler);
+	gfxBinding2->SetSampler(0, gfxSampler.get());
 	gfxBinding2->Initialize();
 
 	Constants cbData3;
@@ -186,7 +191,7 @@ int D3D12SandboxApp::Run()
 	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding3);
 	gfxBinding3->SetBuffer(0, gfxCB3.get());
 	gfxBinding3->SetTexture(0, gfxTexture.get());
-	gfxBinding3->SetSampler(0, &gfxSampler);
+	gfxBinding3->SetSampler(0, gfxSampler.get());
 	gfxBinding3->Initialize();
 
 	// Main message loop:

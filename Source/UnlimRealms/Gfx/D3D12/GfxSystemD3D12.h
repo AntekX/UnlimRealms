@@ -28,9 +28,7 @@ namespace UnlimRealms
 	class GfxRenderTargetD3D12;
 	class GfxSwapChainD3D12;
 	class GfxBufferD3D12;
-	class GfxVertexShaderD3D12;
-	class GfxPixelShaderD3D12;
-	class GfxInputLayoutD3D12;
+	class GfxSamplerD3D12;
 	class GfxPipelineStateObjectD3D12;
 
 	
@@ -58,6 +56,8 @@ namespace UnlimRealms
 		virtual Result CreateSwapChain(std::unique_ptr<GfxSwapChain> &gfxSwapChain);
 
 		virtual Result CreateBuffer(std::unique_ptr<GfxBuffer> &gfxBuffer);
+
+		virtual Result CreateSampler(std::unique_ptr<GfxSampler> &gfxSampler);
 		
 		virtual Result CreateResourceBinding(std::unique_ptr<GfxResourceBinding> &gfxBinding);
 
@@ -446,6 +446,29 @@ namespace UnlimRealms
 			D3D12_INDEX_BUFFER_VIEW d3dIBView;
 			D3D12_CONSTANT_BUFFER_VIEW_DESC d3dCBView;
 		};
+		std::unique_ptr<GfxSystemD3D12::Descriptor> descriptor;
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Direct3D12 sampler
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	class UR_DECL GfxSamplerD3D12 : public GfxSampler
+	{
+	public:
+
+		GfxSamplerD3D12(GfxSystem &gfxSystem);
+
+		virtual ~GfxSamplerD3D12();
+
+		inline GfxSystemD3D12::Descriptor* GetDescriptor() const;
+
+	protected:
+
+		virtual Result OnInitialize(const GfxSamplerState& state);
+
+	private:
+
 		std::unique_ptr<GfxSystemD3D12::Descriptor> descriptor;
 	};
 

@@ -87,6 +87,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GfxSystem::CreateSampler(std::unique_ptr<GfxSampler> &gfxSampler)
+	{
+		gfxSampler.reset(new GfxSampler(*this));
+		return Result(Success);
+	}
+
 	Result GfxSystem::CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState)
 	{
 		gfxPipelineState.reset(new GfxPipelineState(*this));
@@ -612,6 +618,31 @@ namespace UnlimRealms
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// GfxSampler
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GfxSampler::GfxSampler(GfxSystem &gfxSystem) :
+		GfxEntity(gfxSystem)
+	{
+	}
+
+	GfxSampler::~GfxSampler()
+	{
+	}
+
+	Result GfxSampler::Initialize(const GfxSamplerState& state)
+	{
+		this->state = state;
+		return this->OnInitialize(state);
+	}
+
+	Result GfxSampler::OnInitialize(const GfxSamplerState& state)
+	{
+		return Result(Success);
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// GfxPipelineState
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -775,17 +806,17 @@ namespace UnlimRealms
 	{
 	}
 
-	Result GfxResourceBinding::SetBuffer(ur_uint slot, GfxBuffer *buffer)
+	Result GfxResourceBinding::SetBuffer(ur_uint slot, GfxBuffer* buffer)
 	{
 		return this->bufferRange.SetResource(slot, buffer);
 	}
 
-	Result GfxResourceBinding::SetTexture(ur_uint slot, GfxTexture *texture)
+	Result GfxResourceBinding::SetTexture(ur_uint slot, GfxTexture* texture)
 	{
 		return this->textureRange.SetResource(slot, texture);
 	}
 
-	Result GfxResourceBinding::SetSampler(ur_uint slot, GfxSamplerState *sampler)
+	Result GfxResourceBinding::SetSampler(ur_uint slot, GfxSampler* sampler)
 	{
 		return this->samplerRange.SetResource(slot, sampler);
 	}
