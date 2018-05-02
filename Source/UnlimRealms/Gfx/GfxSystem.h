@@ -158,10 +158,10 @@ namespace UnlimRealms
 
 		virtual Result DrawIndexed(ur_uint indexCount, ur_uint indexOffset, ur_uint vertexOffset, ur_uint instanceCount, ur_uint instanceOffset);
 
-		virtual Result UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, const GfxResourceData *data, ur_uint offset, ur_uint size);
+		virtual Result UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, const GfxResourceData *data, ur_uint offset, ur_uint size);
 
 		typedef std::function<Result (GfxResourceData *data)> UpdateBufferCallback;
-		virtual Result UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, UpdateBufferCallback callback);
+		virtual Result UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, UpdateBufferCallback callback);
 	};
 
 

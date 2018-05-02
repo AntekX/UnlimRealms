@@ -307,7 +307,7 @@ namespace UnlimRealms
 			}
 			return Result(Success);
 		};
-		gfxContext.UpdateBuffer(this->gfxVB.get(), GfxGPUAccess::WriteDiscard, false, updateVB);
+		gfxContext.UpdateBuffer(this->gfxVB.get(), GfxGPUAccess::WriteDiscard, updateVB);
 
 		// fill IB
 		auto updateIB = [&](GfxResourceData *dstData) -> Result
@@ -323,7 +323,7 @@ namespace UnlimRealms
 			}
 			return Result(Success);
 		};
-		gfxContext.UpdateBuffer(this->gfxIB.get(), GfxGPUAccess::WriteDiscard, false, updateIB);
+		gfxContext.UpdateBuffer(this->gfxIB.get(), GfxGPUAccess::WriteDiscard, updateIB);
 
 		// fill CB
 		VertexTransformCB cb;
@@ -339,7 +339,7 @@ namespace UnlimRealms
 			{ (R + L) / (L - R),	(T + B) / (B - T),	0.5f,       1.0f },
 		};
 		GfxResourceData cbResData = { &cb, sizeof(VertexTransformCB), 0 };
-		gfxContext.UpdateBuffer(this->gfxCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, sizeof(VertexTransformCB));
+		gfxContext.UpdateBuffer(this->gfxCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, sizeof(VertexTransformCB));
 
 		// setup pipeline
 		gfxContext.SetPipelineState(this->gfxPipelineState.get());

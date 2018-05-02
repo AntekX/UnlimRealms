@@ -554,7 +554,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GfxContextD3D11::UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, UpdateBufferCallback callback)
+	Result GfxContextD3D11::UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, UpdateBufferCallback callback)
 	{
 		if (this->d3dContext.empty())
 			return ResultError(Failure, "GfxContextD3D11::UpdateBuffer: failed, device context is not ready");
@@ -564,6 +564,7 @@ namespace UnlimRealms
 			return ResultError(InvalidArgs, "GfxContextD3D11::UpdateBuffer: failed, invalid buffer");
 
 		D3D11_MAP d3dMapType = GfxGPUAccessFlagToD3D11(gpuAccess);
+		BOOL doNotWait = FALSE;
 		UINT d3dMapFlags = (doNotWait ? D3D11_MAP_FLAG_DO_NOT_WAIT : 0);
 		D3D11_MAPPED_SUBRESOURCE d3dMappedRes;
 		HRESULT hr = this->d3dContext->Map(gfxBufferD3D11->GetD3DBuffer(), 0, d3dMapType, d3dMapFlags, &d3dMappedRes);

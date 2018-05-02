@@ -262,7 +262,7 @@ namespace UnlimRealms
 		cb.CameraPos = cameraPos;
 		cb.Params = this->desc;
 		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
-		gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 		gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);
 
 		// pipeline state
@@ -311,7 +311,7 @@ namespace UnlimRealms
 
 		// constants
 		GfxResourceData cbResData = { &this->lightShafts, sizeof(LightShaftsCB), 0 };
-		res &= gfxContext.UpdateBuffer(this->gfxObjects.lightShaftsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		res &= gfxContext.UpdateBuffer(this->gfxObjects.lightShaftsCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 		res &= gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 1);
 		res &= gfxContext.SetConstantBuffer(this->gfxObjects.lightShaftsCB.get(), 2);
 

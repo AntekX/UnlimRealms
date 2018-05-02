@@ -188,20 +188,20 @@ namespace UnlimRealms
 			inline D3D12_GPU_DESCRIPTOR_HANDLE GpuHandle() const;
 		};
 
-		inline DescriptorHeap* GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType);
+		inline DescriptorHeap* GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType) const;
 
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Dynamic Buffer
+		// Upload Buffer
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		class UR_DECL DynamicBuffer : public GfxEntity
+		class UR_DECL UploadBuffer : public GfxEntity
 		{
 		public:
 
-			DynamicBuffer(GfxSystemD3D12& gfxSystem);
+			UploadBuffer(GfxSystemD3D12& gfxSystem);
 
-			~DynamicBuffer();
+			~UploadBuffer();
 
 		private:
 			
@@ -211,7 +211,7 @@ namespace UnlimRealms
 			ur_size bufferOffset;
 		};
 
-		inline DynamicBuffer* GetDynamicBuffer();
+		inline UploadBuffer* GetUploadBuffer() const;
 
 		
 	private:
@@ -231,7 +231,7 @@ namespace UnlimRealms
 		shared_ref<ID3D12CommandQueue> d3dCommandQueue;
 		std::vector<shared_ref<ID3D12CommandList>> d3dCommandLists;
 		std::mutex commandListsMutex;
-		std::vector<std::unique_ptr<DynamicBuffer>> dynamicBuffers;
+		std::vector<std::unique_ptr<UploadBuffer>> uploadBuffers;
 		std::vector<std::unique_ptr<DescriptorHeap>> descriptorHeaps;
 		std::vector<shared_ref<ID3D12CommandAllocator>> d3dCommandAllocators;
 		std::vector<ur_uint> frameFenceValues;
@@ -286,7 +286,7 @@ namespace UnlimRealms
 
 		virtual Result DrawIndexed(ur_uint indexCount, ur_uint indexOffset, ur_uint vertexOffset, ur_uint instanceCount, ur_uint instanceOffset);
 
-		virtual Result UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, UpdateBufferCallback callback);
+		virtual Result UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, UpdateBufferCallback callback);
 
 		
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

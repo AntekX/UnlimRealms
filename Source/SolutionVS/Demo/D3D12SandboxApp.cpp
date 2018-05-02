@@ -260,7 +260,7 @@ int D3D12SandboxApp::Run()
 				cbData.Transform[i].Multiply(ur_float4x4::Translation(movePos[i].x, movePos[i].y, 0.0f));
 			}
 			cbData.Desc = ur_float4(0.0f, 1.0f, 2.0f, 3.0f);
-			gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, false, &cbResData, 0, 0);
+			gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, &cbResData, 0, 0);
 			
 			// draw primitives
 			gfxContext->SetPipelineStateObject(gfxPSO.get());
@@ -270,13 +270,13 @@ int D3D12SandboxApp::Run()
 
 			memcpy(&cbData2, &cbData, sizeof(cbData2));
 			cbData2.Desc.x = ur_float(InstanceCount / 3);
-			gfxContext->UpdateBuffer(gfxCB2.get(), GfxGPUAccess::Write, false, &cbResData2, 0, 0);
+			gfxContext->UpdateBuffer(gfxCB2.get(), GfxGPUAccess::Write, &cbResData2, 0, 0);
 			gfxContext->SetResourceBinding(gfxBinding2.get());
 			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
 
 			memcpy(&cbData3, &cbData, sizeof(cbData3));
 			cbData3.Desc.x = ur_float(InstanceCount / 3 * 2);
-			gfxContext->UpdateBuffer(gfxCB3.get(), GfxGPUAccess::Write, false, &cbResData3, 0, 0);
+			gfxContext->UpdateBuffer(gfxCB3.get(), GfxGPUAccess::Write, &cbResData3, 0, 0);
 			gfxContext->SetResourceBinding(gfxBinding3.get());
 			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
 

@@ -156,9 +156,6 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="D3D12HelloTriangle\D3D12HelloTriangle.h" />
-    <ClInclude Include="D3D12HelloTriangle\DXSample.h" />
-    <ClInclude Include="D3D12HelloTriangle\DXSampleHelper.h" />
     <ClInclude Include="D3D12SandboxApp.h" />
     <ClInclude Include="Demo.h" />
     <ClInclude Include="Resource.h" />
@@ -167,8 +164,6 @@
     <ClInclude Include="VoxelPlanetApp.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="D3D12HelloTriangle\D3D12HelloTriangle.cpp" />
-    <ClCompile Include="D3D12HelloTriangle\DXSample.cpp" />
     <ClCompile Include="D3D12SandboxApp.cpp" />
     <ClCompile Include="Demo.cpp" />
     <ClCompile Include="stdafx.cpp">

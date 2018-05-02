@@ -22,8 +22,7 @@ namespace UnlimRealms
 
 	inline ur_uint GfxSystemD3D12::CurrentFrameIndex() const
 	{
-		//return this->frameIndex;
-		return this->frameFenceValues[this->frameIndex];
+		return this->frameIndex;
 	}
 
 	inline WinCanvas* GfxSystemD3D12::GetWinCanvas() const
@@ -51,14 +50,14 @@ namespace UnlimRealms
 		return this->d3dCommandAllocators[this->frameIndex].get();
 	}
 
-	inline GfxSystemD3D12::DescriptorHeap* GfxSystemD3D12::GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType)
+	inline GfxSystemD3D12::DescriptorHeap* GfxSystemD3D12::GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType) const
 	{
 		return this->descriptorHeaps[ur_size(heapType)].get();
 	}
 
-	inline GfxSystemD3D12::DynamicBuffer* GfxSystemD3D12::GetDynamicBuffer()
+	inline GfxSystemD3D12::UploadBuffer* GfxSystemD3D12::GetUploadBuffer() const
 	{
-		return this->dynamicBuffers[this->frameIndex].get();
+		return this->uploadBuffers[this->frameIndex].get();
 	}
 
 	inline ID3D12DescriptorHeap* GfxSystemD3D12::DescriptorHeap::GetD3DDescriptorHeap(DescriptorSet& descriptorSet)

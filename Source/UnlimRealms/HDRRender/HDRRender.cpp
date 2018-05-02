@@ -239,7 +239,7 @@ namespace UnlimRealms
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
 		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Height;
 		cb.params = this->params;
-		res &= gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		res &= gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 		res &= gfxContext.SetConstantBuffer(this->gfxObjects->constantsCB.get(), 1);
 
 		// HDR RT to luminance first target
@@ -255,7 +255,7 @@ namespace UnlimRealms
 
 			cb.SrcTargetSize.x = (ur_float)srcRT->GetTargetBuffer()->GetDesc().Width;
 			cb.SrcTargetSize.y = (ur_float)srcRT->GetTargetBuffer()->GetDesc().Height;
-			gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+			gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 			
 			gfxContext.SetRenderTarget(dstRT.get());
 			res &= genericRender->RenderScreenQuad(gfxContext, srcRT->GetTargetBuffer(), ur_null,
@@ -276,7 +276,7 @@ namespace UnlimRealms
 		for (ur_uint ipass = 0; ipass < blurPasses * 2; ++ipass, ++srcIdx)
 		{
 			cb.BlurDirection = floor(ur_float(ipass) / blurPasses);
-			res &= gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+			res &= gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 
 			srcIdx = srcIdx % 2;
 			dstIdx = (srcIdx + 1) % 2;
@@ -303,7 +303,7 @@ namespace UnlimRealms
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->lumRTChain.front()->GetTargetBuffer()->GetDesc().Width;
 		cb.SrcTargetSize.y = (ur_float)this->gfxObjects->lumRTChain.front()->GetTargetBuffer()->GetDesc().Height;
 		cb.params = this->params;
-		res &= gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		res &= gfxContext.UpdateBuffer(this->gfxObjects->constantsCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 		res &= gfxContext.SetConstantBuffer(this->gfxObjects->constantsCB.get(), 1);
 
 		// do tonemapping

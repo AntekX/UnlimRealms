@@ -799,7 +799,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GfxContextD3D12::UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, UpdateBufferCallback callback)
+	Result GfxContextD3D12::UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, UpdateBufferCallback callback)
 	{
 		if (this->d3dCommandList.empty())
 			return ResultError(Failure, "GfxContextD3D12::UpdateBuffer: failed, d3d command list is not initialized");
@@ -807,8 +807,6 @@ namespace UnlimRealms
 		GfxBufferD3D12 *gfxBufferD3D12 = static_cast<GfxBufferD3D12*>(buffer);
 		if (ur_null == gfxBufferD3D12 || ur_null == gfxBufferD3D12->GetResource().GetD3DResource())
 			return ResultError(InvalidArgs, "GfxContextD3D12::UpdateBuffer: failed, invalid buffer");
-
-		// todo: support doNotWait option
 
 		ID3D12Resource *d3dResource = gfxBufferD3D12->GetResource().GetD3DResource();
 		D3D12_RANGE readRange;

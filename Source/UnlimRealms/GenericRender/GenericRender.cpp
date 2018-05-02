@@ -433,7 +433,7 @@ namespace UnlimRealms
 			}
 			return Result(Success);
 		};
-		gfxContext.UpdateBuffer(this->gfxObjects->VB.get(), GfxGPUAccess::WriteDiscard, false, updateVB);
+		gfxContext.UpdateBuffer(this->gfxObjects->VB.get(), GfxGPUAccess::WriteDiscard, updateVB);
 
 		// prepare IB
 		ur_uint ibSizeRequired = totalIndices * sizeof(Index);
@@ -458,13 +458,13 @@ namespace UnlimRealms
 			}
 			return Result(Success);
 		};
-		gfxContext.UpdateBuffer(this->gfxObjects->IB.get(), GfxGPUAccess::WriteDiscard, false, updateIB);
+		gfxContext.UpdateBuffer(this->gfxObjects->IB.get(), GfxGPUAccess::WriteDiscard, updateIB);
 
 		// prepare CB
 		CommonCB cb;
 		cb.viewProj = viewProj;
 		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
-		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 
 		// draw batches
 		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
@@ -504,7 +504,7 @@ namespace UnlimRealms
 		CommonCB cb;
 		cb.viewProj = (transform != ur_null ? *transform : ur_float4x4::Identity);
 		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
-		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 
 		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
 		gfxContext.SetVertexBuffer(this->gfxObjects->quadVB.get(), 0);

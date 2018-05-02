@@ -245,7 +245,7 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GfxContext::UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, const GfxResourceData *srcData, ur_uint offset, ur_uint size)
+	Result GfxContext::UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, const GfxResourceData *srcData, ur_uint offset, ur_uint size)
 	{
 		std::function<Result(GfxResourceData*)> copyFunc = [&](GfxResourceData *dstData) -> Result {
 			if (ur_null == buffer || ur_null == dstData || ur_null == srcData)
@@ -260,10 +260,10 @@ namespace UnlimRealms
 			return Result(Success);
 		};
 
-		return this->UpdateBuffer(buffer, gpuAccess, doNotWait, copyFunc);
+		return this->UpdateBuffer(buffer, gpuAccess, copyFunc);
 	}
 
-	Result GfxContext::UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, bool doNotWait, UpdateBufferCallback callback)
+	Result GfxContext::UpdateBuffer(GfxBuffer *buffer, GfxGPUAccess gpuAccess, UpdateBufferCallback callback)
 	{
 		return Result(NotImplemented);
 	}

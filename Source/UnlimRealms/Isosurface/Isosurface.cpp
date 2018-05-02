@@ -1958,7 +1958,7 @@ namespace UnlimRealms
 			cb.CameraPos = cameraPos;
 			cb.AtmoParams = (atmosphere != ur_null ? atmosphere->GetDesc() : Atmosphere::Desc::Invisible);
 			GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
-			gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, false, &cbResData, 0, cbResData.RowPitch);
+			gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 			gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);
 			gfxContext.SetPipelineState(this->gfxObjects.pipelineState.get());
 
