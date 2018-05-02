@@ -205,6 +205,8 @@ namespace UnlimRealms
 
 			Result Initialize();
 
+			// TODO
+
 		private:
 			
 			static const ur_size InitialReserveSize = 33554432; // 32 Mb
