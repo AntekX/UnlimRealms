@@ -56,6 +56,11 @@ namespace UnlimRealms
 		return this->descriptorHeaps[ur_size(heapType)].get();
 	}
 
+	inline GfxSystemD3D12::DynamicBuffer* GfxSystemD3D12::GetDynamicBuffer()
+	{
+		return this->dynamicBuffers[this->frameIndex].get();
+	}
+
 	inline ID3D12DescriptorHeap* GfxSystemD3D12::DescriptorHeap::GetD3DDescriptorHeap(DescriptorSet& descriptorSet)
 	{
 		if (descriptorSet.heap != this)

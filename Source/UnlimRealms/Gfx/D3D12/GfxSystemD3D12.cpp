@@ -151,6 +151,8 @@ namespace UnlimRealms
 			return ResultError(Failure, "GfxSystemD3D12::InitializeFrameData: failed to create frame fence");
 		++this->frameFenceValues[this->frameIndex];
 
+		// TODO: create per frame dynamic buffer
+
 		return Result(Success);
 	}
 

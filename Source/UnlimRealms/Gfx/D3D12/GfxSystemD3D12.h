@@ -138,7 +138,7 @@ namespace UnlimRealms
 			struct Page : public NonCopyable
 			{
 				shared_ref<ID3D12DescriptorHeap> d3dHeap;
-				std::vector<Range> freeRanges; // todo: optimize ranges
+				std::vector<Range> freeRanges;
 			};
 
 			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType;
@@ -190,6 +190,29 @@ namespace UnlimRealms
 
 		inline DescriptorHeap* GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType);
 
+
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Dynamic Buffer
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		class UR_DECL DynamicBuffer : public GfxEntity
+		{
+		public:
+
+			DynamicBuffer(GfxSystemD3D12& gfxSystem);
+
+			~DynamicBuffer();
+
+		private:
+			
+			static const ur_size InitialReserveSize = 33554432; // 32 Mb
+
+			shared_ref<ID3D12Resource> d3dResource;
+			ur_size bufferOffset;
+		};
+
+		inline DynamicBuffer* GetDynamicBuffer();
+
 		
 	private:
 
@@ -208,6 +231,7 @@ namespace UnlimRealms
 		shared_ref<ID3D12CommandQueue> d3dCommandQueue;
 		std::vector<shared_ref<ID3D12CommandList>> d3dCommandLists;
 		std::mutex commandListsMutex;
+		std::vector<std::unique_ptr<DynamicBuffer>> dynamicBuffers;
 		std::vector<std::unique_ptr<DescriptorHeap>> descriptorHeaps;
 		std::vector<shared_ref<ID3D12CommandAllocator>> d3dCommandAllocators;
 		std::vector<ur_uint> frameFenceValues;
