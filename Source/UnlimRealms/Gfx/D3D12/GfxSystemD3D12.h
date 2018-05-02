@@ -203,11 +203,14 @@ namespace UnlimRealms
 
 			~UploadBuffer();
 
+			Result Initialize();
+
 		private:
 			
 			static const ur_size InitialReserveSize = 33554432; // 32 Mb
 
 			shared_ref<ID3D12Resource> d3dResource;
+			ur_byte* bufferDataPtr;
 			ur_size bufferOffset;
 		};
 

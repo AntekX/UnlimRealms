@@ -135,7 +135,9 @@ namespace UnlimRealms
 		this->framesCount = std::max(framesCount, ur_uint(1));
 		this->d3dCommandAllocators.clear();
 		this->d3dFrameFence.reset(ur_null);
+		this->uploadBuffers.clear();
 
+		// command allocator(s)
 		this->d3dCommandAllocators.resize(framesCount);
 		for (ur_size iframe = 0; iframe < framesCount; ++iframe)
 		{
@@ -144,6 +146,7 @@ namespace UnlimRealms
 				return ResultError(Failure, "GfxSystemD3D12::InitializeFrameData: failed to create direct command allocator");
 		}
 
+		// frame fence(s)
 		this->frameFenceValues.resize(framesCount);
 		memset(this->frameFenceValues.data(), 0, this->frameFenceValues.size() * sizeof(ur_uint));
 		HRESULT hr = this->d3dDevice->CreateFence(this->frameFenceValues[this->frameIndex], D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), this->d3dFrameFence);
@@ -151,7 +154,15 @@ namespace UnlimRealms
 			return ResultError(Failure, "GfxSystemD3D12::InitializeFrameData: failed to create frame fence");
 		++this->frameFenceValues[this->frameIndex];
 
-		// TODO: create per frame dynamic buffer
+		// upload buffer(s)
+		for (ur_size iframe = 0; iframe < framesCount; ++iframe)
+		{
+			std::unique_ptr<UploadBuffer> uploadBuffer(new UploadBuffer(*this));
+			Result res = uploadBuffer->Initialize();
+			if (Failed(res))
+				return ResultError(Failure, "GfxSystemD3D12::InitializeFrameData: failed to create upload buffer");
+			this->uploadBuffers.emplace_back(std::move(uploadBuffer));
+		}
 
 		return Result(Success);
 	}
@@ -337,6 +348,11 @@ namespace UnlimRealms
 		gfxPipelineState.reset(new GfxPipelineStateObjectD3D12(*this));
 		return Result(Success);
 	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// GfxSystemD3D12::DescriptorHeap
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	GfxSystemD3D12::DescriptorHeap::DescriptorHeap(GfxSystemD3D12& gfxSystem, D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType) :
 		GfxEntity(gfxSystem),
@@ -578,6 +594,68 @@ namespace UnlimRealms
 
 	GfxSystemD3D12::Descriptor::~Descriptor()
 	{
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// GfxSystemD3D12::UploadBuffer
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GfxSystemD3D12::UploadBuffer::UploadBuffer(GfxSystemD3D12& gfxSystem) :
+		GfxEntity(gfxSystem)
+	{
+		this->bufferDataPtr = ur_null;
+		this->bufferOffset = 0;
+	}
+
+	GfxSystemD3D12::UploadBuffer::~UploadBuffer()
+	{
+
+	}
+
+	Result GfxSystemD3D12::UploadBuffer::Initialize()
+	{
+		this->d3dResource.reset(ur_null);
+		this->bufferDataPtr = ur_null;
+		this->bufferOffset = 0;
+
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
+		if (ur_null == d3dDevice)
+			return ResultError(NotInitialized, "GfxSystemD3D12::UploadBuffer::Initialize: failed, device unavailable");
+
+		D3D12_RESOURCE_DESC d3dResDesc = {};
+		d3dResDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		d3dResDesc.Alignment = 0;
+		d3dResDesc.Width = InitialReserveSize;
+		d3dResDesc.Height = 1;
+		d3dResDesc.DepthOrArraySize = 1;
+		d3dResDesc.MipLevels = 1;
+		d3dResDesc.Format = DXGI_FORMAT_UNKNOWN;
+		d3dResDesc.SampleDesc.Count = 1;
+		d3dResDesc.SampleDesc.Quality = 0;
+		d3dResDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		d3dResDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+		D3D12_HEAP_PROPERTIES d3dHeapProperties = {};
+		d3dHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+		d3dHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		d3dHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		d3dHeapProperties.CreationNodeMask = 0;
+		d3dHeapProperties.VisibleNodeMask = 0;
+
+		D3D12_RESOURCE_STATES d3dResStates = D3D12_RESOURCE_STATE_GENERIC_READ;
+
+		HRESULT hr = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResDesc, d3dResStates, ur_null,
+			__uuidof(ID3D12Resource), this->d3dResource);
+		if (FAILED(hr))
+			return ResultError(Failure, "GfxSystemD3D12::UploadBuffer::Initialize: failed at CreateCommittedResource");
+
+		hr = this->d3dResource->Map(0, NULL, reinterpret_cast<void**>(&this->bufferDataPtr));
+		if (FAILED(hr))
+			return ResultError(Failure, "GfxSystemD3D12::UploadBuffer::Initialize: failed at to map a resource");
+
+		return Result(Success);
 	}
 
 
