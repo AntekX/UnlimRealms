@@ -25,6 +25,11 @@ namespace UnlimRealms
 		return this->frameIndex;
 	}
 
+	inline ur_uint GfxSystemD3D12::CurrentFrameFenceValue() const
+	{
+		return this->frameFenceValues[this->frameIndex];
+	}
+
 	inline WinCanvas* GfxSystemD3D12::GetWinCanvas() const
 	{
 		return this->winCanvas;

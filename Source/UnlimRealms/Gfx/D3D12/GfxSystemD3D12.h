@@ -75,13 +75,15 @@ namespace UnlimRealms
 
 		Result WaitGPU();
 
-		Result AddCommandList(shared_ref<ID3D12CommandList> &d3dCommandList);		
+		Result AddCommandList(shared_ref<ID3D12CommandList> &d3dCommandList);
 
 		inline ur_bool IsFrameComplete(ur_uint frameIndex);
 
 		inline ur_bool IsCurrentFrameComplete();
 
 		inline ur_uint CurrentFrameIndex() const;
+
+		inline ur_uint CurrentFrameFenceValue() const;
 
 		inline WinCanvas* GetWinCanvas() const;
 
@@ -199,13 +201,20 @@ namespace UnlimRealms
 		{
 		public:
 
+			struct Region
+			{
+				ur_size sizeInBytes;
+				ur_byte* cpuAddress;
+				D3D12_GPU_VIRTUAL_ADDRESS& gpuAddress;
+			};
+
 			UploadBuffer(GfxSystemD3D12& gfxSystem);
 
 			~UploadBuffer();
 
 			Result Initialize();
 
-			// TODO
+			Result Allocate(ur_size sizeInBytes, Region& allocatedRegion);
 
 		private:
 			
@@ -214,6 +223,8 @@ namespace UnlimRealms
 			shared_ref<ID3D12Resource> d3dResource;
 			ur_byte* bufferDataPtr;
 			ur_size bufferOffset;
+			ur_uint frameFenceValue;
+			std::mutex allocateMutex;
 		};
 
 		inline UploadBuffer* GetUploadBuffer() const;
@@ -623,6 +634,8 @@ namespace UnlimRealms
 	extern UR_DECL D3D12_SAMPLER_DESC GfxSamplerStateToD3D12(const GfxSamplerState &state);
 
 	extern UR_DECL HRESULT FillUploadBuffer(ID3D12Resource *uploadResource, ID3D12Resource *destinationResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData);
+
+	extern UR_DECL HRESULT FillUploadBuffer(ur_byte* mappedUploadBufferPtr, ID3D12Resource *uploadResource, ID3D12Resource *destinationResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData);
 
 	extern UR_DECL HRESULT UpdateTextureSubresources(ID3D12GraphicsCommandList* commandList, ID3D12Resource* dstResource, ID3D12Resource* uploadResource,
 		ur_uint dstSubresource, ur_uint srcSubresource, ur_uint numSubresources);

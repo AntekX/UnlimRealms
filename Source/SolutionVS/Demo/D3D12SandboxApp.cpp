@@ -89,7 +89,7 @@ int D3D12SandboxApp::Run()
 		bufferDataDesc.RowPitch = sizeof(bufferData);
 		bufferDataDesc.SlicePitch = 0;
 
-		gfxVB->Initialize(sizeof(bufferData), sizeof(Vertex), GfxUsage::Dynamic, ur_uint(GfxBindFlag::VertexBuffer), 0, &bufferDataDesc);
+		gfxVB->Initialize(sizeof(bufferData), sizeof(Vertex), GfxUsage::Immutable, ur_uint(GfxBindFlag::VertexBuffer), 0, &bufferDataDesc);
 	}
 
 	const ur_uint InstanceCount = 24;

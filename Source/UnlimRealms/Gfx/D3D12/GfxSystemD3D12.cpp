@@ -606,6 +606,7 @@ namespace UnlimRealms
 	{
 		this->bufferDataPtr = ur_null;
 		this->bufferOffset = 0;
+		this->frameFenceValue = 0;
 	}
 
 	GfxSystemD3D12::UploadBuffer::~UploadBuffer()
@@ -654,6 +655,42 @@ namespace UnlimRealms
 		hr = this->d3dResource->Map(0, NULL, reinterpret_cast<void**>(&this->bufferDataPtr));
 		if (FAILED(hr))
 			return ResultError(Failure, "GfxSystemD3D12::UploadBuffer::Initialize: failed at to map a resource");
+
+		return Result(Success);
+	}
+
+	Result GfxSystemD3D12::UploadBuffer::Allocate(ur_size sizeInBytes, Region& allocatedRegion)
+	{
+		if (ur_null == this->d3dResource.get())
+			return Result(NotInitialized);
+
+		if (0 == sizeInBytes)
+			return Result(InvalidArgs);
+
+		D3D12_RESOURCE_DESC d3dResDesc = this->d3dResource->GetDesc();
+		ur_size allocationOffset = 0;
+		// reserve requested memory in a thread safe manner
+		{
+			std::lock_guard<std::mutex> lockAllocate(this->allocateMutex);
+
+			GfxSystemD3D12& gfxSystemD3D12 = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+			if (this->frameFenceValue < gfxSystemD3D12.CurrentFrameFenceValue())
+			{
+				// reset offset on a new frame first allocation
+				this->bufferOffset = 0;
+				this->frameFenceValue = gfxSystemD3D12.CurrentFrameFenceValue();
+			}
+			
+			if (this->bufferOffset + sizeInBytes > d3dResDesc.Width)
+				return Result(OutOfMemory); // TODO: support auto grow
+			
+			allocationOffset = this->bufferOffset;
+			this->bufferOffset += sizeInBytes;
+		}
+
+		allocatedRegion.sizeInBytes = sizeInBytes;
+		allocatedRegion.cpuAddress = this->bufferDataPtr + allocationOffset;
+		allocatedRegion.gpuAddress = this->d3dResource->GetGPUVirtualAddress() + allocationOffset;
 
 		return Result(Success);
 	}
@@ -2257,11 +2294,24 @@ namespace UnlimRealms
 		if (ur_null == uploadResource || ur_null == srcData)
 			return E_INVALIDARG;
 
+		ur_byte* mappedUploadBufferPtr;
+		HRESULT hr = uploadResource->Map(0, NULL, reinterpret_cast<void**>(&mappedUploadBufferPtr));
+		if (FAILED(hr))
+			return hr;
+
+		hr = FillUploadBuffer(mappedUploadBufferPtr, uploadResource, destinationResource, firstSubresource, numSubresources, srcData);
+
+		uploadResource->Unmap(0, NULL);
+
+		return hr;
+	}
+
+	HRESULT FillUploadBuffer(ur_byte* mappedUploadBufferPtr, ID3D12Resource *uploadResource, ID3D12Resource *destinationResource, ur_uint firstSubresource, ur_uint numSubresources, const D3D12_SUBRESOURCE_DATA *srcData)
+	{
 		shared_ref<ID3D12Device> d3dDevice;
 		uploadResource->GetDevice(__uuidof(ID3D12Device), d3dDevice);
 
 		// fill descriptive structures
-
 		D3D12_RESOURCE_DESC resourceDesc = (destinationResource != ur_null ? destinationResource->GetDesc() : uploadResource->GetDesc());
 		ur_size descBufferSize = static_cast<ur_size>(sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) + sizeof(UINT) + sizeof(UINT64)) * numSubresources;
 		std::vector<ur_byte> descBuffer(descBufferSize);
@@ -2273,19 +2323,11 @@ namespace UnlimRealms
 		d3dDevice->GetCopyableFootprints(&resourceDesc, firstSubresource, numSubresources, baseOffset, pLayouts, pNumRows, pRowSizesInBytes, &requiredSize);
 
 		// do copy
-
-		ur_byte* pData;
-		HRESULT hr = uploadResource->Map(0, NULL, reinterpret_cast<void**>(&pData));
-		if (FAILED(hr))
-			return hr;
-
 		for (UINT i = 0; i < numSubresources; ++i)
 		{
-			D3D12_MEMCPY_DEST DestData = { pData + pLayouts[i].Offset, pLayouts[i].Footprint.RowPitch, pLayouts[i].Footprint.RowPitch * pNumRows[i] };
+			D3D12_MEMCPY_DEST DestData = { mappedUploadBufferPtr + pLayouts[i].Offset, pLayouts[i].Footprint.RowPitch, pLayouts[i].Footprint.RowPitch * pNumRows[i] };
 			MemcpySubresource(&DestData, &srcData[i], (SIZE_T)pRowSizesInBytes[i], pNumRows[i], pLayouts[i].Footprint.Depth);
 		}
-		
-		uploadResource->Unmap(0, NULL);
 
 		return S_OK;
 	}
