@@ -689,6 +689,7 @@ namespace UnlimRealms
 		}
 
 		allocatedRegion.sizeInBytes = sizeInBytes;
+		allocatedRegion.offsetInResource = allocationOffset;
 		allocatedRegion.cpuAddress = this->bufferDataPtr + allocationOffset;
 		allocatedRegion.gpuAddress = this->d3dResource->GetGPUVirtualAddress() + allocationOffset;
 
@@ -944,7 +945,7 @@ namespace UnlimRealms
 		return NotImplemented;
 	}
 
-	Result GfxContextD3D12::UpdateResource(GfxResourceD3D12* dstResource, GfxResourceD3D12* srcResource)
+	Result GfxContextD3D12::CopyResource(GfxResourceD3D12* dstResource, GfxResourceD3D12* srcResource)
 	{
 		if (ur_null == this->d3dCommandList.get())
 			return Result(NotInitialized);
@@ -1474,6 +1475,30 @@ namespace UnlimRealms
 				if (FAILED(hr))
 					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to fill upload resource");
 			}
+			else if (d3dSystem.GetUploadBuffer() != ur_null)
+			{
+				// write to common upload buffer
+				
+				GfxSystemD3D12::UploadBuffer::Region uploadRegion = {};
+				res = d3dSystem.GetUploadBuffer()->Allocate(d3dResDesc.Width, uploadRegion);
+				if (Failed(res))
+					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to allocate region in upload buffer");
+
+				memcpy(uploadRegion.cpuAddress, data->Ptr, data->RowPitch);
+
+				// schedule a copy to destination resource
+
+				GfxContextD3D12 uploadContext(this->GetGfxSystem());
+				uploadContext.Initialize();
+				uploadContext.Begin();
+				uploadContext.ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
+
+				uploadContext.GetD3DCommandList()->CopyBufferRegion(this->resource.GetD3DResource(), 0,
+					d3dSystem.GetUploadBuffer()->GetD3DResource(), uploadRegion.offsetInResource, data->RowPitch);
+
+				uploadContext.ResourceTransition(&this->resource, d3dResStates);
+				uploadContext.End();
+			}
 			else
 			{
 				// create & fill upload resource
@@ -1499,7 +1524,7 @@ namespace UnlimRealms
 				uploadContext.Begin();
 				uploadContext.ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
 				
-				uploadContext.UpdateResource(&this->resource, this->uploadResource.get());
+				uploadContext.CopyResource(&this->resource, this->uploadResource.get());
 				
 				uploadContext.ResourceTransition(&this->resource, d3dResStates);
 				uploadContext.End();

@@ -98,6 +98,11 @@ namespace UnlimRealms
 		return this->FirstGpuHandle();
 	}
 
+	inline ID3D12Resource* GfxSystemD3D12::UploadBuffer::GetD3DResource() const
+	{
+		return this->d3dResource;
+	}
+
 	inline ID3D12GraphicsCommandList* GfxContextD3D12::GetD3DCommandList() const
 	{
 		return this->d3dCommandList.get();

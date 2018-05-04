@@ -204,8 +204,9 @@ namespace UnlimRealms
 			struct Region
 			{
 				ur_size sizeInBytes;
+				ur_size offsetInResource;
 				ur_byte* cpuAddress;
-				D3D12_GPU_VIRTUAL_ADDRESS& gpuAddress;
+				D3D12_GPU_VIRTUAL_ADDRESS gpuAddress;
 			};
 
 			UploadBuffer(GfxSystemD3D12& gfxSystem);
@@ -215,6 +216,8 @@ namespace UnlimRealms
 			Result Initialize();
 
 			Result Allocate(ur_size sizeInBytes, Region& allocatedRegion);
+
+			inline ID3D12Resource* GetD3DResource() const;
 
 		private:
 			
@@ -308,7 +311,7 @@ namespace UnlimRealms
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// D3D12 specific functions
 
-		Result UpdateResource(GfxResourceD3D12* dstResource, GfxResourceD3D12* srcResource);
+		Result CopyResource(GfxResourceD3D12* dstResource, GfxResourceD3D12* srcResource);
 
 		Result ResourceTransition(GfxResourceD3D12 *resource, D3D12_RESOURCE_STATES newState);
 
