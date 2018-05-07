@@ -30,6 +30,7 @@ namespace UnlimRealms
 	class GfxBufferD3D12;
 	class GfxSamplerD3D12;
 	class GfxPipelineStateObjectD3D12;
+	class GfxResourceBindingD3D12;
 
 	
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -320,6 +321,7 @@ namespace UnlimRealms
 	private:
 
 		shared_ref<ID3D12GraphicsCommandList> d3dCommandList;
+		GfxResourceBindingD3D12* gfxResourceBindingD3D12;
 	};
 
 
@@ -555,7 +557,7 @@ namespace UnlimRealms
 
 		virtual ~GfxResourceBindingD3D12();
 
-		Result SetOnD3D12Context(GfxContextD3D12* gfxContextD3D12);
+		Result SetupDrawCall(GfxContextD3D12* gfxContextD3D12);
 
 		inline ID3D12RootSignature* GetD3DRootSignature() const;
 

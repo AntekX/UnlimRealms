@@ -702,7 +702,8 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	GfxContextD3D12::GfxContextD3D12(GfxSystem &gfxSystem) :
-		GfxContext(gfxSystem)
+		GfxContext(gfxSystem),
+		gfxResourceBindingD3D12(ur_null)
 	{
 	}
 
@@ -865,9 +866,8 @@ namespace UnlimRealms
 	{
 		if (this->d3dCommandList.empty())
 			return ResultError(Failure, "GfxContextD3D12::SetResourceBinding: failed, d3d command list is not initialized");
-
-		GfxResourceBindingD3D12 *resourceBindingD3D12 = static_cast<GfxResourceBindingD3D12*>(binding);
-		resourceBindingD3D12->SetOnD3D12Context(this);
+		
+		this->gfxResourceBindingD3D12 = static_cast<GfxResourceBindingD3D12*>(binding);
 
 		return Result(Success);
 	}
@@ -899,6 +899,11 @@ namespace UnlimRealms
 	{
 		if (this->d3dCommandList.empty())
 			return ResultError(Failure, "GfxContextD3D12::Draw: failed, d3d command list is not initialized");
+
+		if (this->gfxResourceBindingD3D12 != ur_null)
+		{
+			this->gfxResourceBindingD3D12->SetupDrawCall(this);
+		}
 
 		this->d3dCommandList->DrawInstanced((UINT)vertexCount, (UINT)instanceCount, (UINT)vertexOffset, (UINT)instanceOffset);
 
@@ -1749,10 +1754,6 @@ namespace UnlimRealms
 
 	Result GfxResourceBindingD3D12::OnInitialize()
 	{
-		// todo: check whether layout is changed;
-		// if it is - reinitialize root tables and signature object;
-		// if not - simply copy new resource(s) decriptor(s) into corresponding table descriptor heap(s)
-
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
 		if (ur_null == d3dDevice)
@@ -1762,7 +1763,7 @@ namespace UnlimRealms
 			State::UsedModified == this->GetTextureRange().rangeState ||
 			State::UsedModified == this->GetSamplerRange().rangeState)
 		{
-			// reset
+			// layout changed - (re)initialize signature & tables
 
 			this->d3dDesriptorRangesCbvSrvUav.clear();
 			this->d3dDesriptorRangesSampler.clear();
@@ -1848,7 +1849,6 @@ namespace UnlimRealms
 			}
 		} // end (re)initialize
 
-		
 		// copy resource(s) descriptor(s) to corresponding shader visible table(s)
 
 		if (State::UsedModified == this->GetBufferRange().commonSlotsState ||
@@ -1914,7 +1914,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GfxResourceBindingD3D12::SetOnD3D12Context(GfxContextD3D12* gfxContextD3D12)
+	Result GfxResourceBindingD3D12::SetupDrawCall(GfxContextD3D12* gfxContextD3D12)
 	{
 		if (ur_null == gfxContextD3D12)
 			return Result(InvalidArgs);
@@ -1922,7 +1922,7 @@ namespace UnlimRealms
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 		ID3D12Device *d3dDevice = d3dSystem.GetD3DDevice();
 		if (ur_null == d3dDevice)
-			return ResultError(NotInitialized, "GfxResourceBindingD3D12::SetOnD3D12Context: failed, device unavailable");
+			return ResultError(NotInitialized, "GfxResourceBindingD3D12::SetupDrawCall: failed, device unavailable");
 
 		ID3D12GraphicsCommandList *d3dCommandList = gfxContextD3D12->GetD3DCommandList();
 		d3dCommandList->SetGraphicsRootSignature(this->d3dRootSignature.get());
@@ -1931,6 +1931,8 @@ namespace UnlimRealms
 		{
 			d3dCommandList->SetGraphicsRootDescriptorTable((UINT)rootTableIdx, this->tableDescriptorSets[rootTableIdx]->FirstGpuHandle());
 		}
+
+		// TODO: automatically update dynamic resources, which use common UploadBuffer
 
 		return Result(Success);
 	}
