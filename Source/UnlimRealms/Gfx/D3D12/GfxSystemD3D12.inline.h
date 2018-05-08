@@ -62,7 +62,7 @@ namespace UnlimRealms
 
 	inline GfxSystemD3D12::UploadBuffer* GfxSystemD3D12::GetUploadBuffer() const
 	{
-		return this->uploadBuffers[this->frameIndex].get();
+		return (this->uploadBuffers.empty() ? ur_null : this->uploadBuffers[this->frameIndex].get());
 	}
 
 	inline ID3D12DescriptorHeap* GfxSystemD3D12::DescriptorHeap::GetD3DDescriptorHeap(DescriptorSet& descriptorSet)
@@ -141,6 +141,11 @@ namespace UnlimRealms
 	inline GfxSystemD3D12::Descriptor* GfxBufferD3D12::GetDescriptor() const
 	{
 		return this->descriptor.get();
+	}
+
+	inline GfxResourceData* GfxBufferD3D12::GetDynamicResourceData()
+	{
+		return &this->dynamicResourceData;
 	}
 
 	inline GfxSystemD3D12::Descriptor* GfxSamplerD3D12::GetDescriptor() const

@@ -468,6 +468,8 @@ namespace UnlimRealms
 
 		virtual ~GfxBufferD3D12();
 
+		Result UploadDynamicData();
+
 		inline GfxResourceD3D12& GetResource();
 
 		inline const D3D12_VERTEX_BUFFER_VIEW& GetD3DViewVB() const;
@@ -478,6 +480,8 @@ namespace UnlimRealms
 
 		inline GfxSystemD3D12::Descriptor* GetDescriptor() const;
 
+		inline GfxResourceData* GetDynamicResourceData();
+
 	protected:
 
 		virtual Result OnInitialize(const GfxResourceData *data);
@@ -486,6 +490,8 @@ namespace UnlimRealms
 
 		GfxResourceD3D12 resource;
 		std::unique_ptr<GfxResourceD3D12> uploadResource;
+		GfxResourceData dynamicResourceData;
+		std::vector<ur_byte> dynamicBuffer;
 		union {
 			D3D12_VERTEX_BUFFER_VIEW d3dVBView;
 			D3D12_INDEX_BUFFER_VIEW d3dIBView;

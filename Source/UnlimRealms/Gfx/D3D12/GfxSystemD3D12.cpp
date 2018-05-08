@@ -929,25 +929,33 @@ namespace UnlimRealms
 		if (ur_null == gfxBufferD3D12 || ur_null == gfxBufferD3D12->GetResource().GetD3DResource())
 			return ResultError(InvalidArgs, "GfxContextD3D12::UpdateBuffer: failed, invalid buffer");
 
-		ID3D12Resource *d3dResource = gfxBufferD3D12->GetResource().GetD3DResource();
-		D3D12_RANGE readRange;
-		readRange.Begin = 0;
-		readRange.End = (GfxGPUAccess::Read == gpuAccess || GfxGPUAccess::ReadWrite == gpuAccess ? gfxBufferD3D12->GetDesc().Size : 0);
-		ur_byte* resourceDataPtr;
-		HRESULT hr = d3dResource->Map(0, &readRange, reinterpret_cast<void**>(&resourceDataPtr));
-		if (FAILED(hr))
-			return ResultError(InvalidArgs, "GfxContextD3D12::UpdateBuffer: failed to map d3d resource");
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+		if (d3dSystem.GetUploadBuffer() != ur_null)
+		{
+			callback(gfxBufferD3D12->GetDynamicResourceData());
+		}
+		else
+		{
+			ID3D12Resource *d3dResource = gfxBufferD3D12->GetResource().GetD3DResource();
+			D3D12_RANGE readRange;
+			readRange.Begin = 0;
+			readRange.End = (GfxGPUAccess::Read == gpuAccess || GfxGPUAccess::ReadWrite == gpuAccess ? gfxBufferD3D12->GetDesc().Size : 0);
+			ur_byte* resourceDataPtr;
+			HRESULT hr = d3dResource->Map(0, &readRange, reinterpret_cast<void**>(&resourceDataPtr));
+			if (FAILED(hr))
+				return ResultError(InvalidArgs, "GfxContextD3D12::UpdateBuffer: failed to map d3d resource");
 
-		GfxResourceData mappedData;
-		mappedData.Ptr = resourceDataPtr;
-		mappedData.RowPitch = gfxBufferD3D12->GetDesc().Size;
-		mappedData.SlicePitch = mappedData.RowPitch;
-		
-		callback(&mappedData);
+			GfxResourceData mappedData;
+			mappedData.Ptr = resourceDataPtr;
+			mappedData.RowPitch = gfxBufferD3D12->GetDesc().Size;
+			mappedData.SlicePitch = mappedData.RowPitch;
 
-		d3dResource->Unmap(0, ur_null);
+			callback(&mappedData);
 
-		return NotImplemented;
+			d3dResource->Unmap(0, ur_null);
+		}
+
+		return Result(Success);
 	}
 
 	Result GfxContextD3D12::CopyResource(GfxResourceD3D12* dstResource, GfxResourceD3D12* srcResource)
@@ -1439,6 +1447,8 @@ namespace UnlimRealms
 	{
 		this->resource.Initialize(ur_null);
 		this->uploadResource.reset(ur_null);
+		this->dynamicResourceData = {};
+		this->dynamicBuffer.clear();
 		this->descriptor.reset(ur_null);
 
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
@@ -1472,67 +1482,83 @@ namespace UnlimRealms
 		{
 			D3D12_SUBRESOURCE_DATA d3dSubresData = GfxResourceDataToD3D12(*data);
 
-			if (D3D12_HEAP_TYPE_UPLOAD == d3dHeapProperties.Type)
+			if (d3dSystem.GetUploadBuffer() != ur_null)
 			{
-				// if current resource is in Upload heap - fill it with initial data
+				if (GfxUsage::Dynamic == this->GetDesc().Usage)
+				{
+					// keep a resource data copy
+					// dynamic buffer is automatically updated each frame
+					this->dynamicBuffer.resize(data->RowPitch);
+					this->dynamicResourceData.Ptr = this->dynamicBuffer.data();
+					this->dynamicResourceData.RowPitch = data->RowPitch;
+					this->dynamicResourceData.SlicePitch = data->SlicePitch;
+					memcpy(this->dynamicResourceData.Ptr, data->Ptr, data->RowPitch);
+				}
+				else
+				{
+					// write to common upload buffer
 
-				hr = FillUploadBuffer(this->resource.GetD3DResource(), ur_null, 0, 1, &d3dSubresData);
-				if (FAILED(hr))
-					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to fill upload resource");
-			}
-			else if (d3dSystem.GetUploadBuffer() != ur_null)
-			{
-				// write to common upload buffer
-				
-				GfxSystemD3D12::UploadBuffer::Region uploadRegion = {};
-				res = d3dSystem.GetUploadBuffer()->Allocate(d3dResDesc.Width, uploadRegion);
-				if (Failed(res))
-					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to allocate region in upload buffer");
+					GfxSystemD3D12::UploadBuffer::Region uploadRegion = {};
+					res = d3dSystem.GetUploadBuffer()->Allocate(d3dResDesc.Width, uploadRegion);
+					if (Failed(res))
+						return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to allocate region in upload buffer");
 
-				memcpy(uploadRegion.cpuAddress, data->Ptr, data->RowPitch);
+					memcpy(uploadRegion.cpuAddress, data->Ptr, data->RowPitch);
 
-				// schedule a copy to destination resource
+					// schedule a copy to destination resource
 
-				GfxContextD3D12 uploadContext(this->GetGfxSystem());
-				uploadContext.Initialize();
-				uploadContext.Begin();
-				uploadContext.ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
+					GfxContextD3D12 uploadContext(this->GetGfxSystem());
+					uploadContext.Initialize();
+					uploadContext.Begin();
+					uploadContext.ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
 
-				uploadContext.GetD3DCommandList()->CopyBufferRegion(this->resource.GetD3DResource(), 0,
-					d3dSystem.GetUploadBuffer()->GetD3DResource(), uploadRegion.offsetInResource, data->RowPitch);
+					uploadContext.GetD3DCommandList()->CopyBufferRegion(this->resource.GetD3DResource(), 0,
+						d3dSystem.GetUploadBuffer()->GetD3DResource(), uploadRegion.offsetInResource, data->RowPitch);
 
-				uploadContext.ResourceTransition(&this->resource, d3dResStates);
-				uploadContext.End();
+					uploadContext.ResourceTransition(&this->resource, d3dResStates);
+					uploadContext.End();
+				}
 			}
 			else
 			{
-				// create & fill upload resource
+				if (D3D12_HEAP_TYPE_UPLOAD == d3dHeapProperties.Type)
+				{
+					// if current resource is in Upload heap - fill it with initial data
 
-				shared_ref<ID3D12Resource> d3dUploadResource;
-				d3dHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
-				D3D12_RESOURCE_STATES d3dUploadResState = D3D12_RESOURCE_STATE_GENERIC_READ;
-				hr = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResDesc, d3dUploadResState, ur_null,
-					__uuidof(ID3D12Resource), d3dUploadResource);
-				if (FAILED(hr))
-					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to create upload resource");
-				this->uploadResource.reset(new GfxResourceD3D12(this->GetGfxSystem()));
-				this->uploadResource->Initialize(d3dUploadResource, d3dUploadResState);
+					hr = FillUploadBuffer(this->resource.GetD3DResource(), ur_null, 0, 1, &d3dSubresData);
+					if (FAILED(hr))
+						return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to fill upload resource");
+				}
+				else
+				{
+					// create & fill upload resource
 
-				hr = FillUploadBuffer(this->uploadResource->GetD3DResource(), ur_null, 0, 1, &d3dSubresData);
-				if (FAILED(hr))
-					return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to fill upload resource");
+					shared_ref<ID3D12Resource> d3dUploadResource;
+					d3dHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+					D3D12_RESOURCE_STATES d3dUploadResState = D3D12_RESOURCE_STATE_GENERIC_READ;
+					hr = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResDesc, d3dUploadResState, ur_null,
+						__uuidof(ID3D12Resource), d3dUploadResource);
+					if (FAILED(hr))
+						return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to create upload resource");
+					this->uploadResource.reset(new GfxResourceD3D12(this->GetGfxSystem()));
+					this->uploadResource->Initialize(d3dUploadResource, d3dUploadResState);
 
-				// schedule a copy to destination resource
+					hr = FillUploadBuffer(this->uploadResource->GetD3DResource(), ur_null, 0, 1, &d3dSubresData);
+					if (FAILED(hr))
+						return ResultError(Failure, "GfxBufferD3D12::OnInitialize: failed to fill upload resource");
 
-				GfxContextD3D12 uploadContext(this->GetGfxSystem());
-				uploadContext.Initialize();
-				uploadContext.Begin();
-				uploadContext.ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
-				
-				uploadContext.CopyResource(&this->resource, this->uploadResource.get());
-				
-				uploadContext.ResourceTransition(&this->resource, d3dResStates);
-				uploadContext.End();
+					// schedule a copy to destination resource
+
+					GfxContextD3D12 uploadContext(this->GetGfxSystem());
+					uploadContext.Initialize();
+					uploadContext.Begin();
+					uploadContext.ResourceTransition(&this->resource, D3D12_RESOURCE_STATE_COPY_DEST);
+
+					uploadContext.CopyResource(&this->resource, this->uploadResource.get());
+
+					uploadContext.ResourceTransition(&this->resource, d3dResStates);
+					uploadContext.End();
+				}
 			}
 		}
 
@@ -1567,6 +1593,42 @@ namespace UnlimRealms
 			this->d3dCBView.BufferLocation = this->resource.GetD3DResource()->GetGPUVirtualAddress();
 			this->d3dCBView.SizeInBytes = (UINT)d3dResDesc.Width;
 			d3dDevice->CreateConstantBufferView(&this->d3dCBView, this->descriptor->CpuHandle());
+		}
+
+		return Result(Success);
+	}
+
+	Result GfxBufferD3D12::UploadDynamicData()
+	{
+		if (ur_null == this->dynamicResourceData.Ptr)
+			return ResultError(Failure, "GfxBufferD3D12::UploadDynamicData: buffer is either not initialized or not a dynamic resource");
+
+		if (0 == this->dynamicResourceData.RowPitch)
+			return Result(Success); // nothing to do
+
+		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
+
+		// write to common upload buffer
+
+		GfxSystemD3D12::UploadBuffer::Region uploadRegion = {};
+		Result res = d3dSystem.GetUploadBuffer()->Allocate(this->dynamicResourceData.RowPitch, uploadRegion);
+		if (Failed(res))
+			return ResultError(Failure, "GfxBufferD3D12::UploadDynamicData: failed to allocate region in upload buffer");
+
+		memcpy(uploadRegion.cpuAddress, this->dynamicResourceData.Ptr, this->dynamicResourceData.RowPitch);
+
+		// update buffer view
+		// TODO: dynamic resource has to keep all the descriptors till corresponding draw call is executed on GPU
+
+		if (ur_uint(GfxBindFlag::ConstantBuffer) & this->GetDesc().BindFlags)
+		{
+			this->descriptor.reset();
+			Result res = d3dSystem.GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AcquireDescriptor(this->descriptor);
+			if (Failed(res))
+				return ResultError(Failure, "GfxBufferD3D12::UploadDynamicData: failed to acquire CBV descriptor");
+
+			this->d3dCBView.BufferLocation = uploadRegion.gpuAddress;
+			d3dSystem.GetD3DDevice()->CreateConstantBufferView(&this->d3dCBView, this->descriptor->CpuHandle());
 		}
 
 		return Result(Success);
@@ -1933,6 +1995,27 @@ namespace UnlimRealms
 		}
 
 		// TODO: automatically update dynamic resources, which use common UploadBuffer
+
+		// TEMP: copy pasted code to test dynamic buffer update
+		D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = this->tableDescriptorSets[this->tableIndexCbvSrvUav]->FirstCpuHandle();
+		D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
+		const auto& bufferRange = this->GetBufferRange();
+		for (ur_size slotIdx = bufferRange.slotFrom; slotIdx <= bufferRange.slotTo; ++slotIdx)
+		{
+			auto& slot = bufferRange.slots[slotIdx - bufferRange.slotFrom];
+			if (State::Unused == slot.state)
+				continue;
+			GfxBufferD3D12 *bufferD3D12 = static_cast<GfxBufferD3D12*>(slot.resource);
+			if (bufferD3D12 != ur_null && bufferD3D12->GetDescriptor() != ur_null && bufferD3D12->GetDynamicResourceData()->Ptr != ur_null)
+			{
+				if (Succeeded(bufferD3D12->UploadDynamicData()))
+				{
+					d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, bufferD3D12->GetDescriptor()->CpuHandle(), d3dHeapType);
+				}
+			}
+			descritorsTableHandle.ptr += d3dDescriptorSize;
+		}
 
 		return Result(Success);
 	}
