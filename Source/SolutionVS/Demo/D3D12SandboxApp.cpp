@@ -248,6 +248,14 @@ int D3D12SandboxApp::Run()
 			gfxContext->SetVertexBuffer(gfxVB.get(), 0);
 			for (ur_uint drawCallIdx = 0; drawCallIdx < 3; ++drawCallIdx)
 			{
+				if (drawCallIdx == 1)
+				{
+					gfxBinding->SetTexture(0, gfxTexture2.get());
+				}
+				else
+				{
+					gfxBinding->SetTexture(0, gfxTexture.get());
+				}
 				cbData.Desc.x = ur_float(drawCallIdx * InstanceCount / 3);
 				gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, &cbResData, 0, 0);
 				gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
