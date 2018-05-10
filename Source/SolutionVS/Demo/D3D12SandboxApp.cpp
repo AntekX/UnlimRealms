@@ -109,11 +109,20 @@ int D3D12SandboxApp::Run()
 		gfxCB->Initialize(sizeof(Constants), 0, GfxUsage::Dynamic, ur_uint(GfxBindFlag::ConstantBuffer), ur_uint(GfxAccessFlag::Write), &cbResData);
 	}
 
-	std::unique_ptr<GfxTexture> gfxTexture;
-	CreateTextureFromFile(realm, gfxTexture, "../Res/testimage.dds");
-
-	std::unique_ptr<GfxTexture> gfxTexture2;
-	CreateTextureFromFile(realm, gfxTexture2, "../Res/testimage2.dds");
+	std::string texturesToLoad[DrawCallCount] = {
+		"../Res/testimage3.dds",
+		"../Res/testimage.dds",
+		"../Res/testimage2.dds",
+	};
+	std::vector<std::unique_ptr<GfxTexture>> gfxTextures;
+	for (auto& texturePath : texturesToLoad)
+	{
+		std::unique_ptr<GfxTexture> texture;
+		if (Succeeded(CreateTextureFromFile(realm, texture, texturePath)))
+		{
+			gfxTextures.emplace_back(std::move(texture));
+		}
+	}
 
 	std::unique_ptr<GfxSampler> gfxSampler;
 	if (Succeeded(realm.GetGfxSystem()->CreateSampler(gfxSampler)))
@@ -135,7 +144,7 @@ int D3D12SandboxApp::Run()
 	std::unique_ptr<GfxResourceBinding> gfxBinding;
 	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding);
 	gfxBinding->SetBuffer(0, gfxCB.get());
-	gfxBinding->SetTexture(0, gfxTexture.get());
+	gfxBinding->SetTexture(0, gfxTextures.empty() ? ur_null : gfxTextures.begin()->get());
 	gfxBinding->SetSampler(0, gfxSampler.get());
 	gfxBinding->Initialize();
 
@@ -211,7 +220,7 @@ int D3D12SandboxApp::Run()
 		realm.GetInput()->Update();
 
 		// animate primitives
-		auto updateJob = realm.GetJobSystem().Add(ur_null,
+		auto updateFrameJob = realm.GetJobSystem().Add(ur_null,
 			[&](Job::Context& ctx) -> void
 		{
 			ClockTime timeNow = Clock::now();
@@ -242,9 +251,10 @@ int D3D12SandboxApp::Run()
 			}
 		});
 
-		auto renderJob = realm.GetJobSystem().Add(ur_null,
+		// draw primitives
+		auto drawFrameJob = realm.GetJobSystem().Add(ur_null,
 			[&](Job::Context& ctx) -> void
-		{ // use context to draw
+		{
 			gfxContext->Begin();
 
 			// prepare RT
@@ -258,15 +268,8 @@ int D3D12SandboxApp::Run()
 			gfxContext->SetVertexBuffer(gfxVB.get(), 0);
 			for (ur_uint drawCallIdx = 0; drawCallIdx < 3; ++drawCallIdx)
 			{
-				if (drawCallIdx == 1)
-				{
-					gfxBinding->SetTexture(0, gfxTexture2.get());
-				}
-				else
-				{
-					gfxBinding->SetTexture(0, gfxTexture.get());
-				}
-				updateJob->WaitProgress(ur_float((drawCallIdx + 1) * InstancePerDrawCall)); // wait till portion of data required for this draw call is fully updated
+				gfxBinding->SetTexture(0, gfxTextures.empty() ? ur_null : gfxTextures[drawCallIdx % gfxTextures.size()].get());
+				updateFrameJob->WaitProgress(ur_float((drawCallIdx + 1) * InstancePerDrawCall)); // wait till portion of data required for this draw call is fully updated
 				cbData.Desc.x = ur_float(drawCallIdx * InstancePerDrawCall);
 				gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, &cbResData, 0, 0);
 				gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstancePerDrawCall, 0);
@@ -300,7 +303,7 @@ int D3D12SandboxApp::Run()
 			}
 			#endif
 		});
-		renderJob->Wait();
+		drawFrameJob->Wait();
 
 		// execute command lists
 		realm.GetGfxSystem()->Render();

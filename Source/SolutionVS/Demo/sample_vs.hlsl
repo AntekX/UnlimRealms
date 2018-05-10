@@ -38,7 +38,9 @@ PS_INPUT main(VS_INPUT input, uint instanceID : SV_InstanceID, uint vertexID : S
 	//output.pos = float4(input.pos.xyz, 1.0f);
 	output.col = input.col;
 	//output.col.xyz = Colors[(instanceID + vertexID) % ColorsCount] * 0.5 + 0.5;
-	output.col.xyz = Colors[uint(Desc.x / (InstanceCount / 3))];
+	//output.col.xyz = Colors[uint(Desc.x / (InstanceCount / 3))];
+	output.col.xyz = 1.0;
+	
 	output.uv = input.uv;
 
 	return output;
