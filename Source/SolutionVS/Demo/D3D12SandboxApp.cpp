@@ -161,38 +161,19 @@ int D3D12SandboxApp::Run()
 		moveDir[i].Normalize();
 	}
 
-	// test: explicit resources for another draw call with modified CB
-	Constants cbData2;
-	memset(&cbData2, 0, sizeof(Constants));
-	cbData2.Desc = ur_float4(InstanceCount / 3, 4.0f, 5.0f, 6.0f);
-	GfxResourceData cbResData2 = { &cbData2, sizeof(Constants) , 0 };
-	std::unique_ptr<GfxBuffer> gfxCB2;
-	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxCB2)))
-	{
-		gfxCB2->Initialize(sizeof(Constants), 0, GfxUsage::Dynamic, ur_uint(GfxBindFlag::ConstantBuffer), ur_uint(GfxAccessFlag::Write), &cbResData2);
-	}
-	std::unique_ptr<GfxResourceBinding> gfxBinding2;
-	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding2);
-	gfxBinding2->SetBuffer(0, gfxCB2.get());
-	gfxBinding2->SetTexture(0, gfxTexture.get());
-	gfxBinding2->SetSampler(0, gfxSampler.get());
-	gfxBinding2->Initialize();
-
-	Constants cbData3;
-	memset(&cbData3, 0, sizeof(Constants));
-	cbData3.Desc.x = ur_float(InstanceCount / 3 * 2);
-	GfxResourceData cbResData3 = { &cbData3, sizeof(Constants) , 0 };
-	std::unique_ptr<GfxBuffer> gfxCB3;
-	if (Succeeded(realm.GetGfxSystem()->CreateBuffer(gfxCB3)))
-	{
-		gfxCB3->Initialize(sizeof(Constants), 0, GfxUsage::Dynamic, ur_uint(GfxBindFlag::ConstantBuffer), ur_uint(GfxAccessFlag::Write), &cbResData3);
-	}
-	std::unique_ptr<GfxResourceBinding> gfxBinding3;
-	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding3);
-	gfxBinding3->SetBuffer(0, gfxCB3.get());
-	gfxBinding3->SetTexture(0, gfxTexture.get());
-	gfxBinding3->SetSampler(0, gfxSampler.get());
-	gfxBinding3->Initialize();
+	// TEST: explicitly synchronized draw calls
+#define SYNC_DRAW_CALLS 0
+#if (SYNC_DRAW_CALLS)
+	auto gfxD3D12 = static_cast<GfxSystemD3D12*>(realm.GetGfxSystem());
+	auto d3dDevice = gfxD3D12->GetD3DDevice();
+	auto d3dCommandQueue = gfxD3D12->GetD3DCommandQueue();
+	shared_ref<ID3D12Fence> d3dDrawCallFence;
+	ur_uint drawCallFenceValue = 1;
+	d3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), d3dDrawCallFence);
+	std::unique_ptr<GfxContext> gfxDrawCallContext;
+	realm.GetGfxSystem()->CreateContext(gfxDrawCallContext);
+	gfxDrawCallContext->Initialize();
+#endif
 
 	// Main message loop:
 	MSG msg;
@@ -226,61 +207,79 @@ int D3D12SandboxApp::Run()
 		// update sub systems
 		realm.GetInput()->Update();
 
+		// animate primitives
+		ClockTime timeNow = Clock::now();
+		auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(timeNow - timer);
+		timer = timeNow;
+		ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f; // to seconds
+		for (ur_uint i = 0; i < InstanceCount; ++i)
+		{
+			movePos[i] = movePos[i] + moveDir[i] * moveSpeed * elapsedTime;
+			if (movePos[i].x > 1.0f || movePos[i].x < -1.0f)
+			{
+				movePos[i].x = movePos[i].x / abs(movePos[i].x);
+				moveDir[i].x *= -1.0f;
+				moveDir[i].y = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f + moveDir[i].y;
+				moveDir[i].Normalize();
+			}
+			if (movePos[i].y > 1.0f || movePos[i].y < -1.0f)
+			{
+				movePos[i].y = movePos[i].y / abs(movePos[i].y);
+				moveDir[i].y *= -1.0f;
+				moveDir[i].x = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f + moveDir[i].x;
+				moveDir[i].Normalize();
+			}
+			cbData.Transform[i] = ur_float4x4::Identity;
+			cbData.Transform[i].Multiply(ur_float4x4::Scaling(spriteScale * (moveDir[i].x < 0.0f ? 1.0f : -1.0f), spriteScale * ur_float(canvasWidth) / canvasHeight, 1.0f));
+			cbData.Transform[i].Multiply(ur_float4x4::Translation(movePos[i].x, movePos[i].y, 0.0f));
+		}
+
 		{ // use context to draw
 			gfxContext->Begin();
 
 			// prepare RT
 			gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
 			gfxContext->ClearTarget(gfxSwapChain->GetTargetBuffer(), true, { 0.0f, 0.2f, 0.4f, 1.0f }, false, 0.0f, false, 0);
-
-			// animate primitives
-			ClockTime timeNow = Clock::now();
-			auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(timeNow - timer);
-			timer = timeNow;
-			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f; // to seconds
-			for (ur_uint i = 0; i < InstanceCount; ++i)
-			{
-				movePos[i] = movePos[i] + moveDir[i] * moveSpeed * elapsedTime;
-				if (movePos[i].x > 1.0f || movePos[i].x < -1.0f)
-				{
-					movePos[i].x = movePos[i].x / abs(movePos[i].x);
-					moveDir[i].x *= -1.0f;
-					moveDir[i].y = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f + moveDir[i].y;
-					moveDir[i].Normalize();
-				}
-				if (movePos[i].y > 1.0f || movePos[i].y < -1.0f)
-				{
-					movePos[i].y = movePos[i].y / abs(movePos[i].y);
-					moveDir[i].y *= -1.0f;
-					moveDir[i].x = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f + moveDir[i].x;
-					moveDir[i].Normalize();
-				}
-				cbData.Transform[i] = ur_float4x4::Identity;
-				cbData.Transform[i].Multiply(ur_float4x4::Scaling(spriteScale * (moveDir[i].x < 0.0f ? 1.0f : -1.0f), spriteScale * ur_float(canvasWidth) / canvasHeight, 1.0f));
-				cbData.Transform[i].Multiply(ur_float4x4::Translation(movePos[i].x, movePos[i].y, 0.0f));
-			}
-			cbData.Desc = ur_float4(0.0f, 1.0f, 2.0f, 3.0f);
-			gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, &cbResData, 0, 0);
 			
+			#if (!SYNC_DRAW_CALLS)
 			// draw primitives
 			gfxContext->SetPipelineStateObject(gfxPSO.get());
 			gfxContext->SetResourceBinding(gfxBinding.get());
 			gfxContext->SetVertexBuffer(gfxVB.get(), 0);
-			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
-
-			memcpy(&cbData2, &cbData, sizeof(cbData2));
-			cbData2.Desc.x = ur_float(InstanceCount / 3);
-			gfxContext->UpdateBuffer(gfxCB2.get(), GfxGPUAccess::Write, &cbResData2, 0, 0);
-			gfxContext->SetResourceBinding(gfxBinding2.get());
-			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
-
-			memcpy(&cbData3, &cbData, sizeof(cbData3));
-			cbData3.Desc.x = ur_float(InstanceCount / 3 * 2);
-			gfxContext->UpdateBuffer(gfxCB3.get(), GfxGPUAccess::Write, &cbResData3, 0, 0);
-			gfxContext->SetResourceBinding(gfxBinding3.get());
-			gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
+			for (ur_uint drawCallIdx = 0; drawCallIdx < 3; ++drawCallIdx)
+			{
+				cbData.Desc.x = ur_float(drawCallIdx * InstanceCount / 3);
+				gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, &cbResData, 0, 0);
+				gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
+			}
+			#endif
 
 			gfxContext->End();
+
+			#if (SYNC_DRAW_CALLS)
+			// TEST: explicitly do synchronized draw calls
+			auto WaitDrawCallComplete = [&]() -> void {
+				d3dCommandQueue->Signal(d3dDrawCallFence, drawCallFenceValue);
+				while (d3dDrawCallFence->GetCompletedValue() < drawCallFenceValue) Sleep(0);
+				++drawCallFenceValue;
+			};
+			for (ur_uint drawCallIdx = 0; drawCallIdx < 3; ++drawCallIdx)
+			{
+				cbData.Desc.x = ur_float(drawCallIdx * InstanceCount / 3);
+
+				gfxDrawCallContext->Begin();
+				gfxDrawCallContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
+				gfxDrawCallContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, &cbResData, 0, 0);
+				gfxDrawCallContext->SetPipelineStateObject(gfxPSO.get());
+				gfxDrawCallContext->SetResourceBinding(gfxBinding.get());
+				gfxDrawCallContext->SetVertexBuffer(gfxVB.get(), 0);
+				gfxDrawCallContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
+				gfxDrawCallContext->End();
+				realm.GetGfxSystem()->Render();
+				
+				WaitDrawCallComplete();
+			}
+			#endif
 		}
 
 		// execute command lists

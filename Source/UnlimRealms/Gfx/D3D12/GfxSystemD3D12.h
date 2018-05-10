@@ -216,7 +216,7 @@ namespace UnlimRealms
 
 			Result Initialize();
 
-			Result Allocate(ur_size sizeInBytes, Region& allocatedRegion);
+			Result Allocate(ur_size sizeInBytes, ur_size alignment, Region& allocatedRegion);
 
 			inline ID3D12Resource* GetD3DResource() const;
 
@@ -577,13 +577,17 @@ namespace UnlimRealms
 
 	private:
 
+		// TEMP: reserve per draw call descriptor table(s)
+		static const ur_uint DrawCallsMax = 8;
+		ur_uint drawCallIdx;
+
 		std::unique_ptr<GfxSystemD3D12::DescriptorSet> samplerDescriptorSet;
 		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesCbvSrvUav;
 		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesSampler;
 		std::vector<D3D12_ROOT_PARAMETER> d3dRootParameters;
 		shared_ref<ID3D12RootSignature> d3dRootSignature;
 		shared_ref<ID3DBlob> d3dSerializedRootSignature;
-		std::vector<std::unique_ptr<GfxSystemD3D12::DescriptorSet>> tableDescriptorSets;
+		std::vector<std::unique_ptr<GfxSystemD3D12::DescriptorSet>> tableDescriptorSets[DrawCallsMax];
 		std::vector<ID3D12DescriptorHeap*> d3dTableDescriptorHeaps;
 		ur_size tableIndexCbvSrvUav;
 		ur_size tableIndexSampler;
@@ -597,6 +601,8 @@ namespace UnlimRealms
 	extern UR_DECL D3D12_RESOURCE_DESC GfxTextureDescToD3D12ResDesc(const GfxTextureDesc &desc);
 
 	extern UR_DECL D3D12_RESOURCE_DESC GfxBufferDescToD3D12ResDesc(const GfxBufferDesc &desc);
+
+	extern UR_DECL ur_size GetBufferAlignment(const GfxBufferDesc &desc);
 
 	extern UR_DECL D3D12_RESOURCE_FLAGS GfxBindFlagsToD3D12ResFlags(const ur_uint gfxFlags);
 
