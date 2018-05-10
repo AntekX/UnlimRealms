@@ -86,6 +86,8 @@ namespace UnlimRealms
 
 		void Wait();
 
+		void WaitProgress(ur_float expectedProgress);
+
 		inline ur_float GetProgress() const;
 
 		inline State GetState() const;

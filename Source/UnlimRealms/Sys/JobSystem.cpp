@@ -61,6 +61,11 @@ namespace UnlimRealms
 		while (!this->Finished()) {};
 	}
 
+	void Job::WaitProgress(ur_float expectedProgress)
+	{
+		while (this->progress.load() < expectedProgress) {}
+	}
+
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// JobSystem

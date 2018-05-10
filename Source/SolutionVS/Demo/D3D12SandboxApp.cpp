@@ -5,6 +5,7 @@
 #include "UnlimRealms.h"
 #include "Sys/Storage.h"
 #include "Sys/Log.h"
+#include "Sys/JobSystem.h"
 #include "Sys/Windows/WinCanvas.h"
 #include "Sys/Windows/WinInput.h"
 #include "Gfx/D3D12/GfxSystemD3D12.h"
@@ -93,6 +94,8 @@ int D3D12SandboxApp::Run()
 	}
 
 	const ur_uint InstanceCount = 24;
+	const ur_uint DrawCallCount = 3;
+	const ur_uint InstancePerDrawCall = InstanceCount / DrawCallCount;
 	struct Constants
 	{
 		ur_float4x4 Transform[InstanceCount];
@@ -208,32 +211,39 @@ int D3D12SandboxApp::Run()
 		realm.GetInput()->Update();
 
 		// animate primitives
-		ClockTime timeNow = Clock::now();
-		auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(timeNow - timer);
-		timer = timeNow;
-		ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f; // to seconds
-		for (ur_uint i = 0; i < InstanceCount; ++i)
+		auto updateJob = realm.GetJobSystem().Add(ur_null,
+			[&](Job::Context& ctx) -> void
 		{
-			movePos[i] = movePos[i] + moveDir[i] * moveSpeed * elapsedTime;
-			if (movePos[i].x > 1.0f || movePos[i].x < -1.0f)
+			ClockTime timeNow = Clock::now();
+			auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(timeNow - timer);
+			timer = timeNow;
+			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f; // to seconds
+			for (ur_uint i = 0; i < InstanceCount; ++i)
 			{
-				movePos[i].x = movePos[i].x / abs(movePos[i].x);
-				moveDir[i].x *= -1.0f;
-				moveDir[i].y = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f + moveDir[i].y;
-				moveDir[i].Normalize();
+				movePos[i] = movePos[i] + moveDir[i] * moveSpeed * elapsedTime;
+				if (movePos[i].x > 1.0f || movePos[i].x < -1.0f)
+				{
+					movePos[i].x = movePos[i].x / abs(movePos[i].x);
+					moveDir[i].x *= -1.0f;
+					moveDir[i].y = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f + moveDir[i].y;
+					moveDir[i].Normalize();
+				}
+				if (movePos[i].y > 1.0f || movePos[i].y < -1.0f)
+				{
+					movePos[i].y = movePos[i].y / abs(movePos[i].y);
+					moveDir[i].y *= -1.0f;
+					moveDir[i].x = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f + moveDir[i].x;
+					moveDir[i].Normalize();
+				}
+				cbData.Transform[i] = ur_float4x4::Identity;
+				cbData.Transform[i].Multiply(ur_float4x4::Scaling(spriteScale * (moveDir[i].x < 0.0f ? 1.0f : -1.0f), spriteScale * ur_float(canvasWidth) / canvasHeight, 1.0f));
+				cbData.Transform[i].Multiply(ur_float4x4::Translation(movePos[i].x, movePos[i].y, 0.0f));
+				ctx.progress = ur_float(i + 1);
 			}
-			if (movePos[i].y > 1.0f || movePos[i].y < -1.0f)
-			{
-				movePos[i].y = movePos[i].y / abs(movePos[i].y);
-				moveDir[i].y *= -1.0f;
-				moveDir[i].x = (ur_float)rand() / RAND_MAX * 2.0f - 1.0f + moveDir[i].x;
-				moveDir[i].Normalize();
-			}
-			cbData.Transform[i] = ur_float4x4::Identity;
-			cbData.Transform[i].Multiply(ur_float4x4::Scaling(spriteScale * (moveDir[i].x < 0.0f ? 1.0f : -1.0f), spriteScale * ur_float(canvasWidth) / canvasHeight, 1.0f));
-			cbData.Transform[i].Multiply(ur_float4x4::Translation(movePos[i].x, movePos[i].y, 0.0f));
-		}
+		});
 
+		auto renderJob = realm.GetJobSystem().Add(ur_null,
+			[&](Job::Context& ctx) -> void
 		{ // use context to draw
 			gfxContext->Begin();
 
@@ -256,9 +266,10 @@ int D3D12SandboxApp::Run()
 				{
 					gfxBinding->SetTexture(0, gfxTexture.get());
 				}
-				cbData.Desc.x = ur_float(drawCallIdx * InstanceCount / 3);
+				updateJob->WaitProgress(ur_float((drawCallIdx + 1) * InstancePerDrawCall)); // wait till portion of data required for this draw call is fully updated
+				cbData.Desc.x = ur_float(drawCallIdx * InstancePerDrawCall);
 				gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, &cbResData, 0, 0);
-				gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
+				gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstancePerDrawCall, 0);
 			}
 			#endif
 
@@ -273,7 +284,7 @@ int D3D12SandboxApp::Run()
 			};
 			for (ur_uint drawCallIdx = 0; drawCallIdx < 3; ++drawCallIdx)
 			{
-				cbData.Desc.x = ur_float(drawCallIdx * InstanceCount / 3);
+				cbData.Desc.x = ur_float(drawCallIdx * InstancePerDrawCall);
 
 				gfxDrawCallContext->Begin();
 				gfxDrawCallContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), ur_null);
@@ -281,14 +292,15 @@ int D3D12SandboxApp::Run()
 				gfxDrawCallContext->SetPipelineStateObject(gfxPSO.get());
 				gfxDrawCallContext->SetResourceBinding(gfxBinding.get());
 				gfxDrawCallContext->SetVertexBuffer(gfxVB.get(), 0);
-				gfxDrawCallContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstanceCount / 3, 0);
+				gfxDrawCallContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstancePerDrawCall, 0);
 				gfxDrawCallContext->End();
 				realm.GetGfxSystem()->Render();
 				
 				WaitDrawCallComplete();
 			}
 			#endif
-		}
+		});
+		renderJob->Wait();
 
 		// execute command lists
 		realm.GetGfxSystem()->Render();
