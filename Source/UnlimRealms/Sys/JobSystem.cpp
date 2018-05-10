@@ -48,9 +48,10 @@ namespace UnlimRealms
 
 	void Job::Interrupt()
 	{
-		if (!this->interrupt)
+		ur_bool expectedState = true;
+		ur_bool desiredState = false;
+		if (this->interrupt.compare_exchange_strong(expectedState, desiredState))
 		{
-			this->interrupt = true;
 			this->jobSystem.Remove(*this);
 		}
 	}
@@ -104,8 +105,8 @@ namespace UnlimRealms
 			{
 				auto &queue = this->priorityQueue[(ur_int)priority];
 				queue.jobs.push_front(job);
-				job->systemHandle.listPtr = reinterpret_cast<void*>(&queue);
-				job->systemHandle.iterPtr = reinterpret_cast<void*>(&queue.jobs.begin());
+				job->systemHandle.listPtr = &queue.jobs;
+				job->systemHandle.iter = queue.jobs.begin();
 				this->OnJobAdded();
 				res = true;
 			}
@@ -123,10 +124,8 @@ namespace UnlimRealms
 			if (job.systemHandle.listPtr != ur_null)
 			{
 				auto &queue = *reinterpret_cast<JobQueue*>(job.systemHandle.listPtr);
-				auto &iterator = *reinterpret_cast<decltype(queue.jobs)::iterator*>(job.systemHandle.iterPtr);
-				queue.jobs.erase(iterator);
+				queue.jobs.erase(job.systemHandle.iter);
 				job.systemHandle.listPtr = ur_null;
-				job.systemHandle.iterPtr = ur_null;
 				this->OnJobRemoved();
 				res = true;
 			}
@@ -153,7 +152,6 @@ namespace UnlimRealms
 					job = queue.jobs.back();
 					queue.jobs.pop_back();
 					job->systemHandle.listPtr = ur_null;
-					job->systemHandle.iterPtr = ur_null;
 					this->OnJobRemoved();
 					break;
 				}

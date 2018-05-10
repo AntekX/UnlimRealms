@@ -15,6 +15,7 @@ namespace UnlimRealms
 	// forward declarations
 	class JobSystem;
 	class Job;
+	typedef std::list<std::shared_ptr<Job>> JobList;
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,9 +37,9 @@ namespace UnlimRealms
 	
 		struct QueueHandle
 		{
-			void* listPtr;
-			void* iterPtr;
-			QueueHandle() : listPtr(ur_null), iterPtr(ur_null) {}
+			JobList* listPtr;
+			JobList::iterator iter;
+			QueueHandle() : listPtr(ur_null) {}
 		} systemHandle;
 	};
 
@@ -62,12 +63,12 @@ namespace UnlimRealms
 		struct UR_DECL Context
 		{
 			DataPtr data;
-			ur_bool &interrupt;
+			std::atomic<ur_bool> &interrupt;
 			std::atomic<ur_float> &progress;
 			std::atomic<Result::UID> &resultCode;
 
 			Context(DataPtr &data,
-				ur_bool &interrupt, std::atomic<ur_float> &progress, std::atomic<Result::UID> &resultCode) :
+				std::atomic<ur_bool> &interrupt, std::atomic<ur_float> &progress, std::atomic<Result::UID> &resultCode) :
 				data(data), interrupt(interrupt), progress(progress), resultCode(resultCode)
 			{
 			}
@@ -103,7 +104,7 @@ namespace UnlimRealms
 
 		Callback callback;
 		DataPtr data;
-		ur_bool interrupt;
+		std::atomic<ur_bool> interrupt;
 		std::atomic<State> state;
 		std::atomic<ur_float> progress;
 		std::atomic<Result::UID> resultCode;
@@ -153,7 +154,7 @@ namespace UnlimRealms
 
 		struct JobQueue
 		{
-			std::list<std::shared_ptr<Job>> jobs;
+			JobList jobs;
 		};
 		JobQueue priorityQueue[(ur_int)JobPriority::Count];
 		std::mutex queueMutex;
