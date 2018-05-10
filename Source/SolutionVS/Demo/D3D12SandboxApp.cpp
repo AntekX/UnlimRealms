@@ -287,6 +287,8 @@ int D3D12SandboxApp::Run()
 			};
 			for (ur_uint drawCallIdx = 0; drawCallIdx < 3; ++drawCallIdx)
 			{
+				gfxBinding->SetTexture(0, gfxTextures.empty() ? ur_null : gfxTextures[drawCallIdx % gfxTextures.size()].get());
+				updateFrameJob->WaitProgress(ur_float((drawCallIdx + 1) * InstancePerDrawCall)); // wait till portion of data required for this draw call is fully updated
 				cbData.Desc.x = ur_float(drawCallIdx * InstancePerDrawCall);
 
 				gfxDrawCallContext->Begin();
