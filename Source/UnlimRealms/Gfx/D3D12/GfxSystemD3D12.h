@@ -580,6 +580,7 @@ namespace UnlimRealms
 		// TEMP: reserve per draw call descriptor table(s)
 		static const ur_uint DrawCallsMax = 8;
 		ur_uint drawCallIdx;
+		ur_uint frameFence;
 
 		std::unique_ptr<GfxSystemD3D12::DescriptorSet> samplerDescriptorSet;
 		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDesriptorRangesCbvSrvUav;

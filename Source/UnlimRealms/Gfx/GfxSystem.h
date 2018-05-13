@@ -136,23 +136,23 @@ namespace UnlimRealms
 			bool clearDepth, const ur_float &depth,
 			bool clearStencil, const ur_uint &stencil);
 
-		virtual Result SetPipelineState(GfxPipelineState *state);
+		virtual Result SetPipelineStateObject(GfxPipelineStateObject *state); // TODO: support in DX11
 
-		virtual Result SetPipelineStateObject(GfxPipelineStateObject *state);
+		virtual Result SetResourceBinding(GfxResourceBinding *binding); // TODO: support in DX11
 
-		virtual Result SetResourceBinding(GfxResourceBinding *binding);
+		virtual Result SetPipelineState(GfxPipelineState *state); // TODO: deprecated, to be removed
 
-		virtual Result SetTexture(GfxTexture *texture, ur_uint slot);
+		virtual Result SetTexture(GfxTexture *texture, ur_uint slot); // TODO: deprecated, to be removed
 
-		virtual Result SetConstantBuffer(GfxBuffer *buffer, ur_uint slot);
+		virtual Result SetConstantBuffer(GfxBuffer *buffer, ur_uint slot); // TODO: deprecated, to be removed
+
+		virtual Result SetVertexShader(GfxVertexShader *shader); // TODO: deprecated, to be removed
+
+		virtual Result SetPixelShader(GfxPixelShader *shader); // TODO: deprecated, to be removed
 
 		virtual Result SetVertexBuffer(GfxBuffer *buffer, ur_uint slot);
 
 		virtual Result SetIndexBuffer(GfxBuffer *buffer);
-
-		virtual Result SetVertexShader(GfxVertexShader *shader);
-
-		virtual Result SetPixelShader(GfxPixelShader *shader);
 
 		virtual Result Draw(ur_uint vertexCount, ur_uint vertexOffset, ur_uint instanceCount, ur_uint instanceOffset);
 

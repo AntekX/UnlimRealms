@@ -1820,6 +1820,7 @@ namespace UnlimRealms
 		GfxResourceBinding(gfxSystem)
 	{
 		this->drawCallIdx = 0;
+		this->frameFence = 0;
 	}
 
 	GfxResourceBindingD3D12::~GfxResourceBindingD3D12()
@@ -2001,6 +2002,14 @@ namespace UnlimRealms
 		if (ur_null == d3dDevice)
 			return ResultError(NotInitialized, "GfxResourceBindingD3D12::SetupDrawCall: failed, device unavailable");
 
+		if (this->frameFence < d3dSystem.CurrentFrameFenceValue())
+		{
+			this->drawCallIdx = 0;
+			this->frameFence = d3dSystem.CurrentFrameFenceValue();
+		}
+		if (this->drawCallIdx >= DrawCallsMax)
+			return Result(Failure);
+		
 		auto& drawCallDescriptorTables = this->tableDescriptorSets[this->drawCallIdx];
 		this->drawCallIdx = (this->drawCallIdx + 1) % DrawCallsMax;
 

@@ -126,6 +126,24 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GfxSystemD3D11::CreateSampler(std::unique_ptr<GfxSampler> &gfxSampler)
+	{
+		gfxSampler.reset(new GfxSamplerD3D11(*this));
+		return Result(Success);
+	}
+
+	Result GfxSystemD3D11::CreateResourceBinding(std::unique_ptr<GfxResourceBinding> &gfxBinding)
+	{
+		gfxBinding.reset(new GfxResourceBindingD3D11(*this));
+		return Result(Success);
+	}
+
+	Result GfxSystemD3D11::CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState)
+	{
+		gfxPipelineState.reset(new GfxPipelineStateObjectD3D11(*this));
+		return Result(Success);
+	}
+
 	Result GfxSystemD3D11::CreateInputLayout(std::unique_ptr<GfxInputLayout> &gfxInputLayout)
 	{
 		gfxInputLayout.reset(new GfxInputLayoutD3D11(*this));
@@ -374,6 +392,18 @@ namespace UnlimRealms
 		}
 
 		return Result(Success);
+	}
+
+	Result GfxContextD3D11::SetPipelineStateObject(GfxPipelineStateObject *state)
+	{
+		// TODO:
+		return Result(NotImplemented);
+	}
+
+	Result GfxContextD3D11::SetResourceBinding(GfxResourceBinding *binding)
+	{
+		// TODO:
+		return Result(NotImplemented);
 	}
 	
 	Result GfxContextD3D11::SetPipelineState(GfxPipelineState *state)
@@ -1085,6 +1115,131 @@ namespace UnlimRealms
 		}
 
 		return Result(Success);
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// GfxSamplerD3D11
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	
+	GfxSamplerD3D11::GfxSamplerD3D11(GfxSystem &gfxSystem) :
+		GfxSampler(gfxSystem)
+	{
+	}
+
+	GfxSamplerD3D11::~GfxSamplerD3D11()
+	{
+	}
+
+	Result GfxSamplerD3D11::OnInitialize(const GfxSamplerState& state)
+	{
+		this->d3dSamplerState.reset(ur_null);
+
+		GfxSystemD3D11 &d3dSystem = static_cast<GfxSystemD3D11&>(this->GetGfxSystem());
+		ID3D11Device *d3dDevice = d3dSystem.GetDevice();
+		if (ur_null == d3dDevice)
+			return ResultError(NotInitialized, "GfxSamplerD3D11: failed to initialize, device not ready");
+
+		D3D11_SAMPLER_DESC desc = GfxSamplerStateToD3D11(state);
+		HRESULT hr = d3dDevice->CreateSamplerState(&desc, this->d3dSamplerState);
+		if (FAILED(hr))
+			return ResultError(Failure, "GfxSamplerD3D11: failed to create sampler state object");
+
+		return Result(Success);
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// GfxPipelineStateObjectD3D11
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+
+	GfxPipelineStateObjectD3D11::GfxPipelineStateObjectD3D11(GfxSystem &gfxSystem) :
+		GfxPipelineStateObject(gfxSystem)
+	{
+
+	}
+
+	GfxPipelineStateObjectD3D11::~GfxPipelineStateObjectD3D11()
+	{
+
+	}
+
+	Result GfxPipelineStateObjectD3D11::OnInitialize(const StateFlags& changedStates)
+	{
+		GfxSystemD3D11 &d3dSystem = static_cast<GfxSystemD3D11&>(this->GetGfxSystem());
+		ID3D11Device *d3dDevice = d3dSystem.GetDevice();
+		if (ur_null == d3dDevice)
+			return ResultError(NotInitialized, "GfxPipelineStateObjectD3D11: failed to initialize, device not ready");
+		
+		if (InputLayoutFlag & changedStates)
+		{
+			this->d3dInputLayout.reset(ur_null);
+			auto& gfxElements = this->GetInputLayout()->GetElements();
+			std::vector<D3D11_INPUT_ELEMENT_DESC> d3dElements(gfxElements.size());
+			const GfxInputElement *gfxElement = gfxElements.data();
+			for (auto &d3dElement : d3dElements)
+			{
+				d3dElement = GfxInputElementToD3D11(*gfxElement++);
+			}
+			HRESULT hr = d3dDevice->CreateInputLayout(d3dElements.data(), UINT(gfxElements.size()),
+				this->GetVertexShader()->GetByteCode(), this->GetVertexShader()->GetSizeInBytes(), this->d3dInputLayout);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxPipelineStateObjectD3D11: failed to create input layout");
+		}
+		if (RasterizerStateFlag & changedStates)
+		{
+			this->d3dRasterizerState.reset(ur_null);
+			D3D11_RASTERIZER_DESC desc = GfxRasterizerStateToD3D11(this->GetRasterizerState());
+			HRESULT hr = d3dDevice->CreateRasterizerState(&desc, this->d3dRasterizerState);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxPipelineStateObjectD3D11: failed to create rasterizer state object");
+		}
+		if (DepthStencilStateFlag & changedStates)
+		{
+			this->d3dDepthStencilState.reset(ur_null);
+			D3D11_DEPTH_STENCIL_DESC desc = GfxDepthStencilStateToD3D11(this->GetDepthStencilState());
+			HRESULT hr = d3dDevice->CreateDepthStencilState(&desc, this->d3dDepthStencilState);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxPipelineStateObjectD3D11: failed to create depth stencil state object");
+		}
+		if (BlendStateFlag & changedStates)
+		{
+			this->d3dBlendState.reset(ur_null);
+			D3D11_BLEND_DESC desc;
+			desc.AlphaToCoverageEnable = false;
+			desc.IndependentBlendEnable = true;
+			for (ur_uint irt = 0; irt < GfxRenderState::MaxRenderTargets; ++irt)
+			{
+				desc.RenderTarget[irt] = GfxBlendStateToD3D11(this->GetBlendState(irt));
+			}
+			HRESULT hr = d3dDevice->CreateBlendState(&desc, this->d3dBlendState);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxPipelineStateObjectD3D11: failed to create blend state object");
+		}
+
+		return Result(Success);
+	}
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// GfxResourceBindingD3D11
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+
+	GfxResourceBindingD3D11::GfxResourceBindingD3D11(GfxSystem &gfxSystem) :
+		GfxResourceBinding(gfxSystem)
+	{
+
+	}
+
+	GfxResourceBindingD3D11::~GfxResourceBindingD3D11()
+	{
+
+	}
+
+	Result GfxResourceBindingD3D11::OnInitialize()
+	{
+		// TODO:
+		return Result(NotImplemented);
 	}
 
 

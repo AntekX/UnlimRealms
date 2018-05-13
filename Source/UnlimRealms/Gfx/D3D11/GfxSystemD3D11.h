@@ -53,9 +53,15 @@ namespace UnlimRealms
 
 		virtual Result CreatePixelShader(std::unique_ptr<GfxPixelShader> &gfxPixelShader);
 
-		virtual Result CreateInputLayout(std::unique_ptr<GfxInputLayout> &gfxInputLayout);
+		virtual Result CreateInputLayout(std::unique_ptr<GfxInputLayout> &gfxInputLayout); // TODO: deprecated, to be removed
 
-		virtual Result CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState);
+		virtual Result CreatePipelineState(std::unique_ptr<GfxPipelineState> &gfxPipelineState); // TODO: deprecated, to be removed
+
+		virtual Result CreateSampler(std::unique_ptr<GfxSampler> &gfxSampler);
+
+		virtual Result CreateResourceBinding(std::unique_ptr<GfxResourceBinding> &gfxBinding);
+
+		virtual Result CreatePipelineStateObject(std::unique_ptr<GfxPipelineStateObject> &gfxPipelineState);
 
 		inline WinCanvas* GetWinCanvas() const;
 
@@ -124,19 +130,26 @@ namespace UnlimRealms
 			bool clearDepth, const ur_float &depth,
 			bool clearStencil, const ur_uint &stencil);
 
+		virtual Result SetPipelineStateObject(GfxPipelineStateObject *state);
+
+		virtual Result SetResourceBinding(GfxResourceBinding *binding);
+
+		// TODO: deprected, to be removed
+		#if 1
 		virtual Result SetPipelineState(GfxPipelineState *state);
 
 		virtual Result SetTexture(GfxTexture *texture, ur_uint slot);
 
 		virtual Result SetConstantBuffer(GfxBuffer *buffer, ur_uint slot);
 
-		virtual Result SetVertexBuffer(GfxBuffer *buffer, ur_uint slot);
-
-		virtual Result SetIndexBuffer(GfxBuffer *buffer);
-
 		virtual Result SetVertexShader(GfxVertexShader *shader);
 
 		virtual Result SetPixelShader(GfxPixelShader *shader);
+		#endif
+
+		virtual Result SetVertexBuffer(GfxBuffer *buffer, ur_uint slot);
+
+		virtual Result SetIndexBuffer(GfxBuffer *buffer);
 
 		virtual Result Draw(ur_uint vertexCount, ur_uint vertexOffset, ur_uint instanceCount, ur_uint instanceOffset);
 
@@ -374,6 +387,68 @@ namespace UnlimRealms
 		ur_size hashRasterizerState;
 		ur_size hashDepthStencilState;
 		ur_size hashBlendState;
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Direct3D11 sampler
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	class UR_DECL GfxSamplerD3D11 : public GfxSampler
+	{
+	public:
+
+		GfxSamplerD3D11(GfxSystem &gfxSystem);
+
+		virtual ~GfxSamplerD3D11();
+
+	protected:
+
+		virtual Result OnInitialize(const GfxSamplerState& state);
+
+	private:
+
+		shared_ref<ID3D11SamplerState> d3dSamplerState;
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Direct3D11 graphics pipeline state object
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	class UR_DECL GfxPipelineStateObjectD3D11 : public GfxPipelineStateObject
+	{
+	public:
+
+		GfxPipelineStateObjectD3D11(GfxSystem &gfxSystem);
+
+		virtual ~GfxPipelineStateObjectD3D11();
+
+	protected:
+
+		virtual Result OnInitialize(const StateFlags& changedStates);
+
+	private:
+
+		shared_ref<ID3D11InputLayout> d3dInputLayout;
+		shared_ref<ID3D11RasterizerState> d3dRasterizerState;
+		shared_ref<ID3D11DepthStencilState> d3dDepthStencilState;
+		shared_ref<ID3D11BlendState> d3dBlendState;
+	};
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Direct3D11 resource binding
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	class UR_DECL GfxResourceBindingD3D11 : public GfxResourceBinding
+	{
+	public:
+
+		GfxResourceBindingD3D11(GfxSystem &gfxSystem);
+
+		virtual ~GfxResourceBindingD3D11();
+
+	protected:
+
+		virtual Result OnInitialize();
 	};
 
 
