@@ -136,9 +136,9 @@ namespace UnlimRealms
 			bool clearDepth, const ur_float &depth,
 			bool clearStencil, const ur_uint &stencil);
 
-		virtual Result SetPipelineStateObject(GfxPipelineStateObject *state); // TODO: support in DX11
+		virtual Result SetPipelineStateObject(GfxPipelineStateObject *state);
 
-		virtual Result SetResourceBinding(GfxResourceBinding *binding); // TODO: support in DX11
+		virtual Result SetResourceBinding(GfxResourceBinding *binding);
 
 		virtual Result SetPipelineState(GfxPipelineState *state); // TODO: deprecated, to be removed
 

@@ -72,6 +72,46 @@ namespace UnlimRealms
 		return this->d3dPixelShader.get();
 	}
 
+	inline ID3D11SamplerState* GfxSamplerD3D11::GetD3DSamplerState() const
+	{
+		return this->d3dSamplerState;
+	}
+
+	inline ID3D11InputLayout* GfxPipelineStateObjectD3D11::GetD3DInputLayout() const
+	{
+		return this->d3dInputLayout;
+	}
+
+	inline ID3D11RasterizerState* GfxPipelineStateObjectD3D11::GetD3DRasterizerState() const
+	{
+		return this->d3dRasterizerState;
+	}
+
+	inline ID3D11DepthStencilState* GfxPipelineStateObjectD3D11::GetD3DDepthStencilState() const
+	{
+		return this->d3dDepthStencilState;
+	}
+
+	inline ID3D11BlendState* GfxPipelineStateObjectD3D11::GetD3DBlendState() const
+	{
+		return this->d3dBlendState;
+	}
+
+	inline const std::vector<GfxResourceBindingD3D11::D3DResourceRange<ID3D11Buffer>>& GfxResourceBindingD3D11::GetD3DConstBufferRanges() const
+	{
+		return this->d3dConstBufferRanges;
+	}
+
+	inline const std::vector<GfxResourceBindingD3D11::D3DResourceRange<ID3D11ShaderResourceView>>& GfxResourceBindingD3D11::GetD3DTextureRanges() const
+	{
+		return this->d3dTextureRanges;
+	}
+
+	inline const std::vector<GfxResourceBindingD3D11::D3DResourceRange<ID3D11SamplerState>>& GfxResourceBindingD3D11::GetD3DSamplerRanges() const
+	{
+		return this->d3dSamplerRanges;
+	}
+
 	inline ID3D11InputLayout* GfxInputLayoutD3D11::GetD3DInputLayout() const
 	{
 		return this->d3dInputLayout.get();
