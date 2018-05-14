@@ -1306,56 +1306,65 @@ namespace UnlimRealms
 
 	Result GfxResourceBindingD3D11::OnInitialize()
 	{
-		this->d3dConstBufferRanges.clear();
 		this->d3dTextureRanges.clear();
 		this->d3dSamplerRanges.clear();
 
 		auto& bufferRange = this->GetBufferRange();
-		for (ur_uint slot = bufferRange.slotFrom; slot <= bufferRange.slotTo; ++slot)
+		if (bufferRange.commonSlotsState != State::UsedUnmodified)
 		{
-			if (State::Unused == bufferRange.slots[slot - bufferRange.slotFrom].state)
-				continue;
-
-			const GfxBufferD3D11* gfxBufferD3D11 = static_cast<const GfxBufferD3D11*>(bufferRange.slots[slot - bufferRange.slotFrom].resource);
-			if (gfxBufferD3D11->GetDesc().BindFlags & ur_uint(GfxBindFlag::ConstantBuffer))
+			this->d3dConstBufferRanges.clear();
+			for (ur_uint slot = bufferRange.slotFrom; slot <= bufferRange.slotTo; ++slot)
 			{
-				if (this->d3dConstBufferRanges.empty() || this->d3dConstBufferRanges.back().slot + 1 < slot)
+				if (State::Unused == bufferRange.slots[slot - bufferRange.slotFrom].state)
+					continue;
+
+				const GfxBufferD3D11* gfxBufferD3D11 = static_cast<const GfxBufferD3D11*>(bufferRange.slots[slot - bufferRange.slotFrom].resource);
+				if (gfxBufferD3D11->GetDesc().BindFlags & ur_uint(GfxBindFlag::ConstantBuffer))
 				{
-					this->d3dConstBufferRanges.emplace_back(D3DResourceRange<ID3D11Buffer>());
-					this->d3dConstBufferRanges.back().slot = slot;
+					if (this->d3dConstBufferRanges.empty() || this->d3dConstBufferRanges.back().slot + 1 < slot)
+					{
+						this->d3dConstBufferRanges.emplace_back(D3DResourceRange<ID3D11Buffer>());
+						this->d3dConstBufferRanges.back().slot = slot;
+					}
+					this->d3dConstBufferRanges.back().resources.emplace_back(gfxBufferD3D11->GetD3DBuffer());
 				}
-				this->d3dConstBufferRanges.back().resources.emplace_back(gfxBufferD3D11->GetD3DBuffer());
 			}
 		}
 
 		auto& texRange = this->GetTextureRange();
-		for (ur_uint slot = texRange.slotFrom; slot <= texRange.slotTo; ++slot)
+		if (texRange.commonSlotsState != State::UsedUnmodified)
 		{
-			if (State::Unused == texRange.slots[slot - texRange.slotFrom].state)
-				continue;
-
-			const GfxTextureD3D11* gfxTextureD3D11 = static_cast<const GfxTextureD3D11*>(texRange.slots[slot - texRange.slotFrom].resource);
-			if (this->d3dTextureRanges.empty() || this->d3dTextureRanges.back().slot + 1 < slot)
+			for (ur_uint slot = texRange.slotFrom; slot <= texRange.slotTo; ++slot)
 			{
-				this->d3dTextureRanges.emplace_back(D3DResourceRange<ID3D11ShaderResourceView>());
-				this->d3dTextureRanges.back().slot = slot;
+				if (State::Unused == texRange.slots[slot - texRange.slotFrom].state)
+					continue;
+
+				const GfxTextureD3D11* gfxTextureD3D11 = static_cast<const GfxTextureD3D11*>(texRange.slots[slot - texRange.slotFrom].resource);
+				if (this->d3dTextureRanges.empty() || this->d3dTextureRanges.back().slot + 1 < slot)
+				{
+					this->d3dTextureRanges.emplace_back(D3DResourceRange<ID3D11ShaderResourceView>());
+					this->d3dTextureRanges.back().slot = slot;
+				}
+				this->d3dTextureRanges.back().resources.emplace_back(gfxTextureD3D11->GetSRV());
 			}
-			this->d3dTextureRanges.back().resources.emplace_back(gfxTextureD3D11->GetSRV());
 		}
 
 		auto& samplerRange = this->GetSamplerRange();
-		for (ur_uint slot = samplerRange.slotFrom; slot <= samplerRange.slotTo; ++slot)
+		if (samplerRange.commonSlotsState != State::UsedUnmodified)
 		{
-			if (State::Unused == samplerRange.slots[slot - samplerRange.slotFrom].state)
-				continue;
-
-			const GfxSamplerD3D11* gfxSamplerD3D11 = static_cast<const GfxSamplerD3D11*>(samplerRange.slots[slot - samplerRange.slotFrom].resource);
-			if (this->d3dSamplerRanges.empty() || this->d3dSamplerRanges.back().slot + 1 < slot)
+			for (ur_uint slot = samplerRange.slotFrom; slot <= samplerRange.slotTo; ++slot)
 			{
-				this->d3dSamplerRanges.emplace_back(D3DResourceRange<ID3D11SamplerState>());
-				this->d3dSamplerRanges.back().slot = slot;
+				if (State::Unused == samplerRange.slots[slot - samplerRange.slotFrom].state)
+					continue;
+
+				const GfxSamplerD3D11* gfxSamplerD3D11 = static_cast<const GfxSamplerD3D11*>(samplerRange.slots[slot - samplerRange.slotFrom].resource);
+				if (this->d3dSamplerRanges.empty() || this->d3dSamplerRanges.back().slot + 1 < slot)
+				{
+					this->d3dSamplerRanges.emplace_back(D3DResourceRange<ID3D11SamplerState>());
+					this->d3dSamplerRanges.back().slot = slot;
+				}
+				this->d3dSamplerRanges.back().resources.emplace_back(gfxSamplerD3D11->GetD3DSamplerState());
 			}
-			this->d3dSamplerRanges.back().resources.emplace_back(gfxSamplerD3D11->GetD3DSamplerState());
 		}
 
 		return Result(Success);
