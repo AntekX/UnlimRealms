@@ -873,6 +873,7 @@ namespace UnlimRealms
 	Result GfxSwapChainD3D11::Initialize(const GfxPresentParams &params)
 	{
 		this->targetBuffer.reset(ur_null);
+		this->dxgiSwapChain.reset(ur_null);
 
 		GfxSystemD3D11 &d3dSystem = static_cast<GfxSystemD3D11&>(this->GetGfxSystem());
 		IDXGIFactory1 *dxgiFactory = d3dSystem.GetDXGIFactory();
@@ -1234,6 +1235,9 @@ namespace UnlimRealms
 
 	Result GfxPipelineStateObjectD3D11::OnInitialize(const StateFlags& changedStates)
 	{
+		if (0 == changedStates)
+			return Result(Success);
+
 		GfxSystemD3D11 &d3dSystem = static_cast<GfxSystemD3D11&>(this->GetGfxSystem());
 		ID3D11Device *d3dDevice = d3dSystem.GetDevice();
 		if (ur_null == d3dDevice)
@@ -1306,11 +1310,8 @@ namespace UnlimRealms
 
 	Result GfxResourceBindingD3D11::OnInitialize()
 	{
-		this->d3dTextureRanges.clear();
-		this->d3dSamplerRanges.clear();
-
 		auto& bufferRange = this->GetBufferRange();
-		if (bufferRange.commonSlotsState != State::UsedUnmodified)
+		if (bufferRange.commonSlotsState == State::UsedModified)
 		{
 			this->d3dConstBufferRanges.clear();
 			for (ur_uint slot = bufferRange.slotFrom; slot <= bufferRange.slotTo; ++slot)
@@ -1332,8 +1333,9 @@ namespace UnlimRealms
 		}
 
 		auto& texRange = this->GetTextureRange();
-		if (texRange.commonSlotsState != State::UsedUnmodified)
+		if (texRange.commonSlotsState == State::UsedModified)
 		{
+			this->d3dTextureRanges.clear();
 			for (ur_uint slot = texRange.slotFrom; slot <= texRange.slotTo; ++slot)
 			{
 				if (State::Unused == texRange.slots[slot - texRange.slotFrom].state)
@@ -1350,8 +1352,9 @@ namespace UnlimRealms
 		}
 
 		auto& samplerRange = this->GetSamplerRange();
-		if (samplerRange.commonSlotsState != State::UsedUnmodified)
+		if (samplerRange.commonSlotsState == State::UsedModified)
 		{
+			this->d3dSamplerRanges.clear();
 			for (ur_uint slot = samplerRange.slotFrom; slot <= samplerRange.slotTo; ++slot)
 			{
 				if (State::Unused == samplerRange.slots[slot - samplerRange.slotFrom].state)

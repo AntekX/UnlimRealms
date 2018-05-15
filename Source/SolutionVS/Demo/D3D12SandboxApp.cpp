@@ -266,12 +266,14 @@ int D3D12SandboxApp::Run()
 			gfxContext->SetPipelineStateObject(gfxPSO.get());
 			gfxContext->SetResourceBinding(gfxBinding.get());
 			gfxContext->SetVertexBuffer(gfxVB.get(), 0);
-			for (ur_uint drawCallIdx = 0; drawCallIdx < 3; ++drawCallIdx)
+			for (ur_uint drawCallIdx = 0; drawCallIdx < DrawCallCount; ++drawCallIdx)
 			{
 				gfxBinding->SetTexture(0, gfxTextures.empty() ? ur_null : gfxTextures[drawCallIdx % gfxTextures.size()].get());
+				gfxBinding->Initialize(); // temp: force update in d3d11 mode
+				gfxContext->SetResourceBinding(gfxBinding.get()); // temp: force update in d3d11 mode
 				updateFrameJob->WaitProgress(ur_float((drawCallIdx + 1) * InstancePerDrawCall)); // wait till portion of data required for this draw call is fully updated
 				cbData.Desc.x = ur_float(drawCallIdx * InstancePerDrawCall);
-				gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::Write, &cbResData, 0, 0);
+				gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, 0);
 				gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstancePerDrawCall, 0);
 			}
 			#endif
@@ -285,7 +287,7 @@ int D3D12SandboxApp::Run()
 				while (d3dDrawCallFence->GetCompletedValue() < drawCallFenceValue) Sleep(0);
 				++drawCallFenceValue;
 			};
-			for (ur_uint drawCallIdx = 0; drawCallIdx < 3; ++drawCallIdx)
+			for (ur_uint drawCallIdx = 0; drawCallIdx < DrawCallCount; ++drawCallIdx)
 			{
 				gfxBinding->SetTexture(0, gfxTextures.empty() ? ur_null : gfxTextures[drawCallIdx % gfxTextures.size()].get());
 				updateFrameJob->WaitProgress(ur_float((drawCallIdx + 1) * InstancePerDrawCall)); // wait till portion of data required for this draw call is fully updated
