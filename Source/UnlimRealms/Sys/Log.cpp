@@ -72,6 +72,12 @@ namespace UnlimRealms
 			return;
 
 		*this->stream << text << "\n";
+
+		#ifdef _WINDOWS
+		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> strConverter;
+		std::wstring textW = strConverter.from_bytes(text);
+		OutputDebugString(textW.c_str());
+		#endif
 	}
 
 

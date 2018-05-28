@@ -186,6 +186,7 @@ namespace UnlimRealms
 		StateFlags stateFlags;
 		ur_uint gfxPipelineStateVersion;
 		ur_uint gfxResourceBindingVersion;
+		ur_bool NEW_GAPI; // TEMP: switches on/off new GAPI code branch depending on the used function(s)
 	};
 
 

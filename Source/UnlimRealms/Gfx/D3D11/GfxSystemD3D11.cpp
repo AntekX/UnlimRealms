@@ -250,7 +250,8 @@ namespace UnlimRealms
 		gfxPipelineState(ur_null),
 		gfxResourceBinding(ur_null),
 		gfxPipelineStateVersion(0),
-		gfxResourceBindingVersion(0)
+		gfxResourceBindingVersion(0),
+		NEW_GAPI(false)
 	{
 	}
 
@@ -400,6 +401,8 @@ namespace UnlimRealms
 
 	Result GfxContextD3D11::SetPipelineStateObject(GfxPipelineStateObject *state)
 	{
+		this->NEW_GAPI = true;
+
 		if (this->d3dContext.empty())
 			return ResultError(Failure, "GfxContextD3D11::SetPipelineStateObject: failed, device context is not ready");
 
@@ -411,6 +414,8 @@ namespace UnlimRealms
 
 	Result GfxContextD3D11::SetResourceBinding(GfxResourceBinding *binding)
 	{
+		this->NEW_GAPI = true;
+
 		if (this->d3dContext.empty())
 			return ResultError(Failure, "GfxContextD3D11::SetResourceBinding: failed, device context is not ready");
 
@@ -422,6 +427,9 @@ namespace UnlimRealms
 
 	Result GfxContextD3D11::SetupStatesAndResources()
 	{
+		if (!this->NEW_GAPI)
+			return Result(Success);
+
 		// ensure state & binding objects changes have been applied (fast modifcation tests are done internaly);
 		// this step will change object(s) version in case if there are any changes;
 		if (this->gfxPipelineState != ur_null)
@@ -514,6 +522,8 @@ namespace UnlimRealms
 	
 	Result GfxContextD3D11::SetPipelineState(GfxPipelineState *state)
 	{
+		this->NEW_GAPI = false;
+
 		if (this->d3dContext.empty())
 			return ResultError(Failure, "GfxContextD3D11::SetPipelineState: failed, device context is not ready");
 

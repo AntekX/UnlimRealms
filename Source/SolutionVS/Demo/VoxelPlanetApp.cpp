@@ -8,6 +8,7 @@
 #include "Sys/Windows/WinCanvas.h"
 #include "Sys/Windows/WinInput.h"
 #include "Gfx/D3D11/GfxSystemD3D11.h"
+#include "Gfx/D3D12/GfxSystemD3D12.h"
 #include "ImguiRender/ImguiRender.h"
 #include "GenericRender/GenericRender.h"
 #include "Resources/Resources.h"
