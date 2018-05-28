@@ -32,8 +32,8 @@ int D3D12SandboxApp::Run()
 	realm.SetInput(std::move(input));
 
 	// create gfx system
-	//std::unique_ptr<GfxSystemD3D11> gfx(new GfxSystemD3D11(realm)); // for test purpose
-	std::unique_ptr<GfxSystemD3D12> gfx(new GfxSystemD3D12(realm));
+	std::unique_ptr<GfxSystemD3D11> gfx(new GfxSystemD3D11(realm)); // for test purpose
+	//std::unique_ptr<GfxSystemD3D12> gfx(new GfxSystemD3D12(realm));
 	Result res = gfx->Initialize(realm.GetCanvas());
 	realm.SetGfxSystem(std::move(gfx));
 
@@ -269,8 +269,6 @@ int D3D12SandboxApp::Run()
 			for (ur_uint drawCallIdx = 0; drawCallIdx < DrawCallCount; ++drawCallIdx)
 			{
 				gfxBinding->SetTexture(0, gfxTextures.empty() ? ur_null : gfxTextures[drawCallIdx % gfxTextures.size()].get());
-				gfxBinding->Initialize(); // temp: force update in d3d11 mode
-				gfxContext->SetResourceBinding(gfxBinding.get()); // temp: force update in d3d11 mode
 				updateFrameJob->WaitProgress(ur_float((drawCallIdx + 1) * InstancePerDrawCall)); // wait till portion of data required for this draw call is fully updated
 				cbData.Desc.x = ur_float(drawCallIdx * InstancePerDrawCall);
 				gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, 0);

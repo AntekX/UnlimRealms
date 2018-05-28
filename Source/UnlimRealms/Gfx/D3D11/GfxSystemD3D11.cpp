@@ -246,7 +246,11 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	
 	GfxContextD3D11::GfxContextD3D11(GfxSystem &gfxSystem) :
-		GfxContext(gfxSystem)
+		GfxContext(gfxSystem),
+		gfxPipelineState(ur_null),
+		gfxResourceBinding(ur_null),
+		gfxPipelineStateVersion(0),
+		gfxResourceBindingVersion(0)
 	{
 	}
 
@@ -399,35 +403,8 @@ namespace UnlimRealms
 		if (this->d3dContext.empty())
 			return ResultError(Failure, "GfxContextD3D11::SetPipelineStateObject: failed, device context is not ready");
 
-		GfxPipelineStateObjectD3D11 *pso_d3d11 = static_cast<GfxPipelineStateObjectD3D11*>(state);
-		if (ur_null == pso_d3d11)
-			return ResultError(Failure, "GfxContextD3D11::SetPipelineStateObject: failed, pipeline state");
-
-		if (pso_d3d11->GetVertexShader() != ur_null)
-		{
-			const GfxVertexShaderD3D11 *vs_d3d11 = static_cast<const GfxVertexShaderD3D11*>(pso_d3d11->GetVertexShader());
-			d3dContext->VSSetShader(vs_d3d11->GetD3DShader(), ur_null, 0);
-		}
-
-		if (pso_d3d11->GetPixelShader() != ur_null)
-		{
-			const GfxPixelShaderD3D11 *ps_d3d11 = static_cast<const GfxPixelShaderD3D11*>(pso_d3d11->GetPixelShader());
-			d3dContext->PSSetShader(ps_d3d11->GetD3DShader(), ur_null, 0);
-		}
-
-		d3dContext->IASetPrimitiveTopology(GfxPrimitiveTopologyToD3D11(pso_d3d11->GetPrimitiveTopology()));
-
-		if (pso_d3d11->GetInputLayout() != ur_null)
-		{
-			const GfxInputLayoutD3D11 *layout_d3d11 = static_cast<const GfxInputLayoutD3D11*>(pso_d3d11->GetInputLayout());
-			d3dContext->IASetInputLayout(layout_d3d11->GetD3DInputLayout());
-		}
-
-		d3dContext->RSSetState(pso_d3d11->GetD3DRasterizerState());
-
-		d3dContext->OMSetDepthStencilState(pso_d3d11->GetD3DDepthStencilState(), (UINT)pso_d3d11->GetStencilRef());
-
-		d3dContext->OMSetBlendState(pso_d3d11->GetD3DBlendState(), ur_null, 0xffffffff);
+		this->gfxPipelineState = static_cast<GfxPipelineStateObjectD3D11*>(state);
+		this->stateFlags |= PipelineStateFlag;
 
 		return Result(Success);
 	}
@@ -437,39 +414,100 @@ namespace UnlimRealms
 		if (this->d3dContext.empty())
 			return ResultError(Failure, "GfxContextD3D11::SetResourceBinding: failed, device context is not ready");
 
-		GfxResourceBindingD3D11 *binding_d3d11 = static_cast<GfxResourceBindingD3D11*>(binding);
-		if (ur_null == binding_d3d11)
-			return ResultError(Failure, "GfxContextD3D11::SetResourceBinding: failed, invalid resource binding");
+		this->gfxResourceBinding = static_cast<GfxResourceBindingD3D11*>(binding);
+		this->stateFlags |= ResourceBindingFlag;
 
-		for (const auto& range : binding_d3d11->GetD3DConstBufferRanges())
+		return Result(Success);
+	}
+
+	Result GfxContextD3D11::SetupStatesAndResources()
+	{
+		// ensure state & binding objects changes have been applied (fast modifcation tests are done internaly);
+		// this step will change object(s) version in case if there are any changes;
+		if (this->gfxPipelineState != ur_null)
 		{
-			this->d3dContext->VSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->GSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->HSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->DSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->PSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->CSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
+			this->gfxPipelineState->Initialize();
+		}
+		if (this->gfxResourceBinding != ur_null)
+		{
+			this->gfxResourceBinding->Initialize();
 		}
 
-		for (const auto& range : binding_d3d11->GetD3DTextureRanges())
+		// setup pipeline state
+		if ((PipelineStateFlag & this->stateFlags) ||
+			(this->gfxPipelineState != ur_null && this->gfxPipelineState->GetVersionID() != this->gfxPipelineStateVersion))
 		{
-			this->d3dContext->VSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->GSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->HSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->DSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->PSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->CSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
+			ID3D11VertexShader* vs_d3d11 = ur_null;
+			ID3D11PixelShader* ps_d3d11 = ur_null;
+			ID3D11InputLayout* il_d3d11 = ur_null;
+
+			if (this->gfxPipelineState != ur_null)
+			{
+				if (this->gfxPipelineState->GetVertexShader() != ur_null)
+				{
+					vs_d3d11 = static_cast<const GfxVertexShaderD3D11*>(this->gfxPipelineState->GetVertexShader())->GetD3DShader();
+				}
+				if (this->gfxPipelineState->GetPixelShader() != ur_null)
+				{
+					ps_d3d11 = static_cast<const GfxPixelShaderD3D11*>(this->gfxPipelineState->GetPixelShader())->GetD3DShader();
+				}
+				if (this->gfxPipelineState->GetInputLayout() != ur_null)
+				{
+					il_d3d11 = static_cast<const GfxInputLayoutD3D11*>(this->gfxPipelineState->GetInputLayout())->GetD3DInputLayout();
+				}
+
+				d3dContext->IASetPrimitiveTopology(GfxPrimitiveTopologyToD3D11(this->gfxPipelineState->GetPrimitiveTopology()));
+				d3dContext->RSSetState(this->gfxPipelineState->GetD3DRasterizerState());
+				d3dContext->OMSetDepthStencilState(this->gfxPipelineState->GetD3DDepthStencilState(), (UINT)this->gfxPipelineState->GetStencilRef());
+				d3dContext->OMSetBlendState(this->gfxPipelineState->GetD3DBlendState(), ur_null, 0xffffffff);
+			}
+			
+			d3dContext->IASetInputLayout(il_d3d11);
+			d3dContext->VSSetShader(vs_d3d11, ur_null, 0);
+			d3dContext->PSSetShader(ps_d3d11, ur_null, 0);
+
+			this->gfxPipelineStateVersion = (this->gfxPipelineState != ur_null ? this->gfxPipelineState->GetVersionID() : 0);
 		}
 
-		for (const auto& range : binding_d3d11->GetD3DSamplerRanges())
+		// setup resource binding
+		if ((this->gfxResourceBinding != ur_null) &&
+			(ResourceBindingFlag & this->stateFlags || this->gfxResourceBinding->GetVersionID() != this->gfxResourceBindingVersion))
 		{
-			this->d3dContext->VSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->GSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->HSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->DSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->PSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
-			this->d3dContext->CSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
+			for (const auto& range : this->gfxResourceBinding->GetD3DConstBufferRanges())
+			{
+				this->d3dContext->VSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->GSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->HSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->DSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->PSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->CSSetConstantBuffers(range.slot, (UINT)range.resources.size(), range.resources.data());
+			}
+
+			for (const auto& range : this->gfxResourceBinding->GetD3DTextureRanges())
+			{
+				this->d3dContext->VSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->GSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->HSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->DSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->PSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->CSSetShaderResources(range.slot, (UINT)range.resources.size(), range.resources.data());
+			}
+
+			for (const auto& range : this->gfxResourceBinding->GetD3DSamplerRanges())
+			{
+				this->d3dContext->VSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->GSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->HSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->DSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->PSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
+				this->d3dContext->CSSetSamplers(range.slot, (UINT)range.resources.size(), range.resources.data());
+			}
+
+			this->gfxResourceBindingVersion = this->gfxResourceBinding->GetVersionID();
 		}
+
+		// reset state flags
+		this->stateFlags = 0;
 
 		return Result(Success);
 	}
@@ -623,6 +661,10 @@ namespace UnlimRealms
 		if (this->d3dContext.empty())
 			return Result(Failure);
 
+		Result res = this->SetupStatesAndResources();
+		if (Failed(res))
+			return res;
+
 		if (instanceCount > 0)
 		{
 			this->d3dContext->DrawInstanced((UINT)vertexCount, (UINT)instanceCount, (UINT)vertexOffset, (UINT)instanceOffset);
@@ -639,6 +681,10 @@ namespace UnlimRealms
 	{
 		if (this->d3dContext.empty())
 			return Result(Failure);
+
+		Result res = this->SetupStatesAndResources();
+		if (Failed(res))
+			return res;
 
 		if (instanceCount > 0)
 		{
@@ -1223,7 +1269,8 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
 
 	GfxPipelineStateObjectD3D11::GfxPipelineStateObjectD3D11(GfxSystem &gfxSystem) :
-		GfxPipelineStateObject(gfxSystem)
+		GfxPipelineStateObject(gfxSystem),
+		versionID(0)
 	{
 
 	}
@@ -1289,6 +1336,8 @@ namespace UnlimRealms
 				return ResultError(Failure, "GfxPipelineStateObjectD3D11: failed to create blend state object");
 		}
 
+		++this->versionID;
+
 		return Result(Success);
 	}
 
@@ -1298,7 +1347,8 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
 
 	GfxResourceBindingD3D11::GfxResourceBindingD3D11(GfxSystem &gfxSystem) :
-		GfxResourceBinding(gfxSystem)
+		GfxResourceBinding(gfxSystem),
+		versionID(0)
 	{
 
 	}
@@ -1330,6 +1380,7 @@ namespace UnlimRealms
 					this->d3dConstBufferRanges.back().resources.emplace_back(gfxBufferD3D11->GetD3DBuffer());
 				}
 			}
+			++this->versionID;
 		}
 
 		auto& texRange = this->GetTextureRange();
@@ -1349,6 +1400,7 @@ namespace UnlimRealms
 				}
 				this->d3dTextureRanges.back().resources.emplace_back(gfxTextureD3D11->GetSRV());
 			}
+			++this->versionID;
 		}
 
 		auto& samplerRange = this->GetSamplerRange();
@@ -1368,6 +1420,7 @@ namespace UnlimRealms
 				}
 				this->d3dSamplerRanges.back().resources.emplace_back(gfxSamplerD3D11->GetD3DSamplerState());
 			}
+			++this->versionID;
 		}
 
 		return Result(Success);

@@ -97,6 +97,11 @@ namespace UnlimRealms
 		return this->d3dBlendState;
 	}
 
+	inline ur_uint GfxPipelineStateObjectD3D11::GetVersionID() const
+	{
+		return this->versionID;
+	}
+
 	inline const std::vector<GfxResourceBindingD3D11::D3DResourceRange<ID3D11Buffer>>& GfxResourceBindingD3D11::GetD3DConstBufferRanges() const
 	{
 		return this->d3dConstBufferRanges;
@@ -110,6 +115,11 @@ namespace UnlimRealms
 	inline const std::vector<GfxResourceBindingD3D11::D3DResourceRange<ID3D11SamplerState>>& GfxResourceBindingD3D11::GetD3DSamplerRanges() const
 	{
 		return this->d3dSamplerRanges;
+	}
+
+	inline ur_uint GfxResourceBindingD3D11::GetVersionID() const
+	{
+		return this->versionID;
 	}
 
 	inline ID3D11InputLayout* GfxInputLayoutD3D11::GetD3DInputLayout() const

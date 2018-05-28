@@ -22,6 +22,18 @@ namespace UnlimRealms
 
 	// referenced classes
 	class WinCanvas;
+	class GfxSystemD3D11;
+	class GfxContextD3D11;
+	class GfxPipelineStateObjectD3D11;
+	class GfxResourceBindingD3D11;
+	class GfxTextureD3D11;
+	class GfxRenderTargetD3D11;
+	class GfxSwapChainD3D11;
+	class GfxBufferD3D11;
+	class GfxVertexShaderD3D11;
+	class GfxPixelShaderD3D11;
+	class GfxInputLayoutD3D11;
+	class GfxSamplerD3D11;
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -159,7 +171,21 @@ namespace UnlimRealms
 
 	private:
 
+		Result SetupStatesAndResources();
+
+		enum StateFlag
+		{
+			PipelineStateFlag		= 0x1,
+			ResourceBindingFlag		= 0x2
+		};
+		typedef ur_uint StateFlags;
+
 		shared_ref<ID3D11DeviceContext> d3dContext;
+		GfxPipelineStateObjectD3D11* gfxPipelineState;
+		GfxResourceBindingD3D11* gfxResourceBinding;
+		StateFlags stateFlags;
+		ur_uint gfxPipelineStateVersion;
+		ur_uint gfxResourceBindingVersion;
 	};
 
 
@@ -432,6 +458,8 @@ namespace UnlimRealms
 		
 		inline ID3D11BlendState* GetD3DBlendState() const;
 
+		inline ur_uint GetVersionID() const;
+
 	protected:
 
 		virtual Result OnInitialize(const StateFlags& changedStates);
@@ -442,6 +470,7 @@ namespace UnlimRealms
 		shared_ref<ID3D11RasterizerState> d3dRasterizerState;
 		shared_ref<ID3D11DepthStencilState> d3dDepthStencilState;
 		shared_ref<ID3D11BlendState> d3dBlendState;
+		ur_uint versionID;
 	};
 
 
@@ -469,6 +498,8 @@ namespace UnlimRealms
 		
 		inline const std::vector<D3DResourceRange<ID3D11SamplerState>>& GetD3DSamplerRanges() const;
 
+		inline ur_uint GetVersionID() const;
+
 	protected:
 
 		virtual Result OnInitialize();
@@ -478,6 +509,7 @@ namespace UnlimRealms
 		std::vector<D3DResourceRange<ID3D11Buffer>> d3dConstBufferRanges;
 		std::vector<D3DResourceRange<ID3D11ShaderResourceView>> d3dTextureRanges;
 		std::vector<D3DResourceRange<ID3D11SamplerState>> d3dSamplerRanges;
+		ur_uint versionID;
 	};
 
 
