@@ -1398,7 +1398,7 @@ namespace UnlimRealms
 					this->d3dTextureRanges.emplace_back(D3DResourceRange<ID3D11ShaderResourceView>());
 					this->d3dTextureRanges.back().slot = slot;
 				}
-				this->d3dTextureRanges.back().resources.emplace_back(gfxTextureD3D11->GetSRV());
+				this->d3dTextureRanges.back().resources.emplace_back(gfxTextureD3D11 != ur_null ? gfxTextureD3D11->GetSRV() : ur_null);
 			}
 			++this->versionID;
 		}
@@ -1418,7 +1418,7 @@ namespace UnlimRealms
 					this->d3dSamplerRanges.emplace_back(D3DResourceRange<ID3D11SamplerState>());
 					this->d3dSamplerRanges.back().slot = slot;
 				}
-				this->d3dSamplerRanges.back().resources.emplace_back(gfxSamplerD3D11->GetD3DSamplerState());
+				this->d3dSamplerRanges.back().resources.emplace_back(gfxSamplerD3D11 != ur_null ? gfxSamplerD3D11->GetD3DSamplerState() : ur_null);
 			}
 			++this->versionID;
 		}

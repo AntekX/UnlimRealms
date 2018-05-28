@@ -42,6 +42,10 @@ namespace UnlimRealms
 		gfxPS.reset(ur_null);
 		gfxInputLayout.reset(ur_null);
 		gfxPipelineState.reset(ur_null);
+#if (NEW_GAPI)
+		gfxResourceBinding.reset(ur_null);
+		gfxSampler.reset(ur_null);
+#endif
 		gfxFontsTexture.reset(ur_null);
 		gfxCB.reset(ur_null);
 		gfxVB.reset(ur_null);
@@ -78,48 +82,6 @@ namespace UnlimRealms
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to initialize input layout");
-
-		// Pipeline State
-		res = this->GetRealm().GetGfxSystem()->CreatePipelineState(this->gfxPipelineState);
-		if (Succeeded(res))
-		{
-			this->gfxPipelineState->PrimitiveTopology = GfxPrimitiveTopology::TriangleList;
-			this->gfxPipelineState->InputLayout = this->gfxInputLayout.get();
-			this->gfxPipelineState->VertexShader = this->gfxVS.get();
-			this->gfxPipelineState->PixelShader = this->gfxPS.get();
-
-			GfxRenderState gfxState = GfxRenderState::Default;
-			
-			gfxState.BlendState[0].BlendEnable = true;
-			gfxState.BlendState[0].SrcBlend = GfxBlendFactor::SrcAlpha;
-			gfxState.BlendState[0].DstBlend = GfxBlendFactor::InvSrcAlpha;
-			gfxState.BlendState[0].BlendOp = GfxBlendOp::Add;
-			gfxState.BlendState[0].SrcBlendAlpha = GfxBlendFactor::InvSrcAlpha;
-			gfxState.BlendState[0].DstBlendAlpha = GfxBlendFactor::Zero;
-			gfxState.BlendState[0].BlendOpAlpha = GfxBlendOp::Add;
-
-			gfxState.RasterizerState.CullMode = GfxCullMode::None;
-			gfxState.RasterizerState.ScissorEnable = true;
-
-			gfxState.DepthStencilState.DepthEnable = false;
-			gfxState.DepthStencilState.DepthFunc = GfxCmpFunc::Always;
-			gfxState.DepthStencilState.StencilEnable = false;
-
-			gfxState.SamplerState[0].MinFilter = GfxFilter::Linear;
-			gfxState.SamplerState[0].MagFilter = GfxFilter::Linear;
-			gfxState.SamplerState[0].MipFilter = GfxFilter::Linear;
-			gfxState.SamplerState[0].AddressU = GfxTextureAddressMode::Wrap;
-			gfxState.SamplerState[0].AddressV = GfxTextureAddressMode::Wrap;
-			gfxState.SamplerState[0].AddressW = GfxTextureAddressMode::Wrap;
-			gfxState.SamplerState[0].MipLodMin = 0.0f;
-			gfxState.SamplerState[0].MipLodMax = 0.0f;
-			gfxState.SamplerState[0].MipLodBias = 0.0f;
-			gfxState.SamplerState[0].CmpFunc = GfxCmpFunc::Never;
-
-			res = this->gfxPipelineState->SetRenderState(gfxState);
-		}
-		if (Failed(res))
-			return ResultError(Failure, "ImguiRender::Init: failed to initialize pipeline state");
 
 		// Fonts Texture
 		ImGui::GetIO().Fonts->TexID = ur_null;
@@ -181,6 +143,112 @@ namespace UnlimRealms
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to initialize index buffer");
+
+#if (NEW_GAPI)
+		// TODO
+
+		// Resource Binding
+		res = this->GetRealm().GetGfxSystem()->CreateResourceBinding(this->gfxResourceBinding);
+		if (Succeeded(res))
+		{
+			res = this->GetRealm().GetGfxSystem()->CreateSampler(this->gfxSampler);
+			if (Succeeded(res))
+			{
+				GfxSamplerState samplerState = GfxSamplerState::Default;
+				samplerState.MinFilter = GfxFilter::Linear;
+				samplerState.MagFilter = GfxFilter::Linear;
+				samplerState.MipFilter = GfxFilter::Linear;
+				samplerState.AddressU = GfxTextureAddressMode::Wrap;
+				samplerState.AddressV = GfxTextureAddressMode::Wrap;
+				samplerState.AddressW = GfxTextureAddressMode::Wrap;
+				samplerState.MipLodMin = 0.0f;
+				samplerState.MipLodMax = 0.0f;
+				samplerState.MipLodBias = 0.0f;
+				samplerState.CmpFunc = GfxCmpFunc::Never;
+				this->gfxSampler->Initialize(samplerState);
+			}
+			this->gfxResourceBinding->SetBuffer(0, this->gfxCB.get());
+			this->gfxResourceBinding->SetSampler(0, this->gfxSampler.get());
+			this->gfxResourceBinding->SetTexture(0, ur_null);
+			this->gfxResourceBinding->Initialize();
+		}
+
+		// Pipeline State
+		res = this->GetRealm().GetGfxSystem()->CreatePipelineStateObject(this->gfxPipelineState);
+		if (Succeeded(res))
+		{
+			this->gfxPipelineState->SetPrimitiveTopology(GfxPrimitiveTopology::TriangleList);
+			this->gfxPipelineState->SetInputLayout(gfxInputLayout.get());
+			this->gfxPipelineState->SetVertexShader(this->gfxVS.get());
+			this->gfxPipelineState->SetPixelShader(this->gfxPS.get());
+
+			GfxBlendState blendState = GfxBlendState::Default;
+			blendState.BlendEnable = true;
+			blendState.SrcBlend = GfxBlendFactor::SrcAlpha;
+			blendState.DstBlend = GfxBlendFactor::InvSrcAlpha;
+			blendState.BlendOp = GfxBlendOp::Add;
+			blendState.SrcBlendAlpha = GfxBlendFactor::InvSrcAlpha;
+			blendState.DstBlendAlpha = GfxBlendFactor::Zero;
+			blendState.BlendOpAlpha = GfxBlendOp::Add;
+			this->gfxPipelineState->SetBlendState(blendState);
+
+			GfxRasterizerState rasterState = GfxRasterizerState::Default;
+			rasterState.CullMode = GfxCullMode::None;
+			rasterState.ScissorEnable = true;
+			this->gfxPipelineState->SetRasterizerState(rasterState);
+
+			GfxDepthStencilState depthStencilState = GfxDepthStencilState::Default;
+			depthStencilState.DepthEnable = false;
+			depthStencilState.DepthFunc = GfxCmpFunc::Always;
+			depthStencilState.StencilEnable = false;
+			this->gfxPipelineState->SetDepthStencilState(depthStencilState);
+
+			this->gfxPipelineState->SetResourceBinding(this->gfxResourceBinding.get());
+			this->gfxPipelineState->Initialize();
+		}
+#else
+		// Pipeline State
+		res = this->GetRealm().GetGfxSystem()->CreatePipelineState(this->gfxPipelineState);
+		if (Succeeded(res))
+		{
+			this->gfxPipelineState->PrimitiveTopology = GfxPrimitiveTopology::TriangleList;
+			this->gfxPipelineState->InputLayout = this->gfxInputLayout.get();
+			this->gfxPipelineState->VertexShader = this->gfxVS.get();
+			this->gfxPipelineState->PixelShader = this->gfxPS.get();
+
+			GfxRenderState gfxState = GfxRenderState::Default;
+			
+			gfxState.BlendState[0].BlendEnable = true;
+			gfxState.BlendState[0].SrcBlend = GfxBlendFactor::SrcAlpha;
+			gfxState.BlendState[0].DstBlend = GfxBlendFactor::InvSrcAlpha;
+			gfxState.BlendState[0].BlendOp = GfxBlendOp::Add;
+			gfxState.BlendState[0].SrcBlendAlpha = GfxBlendFactor::InvSrcAlpha;
+			gfxState.BlendState[0].DstBlendAlpha = GfxBlendFactor::Zero;
+			gfxState.BlendState[0].BlendOpAlpha = GfxBlendOp::Add;
+
+			gfxState.RasterizerState.CullMode = GfxCullMode::None;
+			gfxState.RasterizerState.ScissorEnable = true;
+
+			gfxState.DepthStencilState.DepthEnable = false;
+			gfxState.DepthStencilState.DepthFunc = GfxCmpFunc::Always;
+			gfxState.DepthStencilState.StencilEnable = false;
+
+			gfxState.SamplerState[0].MinFilter = GfxFilter::Linear;
+			gfxState.SamplerState[0].MagFilter = GfxFilter::Linear;
+			gfxState.SamplerState[0].MipFilter = GfxFilter::Linear;
+			gfxState.SamplerState[0].AddressU = GfxTextureAddressMode::Wrap;
+			gfxState.SamplerState[0].AddressV = GfxTextureAddressMode::Wrap;
+			gfxState.SamplerState[0].AddressW = GfxTextureAddressMode::Wrap;
+			gfxState.SamplerState[0].MipLodMin = 0.0f;
+			gfxState.SamplerState[0].MipLodMax = 0.0f;
+			gfxState.SamplerState[0].MipLodBias = 0.0f;
+			gfxState.SamplerState[0].CmpFunc = GfxCmpFunc::Never;
+
+			res = this->gfxPipelineState->SetRenderState(gfxState);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to initialize pipeline state");
+#endif
 
 		// Keyboard mapping
 		ImGuiIO &io = ImGui::GetIO();
@@ -342,8 +410,14 @@ namespace UnlimRealms
 		gfxContext.UpdateBuffer(this->gfxCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, sizeof(VertexTransformCB));
 
 		// setup pipeline
+#if (NEW_GAPI)
+		this->gfxResourceBinding->SetBuffer(0, this->gfxCB.get());
+		gfxContext.SetResourceBinding(this->gfxResourceBinding.get());
+		gfxContext.SetPipelineStateObject(this->gfxPipelineState.get());
+#else
 		gfxContext.SetPipelineState(this->gfxPipelineState.get());
 		gfxContext.SetConstantBuffer(this->gfxCB.get(), 0);
+#endif
 		gfxContext.SetVertexBuffer(this->gfxVB.get(), 0);
 		gfxContext.SetIndexBuffer(this->gfxIB.get());
 
@@ -363,9 +437,16 @@ namespace UnlimRealms
 				else
 				{
 					const RectI r = { (ur_int)pCmd->ClipRect.x, (ur_int)pCmd->ClipRect.y, (ur_int)pCmd->ClipRect.z, (ur_int)pCmd->ClipRect.w };
-					gfxContext.SetScissorRect(&r);
-					gfxContext.SetTexture((GfxTexture*)pCmd->TextureId, 0);
-					gfxContext.DrawIndexed(pCmd->ElemCount, ibOfs, vbOfs, 0, 0);
+					if (r.Area() > 0)
+					{
+						gfxContext.SetScissorRect(&r);
+#if (NEW_GAPI)
+						this->gfxResourceBinding->SetTexture(0, (GfxTexture*)pCmd->TextureId);
+#else
+						gfxContext.SetTexture((GfxTexture*)pCmd->TextureId, 0);
+#endif
+						gfxContext.DrawIndexed(pCmd->ElemCount, ibOfs, vbOfs, 0, 0);
+					}
 				}
 				ibOfs += (ur_uint)pCmd->ElemCount;
 			}

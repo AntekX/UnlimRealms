@@ -14,6 +14,9 @@
 namespace UnlimRealms
 {
 
+	// WIP time definition
+#define NEW_GAPI 1
+
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Imgui Renderer
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
@@ -38,11 +41,17 @@ namespace UnlimRealms
 		std::unique_ptr<GfxVertexShader> gfxVS;
 		std::unique_ptr<GfxPixelShader> gfxPS;
 		std::unique_ptr<GfxInputLayout> gfxInputLayout;
-		std::unique_ptr<GfxPipelineState> gfxPipelineState;
 		std::unique_ptr<GfxTexture> gfxFontsTexture;
 		std::unique_ptr<GfxBuffer> gfxCB;
 		std::unique_ptr<GfxBuffer> gfxVB;
 		std::unique_ptr<GfxBuffer> gfxIB;
+#if (NEW_GAPI)
+		std::unique_ptr<GfxSampler> gfxSampler;
+		std::unique_ptr<GfxPipelineStateObject> gfxPipelineState;
+		std::unique_ptr<GfxResourceBinding> gfxResourceBinding;
+#else
+		std::unique_ptr<GfxPipelineState> gfxPipelineState;
+#endif
 		ClockTime timePoint;
 	};
 

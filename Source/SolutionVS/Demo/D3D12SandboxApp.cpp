@@ -12,6 +12,7 @@
 #include "Gfx/D3D11/GfxSystemD3D11.h" // for test purpose
 #include "Resources/Resources.h"
 #include "Core/Math.h"
+#include "ImguiRender/ImguiRender.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
@@ -32,8 +33,8 @@ int D3D12SandboxApp::Run()
 	realm.SetInput(std::move(input));
 
 	// create gfx system
-	std::unique_ptr<GfxSystemD3D11> gfx(new GfxSystemD3D11(realm)); // for test purpose
-	//std::unique_ptr<GfxSystemD3D12> gfx(new GfxSystemD3D12(realm));
+	//std::unique_ptr<GfxSystemD3D11> gfx(new GfxSystemD3D11(realm)); // for test purpose
+	std::unique_ptr<GfxSystemD3D12> gfx(new GfxSystemD3D12(realm));
 	Result res = gfx->Initialize(realm.GetCanvas());
 	realm.SetGfxSystem(std::move(gfx));
 
@@ -52,6 +53,14 @@ int D3D12SandboxApp::Run()
 	if (Succeeded(realm.GetGfxSystem()->CreateContext(gfxContext)))
 	{
 		res = gfxContext->Initialize();
+	}
+
+	// initialize ImguiRender
+	ImguiRender *imguiRender = realm.AddComponent<ImguiRender>(realm);
+	if (imguiRender != ur_null)
+	{
+		imguiRender = realm.GetComponent<ImguiRender>();
+		res = imguiRender->Init();
 	}
 
 	// initialize test rendering primitive
@@ -218,6 +227,7 @@ int D3D12SandboxApp::Run()
 
 		// update sub systems
 		realm.GetInput()->Update();
+		imguiRender->NewFrame();
 
 		// animate primitives
 		auto updateFrameJob = realm.GetJobSystem().Add(ur_null,
@@ -275,6 +285,25 @@ int D3D12SandboxApp::Run()
 				gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstancePerDrawCall, 0);
 			}
 			#endif
+
+			// expose demo gui
+			static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
+			static bool showGUI = true;
+			showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
+			if (showGUI)
+			{
+				ImGui::SetNextWindowSize(imguiDemoWndSize, ImGuiSetCond_Once);
+				ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
+				ImGui::Begin("Control Panel");
+				ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().Description.c_str());
+				ImGui::End();
+
+				// Imgui metrics
+				ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
+				ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+				ImGui::ShowMetricsWindow();
+				imguiRender->Render(*gfxContext);
+			}
 
 			gfxContext->End();
 
