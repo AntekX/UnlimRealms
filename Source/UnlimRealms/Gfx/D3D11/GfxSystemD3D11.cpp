@@ -425,20 +425,20 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GfxContextD3D11::SetupStatesAndResources()
+	Result GfxContextD3D11::SetupPipeline()
 	{
 		if (!this->NEW_GAPI)
 			return Result(Success);
 
 		// ensure state & binding objects changes have been applied (fast modifcation tests are done internaly);
 		// this step will change object(s) version in case if there are any changes;
-		if (this->gfxPipelineState != ur_null)
-		{
-			this->gfxPipelineState->Initialize();
-		}
 		if (this->gfxResourceBinding != ur_null)
 		{
 			this->gfxResourceBinding->Initialize();
+		}
+		if (this->gfxPipelineState != ur_null)
+		{
+			this->gfxPipelineState->Initialize();
 		}
 
 		// setup pipeline state
@@ -671,7 +671,7 @@ namespace UnlimRealms
 		if (this->d3dContext.empty())
 			return Result(Failure);
 
-		Result res = this->SetupStatesAndResources();
+		Result res = this->SetupPipeline();
 		if (Failed(res))
 			return res;
 
@@ -692,7 +692,7 @@ namespace UnlimRealms
 		if (this->d3dContext.empty())
 			return Result(Failure);
 
-		Result res = this->SetupStatesAndResources();
+		Result res = this->SetupPipeline();
 		if (Failed(res))
 			return res;
 

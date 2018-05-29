@@ -712,7 +712,8 @@ namespace UnlimRealms
 
 	GfxContextD3D12::GfxContextD3D12(GfxSystem &gfxSystem) :
 		GfxContext(gfxSystem),
-		gfxResourceBindingD3D12(ur_null)
+		gfxResourceBinding(ur_null),
+		gfxPipelineState(ur_null)
 	{
 	}
 
@@ -858,27 +859,70 @@ namespace UnlimRealms
 
 	Result GfxContextD3D12::SetPipelineStateObject(GfxPipelineStateObject *state)
 	{
-		if (ur_null == state)
-			return Result(InvalidArgs);
-
-		if (this->d3dCommandList.empty())
-			return ResultError(Failure, "GfxContextD3D12::SetPipelineStateObject: failed, d3d command list is not initialized");
-
-		GfxPipelineStateObjectD3D12 *pipelineStateD3D12 = static_cast<GfxPipelineStateObjectD3D12*>(state);
-		this->d3dCommandList->SetPipelineState(pipelineStateD3D12->GetD3DPipelineState());
-		this->d3dCommandList->IASetPrimitiveTopology(pipelineStateD3D12->GetD3DPrimitiveTopology());
+		this->gfxPipelineState = static_cast<GfxPipelineStateObjectD3D12*>(state);
 
 		return Result(Success);
 	}
 
 	Result GfxContextD3D12::SetResourceBinding(GfxResourceBinding *binding)
 	{
-		if (this->d3dCommandList.empty())
-			return ResultError(Failure, "GfxContextD3D12::SetResourceBinding: failed, d3d command list is not initialized");
-		
-		this->gfxResourceBindingD3D12 = static_cast<GfxResourceBindingD3D12*>(binding);
+		this->gfxResourceBinding = static_cast<GfxResourceBindingD3D12*>(binding);
 
 		return Result(Success);
+	}
+
+	Result GfxContextD3D12::SetupPipeline()
+	{
+		Result res = Success;
+
+		// ensure state & binding objects changes have been applied (fast modifcation tests are done internaly);
+		if (this->gfxResourceBinding != ur_null)
+		{
+			res &= this->gfxResourceBinding->Initialize();
+		}
+		if (this->gfxPipelineState != ur_null)
+		{
+			res &= this->gfxPipelineState->Initialize();
+		}
+
+		// update resources & corresponding descriptor tables
+		if (this->gfxResourceBinding != ur_null)
+		{
+			res &= this->gfxResourceBinding->SetupDrawCall(this);
+		}
+		
+		// setup pipeline state
+		if (this->gfxPipelineState != ur_null)
+		{
+			if (this->gfxResourceBinding != ur_null)
+			{
+				// make sure root signatire is up to date
+				ID3D12RootSignature* d3dBindingRootSignature = ur_null; 
+				ID3D12RootSignature* d3dPSORootSignature = ur_null;
+				if (this->gfxResourceBinding != ur_null)
+				{
+					d3dBindingRootSignature = this->gfxResourceBinding->GetD3DRootSignature();
+				}
+				const GfxResourceBindingD3D12* gfxPSOBinding = static_cast<const GfxResourceBindingD3D12*>(this->gfxPipelineState->GetResourceBinding());
+				if (gfxPSOBinding != ur_null)
+				{
+					d3dPSORootSignature = gfxPSOBinding->GetD3DRootSignature();
+				}
+				if (d3dBindingRootSignature != d3dPSORootSignature)
+				{
+					res &= this->gfxPipelineState->SetResourceBinding(this->gfxResourceBinding);
+					res &= this->gfxPipelineState->Initialize();
+				}
+			}
+			
+			if (Succeeded(res))
+			{
+				this->d3dCommandList->SetPipelineState(this->gfxPipelineState->GetD3DPipelineState());
+				this->d3dCommandList->IASetPrimitiveTopology(this->gfxPipelineState->GetD3DPrimitiveTopology());
+			}
+		}
+
+		return res;
 	}
 
 	Result GfxContextD3D12::SetVertexBuffer(GfxBuffer *buffer, ur_uint slot)
@@ -909,10 +953,7 @@ namespace UnlimRealms
 		if (this->d3dCommandList.empty())
 			return ResultError(Failure, "GfxContextD3D12::Draw: failed, d3d command list is not initialized");
 
-		if (this->gfxResourceBindingD3D12 != ur_null)
-		{
-			this->gfxResourceBindingD3D12->SetupDrawCall(this);
-		}
+		this->SetupPipeline();
 
 		instanceCount = std::max(instanceCount, ur_uint(1));
 		this->d3dCommandList->DrawInstanced((UINT)vertexCount, (UINT)instanceCount, (UINT)vertexOffset, (UINT)instanceOffset);
@@ -925,10 +966,7 @@ namespace UnlimRealms
 		if (this->d3dCommandList.empty())
 			return ResultError(Failure, "GfxContextD3D12::DrawIndexed: failed, d3d command list is not initialized");
 
-		if (this->gfxResourceBindingD3D12 != ur_null)
-		{
-			this->gfxResourceBindingD3D12->SetupDrawCall(this);
-		}
+		this->SetupPipeline();
 
 		instanceCount = std::max(instanceCount, ur_uint(1));
 		this->d3dCommandList->DrawIndexedInstanced((UINT)indexCount, (UINT)instanceCount, (UINT)indexOffset, (UINT)vertexOffset, (UINT)instanceOffset);
@@ -1869,7 +1907,7 @@ namespace UnlimRealms
 			InitializeRanges<GfxTexture, D3D12_DESCRIPTOR_RANGE_TYPE_SRV>(this->GetTextureRange(), this->d3dDesriptorRangesCbvSrvUav);
 			InitializeRanges<GfxSampler, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER>(this->GetSamplerRange(), this->d3dDesriptorRangesSampler);
 
-			// initialize root signature
+			// initialize root parameters
 
 			if (!this->d3dDesriptorRangesCbvSrvUav.empty())
 			{
@@ -1892,21 +1930,6 @@ namespace UnlimRealms
 				rootParameter.DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesSampler.data();
 				rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 			}
-
-			D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc = {};
-			d3dRootSignatureDesc.NumParameters = (UINT)d3dRootParameters.size();
-			d3dRootSignatureDesc.pParameters = d3dRootParameters.data();
-			d3dRootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-			shared_ref<ID3DBlob> d3dErrorBlob;
-			HRESULT hr = D3D12SerializeRootSignature(&d3dRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, this->d3dSerializedRootSignature, d3dErrorBlob);
-			if (FAILED(hr))
-				return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to serialize d3d root signature");
-
-			hr = d3dDevice->CreateRootSignature(0, this->d3dSerializedRootSignature->GetBufferPointer(), this->d3dSerializedRootSignature->GetBufferSize(),
-				__uuidof(ID3D12RootSignature), this->d3dRootSignature);
-			if (FAILED(hr))
-				return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to create d3d root signature");
 
 			// reserve descriptors per non empty root table;
 			// this gpu memory location will be used to store shader visible descriptors in an ordered manner (correspnding to table ranges layout);
@@ -1939,6 +1962,27 @@ namespace UnlimRealms
 				this->d3dTableDescriptorHeaps.emplace_back(tableHeap);
 			}
 		} // end (re)initialize
+
+		// (re)initialize root signature
+
+		if (ur_null == this->d3dRootSignature.get())
+		{
+			D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc = {};
+			d3dRootSignatureDesc.NumParameters = (UINT)this->d3dRootParameters.size();
+			d3dRootSignatureDesc.pParameters = this->d3dRootParameters.data();
+			d3dRootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+			shared_ref<ID3DBlob> d3dErrorBlob;
+			HRESULT hr = D3D12SerializeRootSignature(&d3dRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, this->d3dSerializedRootSignature, d3dErrorBlob);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to serialize d3d root signature");
+
+			hr = d3dDevice->CreateRootSignature(0, this->d3dSerializedRootSignature->GetBufferPointer(), this->d3dSerializedRootSignature->GetBufferSize(),
+				__uuidof(ID3D12RootSignature), this->d3dRootSignature);
+			if (FAILED(hr))
+				return ResultError(Failure, "GfxResourceBindingD3D12::OnInitialize: failed to create d3d root signature");
+
+		}
 
 		// copy resource(s) descriptor(s) to corresponding shader visible table(s)
 

@@ -171,7 +171,7 @@ namespace UnlimRealms
 
 	private:
 
-		Result SetupStatesAndResources();
+		Result SetupPipeline();
 
 		enum StateFlag
 		{

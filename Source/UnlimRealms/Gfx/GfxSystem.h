@@ -464,8 +464,6 @@ namespace UnlimRealms
 
 		virtual ~GfxPipelineStateObject();
 
-		Result SetResourceBinding(GfxResourceBinding* binding);
-
 		Result SetBlendState(const GfxBlendState& blendState, ur_uint rtIndex = 0);
 
 		Result SetRasterizerState(const GfxRasterizerState& rasterizerState);
@@ -477,6 +475,8 @@ namespace UnlimRealms
 		Result SetPrimitiveTopology(GfxPrimitiveTopology primitiveTopology);
 
 		Result SetRenderTargetFormat(ur_uint numRenderTargets, GfxFormat* RTFormats, GfxFormat DSFormat);
+
+		Result SetResourceBinding(GfxResourceBinding* binding);
 
 		Result SetInputLayout(GfxInputLayout* inputLayout);
 		
@@ -531,7 +531,6 @@ namespace UnlimRealms
 
 	private:
 
-		GfxResourceBinding* binding;
 		GfxBlendState blendState[MaxRenderTargets];
 		GfxRasterizerState rasterizerState;
 		GfxDepthStencilState depthStencilState;
@@ -540,6 +539,7 @@ namespace UnlimRealms
 		ur_uint numRenderTargets;
 		GfxFormat renderTargetFormats[MaxRenderTargets];
 		GfxFormat depthStencilFormat;
+		GfxResourceBinding* binding;
 		GfxInputLayout* inputLayout;
 		GfxVertexShader* vertexShader;
 		GfxPixelShader* pixelShader;

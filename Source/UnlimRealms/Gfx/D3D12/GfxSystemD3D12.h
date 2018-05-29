@@ -320,8 +320,11 @@ namespace UnlimRealms
 
 	private:
 
+		Result SetupPipeline();
+
 		shared_ref<ID3D12GraphicsCommandList> d3dCommandList;
-		GfxResourceBindingD3D12* gfxResourceBindingD3D12;
+		GfxResourceBindingD3D12* gfxResourceBinding;
+		GfxPipelineStateObjectD3D12* gfxPipelineState;
 	};
 
 
@@ -549,6 +552,7 @@ namespace UnlimRealms
 		shared_ref<ID3D12PipelineState> d3dPipelineState;
 		D3D12_PRIMITIVE_TOPOLOGY d3dPrimitiveTopology;
 		std::vector<D3D12_INPUT_ELEMENT_DESC> d3dInputLayoutElements;
+		std::unique_ptr<GfxResourceBindingD3D12> gfxDefaultBinding;
 	};
 
 

@@ -159,9 +159,9 @@ int D3D12SandboxApp::Run()
 
 	std::unique_ptr<GfxPipelineStateObject> gfxPSO;
 	realm.GetGfxSystem()->CreatePipelineStateObject(gfxPSO);
-	gfxPSO->SetResourceBinding(gfxBinding.get());
 	gfxPSO->SetPixelShader(gfxPS.get());
 	gfxPSO->SetVertexShader(gfxVS.get());
+	gfxPSO->SetResourceBinding(gfxBinding.get());
 	gfxPSO->SetInputLayout(gfxIL.get());
 	gfxPSO->SetRasterizerState(gfxRasterizer);
 	gfxPSO->SetDepthStencilState(gfxDepthStencil);
