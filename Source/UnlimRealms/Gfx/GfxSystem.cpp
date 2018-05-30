@@ -808,7 +808,24 @@ namespace UnlimRealms
 
 	Result GfxResourceBinding::Initialize(Layout& layout)
 	{
-		// TODO: initialize ranges from layout
+		for (auto& registerRange : layout)
+		{
+			switch (registerRange.ShaderRegister)
+			{
+			case GfxShaderRegister::ConstantBuffer:
+				this->constBufferRanges.emplace_back(ResourceRange<GfxBuffer>(registerRange));
+				break;
+			case GfxShaderRegister::ReadBuffer:
+				this->readBufferRanges.emplace_back(ResourceRange<GfxTexture>(registerRange));
+				break;
+			case GfxShaderRegister::ReadWriteBuffer:
+				// TODO: support
+				break;
+			case GfxShaderRegister::Sampler:
+				this->samplerRanges.emplace_back(ResourceRange<GfxSampler>(registerRange));
+				break;
+			}
+		}
 
 		Result res = this->OnInitialize();
 		

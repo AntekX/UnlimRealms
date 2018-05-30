@@ -589,6 +589,8 @@ namespace UnlimRealms
 		{
 			std::vector<TResource*> resources;
 			State state;
+			
+			ResourceRange(const RegisterRange& range);
 		};
 		template <typename TResource>
 		class ResourceRanges : public std::vector<ResourceRange<TResource>> {};

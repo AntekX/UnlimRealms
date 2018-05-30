@@ -155,4 +155,13 @@ namespace UnlimRealms
 		return this->samplerRanges;
 	}
 
+	template <typename TResource>
+	GfxResourceBinding::ResourceRange<TResource>::ResourceRange(const GfxResourceBinding::RegisterRange& range)
+	{
+		this->ShaderRegister = range.ShaderRegister;
+		this->SlotFrom = range.SlotFrom;
+		this->SlotTo = std::max(range.SlotTo, range.SlotFrom);
+		this->resources.resize(this->SlotTo - this->SlotFrom + 1);
+	}
+
 } // end namespace UnlimRealms
