@@ -806,28 +806,11 @@ namespace UnlimRealms
 	{
 	}
 
-	Result GfxResourceBinding::SetBuffer(ur_uint slot, GfxBuffer* buffer)
+	Result GfxResourceBinding::Initialize(Layout& layout)
 	{
-		return this->bufferRange.SetResource(slot, buffer);
-	}
+		// TODO: initialize ranges from layout
 
-	Result GfxResourceBinding::SetTexture(ur_uint slot, GfxTexture* texture)
-	{
-		return this->textureRange.SetResource(slot, texture);
-	}
-
-	Result GfxResourceBinding::SetSampler(ur_uint slot, GfxSampler* sampler)
-	{
-		return this->samplerRange.SetResource(slot, sampler);
-	}
-
-	Result GfxResourceBinding::Initialize()
-	{
 		Result res = this->OnInitialize();
-		
-		this->bufferRange.OnInitialized();
-		this->textureRange.OnInitialized();
-		this->samplerRange.OnInitialized();
 		
 		return res;
 	}
@@ -835,6 +818,42 @@ namespace UnlimRealms
 	Result GfxResourceBinding::OnInitialize()
 	{
 		return Result(Success);
+	}
+
+	Result GfxResourceBinding::SetConstantBuffer(ur_uint slot, GfxBuffer* buffer)
+	{
+		for (auto& range : this->constBufferRanges)
+		{
+			if (slot < range.SlotFrom || slot > range.SlotTo)
+				continue;
+			range.resources[slot - range.SlotFrom] = buffer;
+			return Result(Success);
+		}
+		return Result(InvalidArgs);
+	}
+
+	Result GfxResourceBinding::SetTexture(ur_uint slot, GfxTexture* texture)
+	{
+		for (auto& range : this->readBufferRanges)
+		{
+			if (slot < range.SlotFrom || slot > range.SlotTo)
+				continue;
+			range.resources[slot - range.SlotFrom] = texture;
+			return Result(Success);
+		}
+		return Result(InvalidArgs);
+	}
+
+	Result GfxResourceBinding::SetSampler(ur_uint slot, GfxSampler* sampler)
+	{
+		for (auto& range : this->samplerRanges)
+		{
+			if (slot < range.SlotFrom || slot > range.SlotTo)
+				continue;
+			range.resources[slot - range.SlotFrom] = sampler;
+			return Result(Success);
+		}
+		return Result(InvalidArgs);
 	}
 
 } // end namespace UnlimRealms

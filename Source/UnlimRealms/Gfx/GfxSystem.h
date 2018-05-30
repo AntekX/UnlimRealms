@@ -554,17 +554,25 @@ namespace UnlimRealms
 	{
 	public:
 
+		struct UR_DECL RegisterRange
+		{
+			GfxShaderRegister ShaderRegister;
+			ur_uint SlotFrom;
+			ur_uint SlotTo;
+		};
+		typedef std::vector<RegisterRange> Layout;
+
 		GfxResourceBinding(GfxSystem &gfxSystem);
 
 		virtual ~GfxResourceBinding();
 
-		Result SetBuffer(ur_uint slot, GfxBuffer* buffer);
+		Result Initialize(Layout& layout);
+
+		Result SetConstantBuffer(ur_uint slot, GfxBuffer* buffer);
 
 		Result SetTexture(ur_uint slot, GfxTexture* texture);
 
 		Result SetSampler(ur_uint slot, GfxSampler* sampler);
-
-		Result Initialize();
 
 	protected:
 
@@ -572,47 +580,32 @@ namespace UnlimRealms
 
 		enum class State
 		{
-			Unused,
-			UsedModified,
-			UsedUnmodified
+			Modified,
+			Unmodified
 		};
-
-		static const ur_uint RespurceRangeReserveSize = 8;
 
 		template <typename TResource>
-		struct ResourceRange
+		struct ResourceRange : public RegisterRange
 		{
-			ur_uint slotFrom;
-			ur_uint slotTo;
-			State rangeState;
-			State commonSlotsState;
-			struct Slot
-			{
-				State state;
-				TResource* resource;
-			};
-			std::vector<Slot> slots;
-
-			ResourceRange();
-
-			Result SetResource(ur_uint slot, TResource* resource);
-			
-			void OnInitialized();
-
-			inline ur_bool IsValid() const;
+			std::vector<TResource*> resources;
+			State state;
 		};
+		template <typename TResource>
+		class ResourceRanges : public std::vector<ResourceRange<TResource>> {};
 
-		inline const ResourceRange<GfxBuffer>& GetBufferRange() const;
+		inline const ResourceRanges<GfxTexture>& GetReadBufferRanges() const;
 
-		inline const ResourceRange<GfxTexture>& GetTextureRange() const;
+		inline const ResourceRanges<GfxBuffer>& GetConstBufferRanges() const;
 
-		inline const ResourceRange<GfxSampler>& GetSamplerRange() const;
+		inline const ResourceRanges<GfxSampler>& GetSamplerRange() const;
 
 	private:
 
-		ResourceRange<GfxBuffer> bufferRange;
-		ResourceRange<GfxTexture> textureRange;
-		ResourceRange<GfxSampler> samplerRange;
+		ResourceRanges<GfxTexture> readBufferRanges;
+		//ResourceRanges<GfxBuffer> readWriteBufferRanges; // TODO: support RW resources
+		ResourceRanges<GfxBuffer> constBufferRanges;
+		ResourceRanges<GfxSampler> samplerRanges;
+
 	};
 
 } // end namespace UnlimRealms

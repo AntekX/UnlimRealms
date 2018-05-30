@@ -155,7 +155,14 @@ int D3D12SandboxApp::Run()
 	gfxBinding->SetBuffer(0, gfxCB.get());
 	gfxBinding->SetTexture(0, gfxTextures.empty() ? ur_null : gfxTextures.begin()->get());
 	gfxBinding->SetSampler(0, gfxSampler.get());
-	gfxBinding->Initialize();
+	//gfxBinding->Initialize();
+	
+	GfxResourceBinding::Layout gfxBindingLayout = {
+		{ GfxShaderRegister::ConstantBuffer, 0 },
+		{ GfxShaderRegister::ReadBuffer, 0 },
+		{ GfxShaderRegister::Sampler, 0 }
+	};
+	gfxBinding->InitializeNew(gfxBindingLayout);
 
 	std::unique_ptr<GfxPipelineStateObject> gfxPSO;
 	realm.GetGfxSystem()->CreatePipelineStateObject(gfxPSO);
