@@ -150,7 +150,7 @@ namespace UnlimRealms
 		return this->constBufferRanges;
 	}
 
-	inline const GfxResourceBinding::ResourceRanges<GfxSampler>& GfxResourceBinding::GetSamplerRange() const
+	inline const GfxResourceBinding::ResourceRanges<GfxSampler>& GfxResourceBinding::GetSamplerRanges() const
 	{
 		return this->samplerRanges;
 	}

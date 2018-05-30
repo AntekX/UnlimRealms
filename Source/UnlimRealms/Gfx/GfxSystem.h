@@ -599,7 +599,7 @@ namespace UnlimRealms
 
 		inline const ResourceRanges<GfxBuffer>& GetConstBufferRanges() const;
 
-		inline const ResourceRanges<GfxSampler>& GetSamplerRange() const;
+		inline const ResourceRanges<GfxSampler>& GetSamplerRanges() const;
 
 	private:
 

@@ -875,11 +875,7 @@ namespace UnlimRealms
 	{
 		Result res = Success;
 
-		// ensure state & binding objects changes have been applied (fast modifcation tests are done internaly);
-		if (this->gfxResourceBinding != ur_null)
-		{
-			res &= this->gfxResourceBinding->Initialize();
-		}
+		// ensure pipeline state changes have been applied (fast modifcation tests are done internaly)
 		if (this->gfxPipelineState != ur_null)
 		{
 			res &= this->gfxPipelineState->Initialize();
@@ -1885,83 +1881,78 @@ namespace UnlimRealms
 		if (ur_null == d3dDevice)
 			return ResultError(NotInitialized, "GfxResourceBindingD3D12::OnInitialize: failed, device unavailable");
 
-		if (State::UsedModified == this->GetBufferRange().rangeState ||
-			State::UsedModified == this->GetTextureRange().rangeState ||
-			State::UsedModified == this->GetSamplerRange().rangeState)
+		// layout changed - (re)initialize signature & tables
+
+		this->d3dDesriptorRangesCbvSrvUav.clear();
+		this->d3dDesriptorRangesSampler.clear();
+		this->d3dRootParameters.clear();
+		this->d3dRootSignature.reset(ur_null);
+		this->d3dSerializedRootSignature.reset(ur_null);
+		for (auto& tableDescriptorSets : this->tableDescriptorSets) tableDescriptorSets.clear();
+		this->d3dTableDescriptorHeaps.clear();
+		this->tableIndexCbvSrvUav = ur_size(-1);
+		this->tableIndexSampler = ur_size(-1);
+
+		// initialize descriptor table ranges
+
+		InitializeRanges<GfxBuffer, D3D12_DESCRIPTOR_RANGE_TYPE_CBV>(this->GetConstBufferRanges(), this->d3dDesriptorRangesCbvSrvUav);
+		InitializeRanges<GfxTexture, D3D12_DESCRIPTOR_RANGE_TYPE_SRV>(this->GetReadBufferRanges(), this->d3dDesriptorRangesCbvSrvUav);
+		InitializeRanges<GfxSampler, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER>(this->GetSamplerRanges(), this->d3dDesriptorRangesSampler);
+
+		// initialize root parameters
+
+		if (!this->d3dDesriptorRangesCbvSrvUav.empty())
 		{
-			// layout changed - (re)initialize signature & tables
+			this->tableIndexCbvSrvUav = this->d3dRootParameters.size();
+			this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
+			D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
+			rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+			rootParameter.DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesCbvSrvUav.size();
+			rootParameter.DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesCbvSrvUav.data();
+			rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		}
 
-			this->d3dDesriptorRangesCbvSrvUav.clear();
-			this->d3dDesriptorRangesSampler.clear();
-			this->d3dRootParameters.clear();
-			this->d3dRootSignature.reset(ur_null);
-			this->d3dSerializedRootSignature.reset(ur_null);
-			for (auto& tableDescriptorSets : this->tableDescriptorSets) tableDescriptorSets.clear();
-			this->d3dTableDescriptorHeaps.clear();
-			this->tableIndexCbvSrvUav = ur_size(-1);
-			this->tableIndexSampler = ur_size(-1);
+		if (!this->d3dDesriptorRangesSampler.empty())
+		{
+			this->tableIndexSampler = this->d3dRootParameters.size();
+			this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
+			D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
+			rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+			rootParameter.DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesSampler.size();
+			rootParameter.DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesSampler.data();
+			rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		}
 
-			// initialize descriptor table ranges
-
-			InitializeRanges<GfxBuffer, D3D12_DESCRIPTOR_RANGE_TYPE_CBV>(this->GetBufferRange(), this->d3dDesriptorRangesCbvSrvUav);
-			InitializeRanges<GfxTexture, D3D12_DESCRIPTOR_RANGE_TYPE_SRV>(this->GetTextureRange(), this->d3dDesriptorRangesCbvSrvUav);
-			InitializeRanges<GfxSampler, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER>(this->GetSamplerRange(), this->d3dDesriptorRangesSampler);
-
-			// initialize root parameters
-
-			if (!this->d3dDesriptorRangesCbvSrvUav.empty())
+		// reserve descriptors per non empty root table;
+		// this gpu memory location will be used to store shader visible descriptors in an ordered manner (correspnding to table ranges layout);
+		// to be able to bind different resources to the same layout - ID3D12Device::CopyDescriptors is used to copy descriptors from random heap(s) locations into root table heap region;
+		std::set<ID3D12DescriptorHeap*> uniqueTableHeaps;
+		for (ur_uint idc = 0; idc < DrawCallsMax; ++idc)
+		{
+			this->tableDescriptorSets[idc].resize(this->d3dRootParameters.size());
+			for (ur_size rootTableIdx = 0; rootTableIdx < this->d3dRootParameters.size(); ++rootTableIdx)
 			{
-				this->tableIndexCbvSrvUav = this->d3dRootParameters.size();
-				this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
-				D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
-				rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-				rootParameter.DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesCbvSrvUav.size();
-				rootParameter.DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesCbvSrvUav.data();
-				rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-			}
-
-			if (!this->d3dDesriptorRangesSampler.empty())
-			{
-				this->tableIndexSampler = this->d3dRootParameters.size();
-				this->d3dRootParameters.emplace_back(D3D12_ROOT_PARAMETER());
-				D3D12_ROOT_PARAMETER& rootParameter = this->d3dRootParameters.back();
-				rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-				rootParameter.DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDesriptorRangesSampler.size();
-				rootParameter.DescriptorTable.pDescriptorRanges = this->d3dDesriptorRangesSampler.data();
-				rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-			}
-
-			// reserve descriptors per non empty root table;
-			// this gpu memory location will be used to store shader visible descriptors in an ordered manner (correspnding to table ranges layout);
-			// to be able to bind different resources to the same layout - ID3D12Device::CopyDescriptors is used to copy descriptors from random heap(s) locations into root table heap region;
-			std::set<ID3D12DescriptorHeap*> uniqueTableHeaps;
-			for (ur_uint idc = 0; idc < DrawCallsMax; ++idc)
-			{
-				this->tableDescriptorSets[idc].resize(this->d3dRootParameters.size());
-				for (ur_size rootTableIdx = 0; rootTableIdx < this->d3dRootParameters.size(); ++rootTableIdx)
+				auto& tableDescriptorSet = this->tableDescriptorSets[idc][rootTableIdx];
+				const auto& d3dDescriptorTable = this->d3dRootParameters[rootTableIdx].DescriptorTable;
+				D3D12_DESCRIPTOR_HEAP_TYPE d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE(-1);
+				ur_size descriptorsCount = 0;
+				for (UINT irange = 0; irange < d3dDescriptorTable.NumDescriptorRanges; ++irange)
 				{
-					auto& tableDescriptorSet = this->tableDescriptorSets[idc][rootTableIdx];
-					const auto& d3dDescriptorTable = this->d3dRootParameters[rootTableIdx].DescriptorTable;
-					D3D12_DESCRIPTOR_HEAP_TYPE d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE(-1);
-					ur_size descriptorsCount = 0;
-					for (UINT irange = 0; irange < d3dDescriptorTable.NumDescriptorRanges; ++irange)
-					{
-						descriptorsCount += ur_size(d3dDescriptorTable.pDescriptorRanges[irange].NumDescriptors);
-						if (d3dDescriptorTable.pDescriptorRanges[irange].RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
-							d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-						else
-							d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-					}
-					d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->AcquireDescriptors(tableDescriptorSet, descriptorsCount, true);
-					uniqueTableHeaps.insert(d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->GetD3DDescriptorHeap(*tableDescriptorSet.get()));
+					descriptorsCount += ur_size(d3dDescriptorTable.pDescriptorRanges[irange].NumDescriptors);
+					if (d3dDescriptorTable.pDescriptorRanges[irange].RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
+						d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+					else
+						d3dDescriptorHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 				}
+				d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->AcquireDescriptors(tableDescriptorSet, descriptorsCount, true);
+				uniqueTableHeaps.insert(d3dSystem.GetDescriptorHeap(d3dDescriptorHeapType)->GetD3DDescriptorHeap(*tableDescriptorSet.get()));
 			}
-			this->d3dTableDescriptorHeaps.reserve(uniqueTableHeaps.size());
-			for (auto& tableHeap : uniqueTableHeaps)
-			{
-				this->d3dTableDescriptorHeaps.emplace_back(tableHeap);
-			}
-		} // end (re)initialize
+		}
+		this->d3dTableDescriptorHeaps.reserve(uniqueTableHeaps.size());
+		for (auto& tableHeap : uniqueTableHeaps)
+		{
+			this->d3dTableDescriptorHeaps.emplace_back(tableHeap);
+		}
 
 		// (re)initialize root signature
 
@@ -2086,35 +2077,33 @@ namespace UnlimRealms
 			D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = drawCallDescriptorTables[this->tableIndexCbvSrvUav]->FirstCpuHandle();
 			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 			UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
-			const auto& bufferRange = this->GetBufferRange();
-			for (ur_size slotIdx = bufferRange.slotFrom; slotIdx <= bufferRange.slotTo; ++slotIdx)
+			for (const auto& constBufferRange : this->GetConstBufferRanges())
 			{
-				auto& slot = bufferRange.slots[slotIdx - bufferRange.slotFrom];
-				if (State::Unused == slot.state)
-					continue;
-				GfxBufferD3D12 *bufferD3D12 = static_cast<GfxBufferD3D12*>(slot.resource);
-				if (bufferD3D12 != ur_null && bufferD3D12->GetDescriptor() != ur_null)
+				for (ur_size slotIdx = constBufferRange.SlotFrom; slotIdx <= constBufferRange.SlotTo; ++slotIdx)
 				{
-					if (bufferD3D12->GetDynamicResourceData()->Ptr != ur_null)
+					GfxBufferD3D12 *bufferD3D12 = static_cast<GfxBufferD3D12*>(constBufferRange.resources[slotIdx - constBufferRange.SlotFrom]);
+					if (bufferD3D12 != ur_null && bufferD3D12->GetDescriptor() != ur_null)
 					{
-						bufferD3D12->UploadDynamicData();
+						if (bufferD3D12->GetDynamicResourceData()->Ptr != ur_null)
+						{
+							bufferD3D12->UploadDynamicData();
+						}
+						d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, bufferD3D12->GetDescriptor()->CpuHandle(), d3dHeapType);
 					}
-					d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, bufferD3D12->GetDescriptor()->CpuHandle(), d3dHeapType);
+					descritorsTableHandle.ptr += d3dDescriptorSize;
 				}
-				descritorsTableHandle.ptr += d3dDescriptorSize;
 			}
-			const auto& textureRange = this->GetTextureRange();
-			for (ur_size slotIdx = textureRange.slotFrom; slotIdx <= textureRange.slotTo; ++slotIdx)
+			for (const auto& textureRange : this->GetReadBufferRanges())
 			{
-				auto& slot = textureRange.slots[slotIdx - bufferRange.slotFrom];
-				if (State::Unused == slot.state)
-					continue;
-				GfxTextureD3D12 *textureD3D12 = static_cast<GfxTextureD3D12*>(slot.resource);
-				if (textureD3D12 != ur_null && textureD3D12->GetSRVDescriptor() != ur_null)
+				for (ur_size slotIdx = textureRange.SlotFrom; slotIdx <= textureRange.SlotTo; ++slotIdx)
 				{
-					d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, textureD3D12->GetSRVDescriptor()->CpuHandle(), d3dHeapType);
+					GfxTextureD3D12 *textureD3D12 = static_cast<GfxTextureD3D12*>(textureRange.resources[slotIdx - textureRange.SlotFrom]);
+					if (textureD3D12 != ur_null && textureD3D12->GetSRVDescriptor() != ur_null)
+					{
+						d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, textureD3D12->GetSRVDescriptor()->CpuHandle(), d3dHeapType);
+					}
+					descritorsTableHandle.ptr += d3dDescriptorSize;
 				}
-				descritorsTableHandle.ptr += d3dDescriptorSize;
 			}
 		}
 
@@ -2123,18 +2112,17 @@ namespace UnlimRealms
 			D3D12_CPU_DESCRIPTOR_HANDLE descritorsTableHandle = drawCallDescriptorTables[this->tableIndexSampler]->FirstCpuHandle();
 			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
 			UINT d3dDescriptorSize = d3dDevice->GetDescriptorHandleIncrementSize(d3dHeapType);
-			const auto& samplerRange = this->GetSamplerRange();
-			for (ur_size slotIdx = samplerRange.slotFrom; slotIdx <= samplerRange.slotTo; ++slotIdx)
+			for (const auto& samplerRange : this->GetSamplerRanges())
 			{
-				auto& slot = samplerRange.slots[slotIdx - samplerRange.slotFrom];
-				if (State::Unused == slot.state)
-					continue;
-				GfxSamplerD3D12 *samplerD3D12 = static_cast<GfxSamplerD3D12*>(slot.resource);
-				if (samplerD3D12 != ur_null && samplerD3D12->GetDescriptor() != ur_null)
+				for (ur_size slotIdx = samplerRange.SlotFrom; slotIdx <= samplerRange.SlotTo; ++slotIdx)
 				{
-					d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, samplerD3D12->GetDescriptor()->CpuHandle(), d3dHeapType);
+					GfxSamplerD3D12 *samplerD3D12 = static_cast<GfxSamplerD3D12*>(samplerRange.resources[slotIdx - samplerRange.SlotFrom]);
+					if (samplerD3D12 != ur_null && samplerD3D12->GetDescriptor() != ur_null)
+					{
+						d3dDevice->CopyDescriptorsSimple(1, descritorsTableHandle, samplerD3D12->GetDescriptor()->CpuHandle(), d3dHeapType);
+					}
+					descritorsTableHandle.ptr += d3dDescriptorSize;
 				}
-				descritorsTableHandle.ptr += d3dDescriptorSize;
 			}
 		}
 

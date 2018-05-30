@@ -1370,16 +1370,15 @@ namespace UnlimRealms
 
 	Result GfxResourceBindingD3D11::OnInitialize()
 	{
-		auto& bufferRange = this->GetBufferRange();
-		if (bufferRange.commonSlotsState == State::UsedModified)
-		{
-			this->d3dConstBufferRanges.clear();
-			for (ur_uint slot = bufferRange.slotFrom; slot <= bufferRange.slotTo; ++slot)
-			{
-				if (State::Unused == bufferRange.slots[slot - bufferRange.slotFrom].state)
-					continue;
+		this->d3dConstBufferRanges.clear();
+		this->d3dTextureRanges.clear();
+		this->d3dSamplerRanges.clear();
 
-				const GfxBufferD3D11* gfxBufferD3D11 = static_cast<const GfxBufferD3D11*>(bufferRange.slots[slot - bufferRange.slotFrom].resource);
+		for (auto& constBufferRange : this->GetConstBufferRanges())
+		{
+			for (ur_uint slot = constBufferRange.SlotFrom; slot <= constBufferRange.SlotTo; ++slot)
+			{
+				const GfxBufferD3D11* gfxBufferD3D11 = static_cast<const GfxBufferD3D11*>(constBufferRange.resources[slot - constBufferRange.SlotFrom]);
 				if (gfxBufferD3D11->GetDesc().BindFlags & ur_uint(GfxBindFlag::ConstantBuffer))
 				{
 					if (this->d3dConstBufferRanges.empty() || this->d3dConstBufferRanges.back().slot + 1 < slot)
@@ -1396,7 +1395,6 @@ namespace UnlimRealms
 		auto& texRange = this->GetTextureRange();
 		if (texRange.commonSlotsState == State::UsedModified)
 		{
-			this->d3dTextureRanges.clear();
 			for (ur_uint slot = texRange.slotFrom; slot <= texRange.slotTo; ++slot)
 			{
 				if (State::Unused == texRange.slots[slot - texRange.slotFrom].state)
@@ -1416,7 +1414,6 @@ namespace UnlimRealms
 		auto& samplerRange = this->GetSamplerRange();
 		if (samplerRange.commonSlotsState == State::UsedModified)
 		{
-			this->d3dSamplerRanges.clear();
 			for (ur_uint slot = samplerRange.slotFrom; slot <= samplerRange.slotTo; ++slot)
 			{
 				if (State::Unused == samplerRange.slots[slot - samplerRange.slotFrom].state)

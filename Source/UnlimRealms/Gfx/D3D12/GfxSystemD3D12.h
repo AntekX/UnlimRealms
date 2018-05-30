@@ -576,7 +576,7 @@ namespace UnlimRealms
 		virtual Result OnInitialize();
 
 		template <typename TGfxResource, D3D12_DESCRIPTOR_RANGE_TYPE d3dDescriptorRangeType>
-		void InitializeRanges(const ResourceRange<TGfxResource>& resourceRange,
+		void InitializeRanges(const ResourceRanges<TGfxResource>& resourceRange,
 			std::vector<D3D12_DESCRIPTOR_RANGE>& d3dDescriptorRanges);
 
 	private:
