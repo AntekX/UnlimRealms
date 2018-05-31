@@ -145,13 +145,18 @@ namespace UnlimRealms
 			return ResultError(Failure, "ImguiRender::Init: failed to initialize index buffer");
 
 #if (NEW_GAPI)
-		// TODO
-
+		
 		// Resource Binding
 		res = this->GetRealm().GetGfxSystem()->CreateResourceBinding(this->gfxResourceBinding);
 		if (Succeeded(res))
 		{
-			res = this->GetRealm().GetGfxSystem()->CreateSampler(this->gfxSampler);
+			GfxResourceBinding::Layout gfxBindingLayout = {
+				{ GfxShaderRegister::ConstantBuffer, 0 },
+				{ GfxShaderRegister::ReadBuffer, 0 },
+				{ GfxShaderRegister::Sampler, 0 }
+			};
+			res &= this->gfxResourceBinding->Initialize(gfxBindingLayout);
+			res &= this->GetRealm().GetGfxSystem()->CreateSampler(this->gfxSampler);
 			if (Succeeded(res))
 			{
 				GfxSamplerState samplerState = GfxSamplerState::Default;
@@ -167,20 +172,19 @@ namespace UnlimRealms
 				samplerState.CmpFunc = GfxCmpFunc::Never;
 				this->gfxSampler->Initialize(samplerState);
 			}
-			this->gfxResourceBinding->SetBuffer(0, this->gfxCB.get());
+			this->gfxResourceBinding->SetConstantBuffer(0, this->gfxCB.get());
 			this->gfxResourceBinding->SetSampler(0, this->gfxSampler.get());
-			this->gfxResourceBinding->SetTexture(0, ur_null);
-			this->gfxResourceBinding->Initialize();
 		}
 
 		// Pipeline State
 		res = this->GetRealm().GetGfxSystem()->CreatePipelineStateObject(this->gfxPipelineState);
 		if (Succeeded(res))
 		{
-			this->gfxPipelineState->SetPrimitiveTopology(GfxPrimitiveTopology::TriangleList);
+			this->gfxPipelineState->SetResourceBinding(this->gfxResourceBinding.get());
 			this->gfxPipelineState->SetInputLayout(gfxInputLayout.get());
 			this->gfxPipelineState->SetVertexShader(this->gfxVS.get());
 			this->gfxPipelineState->SetPixelShader(this->gfxPS.get());
+			this->gfxPipelineState->SetPrimitiveTopology(GfxPrimitiveTopology::TriangleList);
 
 			GfxBlendState blendState = GfxBlendState::Default;
 			blendState.BlendEnable = true;
@@ -202,8 +206,7 @@ namespace UnlimRealms
 			depthStencilState.DepthFunc = GfxCmpFunc::Always;
 			depthStencilState.StencilEnable = false;
 			this->gfxPipelineState->SetDepthStencilState(depthStencilState);
-
-			this->gfxPipelineState->SetResourceBinding(this->gfxResourceBinding.get());
+			
 			this->gfxPipelineState->Initialize();
 		}
 #else
@@ -411,7 +414,7 @@ namespace UnlimRealms
 
 		// setup pipeline
 #if (NEW_GAPI)
-		this->gfxResourceBinding->SetBuffer(0, this->gfxCB.get());
+		this->gfxResourceBinding->SetConstantBuffer(0, this->gfxCB.get());
 		gfxContext.SetResourceBinding(this->gfxResourceBinding.get());
 		gfxContext.SetPipelineStateObject(this->gfxPipelineState.get());
 #else

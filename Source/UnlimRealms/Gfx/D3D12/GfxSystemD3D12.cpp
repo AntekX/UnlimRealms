@@ -892,7 +892,7 @@ namespace UnlimRealms
 		{
 			if (this->gfxResourceBinding != ur_null)
 			{
-				// make sure root signatire is up to date
+				// make sure root signature is up to date
 				ID3D12RootSignature* d3dBindingRootSignature = ur_null; 
 				ID3D12RootSignature* d3dPSORootSignature = ur_null;
 				if (this->gfxResourceBinding != ur_null)

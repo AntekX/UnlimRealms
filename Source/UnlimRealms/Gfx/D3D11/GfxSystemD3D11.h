@@ -185,7 +185,6 @@ namespace UnlimRealms
 		GfxResourceBindingD3D11* gfxResourceBinding;
 		StateFlags stateFlags;
 		ur_uint gfxPipelineStateVersion;
-		ur_uint gfxResourceBindingVersion;
 		ur_bool NEW_GAPI; // TEMP: switches on/off new GAPI code branch depending on the used function(s)
 	};
 
@@ -486,31 +485,11 @@ namespace UnlimRealms
 
 		virtual ~GfxResourceBindingD3D11();
 
-		template <typename TD3DResource>
-		struct D3DResourceRange
-		{
-			ur_uint slot;
-			std::vector<TD3DResource*> resources;
-		};
-
-		inline const std::vector<D3DResourceRange<ID3D11Buffer>>& GetD3DConstBufferRanges() const;
-		
-		inline const std::vector<D3DResourceRange<ID3D11ShaderResourceView>>& GetD3DTextureRanges() const;
-		
-		inline const std::vector<D3DResourceRange<ID3D11SamplerState>>& GetD3DSamplerRanges() const;
-
-		inline ur_uint GetVersionID() const;
+		Result SetD3DContextResources(ID3D11DeviceContext* d3dContext);
 
 	protected:
 
 		virtual Result OnInitialize();
-
-	private:
-
-		std::vector<D3DResourceRange<ID3D11Buffer>> d3dConstBufferRanges;
-		std::vector<D3DResourceRange<ID3D11ShaderResourceView>> d3dTextureRanges;
-		std::vector<D3DResourceRange<ID3D11SamplerState>> d3dSamplerRanges;
-		ur_uint versionID;
 	};
 
 

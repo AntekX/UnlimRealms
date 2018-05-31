@@ -150,20 +150,19 @@ int D3D12SandboxApp::Run()
 	gfxDepthStencil.DepthWriteEnable = false;
 
 	// declare binding matching used shader registers
-	std::unique_ptr<GfxResourceBinding> gfxBinding;
-	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding);
-	gfxBinding->SetBuffer(0, gfxCB.get());
-	gfxBinding->SetTexture(0, gfxTextures.empty() ? ur_null : gfxTextures.begin()->get());
-	gfxBinding->SetSampler(0, gfxSampler.get());
-	//gfxBinding->Initialize();
-	
 	GfxResourceBinding::Layout gfxBindingLayout = {
 		{ GfxShaderRegister::ConstantBuffer, 0 },
 		{ GfxShaderRegister::ReadBuffer, 0 },
 		{ GfxShaderRegister::Sampler, 0 }
 	};
-	gfxBinding->InitializeNew(gfxBindingLayout);
+	std::unique_ptr<GfxResourceBinding> gfxBinding;
+	realm.GetGfxSystem()->CreateResourceBinding(gfxBinding);
+	gfxBinding->Initialize(gfxBindingLayout);
+	gfxBinding->SetConstantBuffer(0, gfxCB.get());
+	gfxBinding->SetTexture(0, gfxTextures.empty() ? ur_null : gfxTextures.begin()->get());
+	gfxBinding->SetSampler(0, gfxSampler.get());
 
+	// pipeline state
 	std::unique_ptr<GfxPipelineStateObject> gfxPSO;
 	realm.GetGfxSystem()->CreatePipelineStateObject(gfxPSO);
 	gfxPSO->SetPixelShader(gfxPS.get());
