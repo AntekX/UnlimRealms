@@ -14,6 +14,8 @@
 namespace UnlimRealms
 {
 
+#define NEW_GAPI 1
+
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// HDR rendering
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,6 +80,7 @@ namespace UnlimRealms
 			std::unique_ptr<GenericRender::PipelineState> screenQuadStateBlur;
 			std::unique_ptr<GenericRender::PipelineState> screenQuadStateTonemapping;
 			std::unique_ptr<GenericRender::PipelineState> screenQuadStateDebug;
+
 		};
 
 		std::unique_ptr<GfxObjects> gfxObjects;

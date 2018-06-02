@@ -19,4 +19,6 @@ namespace UnlimRealms
 
 	extern UR_DECL DXGI_FORMAT GfxBitsPerIndexToDXGIFormat(ur_uint bitsPerIndex);
 
+	extern UR_DECL DXGI_FORMAT GfxFormatToDXGIDepthStencil(GfxFormat fmt);
+
 } // end namespace UnlimRealms

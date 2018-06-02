@@ -846,23 +846,7 @@ namespace UnlimRealms
 			const GfxTextureDesc &bufferDesc = this->GetDepthStencilBuffer()->GetDesc();
 			D3D11_DEPTH_STENCIL_VIEW_DESC d3dDSViewDesc;
 			d3dDSViewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-			switch (bufferDesc.Format)
-			{
-			case GfxFormat::R32G8X24: 
-				d3dDSViewDesc.Format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-				break;
-			case GfxFormat::R32:
-				d3dDSViewDesc.Format = DXGI_FORMAT_D32_FLOAT;
-				break;
-			case GfxFormat::R24G8:
-				d3dDSViewDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-				break;
-			case GfxFormat::R16:
-				d3dDSViewDesc.Format = DXGI_FORMAT_D16_UNORM;
-				break;
-			default:
-				d3dDSViewDesc.Format = DXGI_FORMAT_UNKNOWN;
-			}
+			d3dDSViewDesc.Format = GfxFormatToDXGIDepthStencil(bufferDesc.Format);
 			d3dDSViewDesc.Flags = 0;
 			d3dDSViewDesc.Texture2D.MipSlice = 0;
 

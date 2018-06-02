@@ -1148,8 +1148,13 @@ namespace UnlimRealms
 		if (ur_null == d3dDevice)
 			return ResultError(NotInitialized, "GfxTextureD3D12::OnInitialize: failed, device unavailable");
 
+		ur_bool isRenderTarget = (ur_uint(GfxBindFlag::RenderTarget) & this->GetDesc().BindFlags);
+		ur_bool isDepthStencil = (ur_uint(GfxBindFlag::DepthStencil) & this->GetDesc().BindFlags);
 		D3D12_RESOURCE_DESC d3dResDesc = GfxTextureDescToD3D12ResDesc(this->GetDesc());
-		d3dResDesc.Format = GfxFormatToDXGI(this->GetDesc().Format, GfxFormatView::Typeless);
+		if (isDepthStencil)
+		{
+			d3dResDesc.Format = GfxFormatToDXGIDepthStencil(this->GetDesc().Format);
+		}
 
 		D3D12_HEAP_PROPERTIES d3dHeapProperties = {};
 		d3dHeapProperties.Type = GfxUsageToD3D12HeapType(this->GetDesc().Usage);
@@ -1159,9 +1164,27 @@ namespace UnlimRealms
 		d3dHeapProperties.VisibleNodeMask = 0;
 
 		D3D12_RESOURCE_STATES d3dResStates = GfxBindFlagsAndUsageToD3D12ResState(this->GetDesc().BindFlags, this->GetDesc().Usage);
+
+		D3D12_CLEAR_VALUE d3dClearValue;
+		D3D12_CLEAR_VALUE* d3dClearValuePtr = ur_null;
+		if (isRenderTarget || isDepthStencil)
+		{
+			d3dClearValuePtr = &d3dClearValue;
+			if (isRenderTarget)
+			{
+				d3dClearValue.Format = d3dResDesc.Format;
+				d3dClearValue.Color[0] = 0.0f; d3dClearValue.Color[1] = 0.0f; d3dClearValue.Color[2] = 0.0f; d3dClearValue.Color[3] = 0.0f;
+			}
+			else if (isDepthStencil)
+			{
+				d3dClearValue.Format = d3dResDesc.Format;
+				d3dClearValue.DepthStencil.Depth = 1.0f;
+				d3dClearValue.DepthStencil.Stencil = 0;
+			}
+		}
 		
 		shared_ref<ID3D12Resource> d3dResource;
-		HRESULT hr = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResDesc, d3dResStates, ur_null,
+		HRESULT hr = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResDesc, d3dResStates, d3dClearValuePtr,
 			__uuidof(ID3D12Resource), d3dResource);
 		if (FAILED(hr))
 			return ResultError(Failure, "GfxTextureD3D12::OnInitialize: failed at CreateCommittedResource");
@@ -1286,23 +1309,7 @@ namespace UnlimRealms
 			const GfxTextureDesc &bufferDesc = this->GetDepthStencilBuffer()->GetDesc();
 			D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
 			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-			switch (bufferDesc.Format)
-			{
-			case GfxFormat::R32G8X24:
-				dsvDesc.Format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-				break;
-			case GfxFormat::R32:
-				dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
-				break;
-			case GfxFormat::R24G8:
-				dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-				break;
-			case GfxFormat::R16:
-				dsvDesc.Format = DXGI_FORMAT_D16_UNORM;
-				break;
-			default:
-				dsvDesc.Format = DXGI_FORMAT_UNKNOWN;
-			}
+			dsvDesc.Format = GfxFormatToDXGIDepthStencil(bufferDesc.Format);
 			dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
 			dsvDesc.Texture2D.MipSlice = 0;
 

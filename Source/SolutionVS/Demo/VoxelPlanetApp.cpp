@@ -38,6 +38,7 @@ int VoxelPlanetApp::Run()
 
 	// create gfx system
 	std::unique_ptr<GfxSystemD3D11> gfx(new GfxSystemD3D11(realm));
+	//std::unique_ptr<GfxSystemD3D12> gfx(new GfxSystemD3D12(realm));
 	Result res = gfx->Initialize(realm.GetCanvas());
 	realm.SetGfxSystem(std::move(gfx));
 

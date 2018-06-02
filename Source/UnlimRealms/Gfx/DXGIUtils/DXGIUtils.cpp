@@ -97,4 +97,27 @@ namespace UnlimRealms
 		return DXGI_FORMAT_UNKNOWN;
 	}
 
+	DXGI_FORMAT GfxFormatToDXGIDepthStencil(GfxFormat fmt)
+	{
+		DXGI_FORMAT dxgiFmt = DXGI_FORMAT_UNKNOWN;
+		switch (fmt)
+		{
+		case GfxFormat::R32G8X24:
+			dxgiFmt = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+			break;
+		case GfxFormat::R32:
+			dxgiFmt = DXGI_FORMAT_D32_FLOAT;
+			break;
+		case GfxFormat::R24G8:
+			dxgiFmt = DXGI_FORMAT_D24_UNORM_S8_UINT;
+			break;
+		case GfxFormat::R16:
+			dxgiFmt = DXGI_FORMAT_D16_UNORM;
+			break;
+		default:
+			dxgiFmt = DXGI_FORMAT_UNKNOWN;
+		}
+		return dxgiFmt;
+	}
+
 } // end namespace UnlimRealms
