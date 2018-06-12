@@ -16,7 +16,9 @@
 namespace UnlimRealms
 {
 
+#if !(NEW_GAPI)
 	GfxRenderState GenericRender::DefaultQuadRenderState;
+#endif
 
 	GenericRender::GenericRender(Realm &realm) :
 		RealmEntity(realm)
@@ -28,6 +30,7 @@ namespace UnlimRealms
 			this->batches[ip].indicesCount = 0;
 		}
 
+#if !(NEW_GAPI)
 		static const bool initDefault = [] {
 			DefaultQuadRenderState = GfxRenderState::Default;
 			DefaultQuadRenderState.RasterizerState.CullMode = GfxCullMode::None;
@@ -35,6 +38,7 @@ namespace UnlimRealms
 			DefaultQuadRenderState.DepthStencilState.DepthWriteEnable = false;
 			return true;
 		}();
+#endif
 	}
 
 	GenericRender::~GenericRender()
@@ -77,60 +81,6 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize input layout");
 
-		// Pipeline State
-		for (ur_uint i = 0; i < (ur_size)PrimitiveType::Count; ++i)
-		{
-			std::unique_ptr<GfxPipelineState> gfxPipelineState;
-			res = this->GetRealm().GetGfxSystem()->CreatePipelineState(gfxPipelineState);
-			if (Succeeded(res))
-			{
-				switch (PrimitiveType(i))
-				{
-				case PrimitiveType::Point: gfxPipelineState->PrimitiveTopology = GfxPrimitiveTopology::PointList; break;
-				case PrimitiveType::Line: gfxPipelineState->PrimitiveTopology = GfxPrimitiveTopology::LineList; break;
-				case PrimitiveType::Triangle: gfxPipelineState->PrimitiveTopology = GfxPrimitiveTopology::TriangleList; break;
-				}
-
-				gfxPipelineState->InputLayout = this->gfxObjects->inputLayout.get();
-				gfxPipelineState->VertexShader = this->gfxObjects->VS.get();
-				gfxPipelineState->PixelShader = this->gfxObjects->PS.get();
-
-				GfxRenderState gfxState = GfxRenderState::Default;
-				gfxState.RasterizerState.CullMode = GfxCullMode::None;
-				
-				res = gfxPipelineState->SetRenderState(gfxState);
-
-				this->gfxObjects->pipelineState[i] = std::move(gfxPipelineState);
-			}
-			if (Failed(res))
-				return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize pipeline state");
-		}
-
-		// Atlas Texture
-		res = this->GetRealm().GetGfxSystem()->CreateTexture(this->gfxObjects->atlas);
-		if (Succeeded(res))
-		{
-			GfxTextureDesc gfxTexDesc;
-			gfxTexDesc.Width = 1;
-			gfxTexDesc.Height = 1;
-			gfxTexDesc.Levels = 1;
-			gfxTexDesc.Format = GfxFormat::R8G8B8A8;
-			gfxTexDesc.FormatView = GfxFormatView::Unorm;
-			gfxTexDesc.Usage = GfxUsage::Default;
-			gfxTexDesc.BindFlags = (ur_uint)GfxBindFlag::ShaderResource;
-			gfxTexDesc.AccessFlags = 0;
-
-			GfxResourceData gfxTexData;
-			ur_uint32 pixels[] = { 0xffffffff };
-			gfxTexData.Ptr = pixels;
-			gfxTexData.RowPitch = gfxTexDesc.Width * sizeof(*pixels);
-			gfxTexData.SlicePitch = 0;
-
-			res = this->gfxObjects->atlas->Initialize(gfxTexDesc, &gfxTexData);
-		}
-		if (Failed(res))
-			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize texture atlas");
-
 		// Constant Buffer
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects->CB);
 		if (Succeeded(res))
@@ -166,10 +116,10 @@ namespace UnlimRealms
 		if (Succeeded(res))
 		{
 			Vertex quadVertices[] = {
-				{ { -1.0f, +1.0f, 0.0f }, 0xffffffff, { 0.0f, 0.0f } },
-				{ { +1.0f, +1.0f, 0.0f }, 0xffffffff, { 1.0f, 0.0f } },
-				{ { -1.0f, -1.0f, 0.0f }, 0xffffffff, { 0.0f, 1.0f } },
-				{ { +1.0f, -1.0f, 0.0f }, 0xffffffff, { 1.0f, 1.0f } }
+				{ { -1.0f, +1.0f, 0.0f }, 0xffffffff,{ 0.0f, 0.0f } },
+			{ { +1.0f, +1.0f, 0.0f }, 0xffffffff,{ 1.0f, 0.0f } },
+			{ { -1.0f, -1.0f, 0.0f }, 0xffffffff,{ 0.0f, 1.0f } },
+			{ { +1.0f, -1.0f, 0.0f }, 0xffffffff,{ 1.0f, 1.0f } }
 			};
 			GfxResourceData gfxResData = { quadVertices, sizeof(quadVertices), 0 };
 			res = this->gfxObjects->quadVB->Initialize(gfxResData.RowPitch, sizeof(Vertex), GfxUsage::Immutable,
@@ -178,9 +128,122 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize quad vertex buffer");
 
+		// Atlas Texture
+		res = this->GetRealm().GetGfxSystem()->CreateTexture(this->gfxObjects->atlas);
+		if (Succeeded(res))
+		{
+			GfxTextureDesc gfxTexDesc;
+			gfxTexDesc.Width = 1;
+			gfxTexDesc.Height = 1;
+			gfxTexDesc.Levels = 1;
+			gfxTexDesc.Format = GfxFormat::R8G8B8A8;
+			gfxTexDesc.FormatView = GfxFormatView::Unorm;
+			gfxTexDesc.Usage = GfxUsage::Default;
+			gfxTexDesc.BindFlags = (ur_uint)GfxBindFlag::ShaderResource;
+			gfxTexDesc.AccessFlags = 0;
+
+			GfxResourceData gfxTexData;
+			ur_uint32 pixels[] = { 0xffffffff };
+			gfxTexData.Ptr = pixels;
+			gfxTexData.RowPitch = gfxTexDesc.Width * sizeof(*pixels);
+			gfxTexData.SlicePitch = 0;
+
+			res = this->gfxObjects->atlas->Initialize(gfxTexDesc, &gfxTexData);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize texture atlas");
+
+#if (NEW_GAPI)
+		// Default sampler
+		res = this->GetRealm().GetGfxSystem()->CreateSampler(this->gfxObjects->sampler);
+		if (Succeeded(res))
+		{
+			res = this->gfxObjects->sampler->Initialize(GfxSamplerState::Default);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize default sampler");
+
+		// Shader resource binding
+		res = this->GetRealm().GetGfxSystem()->CreateResourceBinding(this->gfxObjects->shaderBinding);
+		if (Succeeded(res))
+		{
+			res = this->gfxObjects->shaderBinding->Initialize(GfxResourceBinding::Layout({
+				{ GfxShaderRegister::ConstantBuffer, 0 },
+				{ GfxShaderRegister::ReadBuffer, 0 },
+				{ GfxShaderRegister::Sampler, 0 }
+			}));
+			if (Succeeded(res))
+			{
+				this->gfxObjects->shaderBinding->SetConstantBuffer(0, this->gfxObjects->CB.get());
+				this->gfxObjects->shaderBinding->SetTexture(0, this->gfxObjects->atlas.get());
+				this->gfxObjects->shaderBinding->SetSampler(0, this->gfxObjects->sampler.get());
+			}
+		}
+		if (Failed(res))
+			return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize resource binding");
+#endif
+
+		// Pipeline State
+		for (ur_uint i = 0; i < (ur_size)PrimitiveType::Count; ++i)
+		{
+#if (NEW_GAPI)
+			std::unique_ptr<GfxPipelineStateObject> gfxPipelineState;
+			res = this->GetRealm().GetGfxSystem()->CreatePipelineStateObject(gfxPipelineState);
+			if (Succeeded(res))
+			{
+				GfxPrimitiveTopology gfxTopology = GfxPrimitiveTopology::Undefined;
+				switch (PrimitiveType(i))
+				{
+				case PrimitiveType::Point: gfxTopology = GfxPrimitiveTopology::PointList; break;
+				case PrimitiveType::Line: gfxTopology = GfxPrimitiveTopology::LineList; break;
+				case PrimitiveType::Triangle: gfxTopology = GfxPrimitiveTopology::TriangleList; break;
+				}
+				GfxRasterizerState gfxRasterState = GfxRasterizerState::Default;
+				gfxRasterState.CullMode = GfxCullMode::None;
+				
+				gfxPipelineState->SetResourceBinding(this->gfxObjects->shaderBinding.get());
+				gfxPipelineState->SetPrimitiveTopology(gfxTopology);
+				gfxPipelineState->SetInputLayout(this->gfxObjects->inputLayout.get());
+				gfxPipelineState->SetVertexShader(this->gfxObjects->VS.get());
+				gfxPipelineState->SetPixelShader(this->gfxObjects->PS.get());
+				gfxPipelineState->SetRasterizerState(gfxRasterState);
+				res &= gfxPipelineState->Initialize();
+				if (Succeeded(res))
+				{
+					this->gfxObjects->pipelineState[i] = std::move(gfxPipelineState);
+				}
+			}
+#else
+			std::unique_ptr<GfxPipelineState> gfxPipelineState;
+			res = this->GetRealm().GetGfxSystem()->CreatePipelineState(gfxPipelineState);
+			if (Succeeded(res))
+			{
+				switch (PrimitiveType(i))
+				{
+				case PrimitiveType::Point: gfxPipelineState->PrimitiveTopology = GfxPrimitiveTopology::PointList; break;
+				case PrimitiveType::Line: gfxPipelineState->PrimitiveTopology = GfxPrimitiveTopology::LineList; break;
+				case PrimitiveType::Triangle: gfxPipelineState->PrimitiveTopology = GfxPrimitiveTopology::TriangleList; break;
+				}
+
+				gfxPipelineState->InputLayout = this->gfxObjects->inputLayout.get();
+				gfxPipelineState->VertexShader = this->gfxObjects->VS.get();
+				gfxPipelineState->PixelShader = this->gfxObjects->PS.get();
+
+				GfxRenderState gfxState = GfxRenderState::Default;
+				gfxState.RasterizerState.CullMode = GfxCullMode::None;
+				
+				res = gfxPipelineState->SetRenderState(gfxState);
+
+				this->gfxObjects->pipelineState[i] = std::move(gfxPipelineState);
+			}
+#endif
+			if (Failed(res))
+				return ResultError(Failure, "GenericRender::CreateGfxObjects: failed to initialize pipeline state");
+		}
+
 		// Quad Pipeline State
 		{
-			std::unique_ptr<PipelineState> gfxPipelineState;
+			std::unique_ptr<State> gfxPipelineState;
 			if (Succeeded(this->CreateScreenQuadState(gfxPipelineState)))
 			{
 				this->gfxObjects->quadState = std::move(gfxPipelineState);
@@ -192,7 +255,36 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result GenericRender::CreateScreenQuadState(std::unique_ptr<PipelineState> &pipelineState,
+#if (NEW_GAPI)
+	Result GenericRender::CreateScreenQuadState(std::unique_ptr<State> &pipelineState)
+	{
+		std::unique_ptr<GfxPipelineStateObject> gfxPipelineState;
+		Result res = this->GetRealm().GetGfxSystem()->CreatePipelineStateObject(gfxPipelineState);
+		if (Succeeded(res))
+		{
+			GfxRasterizerState gfxRasterState = GfxRasterizerState::Default;
+			gfxRasterState.CullMode = GfxCullMode::None;
+			GfxDepthStencilState gfxDepthStencilState = GfxDepthStencilState::Default;
+			gfxDepthStencilState.DepthEnable = false;
+			gfxDepthStencilState.DepthWriteEnable = false;
+
+			gfxPipelineState->SetResourceBinding(this->gfxObjects->shaderBinding.get());
+			gfxPipelineState->SetPrimitiveTopology(GfxPrimitiveTopology::TriangleStrip);
+			gfxPipelineState->SetInputLayout(this->gfxObjects->inputLayout.get());
+			gfxPipelineState->SetVertexShader(this->gfxObjects->VS.get());
+			gfxPipelineState->SetPixelShader(this->gfxObjects->PS.get());
+			gfxPipelineState->SetRasterizerState(gfxRasterState);
+			gfxPipelineState->SetDepthStencilState(gfxDepthStencilState);
+			res &= gfxPipelineState->Initialize();
+		}
+		if (Succeeded(res))
+		{
+			pipelineState = std::move(gfxPipelineState);
+		}
+		return res;
+	}
+#else
+	Result GenericRender::CreateScreenQuadState(std::unique_ptr<State> &pipelineState,
 		GfxPixelShader *customPS, GfxRenderState *customRS, ur_uint stencilRef)
 	{
 		std::unique_ptr<GfxPipelineState> gfxPipelineState;
@@ -205,13 +297,14 @@ namespace UnlimRealms
 			gfxPipelineState->PixelShader = (customPS != ur_null ? customPS : this->gfxObjects->PS.get());
 			gfxPipelineState->StencilRef = stencilRef;
 			res = gfxPipelineState->SetRenderState(customRS != ur_null ? *customRS : DefaultQuadRenderState);
-			if (Succeeded(res))
-			{
-				pipelineState = std::move(gfxPipelineState);
-			}
+		}
+		if (Succeeded(res))
+		{
+			pipelineState = std::move(gfxPipelineState);
 		}
 		return res;
 	}
+#endif
 
 	GenericRender::Batch* GenericRender::FindBatch(PrimitiveType primType)
 	{
@@ -467,14 +560,22 @@ namespace UnlimRealms
 		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 
 		// draw batches
-		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
 		gfxContext.SetVertexBuffer(this->gfxObjects->VB.get(), 0);
 		gfxContext.SetIndexBuffer(this->gfxObjects->IB.get());
+#if (NEW_GAPI)
+		this->gfxObjects->shaderBinding->SetTexture(0, this->gfxObjects->atlas.get());
+#else
+		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
 		gfxContext.SetTexture(this->gfxObjects->atlas.get(), 0);
+#endif
 		ur_uint vbOfs = 0, ibOfs = 0;
 		for (ur_uint i = 0; i < (ur_uint)PrimitiveType::Count; ++i)
 		{
+#if (NEW_GAPI)
+			gfxContext.SetPipelineStateObject(this->gfxObjects->pipelineState[i].get());
+#else
 			gfxContext.SetPipelineState(this->gfxObjects->pipelineState[i].get());
+#endif
 			gfxContext.DrawIndexed((ur_uint)this->batches[i].indicesCount, ibOfs, vbOfs, 0, 0);
 			vbOfs += (ur_uint)this->batches[i].verticesCount;
 			ibOfs += (ur_uint)this->batches[i].indicesCount;
@@ -490,8 +591,51 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+#if (NEW_GAPI)
+	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, GfxSampler* sampler,
+		const ur_float4x4 *transform, State *customState)
+	{
+		if (ur_null == this->gfxObjects ||
+			ur_null == this->gfxObjects->quadVB ||
+			ur_null == this->gfxObjects->quadState ||
+			ur_null == this->gfxObjects->CB)
+			return Result(NotInitialized);
+
+		CommonCB cb;
+		cb.viewProj = (transform != ur_null ? *transform : ur_float4x4::Identity);
+		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
+		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
+
+		this->gfxObjects->shaderBinding->SetTexture(0, texture != ur_null ? texture : this->gfxObjects->atlas.get());
+		this->gfxObjects->shaderBinding->SetSampler(0, sampler != ur_null ? sampler : this->gfxObjects->sampler.get());
+		gfxContext.SetPipelineStateObject(customState != ur_null ? customState : this->gfxObjects->quadState.get());
+		gfxContext.SetVertexBuffer(this->gfxObjects->quadVB.get(), 0);
+		gfxContext.Draw(4, 0, 0, 0);
+
+		return Result(Success);
+	}
+
+	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, GfxSampler* sampler,
+		const RectF &rect, State *customState)
+	{
+		GfxViewPort viewPort;
+		Result res = gfxContext.GetViewPort(viewPort);
+		if (Failed(res))
+			return res;
+
+		ur_float4x4 mx = ur_float4x4::Identity;
+		mx.r[0][0] = rect.Width() / viewPort.Width;
+		mx.r[1][1] = rect.Height() / viewPort.Height;
+		mx.r[3][0] = rect.Min.x / viewPort.Width * 2.0f - 1.0f + mx.r[0][0];
+		mx.r[3][1] = (1.0f - rect.Min.y / viewPort.Height) * 2.0f - 1.0f - mx.r[1][1];
+
+		return this->RenderScreenQuad(gfxContext, texture, sampler, &mx, customState);
+	}
+
+#else
+
 	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const ur_float4x4 *transform,
-		PipelineState *customState)
+		State *customState)
 	{
 		if (ur_null == this->gfxObjects ||
 			ur_null == this->gfxObjects->quadVB ||
@@ -499,24 +643,23 @@ namespace UnlimRealms
 			ur_null == this->gfxObjects->CB)
 			return Result(NotInitialized);
 		
-		GfxPipelineState *pipelineState = (customState != ur_null ? customState : this->gfxObjects->quadState.get());
-
 		CommonCB cb;
 		cb.viewProj = (transform != ur_null ? *transform : ur_float4x4::Identity);
 		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
 		gfxContext.UpdateBuffer(this->gfxObjects->CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 
+		GfxPipelineState *pipelineState = (customState != ur_null ? customState : this->gfxObjects->quadState.get());
 		gfxContext.SetConstantBuffer(this->gfxObjects->CB.get(), 0);
-		gfxContext.SetVertexBuffer(this->gfxObjects->quadVB.get(), 0);
 		gfxContext.SetTexture(texture != ur_null ? texture : this->gfxObjects->atlas.get(), 0);
 		gfxContext.SetPipelineState(pipelineState);
+		gfxContext.SetVertexBuffer(this->gfxObjects->quadVB.get(), 0);
 		gfxContext.Draw(4, 0, 0, 0);
 
 		return Result(Success);
 	}
 
 	Result GenericRender::RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const RectF &rect,
-		PipelineState *customState)
+		State *customState)
 	{
 		GfxViewPort viewPort;
 		Result res = gfxContext.GetViewPort(viewPort);
@@ -531,5 +674,6 @@ namespace UnlimRealms
 		
 		return this->RenderScreenQuad(gfxContext, texture, &mx, customState);
 	}
+#endif
 
 } // end namespace UnlimRealms

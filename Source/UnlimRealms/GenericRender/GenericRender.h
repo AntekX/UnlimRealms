@@ -28,7 +28,11 @@ namespace UnlimRealms
 			Count
 		};
 
-		typedef GfxPipelineState PipelineState;
+#if (NEW_GAPI)
+		typedef GfxPipelineStateObject State;
+#else
+		typedef GfxPipelineState State;
+#endif
 
 		GenericRender(Realm &realm);
 
@@ -49,16 +53,28 @@ namespace UnlimRealms
 
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
+#if (NEW_GAPI)
+		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, GfxSampler* sampler, const ur_float4x4 *transform = ur_null,
+			State *customState = ur_null);
+
+		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, GfxSampler* sampler, const RectF &rect,
+			State *customState = ur_null);
+
+		Result CreateScreenQuadState(std::unique_ptr<State> &pipelineState);
+#else
 		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const ur_float4x4 *transform = ur_null,
-			PipelineState *customState = ur_null);
+			State *customState = ur_null);
 
 		Result RenderScreenQuad(GfxContext &gfxContext, GfxTexture *texture, const RectF &rect,
-			PipelineState *customState = ur_null);
+			State *customState = ur_null);
 
-		Result CreateScreenQuadState(std::unique_ptr<PipelineState> &pipelineState,
+		Result CreateScreenQuadState(std::unique_ptr<State> &pipelineState,
 			GfxPixelShader *customPS = ur_null, GfxRenderState *customRS = ur_null, ur_uint stencilRef = 0);
+#endif
 
+#if !(NEW_GAPI)
 		const GfxRenderState& GetDefaultQuadRenderState() const { return DefaultQuadRenderState; }
+#endif
 
 	protected:
 
@@ -67,13 +83,20 @@ namespace UnlimRealms
 			std::unique_ptr<GfxVertexShader> VS;
 			std::unique_ptr<GfxPixelShader> PS;
 			std::unique_ptr<GfxInputLayout> inputLayout;
-			std::unique_ptr<GfxPipelineState> pipelineState[(ur_size)PrimitiveType::Count];
 			std::unique_ptr<GfxBuffer> CB;
 			std::unique_ptr<GfxBuffer> VB;
 			std::unique_ptr<GfxBuffer> IB;
 			std::unique_ptr<GfxTexture> atlas;
 			std::unique_ptr<GfxBuffer> quadVB;
+#if (NEW_GAPI)
+			std::unique_ptr<GfxSampler> sampler;
+			std::unique_ptr<GfxResourceBinding> shaderBinding;
+			std::unique_ptr<GfxPipelineStateObject> pipelineState[(ur_size)PrimitiveType::Count];
+			std::unique_ptr<GfxPipelineStateObject> quadState;
+#else
+			std::unique_ptr<GfxPipelineState> pipelineState[(ur_size)PrimitiveType::Count];
 			std::unique_ptr<GfxPipelineState> quadState;
+#endif
 		};
 
 		struct CommonCB
@@ -113,7 +136,9 @@ namespace UnlimRealms
 
 	protected:
 
+#if !(NEW_GAPI)
 		static GfxRenderState DefaultQuadRenderState;
+#endif
 
 		Result CreateGfxObjects();
 

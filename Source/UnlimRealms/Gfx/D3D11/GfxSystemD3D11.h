@@ -185,7 +185,7 @@ namespace UnlimRealms
 		GfxResourceBindingD3D11* gfxResourceBinding;
 		StateFlags stateFlags;
 		ur_uint gfxPipelineStateVersion;
-		ur_bool NEW_GAPI; // TEMP: switches on/off new GAPI code branch depending on the used function(s)
+		ur_bool newGAPIMode; // TEMP: switches on/off new GAPI code branch depending on the used function(s)
 	};
 
 

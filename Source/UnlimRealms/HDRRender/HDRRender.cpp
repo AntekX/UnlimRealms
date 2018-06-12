@@ -96,6 +96,9 @@ namespace UnlimRealms
 		// init custom generic quad render states
 		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
 		res = (genericRender != ur_null);
+#if (NEW_GAPI)
+		// TODO
+#else
 		if (Succeeded(res))
 		{
 			// common
@@ -129,6 +132,7 @@ namespace UnlimRealms
 			genericRender->CreateScreenQuadState(gfxObjects->screenQuadStateDebug,
 				ur_null, &quadPointSamplerRS);
 		}
+#endif
 		if (Failed(res))
 			return ResultError(NotInitialized, "HDRRender::Init: failed to get GenericRender component");
 
@@ -234,6 +238,9 @@ namespace UnlimRealms
 
 		Result res = Success;
 		
+#if (NEW_GAPI)
+		// TODO
+#else
 		ConstantsCB cb;
 		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->hdrRT->GetTargetBuffer()->GetDesc().Width;
@@ -285,6 +292,7 @@ namespace UnlimRealms
 				this->gfxObjects->screenQuadStateBlur.get());
 		}
 		if (dstIdx != 0) this->gfxObjects->bloomRT[0].swap(this->gfxObjects->bloomRT[1]);
+#endif
 
 		return res;
 	}
@@ -298,6 +306,9 @@ namespace UnlimRealms
 
 		Result res = Success;
 
+#if (NEW_GAPI)
+		// TODO
+#else
 		ConstantsCB cb;
 		GfxResourceData cbResData = { &cb, sizeof(ConstantsCB), 0 };
 		cb.SrcTargetSize.x = (ur_float)this->gfxObjects->lumRTChain.front()->GetTargetBuffer()->GetDesc().Width;
@@ -335,6 +346,7 @@ namespace UnlimRealms
 					this->gfxObjects->screenQuadStateDebug.get());
 			}
 		}
+#endif
 
 		return res;
 	}

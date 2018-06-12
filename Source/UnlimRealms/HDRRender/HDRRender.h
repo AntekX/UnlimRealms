@@ -14,8 +14,6 @@
 namespace UnlimRealms
 {
 
-#define NEW_GAPI 1
-
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// HDR rendering
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -74,12 +72,12 @@ namespace UnlimRealms
 			std::unique_ptr<GfxPixelShader> averageLuminancePS;
 			std::unique_ptr<GfxPixelShader> toneMappingPS;
 			std::unique_ptr<GfxPixelShader> blurPS;
-			std::unique_ptr<GenericRender::PipelineState> screenQuadStateHDRLuminance;
-			std::unique_ptr<GenericRender::PipelineState> screenQuadStateAverageLuminance;
-			std::unique_ptr<GenericRender::PipelineState> screenQuadStateBloom;
-			std::unique_ptr<GenericRender::PipelineState> screenQuadStateBlur;
-			std::unique_ptr<GenericRender::PipelineState> screenQuadStateTonemapping;
-			std::unique_ptr<GenericRender::PipelineState> screenQuadStateDebug;
+			std::unique_ptr<GenericRender::State> screenQuadStateHDRLuminance;
+			std::unique_ptr<GenericRender::State> screenQuadStateAverageLuminance;
+			std::unique_ptr<GenericRender::State> screenQuadStateBloom;
+			std::unique_ptr<GenericRender::State> screenQuadStateBlur;
+			std::unique_ptr<GenericRender::State> screenQuadStateTonemapping;
+			std::unique_ptr<GenericRender::State> screenQuadStateDebug;
 
 		};
 

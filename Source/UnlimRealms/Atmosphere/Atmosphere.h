@@ -79,8 +79,11 @@ namespace UnlimRealms
 			std::unique_ptr<GfxPixelShader> lightShaftsPS;
 			std::unique_ptr<GfxRenderTarget> lightShaftsRT;
 			std::unique_ptr<GfxBuffer> lightShaftsCB;
-			std::unique_ptr<GenericRender::PipelineState> screenQuadStateOcclusionMask;
-			std::unique_ptr<GenericRender::PipelineState> screenQuadStateBlendLightShafts;
+			std::unique_ptr<GenericRender::State> screenQuadStateOcclusionMask;
+			std::unique_ptr<GenericRender::State> screenQuadStateBlendLightShafts;
+#if (NEW_GAPI)
+			std::unique_ptr<GfxSampler> pointSampler;
+#endif
 		} gfxObjects;
 
 		struct alignas(16) CommonCB

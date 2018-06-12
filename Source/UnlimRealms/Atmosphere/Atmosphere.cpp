@@ -158,10 +158,40 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGfxObjects: failed to initialize Light Shafts constant buffer");
 
+#if (NEW_GAPI)
+		// Custom samplers
+		res = this->GetRealm().GetGfxSystem()->CreateSampler(this->gfxObjects.pointSampler);
+		if (Succeeded(res))
+		{
+			GfxSamplerState gfxSamplerState = GfxSamplerState::Default;
+			gfxSamplerState.MinFilter = GfxFilter::Point;
+			gfxSamplerState.MagFilter = GfxFilter::Point;
+			res = this->gfxObjects.pointSampler->Initialize(gfxSamplerState);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGfxObjects: failed to initialize custom sampler");
+#endif
+
 		// Custom screen quad render states
 		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
 		res = (genericRender != ur_null);
+		if (Succeeded(res))
 		{
+#if (NEW_GAPI)
+			// Occlusion mask
+			res = genericRender->CreateScreenQuadState(this->gfxObjects.screenQuadStateOcclusionMask);
+			if (Succeeded(res))
+			{
+				GfxDepthStencilState gfxDSState = GfxDepthStencilState::Default;
+				gfxDSState.StencilEnable = true;
+				gfxDSState.FrontFace.StencilFunc = GfxCmpFunc::Equal;
+				gfxDSState.StencilWriteMask = 0x0;
+				this->gfxObjects.screenQuadStateOcclusionMask->SetDepthStencilState(gfxDSState);
+				this->gfxObjects.screenQuadStateOcclusionMask->SetStencilRef(0x1);
+				//this->gfxObjects.screenQuadStateOcclusionMask->GetResourceBinding()->SetSampler(0, this->gfxObjects.pointSampler.get());
+			}
+
+#else
 			// Occlusion mask
 			GfxRenderState occlusionMaskRS = genericRender->GetDefaultQuadRenderState();
 			occlusionMaskRS.SamplerState[0].MinFilter = GfxFilter::Point;
@@ -181,6 +211,7 @@ namespace UnlimRealms
 			lightShaftsBlendRS.BlendState[0].DstBlendAlpha = GfxBlendFactor::InvSrcAlpha;
 			genericRender->CreateScreenQuadState(this->gfxObjects.screenQuadStateBlendLightShafts,
 				this->gfxObjects.lightShaftsPS.get(), &lightShaftsBlendRS);
+#endif
 		}
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGfxObjects: failed to initialize Light Shafts render states");
@@ -263,6 +294,10 @@ namespace UnlimRealms
 		cb.Params = this->desc;
 		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
 		gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
+
+#if (NEW_GAPI)
+		// todo
+#else
 		gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);
 
 		// pipeline state
@@ -273,6 +308,7 @@ namespace UnlimRealms
 		gfxContext.SetVertexBuffer(this->gfxObjects.VB.get(), 0);
 		gfxContext.SetIndexBuffer(this->gfxObjects.IB.get());
 		gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
+#endif
 
 		return Success;
 	}
@@ -312,6 +348,9 @@ namespace UnlimRealms
 		// constants
 		GfxResourceData cbResData = { &this->lightShafts, sizeof(LightShaftsCB), 0 };
 		res &= gfxContext.UpdateBuffer(this->gfxObjects.lightShaftsCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
+#if (NEW_GAPI)
+		// todo
+#else
 		res &= gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 1);
 		res &= gfxContext.SetConstantBuffer(this->gfxObjects.lightShaftsCB.get(), 2);
 
@@ -326,7 +365,7 @@ namespace UnlimRealms
 		res &= gfxContext.SetRenderTarget(&renderTarget);
 		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects.lightShaftsRT->GetTargetBuffer(), ur_null,
 			this->gfxObjects.screenQuadStateBlendLightShafts.get());
-
+#endif
 		return res;
 	}
 
