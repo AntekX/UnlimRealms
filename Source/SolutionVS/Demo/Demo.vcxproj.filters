@@ -36,6 +36,9 @@
     <ClInclude Include="VoxelPlanetApp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="VulkanSandboxApp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -48,6 +51,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="VoxelPlanetApp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="VulkanSandboxApp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
