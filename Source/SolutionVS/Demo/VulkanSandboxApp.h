@@ -6,3 +6,56 @@ public:
 
 	int Run();
 };
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// NEW GFX ABSTRACTION LAYER WIP
+// GRAF: GRaphics Abstraction Front-end
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#include "UnlimRealms.h"
+
+namespace UnlimRealms
+{
+
+	class /*UR_DECL*/ GrafSystem : public RealmEntity
+	{
+	public:
+
+		GrafSystem(Realm &realm);
+
+		virtual ~GrafSystem();
+
+		virtual Result Initialize(Canvas *canvas);
+	};
+
+} // end namespace UnlimRealms
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// GRAF: VULKAN IMPLEMENTATION
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#include "vulkan/vulkan.h"
+
+namespace UnlimRealms
+{
+
+	class /*UR_DECL*/ GrafSystemVulkan : public GrafSystem
+	{
+	public:
+
+		GrafSystemVulkan(Realm &realm);
+
+		virtual ~GrafSystemVulkan();
+
+		virtual Result Initialize(Canvas *canvas);
+
+	private:
+
+		Result Deinitialize();
+
+		VkInstance vkInstance;
+	};
+
+} // end namespace UnlimRealms
