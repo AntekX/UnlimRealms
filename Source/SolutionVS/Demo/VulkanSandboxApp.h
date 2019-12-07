@@ -18,6 +18,16 @@ public:
 namespace UnlimRealms
 {
 
+	struct UR_DECL GrafDeviceDesc
+	{
+		std::wstring Description;
+		ur_uint VendorId;
+		ur_uint DeviceId;
+		ur_size DedicatedVideoMemory;
+		ur_size DedicatedSystemMemory;
+		ur_size SharedSystemMemory;
+	};
+
 	class /*UR_DECL*/ GrafSystem : public RealmEntity
 	{
 	public:

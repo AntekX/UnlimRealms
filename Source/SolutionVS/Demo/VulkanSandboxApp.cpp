@@ -244,25 +244,27 @@ Result GrafSystemVulkan::Initialize(Canvas *canvas)
 	#if defined(UR_GRAF_LOG_LEVEL_DEBUG)
 	
 	// enumerate extentions
+
 	ur_uint32 vkExtensionCount = 0;
 	vkEnumerateInstanceExtensionProperties(ur_null, &vkExtensionCount, ur_null);
 	std::vector<VkExtensionProperties> vkExtensionProperties(vkExtensionCount);
 	vkEnumerateInstanceExtensionProperties(ur_null, &vkExtensionCount, vkExtensionProperties.data());
-	GetRealm().GetLog().WriteLine("GrafSystemVulkan: extensions available:");
+	LogNoteGrafDbg("GrafSystemVulkan: extensions available:");
 	for (auto& extensionProperty : vkExtensionProperties)
 	{
-		GetRealm().GetLog().WriteLine(extensionProperty.extensionName);
+		LogNoteGrafDbg(extensionProperty.extensionName);
 	}
 
 	// enumerate layers
+
 	ur_uint32 vkLayerCount = 0;
 	vkEnumerateInstanceLayerProperties(&vkLayerCount, ur_null);
 	std::vector<VkLayerProperties> vkLayerProperties(vkLayerCount);
 	vkEnumerateInstanceLayerProperties(&vkLayerCount, vkLayerProperties.data());
-	GetRealm().GetLog().WriteLine("GrafSystemVulkan: layers available:");
+	LogNoteGrafDbg("GrafSystemVulkan: layers available:");
 	for (auto& layerProperty : vkLayerProperties)
 	{
-		GetRealm().GetLog().WriteLine(std::string(layerProperty.layerName) + " (" + layerProperty.description + ")");
+		LogNoteGrafDbg(std::string(layerProperty.layerName) + " (" + layerProperty.description + ")");
 	}
 
 	// TODO: consider setting up custom debug callback for vulkan messages
@@ -291,10 +293,30 @@ Result GrafSystemVulkan::Initialize(Canvas *canvas)
 	VkResult res = vkCreateInstance(&vkCreateInfo, ur_null, &this->vkInstance);
 	if (res != VK_SUCCESS)
 	{
-		GetRealm().GetLog().WriteLine(std::string("GrafSystemVulkan: vkCreateInstance failed with VkResult = ") + VkResultToString(res));
-		return Result(Failure);
+		return ResultError(Failure, std::string("GrafSystemVulkan: vkCreateInstance failed with VkResult = ") + VkResultToString(res));
 	}
 	LogNoteGrafDbg("GrafSystemVulkan: VkInstance created");
+
+	// enumerate physical devices
+
+	ur_uint32 physicalDeviceCount = 0;
+	vkEnumeratePhysicalDevices(this->vkInstance, &physicalDeviceCount, ur_null);
+	if (0 == physicalDeviceCount)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, "GrafSystemVulkan: init failed, no physical device found");
+	}
+	std::vector<VkPhysicalDevice> vkPhysicalDevices(physicalDeviceCount);
+	vkEnumeratePhysicalDevices(this->vkInstance, &physicalDeviceCount, vkPhysicalDevices.data());
+	for (auto& vkPhysicalDevice : vkPhysicalDevices)
+	{
+		VkPhysicalDeviceProperties vkDeviceProperties;
+		VkPhysicalDeviceMemoryProperties vkDeviceMemoryProperties;
+		vkGetPhysicalDeviceProperties(vkPhysicalDevice, &vkDeviceProperties);
+		vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &vkDeviceMemoryProperties);
+		int temp = 0;
+		// TODO: fill GrafDeviceDesc
+	}
 
 	return Result(Success);
 }
