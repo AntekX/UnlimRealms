@@ -35,9 +35,18 @@ int VulkanSandboxApp::Run()
 	// initialize gfx system
 	realm.AddComponent(Component::GetUID<GrafSystem>(), std::unique_ptr<Component>(static_cast<Component*>(new GrafSystemVulkan(realm))));
 	GrafSystem* grafSystem = realm.GetComponent<GrafSystem>();
+	std::unique_ptr<GrafDevice> grafDevice;
 	if (grafSystem != nullptr)
 	{
 		Result res = grafSystem->Initialize(realm.GetCanvas());
+		if (Succeeded(res) && grafSystem->GetDeviceDescCount() > 0)
+		{
+			res = grafSystem->CreateDevice(grafDevice);
+			if (Succeeded(res))
+			{
+				grafDevice->Initialize(0);
+			}
+		}
 	}
 
 	// initialize ImguiRender
@@ -140,6 +149,35 @@ Result GrafSystem::Initialize(Canvas *canvas)
 	return NotImplemented;
 }
 
+Result GrafSystem::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
+{
+	return NotImplemented;
+}
+
+GrafEntity::GrafEntity(GrafSystem &grafSystem) :
+	RealmEntity(grafSystem.GetRealm()),
+	grafSystem(grafSystem)
+{
+}
+
+GrafEntity::~GrafEntity()
+{
+}
+
+GrafDevice::GrafDevice(GrafSystem &grafSystem) :
+	GrafEntity(grafSystem)
+{
+}
+
+GrafDevice::~GrafDevice()
+{
+}
+
+Result GrafDevice::Initialize(ur_uint deviceId)
+{
+	this->deviceId = deviceId;
+	return NotImplemented;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GRAF: VULKAN IMPLEMENTATION
@@ -171,6 +209,10 @@ static const char* VulkanExtensions[] = {
 #if defined(UR_GRAF_VULKAN_DEBUG_LAYER)
 	, "VK_EXT_debug_utils"
 #endif
+};
+
+static const char* VulkanDeviceExtensions[] = {
+	"VK_KHR_swapchain"
 };
 
 static const char* VkResultToString(VkResult res)
@@ -221,14 +263,18 @@ GrafSystemVulkan::GrafSystemVulkan(Realm &realm) :
 
 GrafSystemVulkan::~GrafSystemVulkan()
 {
-	Deinitialize();
+	this->Deinitialize();
 }
 
 Result GrafSystemVulkan::Deinitialize()
 {
+	this->grafDeviceDecsription.clear();
+	this->vkPhysicalDevices.clear();
+
 	if (this->vkInstance != VK_NULL_HANDLE)
 	{
 		vkDestroyInstance(this->vkInstance, ur_null);
+		this->vkInstance = VK_NULL_HANDLE;
 		LogNoteGrafDbg("GrafSystemVulkan: deinitialized");
 	}
 
@@ -306,17 +352,139 @@ Result GrafSystemVulkan::Initialize(Canvas *canvas)
 		this->Deinitialize();
 		return ResultError(Failure, "GrafSystemVulkan: init failed, no physical device found");
 	}
-	std::vector<VkPhysicalDevice> vkPhysicalDevices(physicalDeviceCount);
+	this->vkPhysicalDevices.resize(physicalDeviceCount);
 	vkEnumeratePhysicalDevices(this->vkInstance, &physicalDeviceCount, vkPhysicalDevices.data());
-	for (auto& vkPhysicalDevice : vkPhysicalDevices)
+	this->grafDeviceDecsription.resize(physicalDeviceCount);
+	for (ur_uint32 deviceId = 0; deviceId < physicalDeviceCount; ++deviceId)
 	{
+		VkPhysicalDevice& vkPhysicalDevice = vkPhysicalDevices[deviceId];
 		VkPhysicalDeviceProperties vkDeviceProperties;
 		VkPhysicalDeviceMemoryProperties vkDeviceMemoryProperties;
 		vkGetPhysicalDeviceProperties(vkPhysicalDevice, &vkDeviceProperties);
 		vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &vkDeviceMemoryProperties);
-		int temp = 0;
-		// TODO: fill GrafDeviceDesc
+		
+		GrafDeviceDesc& grafDeviceDesc = this->grafDeviceDecsription[deviceId];
+		grafDeviceDesc = {};
+		grafDeviceDesc.Description = vkDeviceProperties.deviceName;
+		grafDeviceDesc.VendorId = (ur_uint)vkDeviceProperties.vendorID;
+		grafDeviceDesc.DeviceId = (ur_uint)vkDeviceProperties.deviceID;
+		std::vector<VkMemoryPropertyFlags> perHeapFlags(vkDeviceMemoryProperties.memoryHeapCount);
+		for (ur_uint32 memTypeIdx = 0; memTypeIdx < vkDeviceMemoryProperties.memoryTypeCount; ++memTypeIdx)
+		{
+			VkMemoryType& vkMemType = vkDeviceMemoryProperties.memoryTypes[memTypeIdx];
+			perHeapFlags[vkMemType.heapIndex] |= vkMemType.propertyFlags;
+		}
+		for (ur_uint32 memHeapIdx = 0; memHeapIdx < vkDeviceMemoryProperties.memoryHeapCount; ++memHeapIdx)
+		{
+			VkMemoryHeap& vkMemHeap = vkDeviceMemoryProperties.memoryHeaps[memHeapIdx];
+			if (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT & perHeapFlags[memHeapIdx]) grafDeviceDesc.DedicatedVideoMemory += (ur_size)vkMemHeap.size;
+			if (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & perHeapFlags[memHeapIdx]) grafDeviceDesc.SharedSystemMemory += (ur_size)vkMemHeap.size;
+		}
+		
+		#if defined(UR_GRAF_LOG_LEVEL_DEBUG)
+		LogNoteGrafDbg(std::string("GrafSystemVulkan: device available ") + grafDeviceDesc.Description +
+			", VRAM = " + std::to_string(grafDeviceDesc.DedicatedVideoMemory >> 20) + " Mb");
+		#endif
 	}
+
+	return Result(Success);
+}
+
+Result GrafSystemVulkan::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
+{
+	grafDevice.reset(new GrafDeviceVulkan(*this));
+	return Result(Success);
+}
+
+GrafDeviceVulkan::GrafDeviceVulkan(GrafSystem &grafSystem) :
+	GrafDevice(grafSystem)
+{
+	this->vkDevice = VK_NULL_HANDLE;
+}
+
+GrafDeviceVulkan::~GrafDeviceVulkan()
+{
+	this->Deinitialize();
+}
+
+Result GrafDeviceVulkan::Deinitialize()
+{
+	if (this->vkDevice != VK_NULL_HANDLE)
+	{
+		vkDestroyDevice(this->vkDevice, ur_null);
+		this->vkDevice = VK_NULL_HANDLE;
+		LogNoteGrafDbg("GrafDeviceVulkan: deinitialized");
+	}
+
+	return Result(Success);
+}
+
+Result GrafDeviceVulkan::Initialize(ur_uint deviceId)
+{
+	this->Deinitialize();
+
+	LogNoteGrafDbg("GrafDeviceVulkan: initialization...");
+
+	GrafDevice::Initialize(deviceId);
+
+	// get corresponding physical device 
+
+	GrafSystemVulkan& grafSystemVulkan = static_cast<GrafSystemVulkan&>(this->GetGrafSystem());
+	VkPhysicalDevice vkPhysicalDevice = grafSystemVulkan.GetVkPhysicalDevice(this->GetDeviceId());
+	if (VK_NULL_HANDLE == vkPhysicalDevice)
+	{
+		return ResultError(Failure, std::string("GrafDeviceVulkan: can not find VkPhysicalDevice for deviceId = ") + std::to_string(this->GetDeviceId()));
+	}
+
+	// enumerate device queue families
+
+	ur_uint32 vkQueueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(vkPhysicalDevice, &vkQueueFamilyCount, ur_null);
+	std::vector<VkQueueFamilyProperties> vkQueueProperties(vkQueueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(vkPhysicalDevice, &vkQueueFamilyCount, vkQueueProperties.data());
+	ur_uint32 firstGraphicsQueueFamily = 0;
+	ur_uint32 firstComputeQueueFamily = 0;
+	ur_uint32 firstTransferQueueFamily = 0;
+	for (ur_size i = 0; i < vkQueueProperties.size(); ++i)
+	{
+		if (VK_QUEUE_GRAPHICS_BIT & vkQueueProperties[i].queueFlags)
+			firstGraphicsQueueFamily = std::min(ur_uint32(i), firstGraphicsQueueFamily);
+		if (VK_QUEUE_COMPUTE_BIT & vkQueueProperties[i].queueFlags)
+			firstComputeQueueFamily = std::min(ur_uint32(i), firstComputeQueueFamily);
+		if (VK_QUEUE_TRANSFER_BIT & vkQueueProperties[i].queueFlags)
+			firstTransferQueueFamily = std::min(ur_uint32(i), firstTransferQueueFamily);
+	}
+
+	// create logical device
+
+	VkDeviceQueueCreateInfo vkQueueInfo = {};
+	vkQueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	vkQueueInfo.flags = 0;
+	vkQueueInfo.queueFamilyIndex = firstGraphicsQueueFamily;
+	vkQueueInfo.queueCount = 1;
+	ur_float queuePriority = 1.0f;
+	vkQueueInfo.pQueuePriorities = &queuePriority;
+
+	VkPhysicalDeviceFeatures vkDeviceFeatures = {};
+	// todo: pass to Initialize a GRAF structure describing essential user defined feature list and fill corresponding fields in VkPhysicalDeviceFeatures
+
+	VkDeviceCreateInfo vkDeviceInfo = {};
+	vkDeviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	vkDeviceInfo.flags = 0;
+	vkDeviceInfo.queueCreateInfoCount = 1;
+	vkDeviceInfo.pQueueCreateInfos = &vkQueueInfo;
+	vkDeviceInfo.enabledLayerCount = (VulkanLayers ? ur_array_size(VulkanLayers) : 0);
+	vkDeviceInfo.ppEnabledLayerNames = VulkanLayers;
+	vkDeviceInfo.enabledExtensionCount = (VulkanDeviceExtensions ? ur_array_size(VulkanDeviceExtensions) : 0);
+	vkDeviceInfo.ppEnabledExtensionNames = VulkanDeviceExtensions;
+	vkDeviceInfo.pEnabledFeatures = &vkDeviceFeatures;
+
+	VkResult res = vkCreateDevice(vkPhysicalDevice, &vkDeviceInfo, ur_null, &this->vkDevice);
+	if (res != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafDeviceVulkan: vkCreateDevice failed with VkResult = ") + VkResultToString(res));
+	}
+	LogNoteGrafDbg("GrafDeviceVulkan: VkDevice created");
 
 	return Result(Success);
 }
