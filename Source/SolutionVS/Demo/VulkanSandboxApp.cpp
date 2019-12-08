@@ -33,20 +33,45 @@ int VulkanSandboxApp::Run()
 	realm.SetInput(std::move(input));
 
 	// initialize gfx system
-	realm.AddComponent(Component::GetUID<GrafSystem>(), std::unique_ptr<Component>(static_cast<Component*>(new GrafSystemVulkan(realm))));
-	GrafSystem* grafSystem = realm.GetComponent<GrafSystem>();
+	std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
 	std::unique_ptr<GrafDevice> grafDevice;
-	if (grafSystem != nullptr)
+	std::unique_ptr<GrafCanvas> grafCanvas;
+	auto& deinitializeGfxSystem = [&grafSystem, &grafDevice, &grafCanvas]() -> void {
+		// order matters!
+		grafCanvas.reset();
+		grafDevice.reset();
+		grafSystem.reset();
+	};
+	Result grafRes = NotInitialized;
+	do
 	{
-		Result res = grafSystem->Initialize(realm.GetCanvas());
-		if (Succeeded(res) && grafSystem->GetDeviceDescCount() > 0)
-		{
-			res = grafSystem->CreateDevice(grafDevice);
-			if (Succeeded(res))
-			{
-				grafDevice->Initialize(0);
-			}
-		}
+		grafRes = grafSystem->Initialize(realm.GetCanvas());
+		if (Failed(grafRes) || 0 == grafSystem->GetPhysicalDeviceCount()) break;
+		
+		grafRes = grafSystem->CreateDevice(grafDevice);
+		if (Failed(grafRes)) break;
+	
+		grafRes = grafDevice->Initialize(grafSystem->GetRecommendedDeviceId());
+		if (Failed(grafRes)) break;
+
+		grafRes = grafSystem->CreateCanvas(grafCanvas);
+		if (Failed(grafRes)) break;
+
+		grafRes = grafCanvas->Initialize(grafDevice.get());
+		if (Failed(grafRes)) break;
+
+	} while (false);
+	if (Failed(grafRes))
+	{
+		deinitializeGfxSystem();
+		realm.GetLog().WriteLine("VulkanSandboxApp: failed to initialize graphics system", Log::Error);
+	}
+	else
+	{
+		// TODO: GRAF system should be accessible from everywhere as a realm component;
+		// requires keeping pointers to GrafDevice(s) and GrafCanvas(es) in GrafSystem...
+		//realm.AddComponent(Component::GetUID<GrafSystem>(), std::unique_ptr<Component>(static_cast<Component*>(std::move(grafSystem))));
+		//GrafSystem* grafSystem = realm.GetComponent<GrafSystem>();
 	}
 
 	// initialize ImguiRender
@@ -89,6 +114,10 @@ int VulkanSandboxApp::Run()
 			canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 			canvasHeight = realm.GetCanvas()->GetClientBound().Height();
 			// TODO: resize frame buffer(s)
+			if (grafCanvas != ur_null)
+			{
+				grafCanvas->Initialize(grafDevice.get());
+			}
 		}
 
 		// update sub systems
@@ -125,6 +154,8 @@ int VulkanSandboxApp::Run()
 		// TODO: present & flip here
 	}
 
+	deinitializeGfxSystem();
+
 	return 0;
 }
 
@@ -146,12 +177,35 @@ GrafSystem::~GrafSystem()
 
 Result GrafSystem::Initialize(Canvas *canvas)
 {
-	return NotImplemented;
+	return Result(NotImplemented);
+}
+
+Result GrafSystem::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
+{
+	return Result(NotImplemented);
 }
 
 Result GrafSystem::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
 {
-	return NotImplemented;
+	return Result(NotImplemented);
+}
+
+ur_uint GrafSystem::GetRecommendedDeviceId()
+{
+	ur_uint recommendedDeviceId = ur_uint(-1);
+
+	GrafPhysicalDeviceDesc bestDeviceDesc = {};
+	for (ur_uint deviceId = 0; deviceId < (ur_uint)grafPhysicalDeviceDesc.size(); ++deviceId)
+	{
+		const GrafPhysicalDeviceDesc& deviceDesc = grafPhysicalDeviceDesc[deviceId];
+		if (deviceDesc.DedicatedVideoMemory > bestDeviceDesc.DedicatedVideoMemory)
+		{
+			bestDeviceDesc.DedicatedVideoMemory = deviceDesc.DedicatedVideoMemory;
+			recommendedDeviceId = deviceId;
+		}
+	}
+
+	return recommendedDeviceId;
 }
 
 GrafEntity::GrafEntity(GrafSystem &grafSystem) :
@@ -176,7 +230,27 @@ GrafDevice::~GrafDevice()
 Result GrafDevice::Initialize(ur_uint deviceId)
 {
 	this->deviceId = deviceId;
-	return NotImplemented;
+	return Result(NotImplemented);
+}
+
+GrafCanvas::GrafCanvas(GrafSystem &grafSystem) :
+	GrafEntity(grafSystem),
+	grafDevice(ur_null)
+{
+}
+
+GrafCanvas::~GrafCanvas()
+{
+}
+
+const GrafCanvas::InitParams GrafCanvas::InitParams::Default = {
+	GrafFormat::B8G8R8A8_UNORM, GrafPresentMode::VerticalSync, 3
+};
+
+Result GrafCanvas::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
+{
+	this->grafDevice = grafDevice;
+	return Result(NotImplemented);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -206,6 +280,9 @@ static const char** VulkanLayers = ur_null;
 
 static const char* VulkanExtensions[] = {
 	"VK_KHR_surface"
+#if defined(_WINDOWS)
+	, "VK_KHR_win32_surface"
+#endif
 #if defined(UR_GRAF_VULKAN_DEBUG_LAYER)
 	, "VK_EXT_debug_utils"
 #endif
@@ -255,6 +332,8 @@ static const char* VkResultToString(VkResult res)
 	return "VK_UNKNOWN";
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 GrafSystemVulkan::GrafSystemVulkan(Realm &realm) : 
 	GrafSystem(realm)
 {
@@ -268,7 +347,7 @@ GrafSystemVulkan::~GrafSystemVulkan()
 
 Result GrafSystemVulkan::Deinitialize()
 {
-	this->grafDeviceDecsription.clear();
+	this->grafPhysicalDeviceDesc.clear();
 	this->vkPhysicalDevices.clear();
 
 	if (this->vkInstance != VK_NULL_HANDLE)
@@ -354,7 +433,7 @@ Result GrafSystemVulkan::Initialize(Canvas *canvas)
 	}
 	this->vkPhysicalDevices.resize(physicalDeviceCount);
 	vkEnumeratePhysicalDevices(this->vkInstance, &physicalDeviceCount, vkPhysicalDevices.data());
-	this->grafDeviceDecsription.resize(physicalDeviceCount);
+	this->grafPhysicalDeviceDesc.resize(physicalDeviceCount);
 	for (ur_uint32 deviceId = 0; deviceId < physicalDeviceCount; ++deviceId)
 	{
 		VkPhysicalDevice& vkPhysicalDevice = vkPhysicalDevices[deviceId];
@@ -363,7 +442,7 @@ Result GrafSystemVulkan::Initialize(Canvas *canvas)
 		vkGetPhysicalDeviceProperties(vkPhysicalDevice, &vkDeviceProperties);
 		vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &vkDeviceMemoryProperties);
 		
-		GrafDeviceDesc& grafDeviceDesc = this->grafDeviceDecsription[deviceId];
+		GrafPhysicalDeviceDesc& grafDeviceDesc = this->grafPhysicalDeviceDesc[deviceId];
 		grafDeviceDesc = {};
 		grafDeviceDesc.Description = vkDeviceProperties.deviceName;
 		grafDeviceDesc.VendorId = (ur_uint)vkDeviceProperties.vendorID;
@@ -390,16 +469,27 @@ Result GrafSystemVulkan::Initialize(Canvas *canvas)
 	return Result(Success);
 }
 
+Result GrafSystemVulkan::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
+{
+	grafCanvas.reset(new GrafCanvasVulkan(*this));
+	return Result(Success);
+}
+
 Result GrafSystemVulkan::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
 {
 	grafDevice.reset(new GrafDeviceVulkan(*this));
 	return Result(Success);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 GrafDeviceVulkan::GrafDeviceVulkan(GrafSystem &grafSystem) :
 	GrafDevice(grafSystem)
 {
 	this->vkDevice = VK_NULL_HANDLE;
+	this->deviceGraphicsQueueId = ur_uint(-1);
+	this->deviceComputeQueueId = ur_uint(-1);
+	this->deviceTransferQueueId = ur_uint(-1);
 }
 
 GrafDeviceVulkan::~GrafDeviceVulkan()
@@ -409,6 +499,10 @@ GrafDeviceVulkan::~GrafDeviceVulkan()
 
 Result GrafDeviceVulkan::Deinitialize()
 {
+	this->deviceGraphicsQueueId = ur_uint(-1);
+	this->deviceComputeQueueId = ur_uint(-1);
+	this->deviceTransferQueueId = ur_uint(-1);
+
 	if (this->vkDevice != VK_NULL_HANDLE)
 	{
 		vkDestroyDevice(this->vkDevice, ur_null);
@@ -442,25 +536,32 @@ Result GrafDeviceVulkan::Initialize(ur_uint deviceId)
 	vkGetPhysicalDeviceQueueFamilyProperties(vkPhysicalDevice, &vkQueueFamilyCount, ur_null);
 	std::vector<VkQueueFamilyProperties> vkQueueProperties(vkQueueFamilyCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(vkPhysicalDevice, &vkQueueFamilyCount, vkQueueProperties.data());
-	ur_uint32 firstGraphicsQueueFamily = 0;
-	ur_uint32 firstComputeQueueFamily = 0;
-	ur_uint32 firstTransferQueueFamily = 0;
+	ur_uint firstGraphicsQueueFamily = ur_uint(-1);
+	ur_uint firstComputeQueueFamily = ur_uint(-1);
+	ur_uint firstTransferQueueFamily = ur_uint(-1);
 	for (ur_size i = 0; i < vkQueueProperties.size(); ++i)
 	{
 		if (VK_QUEUE_GRAPHICS_BIT & vkQueueProperties[i].queueFlags)
-			firstGraphicsQueueFamily = std::min(ur_uint32(i), firstGraphicsQueueFamily);
+			firstGraphicsQueueFamily = std::min(ur_uint(i), firstGraphicsQueueFamily);
 		if (VK_QUEUE_COMPUTE_BIT & vkQueueProperties[i].queueFlags)
-			firstComputeQueueFamily = std::min(ur_uint32(i), firstComputeQueueFamily);
+			firstComputeQueueFamily = std::min(ur_uint(i), firstComputeQueueFamily);
 		if (VK_QUEUE_TRANSFER_BIT & vkQueueProperties[i].queueFlags)
-			firstTransferQueueFamily = std::min(ur_uint32(i), firstTransferQueueFamily);
+			firstTransferQueueFamily = std::min(ur_uint(i), firstTransferQueueFamily);
 	}
+	if (firstGraphicsQueueFamily == ur_uint(-1))
+	{
+		return ResultError(Failure, std::string("GrafDeviceVulkan: graphics queue family is not available for device Id = ") + std::to_string(this->GetDeviceId()));
+	}
+	this->deviceGraphicsQueueId = firstGraphicsQueueFamily;
+	this->deviceComputeQueueId = firstComputeQueueFamily;
+	this->deviceTransferQueueId = firstTransferQueueFamily;
 
 	// create logical device
 
 	VkDeviceQueueCreateInfo vkQueueInfo = {};
 	vkQueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 	vkQueueInfo.flags = 0;
-	vkQueueInfo.queueFamilyIndex = firstGraphicsQueueFamily;
+	vkQueueInfo.queueFamilyIndex = (ur_uint32)firstGraphicsQueueFamily;
 	vkQueueInfo.queueCount = 1;
 	ur_float queuePriority = 1.0f;
 	vkQueueInfo.pQueuePriorities = &queuePriority;
@@ -487,4 +588,253 @@ Result GrafDeviceVulkan::Initialize(ur_uint deviceId)
 	LogNoteGrafDbg("GrafDeviceVulkan: VkDevice created");
 
 	return Result(Success);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+GrafCanvasVulkan::GrafCanvasVulkan(GrafSystem &grafSystem) :
+	GrafCanvas(grafSystem)
+{
+	this->vkSurface = VK_NULL_HANDLE;
+	this->vkSwapChain = VK_NULL_HANDLE;
+}
+
+GrafCanvasVulkan::~GrafCanvasVulkan()
+{
+	this->Deinitialize();
+}
+
+Result GrafCanvasVulkan::Deinitialize()
+{
+	this->vkSwapChainImages.clear();
+	if (this->vkSwapChain != VK_NULL_HANDLE)
+	{
+		vkDestroySwapchainKHR(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSwapChain, ur_null);
+		this->vkSwapChain = VK_NULL_HANDLE;
+		LogNoteGrafDbg("GrafCanvasVulkan: swap chain destroyed");
+	}
+	if (this->vkSurface != VK_NULL_HANDLE)
+	{
+		vkDestroySurfaceKHR(static_cast<GrafSystemVulkan&>(this->GetGrafSystem()).GetVkInstance(), this->vkSurface, ur_null);
+		this->vkSurface = VK_NULL_HANDLE;
+		LogNoteGrafDbg("GrafCanvasVulkan: surface destroyed");
+	}
+
+	return Result(Success);
+}
+
+Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
+{
+	this->Deinitialize();
+
+	LogNoteGrafDbg("GrafCanvasVulkan: initialization...");
+
+	GrafCanvas::Initialize(grafDevice, initParams);
+
+	// validate logical device 
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+	{
+		return ResultError(InvalidArgs, std::string("GrafCanvasVulkan: failed to initialize, invalid GrafDevice"));
+	}
+
+	// create surface
+
+	GrafSystemVulkan& grafSystemVulkan = static_cast<GrafSystemVulkan&>(this->GetGrafSystem());
+
+	#if defined(_WINDOWS)
+
+	WinCanvas* winCanvas = static_cast<WinCanvas*>(this->GetRealm().GetCanvas());
+	if (ur_null == winCanvas)
+	{
+		return ResultError(InvalidArgs, std::string("GrafCanvasVulkan: failed to initialize, invalid WinCanvas"));
+	}
+
+	VkWin32SurfaceCreateInfoKHR vkSurfaceInfo = {};
+	vkSurfaceInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+	vkSurfaceInfo.flags = 0;
+	vkSurfaceInfo.hinstance = winCanvas->GetHinstance();
+	vkSurfaceInfo.hwnd = winCanvas->GetHwnd();
+
+	VkResult res = vkCreateWin32SurfaceKHR(grafSystemVulkan.GetVkInstance(), &vkSurfaceInfo, ur_null, &this->vkSurface);
+	if (res != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateWin32SurfaceKHR failed with VkResult = ") + VkResultToString(res));
+	}
+	LogNoteGrafDbg("GrafCanvasVulkan: VkSurfaceKHR created");
+
+	#else
+
+	return ResultError(NotImplemented, std::string("GrafCanvasVulkan: failed to initialize, unsupported platform"));
+
+	#endif
+
+	// validate presentation support on current device
+
+	VkPhysicalDevice vkPhysicalDevice = grafSystemVulkan.GetVkPhysicalDevice(grafDeviceVulkan->GetDeviceId());
+	ur_uint32 vkDeviceGraphicsQueueId = (ur_uint32)grafDeviceVulkan->GetVkDeviceGraphicsQueueId();
+	VkBool32 presentationSupported = false;
+	vkGetPhysicalDeviceSurfaceSupportKHR(vkPhysicalDevice, vkDeviceGraphicsQueueId, this->vkSurface, &presentationSupported);
+	if (!presentationSupported)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, "GrafCanvasVulkan: failed to initialize, selected physical device graphics queue does not support presentation");
+	}
+	const ur_uint32 vkDevicePresentQueueCount = 1;
+	ur_uint32 vkDevicePresentQueueIds[vkDevicePresentQueueCount] = { vkDeviceGraphicsQueueId };
+
+	// validate swap chain caps
+
+	VkSurfaceCapabilitiesKHR vkSurfaceCaps = {};
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkPhysicalDevice, this->vkSurface, &vkSurfaceCaps);
+
+	VkSurfaceFormatKHR vkSurfaceFormat = {};
+	ur_uint32 vkSurfaceFormatCount = 0;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(vkPhysicalDevice, this->vkSurface, &vkSurfaceFormatCount, ur_null);
+	std::vector<VkSurfaceFormatKHR> vkSurfaceFormats(vkSurfaceFormatCount);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(vkPhysicalDevice, this->vkSurface, &vkSurfaceFormatCount, vkSurfaceFormats.data());
+	ur_bool surfaceFormatFound = false;
+	VkFormat vkFormatRequested = GrafUtilsVulkan::GrafToVkFormat(initParams.Format);
+	for (ur_size i = 0; i < vkSurfaceFormats.size(); ++i)
+	{
+		if (vkFormatRequested == vkSurfaceFormats[i].format)
+			surfaceFormatFound = true;
+		if (surfaceFormatFound)
+		{
+			vkSurfaceFormat = vkSurfaceFormats[i];
+			break;
+		}
+	}
+	if (!surfaceFormatFound)
+	{
+		LogWarning("GrafCanvasVulkan: requested format is not supported, switching to the first available");
+		if (!vkSurfaceFormats.empty())
+		{
+			vkSurfaceFormat = vkSurfaceFormats[0];
+			surfaceFormatFound = true;
+		}
+	}
+	if (!surfaceFormatFound)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, "GrafCanvasVulkan: failed to initialize, no surface format supported");
+	}
+
+	VkPresentModeKHR vkPresentMode = VK_PRESENT_MODE_MAX_ENUM_KHR;
+	ur_uint32 vkPresentModeCount = 0;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(vkPhysicalDevice, this->vkSurface, &vkPresentModeCount, ur_null);
+	std::vector<VkPresentModeKHR> vkPresentModes(vkPresentModeCount);
+	vkGetPhysicalDeviceSurfacePresentModesKHR(vkPhysicalDevice, this->vkSurface, &vkPresentModeCount, vkPresentModes.data());
+	ur_bool presentModeFound = false;
+	for (ur_size i = 0; i < vkPresentModes.size(); ++i)
+	{
+		if (GrafPresentMode::Immediate == initParams.PresentMode &&
+			VK_PRESENT_MODE_IMMEDIATE_KHR == vkPresentModes[i])
+			presentModeFound = true;
+		else if (GrafPresentMode::VerticalSync == initParams.PresentMode &&
+			VK_PRESENT_MODE_FIFO_KHR == vkPresentModes[i])
+			presentModeFound = true;
+		if (presentModeFound)
+		{
+			vkPresentMode = vkPresentModes[i];
+			break;
+		}
+	}
+	if (!presentModeFound)
+	{
+		LogWarning("GrafCanvasVulkan: requested presentation mode is not supported, switching to the first available");
+		if (!vkPresentModes.empty())
+		{
+			vkPresentMode = vkPresentModes[0];
+			presentModeFound = true;
+		}
+	}
+	if (!presentModeFound)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, "GrafCanvasVulkan: failed to initialize, no presentation mode supported");
+	}
+	
+	VkExtent2D vkSurfaceExtent = {};
+	if (vkSurfaceCaps.currentExtent.width != ur_uint32(-1))
+	{
+		// only this extent can be used
+		vkSurfaceExtent = vkSurfaceCaps.currentExtent;
+	}
+	else
+	{
+		// extent between reported min/max can be used, we choose the maximal
+		vkSurfaceExtent = vkSurfaceCaps.maxImageExtent;
+	}
+
+	ur_uint32 vkSwapChainImageCount = (ur_uint32)initParams.SwapChainImageCount;
+	vkSwapChainImageCount = std::max(vkSurfaceCaps.minImageCount, vkSwapChainImageCount);
+	vkSwapChainImageCount = std::min(vkSurfaceCaps.maxImageCount, vkSwapChainImageCount);
+
+	// create swap chain
+
+	VkSwapchainCreateInfoKHR vkSwapChainInfo = {};
+	vkSwapChainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	vkSwapChainInfo.flags = 0;
+	vkSwapChainInfo.surface = this->vkSurface;
+	vkSwapChainInfo.minImageCount = vkSwapChainImageCount;
+	vkSwapChainInfo.imageFormat = vkSurfaceFormat.format;
+	vkSwapChainInfo.imageColorSpace = vkSurfaceFormat.colorSpace;
+	vkSwapChainInfo.imageExtent = vkSurfaceExtent;
+	vkSwapChainInfo.imageArrayLayers = 1;
+	vkSwapChainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	vkSwapChainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // the same graphics queue is used (vkDeviceGraphicsQueueId)
+	vkSwapChainInfo.queueFamilyIndexCount = vkDevicePresentQueueCount;
+	vkSwapChainInfo.pQueueFamilyIndices = vkDevicePresentQueueIds;
+	vkSwapChainInfo.preTransform = vkSurfaceCaps.currentTransform;
+	vkSwapChainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	vkSwapChainInfo.presentMode = vkPresentMode;
+	vkSwapChainInfo.clipped = VK_TRUE;
+	vkSwapChainInfo.oldSwapchain = VK_NULL_HANDLE;
+
+	res = vkCreateSwapchainKHR(grafDeviceVulkan->GetVkDevice(), &vkSwapChainInfo, ur_null, &this->vkSwapChain);
+	if (res != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateSwapchainKHR failed with VkResult = ") + VkResultToString(res));
+	}
+	LogNoteGrafDbg("GrafCanvasVulkan: VkSwapchainKHR created");
+
+	// retrieve swap chain images
+
+	ur_uint32 vkSwapChainImageRealCount = 0;
+	vkGetSwapchainImagesKHR(grafDeviceVulkan->GetVkDevice(), this->vkSwapChain, &vkSwapChainImageRealCount, ur_null);
+	this->vkSwapChainImages.resize(vkSwapChainImageRealCount);
+	vkGetSwapchainImagesKHR(grafDeviceVulkan->GetVkDevice(), this->vkSwapChain, &vkSwapChainImageRealCount, this->vkSwapChainImages.data());
+
+	return Result(Success);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {
+	VK_FORMAT_UNDEFINED,
+	VK_FORMAT_R8G8B8_UNORM,
+	VK_FORMAT_R8G8B8_SNORM,
+	VK_FORMAT_R8G8B8_UINT,
+	VK_FORMAT_R8G8B8_SINT,
+	VK_FORMAT_R8G8B8_SRGB,
+	VK_FORMAT_B8G8R8_UNORM,
+	VK_FORMAT_B8G8R8_SNORM,
+	VK_FORMAT_B8G8R8_UINT,
+	VK_FORMAT_B8G8R8_SINT,
+	VK_FORMAT_B8G8R8_SRGB,
+	VK_FORMAT_R8G8B8A8_UNORM,
+	VK_FORMAT_R8G8B8A8_SNORM,
+	VK_FORMAT_R8G8B8A8_UINT,
+	VK_FORMAT_R8G8B8A8_SINT,
+	VK_FORMAT_R8G8B8A8_SRGB,
+	VK_FORMAT_B8G8R8A8_UNORM,
+	VK_FORMAT_B8G8R8A8_SNORM,
+	VK_FORMAT_B8G8R8A8_UINT,
+	VK_FORMAT_B8G8R8A8_SINT,
+	VK_FORMAT_B8G8R8A8_SRGB
+};
+VkFormat GrafUtilsVulkan::GrafToVkFormat(GrafFormat grafFormat)
+{
+	return GrafToVkFormatLUT[ur_uint(grafFormat)];
 }
