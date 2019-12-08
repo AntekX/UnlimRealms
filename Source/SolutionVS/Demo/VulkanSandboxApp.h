@@ -22,6 +22,7 @@ namespace UnlimRealms
 	class GrafSystem;
 	class GrafDevice;
 	class GrafCanvas;
+	class GrafImage;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct /*UR_DECL*/ GrafPhysicalDeviceDesc
@@ -32,6 +33,72 @@ namespace UnlimRealms
 		ur_size DedicatedVideoMemory;
 		ur_size DedicatedSystemMemory;
 		ur_size SharedSystemMemory;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class GrafPresentMode
+	{
+		Immediate = 0,
+		VerticalSync,
+		Count
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class GrafFormat
+	{
+		Undefined = 0,
+		R8G8B8_UNORM,
+		R8G8B8_SNORM,
+		R8G8B8_UINT,
+		R8G8B8_SINT,
+		R8G8B8_SRGB,
+		B8G8R8_UNORM,
+		B8G8R8_SNORM,
+		B8G8R8_UINT,
+		B8G8R8_SINT,
+		B8G8R8_SRGB,
+		R8G8B8A8_UNORM,
+		R8G8B8A8_SNORM,
+		R8G8B8A8_UINT,
+		R8G8B8A8_SINT,
+		R8G8B8A8_SRGB,
+		B8G8R8A8_UNORM,
+		B8G8R8A8_SNORM,
+		B8G8R8A8_UINT,
+		B8G8R8A8_SINT,
+		B8G8R8A8_SRGB,
+		Count
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class GrafImageType
+	{
+		Undefined = 0,
+		Tex1D,
+		Tex2D,
+		Tex3D,
+		Count
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class GrafImageUsage
+	{
+		Undefined = 0,
+		TransferSrc,
+		TransferDst,
+		ColorRenderTarget,
+		DepthStencilRenderTarget,
+		Count
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct GrafImageDesc
+	{
+		GrafImageType Type;
+		GrafFormat Format;
+		ur_uint3 Size;
+		ur_uint MipLevels;
+		GrafImageUsage Usage;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,41 +182,30 @@ namespace UnlimRealms
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	enum class GrafPresentMode
+	class /*UR_DECL*/ GrafDeviceEntity : public GrafEntity
 	{
-		Immediate = 0,
-		VerticalSync
+	public:
+
+		GrafDeviceEntity(GrafSystem &grafSystem);
+
+		~GrafDeviceEntity();
+
+		virtual Result Initialize(GrafDevice *grafDevice);
+
+		inline GrafDevice* GetGrafDevice();
+
+	private:
+
+		GrafDevice *grafDevice;
 	};
 
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	enum class GrafFormat
+	inline GrafDevice* GrafDeviceEntity::GetGrafDevice()
 	{
-		Undefined = 0,
-		R8G8B8_UNORM,
-		R8G8B8_SNORM,
-		R8G8B8_UINT,
-		R8G8B8_SINT,
-		R8G8B8_SRGB,
-		B8G8R8_UNORM,
-		B8G8R8_SNORM,
-		B8G8R8_UINT,
-		B8G8R8_SINT,
-		B8G8R8_SRGB,
-		R8G8B8A8_UNORM,
-		R8G8B8A8_SNORM,
-		R8G8B8A8_UINT,
-		R8G8B8A8_SINT,
-		R8G8B8A8_SRGB,
-		B8G8R8A8_UNORM,
-		B8G8R8A8_SNORM,
-		B8G8R8A8_UINT,
-		B8G8R8A8_SINT,
-		B8G8R8A8_SRGB,
-		Count
-	};
+		return this->grafDevice;
+	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	class /*UR_DECL*/ GrafCanvas : public GrafEntity
+	class /*UR_DECL*/ GrafCanvas : public GrafDeviceEntity
 	{
 	public:
 
@@ -165,40 +221,25 @@ namespace UnlimRealms
 
 		~GrafCanvas();
 
-		virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams = InitParams::Default);
-
-		inline GrafDevice* GetGrafDevice() const;
-
-	private:
-
-		GrafDevice* grafDevice;
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams = InitParams::Default);
 	};
 
-	inline GrafDevice* GrafCanvas::GetGrafDevice() const
-	{
-		return this->grafDevice;
-	}
-
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//class /*UR_DECL*/ GrafImage : public GrafEntity
-	//{
-	//public:
+	class /*UR_DECL*/ GrafImage : public GrafDeviceEntity
+	{
+	public:
 
-	//	struct /*UR_DECL*/ InitParams
-	//	{
-	//		GrafFormat Format;
-	//		ur_uint Width;
-	//		ur_uint Height;
-	//		ur_uint Depth;
-	//		static const InitParams Default;
-	//	};
+		struct /*UR_DECL*/ InitParams
+		{
+			GrafImageDesc ImageDesc;
+		};
 
-	//	GrafImage(GrafSystem &grafSystem);
+		GrafImage(GrafSystem &grafSystem);
 
-	//	~GrafImage();
+		~GrafImage();
 
-	//	virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams);
-	//};
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+	};
 
 } // end namespace UnlimRealms
 
@@ -319,6 +360,22 @@ namespace UnlimRealms
 		VkSurfaceKHR vkSurface;
 		VkSwapchainKHR vkSwapChain;
 		std::vector<VkImage> vkSwapChainImages;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafImageVulkan : public GrafImage
+	{
+	public:
+
+		GrafImageVulkan(GrafSystem &grafSystem);
+
+		~GrafImageVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+	private:
+
+		VkImage vkImage;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

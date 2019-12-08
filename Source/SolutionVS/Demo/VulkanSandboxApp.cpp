@@ -233,9 +233,24 @@ Result GrafDevice::Initialize(ur_uint deviceId)
 	return Result(NotImplemented);
 }
 
-GrafCanvas::GrafCanvas(GrafSystem &grafSystem) :
+GrafDeviceEntity::GrafDeviceEntity(GrafSystem &grafSystem) :
 	GrafEntity(grafSystem),
 	grafDevice(ur_null)
+{
+}
+
+GrafDeviceEntity::~GrafDeviceEntity()
+{
+}
+
+Result GrafDeviceEntity::Initialize(GrafDevice *grafDevice)
+{
+	this->grafDevice = grafDevice;
+	return Result(NotImplemented);
+}
+
+GrafCanvas::GrafCanvas(GrafSystem &grafSystem) :
+	GrafDeviceEntity(grafSystem)
 {
 }
 
@@ -249,7 +264,22 @@ const GrafCanvas::InitParams GrafCanvas::InitParams::Default = {
 
 Result GrafCanvas::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
 {
-	this->grafDevice = grafDevice;
+	GrafDeviceEntity::Initialize(grafDevice);
+	return Result(NotImplemented);
+}
+
+GrafImage::GrafImage(GrafSystem &grafSystem) :
+	GrafDeviceEntity(grafSystem)
+{
+}
+
+GrafImage::~GrafImage()
+{
+}
+
+Result GrafImage::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+{
+	GrafDeviceEntity::Initialize(grafDevice);
 	return Result(NotImplemented);
 }
 
@@ -811,6 +841,33 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+GrafImageVulkan::GrafImageVulkan(GrafSystem &grafSystem) :
+	GrafImage(grafSystem)
+{
+	this->vkImage = VK_NULL_HANDLE;
+}
+
+GrafImageVulkan::~GrafImageVulkan()
+{
+	if (this->vkImage)
+	{
+		//vkDestroyImage(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkImage, ur_null);
+		this->vkImage = VK_NULL_HANDLE;
+	}
+}
+
+Result GrafImageVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+{
+	GrafImage::Initialize(grafDevice, initParams);
+	
+	// TODO
+	
+	return Result(NotImplemented);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {
 	VK_FORMAT_UNDEFINED,
 	VK_FORMAT_R8G8B8_UNORM,
