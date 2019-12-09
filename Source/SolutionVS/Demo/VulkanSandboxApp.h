@@ -46,6 +46,7 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class GrafFormat
 	{
+		Unsupported = -1,
 		Undefined = 0,
 		R8G8B8_UNORM,
 		R8G8B8_SNORM,
@@ -115,6 +116,8 @@ namespace UnlimRealms
 		virtual Result CreateDevice(std::unique_ptr<GrafDevice>& grafDevice);
 
 		virtual Result CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas);
+		
+		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
 
 		virtual ur_uint GetRecommendedDeviceId();
 
@@ -239,7 +242,18 @@ namespace UnlimRealms
 		~GrafImage();
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline const GrafImageDesc& GetDesc() const;
+
+	protected:
+
+		GrafImageDesc imageDesc;
 	};
+
+	inline const GrafImageDesc& GrafImage::GetDesc() const
+	{
+		return this->imageDesc;
+	}
 
 } // end namespace UnlimRealms
 
@@ -256,6 +270,7 @@ namespace UnlimRealms
 namespace UnlimRealms
 {
 
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafSystemVulkan : public GrafSystem
 	{
 	public:
@@ -269,6 +284,8 @@ namespace UnlimRealms
 		virtual Result CreateDevice(std::unique_ptr<GrafDevice>& grafDevice);
 
 		virtual Result CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas);
+
+		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
 
 		inline VkInstance GetVkInstance() const;
 		
@@ -341,7 +358,6 @@ namespace UnlimRealms
 		return this->deviceTransferQueueId;
 	}
 
-
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafCanvasVulkan : public GrafCanvas
 	{
@@ -359,7 +375,7 @@ namespace UnlimRealms
 
 		VkSurfaceKHR vkSurface;
 		VkSwapchainKHR vkSwapChain;
-		std::vector<VkImage> vkSwapChainImages;
+		std::vector<std::unique_ptr<GrafImage>> swapChainImages;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -373,17 +389,36 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
+		Result InitializeFromVkImage(GrafDevice *grafDevice, const InitParams& initParams, VkImage vkImage);
+
+		inline VkImage GetVkImage() const;
+
 	private:
 
+		Result Deinitialize();
+
+		Result CreateVkImageViews();
+
+		ur_bool imageExternalHandle;
 		VkImage vkImage;
+		VkImageView vkImageView;
 	};
+
+	inline VkImage GrafImageVulkan::GetVkImage() const
+	{
+		return this->vkImage;
+	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafUtilsVulkan
 	{
 	public:
 
-		static VkFormat GrafToVkFormat(GrafFormat grafFormat);
+		static inline VkImageUsageFlags GrafToVkImageUsage(GrafImageUsage usage);
+		static inline GrafImageUsage VkToGrafImageUsage(VkImageUsageFlags usage);
+		static inline VkImageType GrafToVkImageType(GrafImageType imageType);
+		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
+		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
 	};
 
 } // end namespace UnlimRealms

@@ -14,6 +14,10 @@
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
+// NOTE:
+// dxc -T vs_5_0 -E main Generic_vs.hlsl -Fo Generic_vs.spv
+// dxc -T ps_5_0 -E main Generic_ps.hlsl -Fo Generic_ps.spv
+
 int VulkanSandboxApp::Run()
 {
 	// create realm
@@ -185,6 +189,11 @@ Result GrafSystem::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
 	return Result(NotImplemented);
 }
 
+Result GrafSystem::CreateImage(std::unique_ptr<GrafImage>& grafImage)
+{
+	return Result(NotImplemented);
+}
+
 Result GrafSystem::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
 {
 	return Result(NotImplemented);
@@ -280,6 +289,7 @@ GrafImage::~GrafImage()
 Result GrafImage::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 {
 	GrafDeviceEntity::Initialize(grafDevice);
+	this->imageDesc = initParams.ImageDesc;
 	return Result(NotImplemented);
 }
 
@@ -499,15 +509,21 @@ Result GrafSystemVulkan::Initialize(Canvas *canvas)
 	return Result(Success);
 }
 
+Result GrafSystemVulkan::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
+{
+	grafDevice.reset(new GrafDeviceVulkan(*this));
+	return Result(Success);
+}
+
 Result GrafSystemVulkan::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
 {
 	grafCanvas.reset(new GrafCanvasVulkan(*this));
 	return Result(Success);
 }
 
-Result GrafSystemVulkan::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
+Result GrafSystemVulkan::CreateImage(std::unique_ptr<GrafImage>& grafImage)
 {
-	grafDevice.reset(new GrafDeviceVulkan(*this));
+	grafImage.reset(new GrafImageVulkan(*this));
 	return Result(Success);
 }
 
@@ -636,7 +652,7 @@ GrafCanvasVulkan::~GrafCanvasVulkan()
 
 Result GrafCanvasVulkan::Deinitialize()
 {
-	this->vkSwapChainImages.clear();
+	this->swapChainImages.clear();
 	if (this->vkSwapChain != VK_NULL_HANDLE)
 	{
 		vkDestroySwapchainKHR(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSwapChain, ur_null);
@@ -826,6 +842,7 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 	res = vkCreateSwapchainKHR(grafDeviceVulkan->GetVkDevice(), &vkSwapChainInfo, ur_null, &this->vkSwapChain);
 	if (res != VK_SUCCESS)
 	{
+		this->Deinitialize();
 		return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateSwapchainKHR failed with VkResult = ") + VkResultToString(res));
 	}
 	LogNoteGrafDbg("GrafCanvasVulkan: VkSwapchainKHR created");
@@ -834,8 +851,31 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 
 	ur_uint32 vkSwapChainImageRealCount = 0;
 	vkGetSwapchainImagesKHR(grafDeviceVulkan->GetVkDevice(), this->vkSwapChain, &vkSwapChainImageRealCount, ur_null);
-	this->vkSwapChainImages.resize(vkSwapChainImageRealCount);
-	vkGetSwapchainImagesKHR(grafDeviceVulkan->GetVkDevice(), this->vkSwapChain, &vkSwapChainImageRealCount, this->vkSwapChainImages.data());
+	std::vector<VkImage> vkSwapChainImages(vkSwapChainImageRealCount);
+	vkGetSwapchainImagesKHR(grafDeviceVulkan->GetVkDevice(), this->vkSwapChain, &vkSwapChainImageRealCount, vkSwapChainImages.data());
+
+	this->swapChainImages.resize(vkSwapChainImages.size());
+	for (VkImage& vkImage : vkSwapChainImages)
+	{
+		GrafImage::InitParams imageParams = {};
+		imageParams.ImageDesc.Type = GrafImageType::Tex2D;
+		imageParams.ImageDesc.Format = GrafUtilsVulkan::VkToGrafFormat(vkSwapChainInfo.imageFormat);
+		imageParams.ImageDesc.Size.x = vkSwapChainInfo.imageExtent.width;
+		imageParams.ImageDesc.Size.y = vkSwapChainInfo.imageExtent.height;
+		imageParams.ImageDesc.Size.z = 0;
+		imageParams.ImageDesc.MipLevels = 1;
+		imageParams.ImageDesc.Usage = GrafUtilsVulkan::VkToGrafImageUsage(vkSwapChainInfo.imageUsage);
+		
+		std::unique_ptr<GrafImage> grafImage;
+		grafSystemVulkan.CreateImage(grafImage);
+		Result res = static_cast<GrafImageVulkan*>(grafImage.get())->InitializeFromVkImage(grafDevice, imageParams, vkImage);
+		if (Failed(res))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, "GrafCanvasVulkan: failed to create swap chain images");
+		}
+		this->swapChainImages.push_back(std::move(grafImage));
+	}
 
 	return Result(Success);
 }
@@ -845,28 +885,176 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 GrafImageVulkan::GrafImageVulkan(GrafSystem &grafSystem) :
 	GrafImage(grafSystem)
 {
+	this->imageExternalHandle = false;
 	this->vkImage = VK_NULL_HANDLE;
+	this->vkImageView = VK_NULL_HANDLE;
 }
 
 GrafImageVulkan::~GrafImageVulkan()
 {
-	if (this->vkImage)
+	this->Deinitialize();
+}
+
+Result GrafImageVulkan::Deinitialize()
+{
+	if (this->vkImageView != VK_NULL_HANDLE)
 	{
-		//vkDestroyImage(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkImage, ur_null);
-		this->vkImage = VK_NULL_HANDLE;
+		vkDestroyImageView(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkImageView, ur_null);
+		this->vkImageView = VK_NULL_HANDLE;
 	}
+	if (this->vkImage != VK_NULL_HANDLE && !this->imageExternalHandle)
+	{
+		vkDestroyImage(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkImage, ur_null);
+	}
+	this->vkImage = VK_NULL_HANDLE;
+	this->imageExternalHandle = false;
+
+	return Result(Success);
 }
 
 Result GrafImageVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 {
+	this->Deinitialize();
+
 	GrafImage::Initialize(grafDevice, initParams);
 	
 	// TODO
+
+	// create views
+
+	Result res = this->CreateVkImageViews();
+	if (Failed(res))
+		return res;
 	
 	return Result(NotImplemented);
 }
 
+Result GrafImageVulkan::InitializeFromVkImage(GrafDevice *grafDevice, const InitParams& initParams, VkImage vkImage)
+{
+	this->Deinitialize();
+
+	GrafImage::Initialize(grafDevice, initParams);
+
+	// validate logical device 
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+	{
+		return ResultError(InvalidArgs, std::string("GrafImageVulkan: failed to initialize, invalid GrafDevice"));
+	}
+
+	// init external image
+
+	this->imageExternalHandle = true;
+	this->vkImage = vkImage;
+
+	// create views
+
+	if (this->vkImage != VK_NULL_HANDLE)
+	{
+		Result res = this->CreateVkImageViews();
+		if (Failed(res))
+			return res;
+	}
+
+	return Result(Success);
+}
+
+Result GrafImageVulkan::CreateVkImageViews()
+{
+	if (VK_NULL_HANDLE == this->vkImage || this->vkImageView != VK_NULL_HANDLE)
+	{
+		return ResultError(InvalidArgs, std::string("GrafImageVulkan: failed to create image views, invalid parameters"));
+	}
+
+	VkImageType vkImageType = GrafUtilsVulkan::GrafToVkImageType(this->GetDesc().Type);
+	VkImageViewType vkViewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+	switch (vkImageType)
+	{
+	case VK_IMAGE_TYPE_1D: vkViewType = VK_IMAGE_VIEW_TYPE_1D; break;
+	case VK_IMAGE_TYPE_2D: vkViewType = VK_IMAGE_VIEW_TYPE_2D; break;
+	case VK_IMAGE_TYPE_3D: vkViewType = VK_IMAGE_VIEW_TYPE_3D; break;
+	// TODO: handle texture arrays
+	//VK_IMAGE_VIEW_TYPE_CUBE;
+	//VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+	//VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+	//VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+	default:
+		return ResultError(InvalidArgs, "GrafImageVulkan: failed to create image views, unsupported image type");
+	};
+
+	VkImageUsageFlags vkImageUsage = GrafUtilsVulkan::GrafToVkImageUsage(this->GetDesc().Usage);
+	VkImageAspectFlags vkImageAspectFlags = 0;
+	if (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT & vkImageUsage)
+		vkImageAspectFlags |= VK_IMAGE_ASPECT_COLOR_BIT;
+	if (VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT & vkImageUsage)
+		vkImageAspectFlags |= (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
+
+	VkImageViewCreateInfo vkViewInfo = {};
+	vkViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	vkViewInfo.flags = 0;
+	vkViewInfo.image = this->vkImage;
+	vkViewInfo.viewType = vkViewType;
+	vkViewInfo.format = GrafUtilsVulkan::GrafToVkFormat(this->GetDesc().Format);
+	vkViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+	vkViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+	vkViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+	vkViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+	vkViewInfo.subresourceRange.aspectMask = vkImageAspectFlags;
+	vkViewInfo.subresourceRange.baseMipLevel = 0;
+	vkViewInfo.subresourceRange.levelCount = this->GetDesc().MipLevels;
+	vkViewInfo.subresourceRange.baseArrayLayer = 0;
+	vkViewInfo.subresourceRange.layerCount = 1;
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice()); // at this point device expected to be validate
+	VkResult res = vkCreateImageView(grafDeviceVulkan->GetVkDevice(), &vkViewInfo, ur_null, &this->vkImageView);
+	if (res != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafImageVulkan: vkCreateImageView failed with VkResult = ") + VkResultToString(res));
+	}
+
+	return Result(Success);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkImageUsageFlags GrafUtilsVulkan::GrafToVkImageUsage(GrafImageUsage usage)
+{
+	VkImageUsageFlags vkImageUsage = 0;
+	switch (usage)
+	{
+	case GrafImageUsage::TransferSrc: vkImageUsage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT; break;
+	case GrafImageUsage::TransferDst: vkImageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT; break;
+	case GrafImageUsage::ColorRenderTarget: vkImageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; break;
+	case GrafImageUsage::DepthStencilRenderTarget: vkImageUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; break;
+	};
+	return vkImageUsage;
+}
+
+GrafImageUsage GrafUtilsVulkan::VkToGrafImageUsage(VkImageUsageFlags usage)
+{
+	GrafImageUsage grafUsage = GrafImageUsage::Undefined;
+	switch (usage)
+	{
+	case VK_IMAGE_USAGE_TRANSFER_SRC_BIT: grafUsage = GrafImageUsage::TransferSrc; break;
+	case VK_IMAGE_USAGE_TRANSFER_DST_BIT: grafUsage = GrafImageUsage::TransferDst; break;
+	case VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT: grafUsage = GrafImageUsage::ColorRenderTarget; break;
+	case VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT: grafUsage = GrafImageUsage::DepthStencilRenderTarget; break;
+	};
+	return grafUsage;
+}
+
+VkImageType GrafUtilsVulkan::GrafToVkImageType(GrafImageType imageType)
+{
+	VkImageType vkImageType = VK_IMAGE_TYPE_MAX_ENUM;
+	switch (imageType)
+	{
+	case GrafImageType::Tex1D: vkImageType = VK_IMAGE_TYPE_1D; break;
+	case GrafImageType::Tex2D: vkImageType = VK_IMAGE_TYPE_2D; break;
+	case GrafImageType::Tex3D: vkImageType = VK_IMAGE_TYPE_3D; break;
+	};
+	return vkImageType;
+}
 
 static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {
 	VK_FORMAT_UNDEFINED,
@@ -894,4 +1082,196 @@ static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {
 VkFormat GrafUtilsVulkan::GrafToVkFormat(GrafFormat grafFormat)
 {
 	return GrafToVkFormatLUT[ur_uint(grafFormat)];
+}
+
+static const GrafFormat VkToGrafFormatLUT[VK_FORMAT_END_RANGE + 1] = {
+	GrafFormat::Undefined,
+	GrafFormat::Unsupported,		// VK_FORMAT_R4G4_UNORM_PACK8 = 1,
+	GrafFormat::Unsupported,		// VK_FORMAT_R4G4B4A4_UNORM_PACK16 = 2,
+	GrafFormat::Unsupported,		// VK_FORMAT_B4G4R4A4_UNORM_PACK16 = 3,
+	GrafFormat::Unsupported,		// VK_FORMAT_R5G6B5_UNORM_PACK16 = 4,
+	GrafFormat::Unsupported,		// VK_FORMAT_B5G6R5_UNORM_PACK16 = 5,
+	GrafFormat::Unsupported,		// VK_FORMAT_R5G5B5A1_UNORM_PACK16 = 6,
+	GrafFormat::Unsupported,		// VK_FORMAT_B5G5R5A1_UNORM_PACK16 = 7,
+	GrafFormat::Unsupported,		// VK_FORMAT_A1R5G5B5_UNORM_PACK16 = 8,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8_UNORM = 9,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8_SNORM = 10,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8_USCALED = 11,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8_SSCALED = 12,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8_UINT = 13,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8_SINT = 14,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8_SRGB = 15,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_UNORM = 16,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_SNORM = 17,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_USCALED = 18,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_SSCALED = 19,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_UINT = 20,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_SINT = 21,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_SRGB = 22,
+	GrafFormat::R8G8B8_UNORM,		// VK_FORMAT_R8G8B8_UNORM = 23,
+	GrafFormat::R8G8B8_SNORM,		// VK_FORMAT_R8G8B8_SNORM = 24,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8G8B8_USCALED = 25,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8G8B8_SSCALED = 26,
+	GrafFormat::R8G8B8_UINT,		// VK_FORMAT_R8G8B8_UINT = 27,
+	GrafFormat::R8G8B8_SINT,		// VK_FORMAT_R8G8B8_SINT = 28,
+	GrafFormat::R8G8B8_SRGB,		// VK_FORMAT_R8G8B8_SRGB = 29,
+	GrafFormat::B8G8R8_UNORM,		// VK_FORMAT_B8G8R8_UNORM = 30,
+	GrafFormat::B8G8R8_SNORM,		// VK_FORMAT_B8G8R8_SNORM = 31,
+	GrafFormat::Unsupported,		// VK_FORMAT_B8G8R8_USCALED = 32,
+	GrafFormat::Unsupported,		// VK_FORMAT_B8G8R8_SSCALED = 33,
+	GrafFormat::B8G8R8_UINT,		// VK_FORMAT_B8G8R8_UINT = 34,
+	GrafFormat::B8G8R8_SINT,		// VK_FORMAT_B8G8R8_SINT = 35,
+	GrafFormat::B8G8R8_SRGB,		// VK_FORMAT_B8G8R8_SRGB = 36,
+	GrafFormat::R8G8B8A8_UNORM,		// VK_FORMAT_R8G8B8A8_UNORM = 37,
+	GrafFormat::R8G8B8A8_SNORM,		// VK_FORMAT_R8G8B8A8_SNORM = 38,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8G8B8A8_USCALED = 39,
+	GrafFormat::Unsupported,		// VK_FORMAT_R8G8B8A8_SSCALED = 40,
+	GrafFormat::R8G8B8A8_UINT,		// VK_FORMAT_R8G8B8A8_UINT = 41,
+	GrafFormat::R8G8B8A8_SINT,		// VK_FORMAT_R8G8B8A8_SINT = 42,
+	GrafFormat::R8G8B8A8_SRGB,		// VK_FORMAT_R8G8B8A8_SRGB = 43,
+	GrafFormat::B8G8R8A8_UNORM,		// VK_FORMAT_B8G8R8A8_UNORM = 44,
+	GrafFormat::B8G8R8A8_SNORM,		// VK_FORMAT_B8G8R8A8_SNORM = 45,
+	GrafFormat::Unsupported,		// VK_FORMAT_B8G8R8A8_USCALED = 46,
+	GrafFormat::Unsupported,		// VK_FORMAT_B8G8R8A8_SSCALED = 47,
+	GrafFormat::B8G8R8A8_UINT,		// VK_FORMAT_B8G8R8A8_UINT = 48,
+	GrafFormat::B8G8R8A8_SINT,		// VK_FORMAT_B8G8R8A8_SINT = 49,
+	GrafFormat::B8G8R8A8_SRGB,		// VK_FORMAT_B8G8R8A8_SRGB = 50,
+	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_UNORM_PACK32 = 51,
+	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_SNORM_PACK32 = 52,
+	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_USCALED_PACK32 = 53,
+	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_SSCALED_PACK32 = 54,
+	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_UINT_PACK32 = 55,
+	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_SINT_PACK32 = 56,
+	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_SRGB_PACK32 = 57,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_UNORM_PACK32 = 58,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_SNORM_PACK32 = 59,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_USCALED_PACK32 = 60,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_SSCALED_PACK32 = 61,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_UINT_PACK32 = 62,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_SINT_PACK32 = 63,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_UNORM_PACK32 = 64,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_SNORM_PACK32 = 65,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_USCALED_PACK32 = 66,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_SSCALED_PACK32 = 67,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_UINT_PACK32 = 68,
+	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_SINT_PACK32 = 69,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16_UNORM = 70,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16_SNORM = 71,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16_USCALED = 72,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16_SSCALED = 73,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16_UINT = 74,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16_SINT = 75,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16_SFLOAT = 76,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_UNORM = 77,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_SNORM = 78,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_USCALED = 79,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_SSCALED = 80,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_UINT = 81,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_SINT = 82,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_SFLOAT = 83,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_UNORM = 84,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_SNORM = 85,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_USCALED = 86,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_SSCALED = 87,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_UINT = 88,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_SINT = 89,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_SFLOAT = 90,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_UNORM = 91,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_SNORM = 92,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_USCALED = 93,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_SSCALED = 94,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_UINT = 95,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_SINT = 96,
+	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_SFLOAT = 97,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32_UINT = 98,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32_SINT = 99,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32_SFLOAT = 100,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32G32_UINT = 101,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32G32_SINT = 102,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32G32_SFLOAT = 103,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32_UINT = 104,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32_SINT = 105,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32_SFLOAT = 106,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32A32_UINT = 107,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32A32_SINT = 108,
+	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32A32_SFLOAT = 109,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64_UINT = 110,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64_SINT = 111,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64_SFLOAT = 112,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64G64_UINT = 113,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64G64_SINT = 114,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64G64_SFLOAT = 115,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64_UINT = 116,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64_SINT = 117,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64_SFLOAT = 118,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64A64_UINT = 119,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64A64_SINT = 120,
+	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64A64_SFLOAT = 121,
+	GrafFormat::Unsupported,		// VK_FORMAT_B10G11R11_UFLOAT_PACK32 = 122,
+	GrafFormat::Unsupported,		// VK_FORMAT_E5B9G9R9_UFLOAT_PACK32 = 123,
+	GrafFormat::Unsupported,		// VK_FORMAT_D16_UNORM = 124,
+	GrafFormat::Unsupported,		// VK_FORMAT_X8_D24_UNORM_PACK32 = 125,
+	GrafFormat::Unsupported,		// VK_FORMAT_D32_SFLOAT = 126,
+	GrafFormat::Unsupported,		// VK_FORMAT_S8_UINT = 127,
+	GrafFormat::Unsupported,		// VK_FORMAT_D16_UNORM_S8_UINT = 128,
+	GrafFormat::Unsupported,		// VK_FORMAT_D24_UNORM_S8_UINT = 129,
+	GrafFormat::Unsupported,		// VK_FORMAT_D32_SFLOAT_S8_UINT = 130,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC1_RGB_UNORM_BLOCK = 131,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC1_RGB_SRGB_BLOCK = 132,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC1_RGBA_UNORM_BLOCK = 133,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC1_RGBA_SRGB_BLOCK = 134,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC2_UNORM_BLOCK = 135,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC2_SRGB_BLOCK = 136,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC3_UNORM_BLOCK = 137,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC3_SRGB_BLOCK = 138,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC4_UNORM_BLOCK = 139,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC4_SNORM_BLOCK = 140,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC5_UNORM_BLOCK = 141,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC5_SNORM_BLOCK = 142,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC6H_UFLOAT_BLOCK = 143,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC6H_SFLOAT_BLOCK = 144,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC7_UNORM_BLOCK = 145,
+	GrafFormat::Unsupported,		// VK_FORMAT_BC7_SRGB_BLOCK = 146,
+	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK = 147,
+	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK = 148,
+	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK = 149,
+	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK = 150,
+	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK = 151,
+	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK = 152,
+	GrafFormat::Unsupported,		// VK_FORMAT_EAC_R11_UNORM_BLOCK = 153,
+	GrafFormat::Unsupported,		// VK_FORMAT_EAC_R11_SNORM_BLOCK = 154,
+	GrafFormat::Unsupported,		// VK_FORMAT_EAC_R11G11_UNORM_BLOCK = 155,
+	GrafFormat::Unsupported,		// VK_FORMAT_EAC_R11G11_SNORM_BLOCK = 156,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_4x4_UNORM_BLOCK = 157,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_4x4_SRGB_BLOCK = 158,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_5x4_UNORM_BLOCK = 159,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_5x4_SRGB_BLOCK = 160,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_5x5_UNORM_BLOCK = 161,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_5x5_SRGB_BLOCK = 162,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_6x5_UNORM_BLOCK = 163,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_6x5_SRGB_BLOCK = 164,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_6x6_UNORM_BLOCK = 165,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_6x6_SRGB_BLOCK = 166,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x5_UNORM_BLOCK = 167,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x5_SRGB_BLOCK = 168,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x6_UNORM_BLOCK = 169,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x6_SRGB_BLOCK = 170,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x8_UNORM_BLOCK = 171,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x8_SRGB_BLOCK = 172,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x5_UNORM_BLOCK = 173,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x5_SRGB_BLOCK = 174,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x6_UNORM_BLOCK = 175,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x6_SRGB_BLOCK = 176,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x8_UNORM_BLOCK = 177,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x8_SRGB_BLOCK = 178,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x10_UNORM_BLOCK = 179,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x10_SRGB_BLOCK = 180,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_12x10_UNORM_BLOCK = 181,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_12x10_SRGB_BLOCK = 182,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_12x12_UNORM_BLOCK = 183,
+	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_12x12_SRGB_BLOCK = 184,
+};
+GrafFormat GrafUtilsVulkan::VkToGrafFormat(VkFormat vkFormat)
+{
+	return VkToGrafFormatLUT[ur_uint(vkFormat)];
 }
