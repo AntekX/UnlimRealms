@@ -14,10 +14,6 @@
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
-// NOTE:
-// dxc -T vs_5_0 -E main Generic_vs.hlsl -Fo Generic_vs.spv
-// dxc -T ps_5_0 -E main Generic_ps.hlsl -Fo Generic_ps.spv
-
 int VulkanSandboxApp::Run()
 {
 	// create realm
