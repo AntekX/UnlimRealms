@@ -36,8 +36,10 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
 	std::unique_ptr<GrafDevice> grafDevice;
 	std::unique_ptr<GrafCanvas> grafCanvas;
-	auto& deinitializeGfxSystem = [&grafSystem, &grafDevice, &grafCanvas]() -> void {
+	std::unique_ptr<GrafRenderPass> grafRenderPass_Demo;
+	auto& deinitializeGfxSystem = [&grafSystem, &grafDevice, &grafCanvas, &grafRenderPass_Demo]() -> void {
 		// order matters!
+		grafRenderPass_Demo.reset();
 		grafCanvas.reset();
 		grafDevice.reset();
 		grafSystem.reset();
@@ -59,6 +61,12 @@ int VulkanSandboxApp::Run()
 
 		grafRes = grafCanvas->Initialize(grafDevice.get());
 		if (Failed(grafRes)) break;
+
+		//grafRes = grafSystem->CreateRenderPass(grafRenderPass_Demo);
+		//if (Failed(grafRes)) break;
+
+		//grafRes = grafRenderPass_Demo->Initialize(grafDevice.get());
+		//if (Failed(grafRes)) break;
 
 	} while (false);
 	if (Failed(grafRes))
@@ -151,7 +159,8 @@ int VulkanSandboxApp::Run()
 
 		drawFrameJob->Wait();
 
-		// TODO: present & flip here
+		// present & move to next frame
+		grafCanvas->Present();
 	}
 
 	deinitializeGfxSystem();
@@ -186,6 +195,11 @@ Result GrafSystem::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
 }
 
 Result GrafSystem::CreateImage(std::unique_ptr<GrafImage>& grafImage)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafSystem::CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass)
 {
 	return Result(NotImplemented);
 }
@@ -238,6 +252,11 @@ Result GrafDevice::Initialize(ur_uint deviceId)
 	return Result(NotImplemented);
 }
 
+Result GrafDevice::WaitIdle()
+{
+	return Result(NotImplemented);
+}
+
 GrafDeviceEntity::GrafDeviceEntity(GrafSystem &grafSystem) :
 	GrafEntity(grafSystem),
 	grafDevice(ur_null)
@@ -273,6 +292,11 @@ Result GrafCanvas::Initialize(GrafDevice* grafDevice, const InitParams& initPara
 	return Result(NotImplemented);
 }
 
+Result GrafCanvas::Present()
+{
+	return Result(NotImplemented);
+}
+
 GrafImage::GrafImage(GrafSystem &grafSystem) :
 	GrafDeviceEntity(grafSystem)
 {
@@ -289,6 +313,21 @@ Result GrafImage::Initialize(GrafDevice *grafDevice, const InitParams& initParam
 	return Result(NotImplemented);
 }
 
+GrafRenderPass::GrafRenderPass(GrafSystem& grafSystem) :
+	GrafDeviceEntity(grafSystem)
+{
+}
+
+GrafRenderPass::~GrafRenderPass()
+{
+}
+
+Result GrafRenderPass::Initialize(GrafDevice* grafDevice)
+{
+	GrafDeviceEntity::Initialize(grafDevice);
+	return Result(NotImplemented);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GRAF: VULKAN IMPLEMENTATION
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -299,6 +338,8 @@ Result GrafImage::Initialize(GrafDevice *grafDevice, const InitParams& initParam
 #define UR_GRAF_LOG_LEVEL_DEBUG
 #define UR_GRAF_VULKAN_DEBUG_LAYER
 #endif
+
+#define UR_GRAF_VULKAN_IMPLICIT_WAIT_DEVICE 1
 
 #if defined(UR_GRAF_LOG_LEVEL_DEBUG)
 #define LogNoteGrafDbg(text) GetRealm().GetLog().WriteLine(text, Log::Note)
@@ -335,35 +376,35 @@ static const char* VkResultToString(VkResult res)
 	case VK_SUCCESS: return "VK_SUCCESS";
 	case VK_NOT_READY: return "VK_NOT_READY";
 	case VK_TIMEOUT: return "VK_TIMEOUT";
-    case VK_EVENT_SET: return "VK_EVENT_SET";
-    case VK_EVENT_RESET: return "VK_EVENT_RESET";
-    case VK_INCOMPLETE: return "VK_INCOMPLETE";
-    case VK_ERROR_OUT_OF_HOST_MEMORY: return "VK_ERROR_OUT_OF_HOST_MEMORY";
-    case VK_ERROR_OUT_OF_DEVICE_MEMORY: return "VK_ERROR_OUT_OF_DEVICE_MEMORY";
-    case VK_ERROR_INITIALIZATION_FAILED: return "VK_ERROR_INITIALIZATION_FAILED";
-    case VK_ERROR_DEVICE_LOST: return "VK_ERROR_DEVICE_LOST";
-    case VK_ERROR_MEMORY_MAP_FAILED: return "VK_ERROR_MEMORY_MAP_FAILED";
-    case VK_ERROR_LAYER_NOT_PRESENT: return "VK_ERROR_LAYER_NOT_PRESENT";
-    case VK_ERROR_EXTENSION_NOT_PRESENT: return "VK_ERROR_EXTENSION_NOT_PRESENT";
-    case VK_ERROR_FEATURE_NOT_PRESENT: return "VK_ERROR_FEATURE_NOT_PRESENT";
-    case VK_ERROR_INCOMPATIBLE_DRIVER: return "VK_ERROR_INCOMPATIBLE_DRIVER";
-    case VK_ERROR_TOO_MANY_OBJECTS: return "VK_ERROR_TOO_MANY_OBJECTS";
-    case VK_ERROR_FORMAT_NOT_SUPPORTED: return "VK_ERROR_FORMAT_NOT_SUPPORTED";
-    case VK_ERROR_FRAGMENTED_POOL: return "VK_ERROR_FRAGMENTED_POOL";
-    case VK_ERROR_OUT_OF_POOL_MEMORY: return "VK_ERROR_OUT_OF_POOL_MEMORY";
-    case VK_ERROR_INVALID_EXTERNAL_HANDLE: return "VK_ERROR_INVALID_EXTERNAL_HANDLE";
-    case VK_ERROR_SURFACE_LOST_KHR: return "VK_ERROR_SURFACE_LOST_KHR";
-    case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: return "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR";
-    case VK_SUBOPTIMAL_KHR: return "VK_SUBOPTIMAL_KHR";
-    case VK_ERROR_OUT_OF_DATE_KHR: return "VK_ERROR_OUT_OF_DATE_KHR";
-    case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR: return "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR";
-    case VK_ERROR_VALIDATION_FAILED_EXT: return "VK_ERROR_VALIDATION_FAILED_EXT";
-    case VK_ERROR_INVALID_SHADER_NV: return "VK_ERROR_INVALID_SHADER_NV";
-    case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT: return "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT";
-    case VK_ERROR_FRAGMENTATION_EXT: return "VK_ERROR_FRAGMENTATION_EXT";
-    case VK_ERROR_NOT_PERMITTED_EXT: return "VK_ERROR_NOT_PERMITTED_EXT";
-    case VK_ERROR_INVALID_DEVICE_ADDRESS_EXT: return "VK_ERROR_INVALID_DEVICE_ADDRESS_EXT";
-    case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT: return "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT";
+	case VK_EVENT_SET: return "VK_EVENT_SET";
+	case VK_EVENT_RESET: return "VK_EVENT_RESET";
+	case VK_INCOMPLETE: return "VK_INCOMPLETE";
+	case VK_ERROR_OUT_OF_HOST_MEMORY: return "VK_ERROR_OUT_OF_HOST_MEMORY";
+	case VK_ERROR_OUT_OF_DEVICE_MEMORY: return "VK_ERROR_OUT_OF_DEVICE_MEMORY";
+	case VK_ERROR_INITIALIZATION_FAILED: return "VK_ERROR_INITIALIZATION_FAILED";
+	case VK_ERROR_DEVICE_LOST: return "VK_ERROR_DEVICE_LOST";
+	case VK_ERROR_MEMORY_MAP_FAILED: return "VK_ERROR_MEMORY_MAP_FAILED";
+	case VK_ERROR_LAYER_NOT_PRESENT: return "VK_ERROR_LAYER_NOT_PRESENT";
+	case VK_ERROR_EXTENSION_NOT_PRESENT: return "VK_ERROR_EXTENSION_NOT_PRESENT";
+	case VK_ERROR_FEATURE_NOT_PRESENT: return "VK_ERROR_FEATURE_NOT_PRESENT";
+	case VK_ERROR_INCOMPATIBLE_DRIVER: return "VK_ERROR_INCOMPATIBLE_DRIVER";
+	case VK_ERROR_TOO_MANY_OBJECTS: return "VK_ERROR_TOO_MANY_OBJECTS";
+	case VK_ERROR_FORMAT_NOT_SUPPORTED: return "VK_ERROR_FORMAT_NOT_SUPPORTED";
+	case VK_ERROR_FRAGMENTED_POOL: return "VK_ERROR_FRAGMENTED_POOL";
+	case VK_ERROR_OUT_OF_POOL_MEMORY: return "VK_ERROR_OUT_OF_POOL_MEMORY";
+	case VK_ERROR_INVALID_EXTERNAL_HANDLE: return "VK_ERROR_INVALID_EXTERNAL_HANDLE";
+	case VK_ERROR_SURFACE_LOST_KHR: return "VK_ERROR_SURFACE_LOST_KHR";
+	case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: return "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR";
+	case VK_SUBOPTIMAL_KHR: return "VK_SUBOPTIMAL_KHR";
+	case VK_ERROR_OUT_OF_DATE_KHR: return "VK_ERROR_OUT_OF_DATE_KHR";
+	case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR: return "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR";
+	case VK_ERROR_VALIDATION_FAILED_EXT: return "VK_ERROR_VALIDATION_FAILED_EXT";
+	case VK_ERROR_INVALID_SHADER_NV: return "VK_ERROR_INVALID_SHADER_NV";
+	case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT: return "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT";
+	case VK_ERROR_FRAGMENTATION_EXT: return "VK_ERROR_FRAGMENTATION_EXT";
+	case VK_ERROR_NOT_PERMITTED_EXT: return "VK_ERROR_NOT_PERMITTED_EXT";
+	case VK_ERROR_INVALID_DEVICE_ADDRESS_EXT: return "VK_ERROR_INVALID_DEVICE_ADDRESS_EXT";
+	case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT: return "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT";
 	};
 	return "VK_UNKNOWN";
 }
@@ -523,6 +564,12 @@ Result GrafSystemVulkan::CreateImage(std::unique_ptr<GrafImage>& grafImage)
 	return Result(Success);
 }
 
+Result GrafSystemVulkan::CreatePass(std::unique_ptr<GrafRenderPass>& grafRenderPass)
+{
+	grafRenderPass.reset(new GrafRenderPassVulkan(*this));
+	return Result(Success);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 GrafDeviceVulkan::GrafDeviceVulkan(GrafSystem &grafSystem) :
@@ -547,6 +594,9 @@ Result GrafDeviceVulkan::Deinitialize()
 
 	if (this->vkDevice != VK_NULL_HANDLE)
 	{
+		#if (UR_GRAF_VULKAN_IMPLICIT_WAIT_DEVICE)
+		this->WaitIdle();
+		#endif
 		vkDestroyDevice(this->vkDevice, ur_null);
 		this->vkDevice = VK_NULL_HANDLE;
 		LogNoteGrafDbg("GrafDeviceVulkan: deinitialized");
@@ -627,8 +677,16 @@ Result GrafDeviceVulkan::Initialize(ur_uint deviceId)
 	{
 		return ResultError(Failure, std::string("GrafDeviceVulkan: vkCreateDevice failed with VkResult = ") + VkResultToString(res));
 	}
-	LogNoteGrafDbg("GrafDeviceVulkan: VkDevice created");
+	LogNoteGrafDbg(std::string("GrafDeviceVulkan: VkDevice created for ") + grafSystemVulkan.GetPhysicalDeviceDesc(deviceId)->Description);
 
+	return Result(Success);
+}
+
+Result GrafDeviceVulkan::WaitIdle()
+{
+	VkResult res = vkDeviceWaitIdle(this->vkDevice);
+	if (res != VK_SUCCESS)
+		return ResultError(Failure, std::string("GrafDeviceVulkan: vkDeviceWaitIdle failed with VkResult = ") + VkResultToString(res));
 	return Result(Success);
 }
 
@@ -639,6 +697,9 @@ GrafCanvasVulkan::GrafCanvasVulkan(GrafSystem &grafSystem) :
 {
 	this->vkSurface = VK_NULL_HANDLE;
 	this->vkSwapChain = VK_NULL_HANDLE;
+	this->vkDevicePresentQueueId = 0;
+	this->vkSemaphoreImageAcquired = VK_NULL_HANDLE;
+	this->swapChainCurrentImageId = 0;
 }
 
 GrafCanvasVulkan::~GrafCanvasVulkan()
@@ -649,12 +710,20 @@ GrafCanvasVulkan::~GrafCanvasVulkan()
 Result GrafCanvasVulkan::Deinitialize()
 {
 	this->swapChainImages.clear();
+
+	if (this->vkSemaphoreImageAcquired != VK_NULL_HANDLE)
+	{
+		vkDestroySemaphore(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSemaphoreImageAcquired, ur_null);
+		this->vkSemaphoreImageAcquired = VK_NULL_HANDLE;
+	}
+
 	if (this->vkSwapChain != VK_NULL_HANDLE)
 	{
 		vkDestroySwapchainKHR(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSwapChain, ur_null);
 		this->vkSwapChain = VK_NULL_HANDLE;
 		LogNoteGrafDbg("GrafCanvasVulkan: swap chain destroyed");
 	}
+	
 	if (this->vkSurface != VK_NULL_HANDLE)
 	{
 		vkDestroySurfaceKHR(static_cast<GrafSystemVulkan&>(this->GetGrafSystem()).GetVkInstance(), this->vkSurface, ur_null);
@@ -680,6 +749,7 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 	{
 		return ResultError(InvalidArgs, std::string("GrafCanvasVulkan: failed to initialize, invalid GrafDevice"));
 	}
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
 
 	// create surface
 
@@ -723,8 +793,9 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 		this->Deinitialize();
 		return ResultError(Failure, "GrafCanvasVulkan: failed to initialize, selected physical device graphics queue does not support presentation");
 	}
+	this->vkDevicePresentQueueId = vkDeviceGraphicsQueueId;
 	const ur_uint32 vkDevicePresentQueueCount = 1;
-	ur_uint32 vkDevicePresentQueueIds[vkDevicePresentQueueCount] = { vkDeviceGraphicsQueueId };
+	ur_uint32 vkDevicePresentQueueIds[vkDevicePresentQueueCount] = { this->vkDevicePresentQueueId };
 
 	// validate swap chain caps
 
@@ -835,7 +906,7 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 	vkSwapChainInfo.clipped = VK_TRUE;
 	vkSwapChainInfo.oldSwapchain = VK_NULL_HANDLE;
 
-	res = vkCreateSwapchainKHR(grafDeviceVulkan->GetVkDevice(), &vkSwapChainInfo, ur_null, &this->vkSwapChain);
+	res = vkCreateSwapchainKHR(vkDevice, &vkSwapChainInfo, ur_null, &this->vkSwapChain);
 	if (res != VK_SUCCESS)
 	{
 		this->Deinitialize();
@@ -846,9 +917,9 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 	// retrieve swap chain images
 
 	ur_uint32 vkSwapChainImageRealCount = 0;
-	vkGetSwapchainImagesKHR(grafDeviceVulkan->GetVkDevice(), this->vkSwapChain, &vkSwapChainImageRealCount, ur_null);
+	vkGetSwapchainImagesKHR(vkDevice, this->vkSwapChain, &vkSwapChainImageRealCount, ur_null);
 	std::vector<VkImage> vkSwapChainImages(vkSwapChainImageRealCount);
-	vkGetSwapchainImagesKHR(grafDeviceVulkan->GetVkDevice(), this->vkSwapChain, &vkSwapChainImageRealCount, vkSwapChainImages.data());
+	vkGetSwapchainImagesKHR(vkDevice, this->vkSwapChain, &vkSwapChainImageRealCount, vkSwapChainImages.data());
 
 	this->swapChainImages.resize(vkSwapChainImages.size());
 	for (VkImage& vkImage : vkSwapChainImages)
@@ -873,7 +944,89 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 		this->swapChainImages.push_back(std::move(grafImage));
 	}
 
+	// create presentation sync objects 
+
+	VkSemaphoreCreateInfo vkSemaphoreInfo = {};
+	vkSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	vkSemaphoreInfo.flags = 0;
+
+	res = vkCreateSemaphore(vkDevice, &vkSemaphoreInfo, ur_null, &this->vkSemaphoreImageAcquired);
+	if (res != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateSemaphore failed with VkResult = ") + VkResultToString(res));
+	}
+
+	// acquire an image to use as a current RT
+	
+	Result urRes = this->AcquireNextImage();
+	if (Failed(urRes))
+	{
+		this->Deinitialize();
+		return urRes;
+	}
+
 	return Result(Success);
+}
+
+Result GrafCanvasVulkan::Present()
+{
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+	VkQueue vkDevicePresentQueue;
+	vkGetDeviceQueue(vkDevice, this->vkDevicePresentQueueId, 0, &vkDevicePresentQueue);
+
+	// TODO: image layout transition to "present" state must be done at this point
+	// VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+
+	// present current image
+
+	VkSwapchainKHR swapChains[] = { this->vkSwapChain };
+
+	VkPresentInfoKHR vkPresentInfo = {};
+	vkPresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	vkPresentInfo.waitSemaphoreCount = 0;
+	vkPresentInfo.pWaitSemaphores = ur_null;
+	vkPresentInfo.swapchainCount = ur_array_size(swapChains);
+	vkPresentInfo.pSwapchains = swapChains;
+	vkPresentInfo.pImageIndices = &this->swapChainCurrentImageId;
+	vkPresentInfo.pResults = ur_null;
+
+	VkResult vkRes = vkQueuePresentKHR(vkDevicePresentQueue, &vkPresentInfo);
+	if (vkRes != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafCanvasVulkan: vkQueuePresentKHR failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	// TEMP: full synchronization
+	vkQueueWaitIdle(vkDevicePresentQueue);
+
+	// acquire next available image to use as RT
+
+	Result res  = this->AcquireNextImage();
+	if (Failed(res))
+		return res;
+
+	return Result(Success);
+}
+
+Result GrafCanvasVulkan::AcquireNextImage()
+{
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+	VkResult res = vkAcquireNextImageKHR(vkDevice, this->vkSwapChain, ~ur_uint64(0), this->vkSemaphoreImageAcquired, VK_NULL_HANDLE, &this->swapChainCurrentImageId);
+	if (res != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafCanvasVulkan: vkAcquireNextImageKHR failed with VkResult = ") + VkResultToString(res));
+	}
+
+	return Result(Success);
+}
+
+GrafImage* GrafCanvasVulkan::GetTargetImage()
+{
+	return ur_null;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1007,6 +1160,72 @@ Result GrafImageVulkan::CreateVkImageViews()
 	if (res != VK_SUCCESS)
 	{
 		return ResultError(Failure, std::string("GrafImageVulkan: vkCreateImageView failed with VkResult = ") + VkResultToString(res));
+	}
+
+	return Result(Success);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+GrafRenderPassVulkan::GrafRenderPassVulkan(GrafSystem& grafSystem) :
+	GrafRenderPass(grafSystem)
+{
+	this->vkRenderPass = VK_NULL_HANDLE;
+	this->vkPipelineLayout = VK_NULL_HANDLE;
+}
+
+GrafRenderPassVulkan::~GrafRenderPassVulkan()
+{
+	this->Deinitialize();
+}
+
+Result GrafRenderPassVulkan::Deinitialize()
+{
+	if (this->vkPipelineLayout != VK_NULL_HANDLE)
+	{
+		vkDestroyPipelineLayout(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipelineLayout, ur_null);
+		this->vkPipelineLayout = VK_NULL_HANDLE;
+	}
+	if (this->vkRenderPass != VK_NULL_HANDLE)
+	{
+		vkDestroyRenderPass(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkRenderPass, ur_null);
+		this->vkRenderPass = VK_NULL_HANDLE;
+	}
+
+	return Result(Success);
+}
+
+Result GrafRenderPassVulkan::Initialize(GrafDevice* grafDevice)
+{
+	this->Deinitialize();
+
+	GrafRenderPass::Initialize(grafDevice);
+
+	// validate logical device 
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+	{
+		return ResultError(InvalidArgs, std::string("GrafImageVulkan: failed to initialize, invalid GrafDevice"));
+	}
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+	//VkAttachmentDescription vkAttachmentDescs[] = { {} };
+
+	VkRenderPassCreateInfo vkRenderPassInfo = {};
+	vkRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	vkRenderPassInfo.flags = 0;
+	vkRenderPassInfo.attachmentCount = 0;
+	vkRenderPassInfo.pAttachments = ur_null; // VkAttachmentDescription*
+	vkRenderPassInfo.subpassCount = 0;
+	vkRenderPassInfo.pSubpasses = ur_null; // VkSubpassDescription*
+	vkRenderPassInfo.dependencyCount = 0;
+	vkRenderPassInfo.pDependencies = ur_null; // VkSubpassDependency*
+
+	VkResult res = vkCreateRenderPass(vkDevice, &vkRenderPassInfo, ur_null, &this->vkRenderPass);
+	if (res != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafPassVulkan: vkCreateRenderPass failed with VkResult = ") + VkResultToString(res));
 	}
 
 	return Result(Success);

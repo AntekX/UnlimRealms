@@ -23,6 +23,7 @@ namespace UnlimRealms
 	class GrafDevice;
 	class GrafCanvas;
 	class GrafImage;
+	class GrafRenderPass;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct /*UR_DECL*/ GrafPhysicalDeviceDesc
@@ -118,6 +119,8 @@ namespace UnlimRealms
 		virtual Result CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas);
 		
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
+		
+		virtual Result CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
 
 		virtual ur_uint GetRecommendedDeviceId();
 
@@ -172,6 +175,8 @@ namespace UnlimRealms
 
 		virtual Result Initialize(ur_uint deviceId);
 
+		virtual Result WaitIdle();
+
 		inline ur_uint GetDeviceId();
 
 	private:
@@ -225,6 +230,8 @@ namespace UnlimRealms
 		~GrafCanvas();
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams = InitParams::Default);
+
+		virtual Result Present();
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -254,6 +261,24 @@ namespace UnlimRealms
 	{
 		return this->imageDesc;
 	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//class /*UR_DECL*/ GrafRenderTarget : public GrafDeviceEntity
+	//{
+	//public:
+	//};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafRenderPass : public GrafDeviceEntity
+	{
+	public:
+
+		GrafRenderPass(GrafSystem& grafSystem);
+
+		~GrafRenderPass();
+
+		virtual Result Initialize(GrafDevice* grafDevice);
+	};
 
 } // end namespace UnlimRealms
 
@@ -287,6 +312,8 @@ namespace UnlimRealms
 
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
 
+		virtual Result CreatePass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
+
 		inline VkInstance GetVkInstance() const;
 		
 		inline VkPhysicalDevice GetVkPhysicalDevice(ur_uint deviceId) const;
@@ -318,7 +345,9 @@ namespace UnlimRealms
 
 		~GrafDeviceVulkan();
 
-		Result Initialize(ur_uint deviceId);
+		virtual Result Initialize(ur_uint deviceId);
+
+		virtual Result WaitIdle();
 
 		inline VkDevice GetVkDevice() const;
 
@@ -369,13 +398,22 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams = InitParams::Default);
 
+		virtual Result Present();
+
+		virtual GrafImage* GetTargetImage();
+
 	private:
 
 		Result Deinitialize();
 
+		Result AcquireNextImage();
+
+		ur_uint32 vkDevicePresentQueueId;
 		VkSurfaceKHR vkSurface;
 		VkSwapchainKHR vkSwapChain;
 		std::vector<std::unique_ptr<GrafImage>> swapChainImages;
+		VkSemaphore vkSemaphoreImageAcquired;
+		ur_uint32 swapChainCurrentImageId;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -408,6 +446,25 @@ namespace UnlimRealms
 	{
 		return this->vkImage;
 	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafRenderPassVulkan : public GrafRenderPass
+	{
+	public:
+
+		GrafRenderPassVulkan(GrafSystem& grafSystem);
+
+		~GrafRenderPassVulkan();
+
+		virtual Result Initialize(GrafDevice* grafDevice);
+	
+	private:
+
+		Result Deinitialize();
+
+		VkRenderPass vkRenderPass;
+		VkPipelineLayout vkPipelineLayout;
+	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafUtilsVulkan
