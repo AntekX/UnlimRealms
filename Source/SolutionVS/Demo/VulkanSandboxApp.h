@@ -45,6 +45,15 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/*enum GrafDeviceTypeFlags
+	{
+		GrafDeviceTypeFlag_Undefined = 0,
+		GrafDeviceTypeFlag_Graphics = (1 << 0),
+		GrafDeviceTypeFlag_Compute = (1 << 1),
+		GrafDeviceTypeFlag_Transfer = (1 << 2)
+	};*/
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class GrafFormat
 	{
 		Unsupported = -1,
@@ -357,6 +366,12 @@ namespace UnlimRealms
 
 		inline ur_uint GetVkDeviceTransferQueueId() const;
 
+		inline VkCommandPool GetVkGraphicsCommandPool() const;
+
+		inline VkCommandPool GetVkComputeCommandPool() const;
+
+		inline VkCommandPool GetVkTransferCommandPool() const;
+
 	private:
 
 		Result Deinitialize();
@@ -365,6 +380,9 @@ namespace UnlimRealms
 		ur_uint deviceGraphicsQueueId;
 		ur_uint deviceComputeQueueId;
 		ur_uint deviceTransferQueueId;
+		VkCommandPool vkGraphicsCommandPool;
+		VkCommandPool vkComputeCommandPool;
+		VkCommandPool vkTransferCommandPool;
 	};
 
 	inline VkDevice GrafDeviceVulkan::GetVkDevice() const
@@ -385,6 +403,21 @@ namespace UnlimRealms
 	inline ur_uint GrafDeviceVulkan::GetVkDeviceTransferQueueId() const
 	{
 		return this->deviceTransferQueueId;
+	}
+
+	inline VkCommandPool GrafDeviceVulkan::GetVkGraphicsCommandPool() const
+	{
+		return this->vkGraphicsCommandPool;
+	}
+
+	inline VkCommandPool GrafDeviceVulkan::GetVkComputeCommandPool() const
+	{
+		return this->vkComputeCommandPool;
+	}
+
+	inline VkCommandPool GrafDeviceVulkan::GetVkTransferCommandPool() const
+	{
+		return this->vkTransferCommandPool;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -412,8 +445,12 @@ namespace UnlimRealms
 		VkSurfaceKHR vkSurface;
 		VkSwapchainKHR vkSwapChain;
 		std::vector<std::unique_ptr<GrafImage>> swapChainImages;
-		VkSemaphore vkSemaphoreImageAcquired;
 		ur_uint32 swapChainCurrentImageId;
+		
+		// TODO: reconsider, following code used for test presentation code
+		VkSemaphore vkSemaphoreImageAcquired;
+		VkFence vkSubmitFence;
+		VkRenderPass vkRenderPass;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -457,6 +494,8 @@ namespace UnlimRealms
 		~GrafRenderPassVulkan();
 
 		virtual Result Initialize(GrafDevice* grafDevice);
+
+		inline VkRenderPass GetVkRenderPass() const;
 	
 	private:
 
@@ -465,6 +504,11 @@ namespace UnlimRealms
 		VkRenderPass vkRenderPass;
 		VkPipelineLayout vkPipelineLayout;
 	};
+
+	inline VkRenderPass GrafRenderPassVulkan::GetVkRenderPass() const
+	{
+		return this->vkRenderPass;
+	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafUtilsVulkan

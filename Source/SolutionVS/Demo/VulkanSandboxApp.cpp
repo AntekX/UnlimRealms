@@ -469,7 +469,7 @@ Result GrafSystemVulkan::Initialize(Canvas *canvas)
 		LogNoteGrafDbg(std::string(layerProperty.layerName) + " (" + layerProperty.description + ")");
 	}
 
-	// TODO: consider setting up custom debug callback for vulkan messages
+	// NOTE: consider setting up custom debug callback for vulkan messages
 	
 	#endif
 
@@ -579,6 +579,9 @@ GrafDeviceVulkan::GrafDeviceVulkan(GrafSystem &grafSystem) :
 	this->deviceGraphicsQueueId = ur_uint(-1);
 	this->deviceComputeQueueId = ur_uint(-1);
 	this->deviceTransferQueueId = ur_uint(-1);
+	this->vkGraphicsCommandPool = VK_NULL_HANDLE;
+	this->vkComputeCommandPool = VK_NULL_HANDLE;
+	this->vkTransferCommandPool = VK_NULL_HANDLE;
 }
 
 GrafDeviceVulkan::~GrafDeviceVulkan()
@@ -591,6 +594,24 @@ Result GrafDeviceVulkan::Deinitialize()
 	this->deviceGraphicsQueueId = ur_uint(-1);
 	this->deviceComputeQueueId = ur_uint(-1);
 	this->deviceTransferQueueId = ur_uint(-1);
+
+	if (this->vkGraphicsCommandPool != VK_NULL_HANDLE)
+	{
+		vkDestroyCommandPool(this->vkDevice, this->vkGraphicsCommandPool, ur_null);
+		this->vkGraphicsCommandPool = VK_NULL_HANDLE;
+	}
+
+	if (this->vkComputeCommandPool != VK_NULL_HANDLE)
+	{
+		vkDestroyCommandPool(this->vkDevice, this->vkComputeCommandPool, ur_null);
+		this->vkComputeCommandPool = VK_NULL_HANDLE;
+	}
+
+	if (this->vkTransferCommandPool != VK_NULL_HANDLE)
+	{
+		vkDestroyCommandPool(this->vkDevice, this->vkTransferCommandPool, ur_null);
+		this->vkTransferCommandPool = VK_NULL_HANDLE;
+	}
 
 	if (this->vkDevice != VK_NULL_HANDLE)
 	{
@@ -659,7 +680,7 @@ Result GrafDeviceVulkan::Initialize(ur_uint deviceId)
 	vkQueueInfo.pQueuePriorities = &queuePriority;
 
 	VkPhysicalDeviceFeatures vkDeviceFeatures = {};
-	// todo: pass to Initialize a GRAF structure describing essential user defined feature list and fill corresponding fields in VkPhysicalDeviceFeatures
+	// NOTE: pass to Initialize a GRAF structure describing essential user defined feature list and fill corresponding fields in VkPhysicalDeviceFeatures
 
 	VkDeviceCreateInfo vkDeviceInfo = {};
 	vkDeviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -678,6 +699,23 @@ Result GrafDeviceVulkan::Initialize(ur_uint deviceId)
 		return ResultError(Failure, std::string("GrafDeviceVulkan: vkCreateDevice failed with VkResult = ") + VkResultToString(res));
 	}
 	LogNoteGrafDbg(std::string("GrafDeviceVulkan: VkDevice created for ") + grafSystemVulkan.GetPhysicalDeviceDesc(deviceId)->Description);
+
+	// create graphics queue command pool
+
+	VkCommandPoolCreateInfo vkCommandPoolInfo = {};
+	vkCommandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	vkCommandPoolInfo.flags = 0;
+	vkCommandPoolInfo.queueFamilyIndex = this->deviceGraphicsQueueId;
+
+	res = vkCreateCommandPool(this->vkDevice, &vkCommandPoolInfo, ur_null, &this->vkGraphicsCommandPool);
+	if (res != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafDeviceVulkan: vkCreateCommandPool failed with VkResult = ") + VkResultToString(res));
+	}
+	LogNoteGrafDbg(std::string("GrafDeviceVulkan: VkCommandPool created for queue family Id = ") + std::to_string(this->deviceGraphicsQueueId));
+
+	// NOTE: consider initializing command pools for other queue types when required
 
 	return Result(Success);
 }
@@ -699,7 +737,9 @@ GrafCanvasVulkan::GrafCanvasVulkan(GrafSystem &grafSystem) :
 	this->vkSwapChain = VK_NULL_HANDLE;
 	this->vkDevicePresentQueueId = 0;
 	this->vkSemaphoreImageAcquired = VK_NULL_HANDLE;
+	this->vkSubmitFence = VK_NULL_HANDLE;
 	this->swapChainCurrentImageId = 0;
+	this->vkRenderPass = VK_NULL_HANDLE;
 }
 
 GrafCanvasVulkan::~GrafCanvasVulkan()
@@ -709,13 +749,26 @@ GrafCanvasVulkan::~GrafCanvasVulkan()
 
 Result GrafCanvasVulkan::Deinitialize()
 {
-	this->swapChainImages.clear();
+	if (this->vkRenderPass != VK_NULL_HANDLE)
+	{
+		vkDestroyRenderPass(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkRenderPass, ur_null);
+		this->vkRenderPass = VK_NULL_HANDLE;
+
+	}
 
 	if (this->vkSemaphoreImageAcquired != VK_NULL_HANDLE)
 	{
 		vkDestroySemaphore(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSemaphoreImageAcquired, ur_null);
 		this->vkSemaphoreImageAcquired = VK_NULL_HANDLE;
 	}
+
+	if (this->vkSubmitFence != VK_NULL_HANDLE)
+	{
+		vkDestroyFence(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSubmitFence, ur_null);
+		this->vkSubmitFence = VK_NULL_HANDLE;
+	}
+	
+	this->swapChainImages.clear();
 
 	if (this->vkSwapChain != VK_NULL_HANDLE)
 	{
@@ -957,6 +1010,17 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 		return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateSemaphore failed with VkResult = ") + VkResultToString(res));
 	}
 
+	VkFenceCreateInfo vkFenceInfo = {};
+	vkFenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	vkFenceInfo.flags = 0;
+
+	res = vkCreateFence(vkDevice, &vkFenceInfo, ur_null, &this->vkSubmitFence);
+	if (res != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateFence failed with VkResult = ") + VkResultToString(res));
+	}
+
 	// acquire an image to use as a current RT
 	
 	Result urRes = this->AcquireNextImage();
@@ -964,6 +1028,51 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 	{
 		this->Deinitialize();
 		return urRes;
+	}
+
+	// TEMP: hardcoded render pass for swap chain images transition test
+
+	VkAttachmentDescription vkAttachmentDesc = {};
+	vkAttachmentDesc.flags = 0;
+	vkAttachmentDesc.format = VK_FORMAT_B8G8R8_UNORM;
+	vkAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+	vkAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	vkAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	vkAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	vkAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	vkAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	vkAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference vkColorAttachmentRef = {};
+	vkColorAttachmentRef.attachment = 0;
+	vkColorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription vkSubpassDesc = {};
+	vkSubpassDesc.flags = 0;
+	vkSubpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	vkSubpassDesc.inputAttachmentCount = 0;
+	vkSubpassDesc.pInputAttachments = ur_null;
+	vkSubpassDesc.colorAttachmentCount = 1;
+	vkSubpassDesc.pColorAttachments = &vkColorAttachmentRef;
+	vkSubpassDesc.pResolveAttachments = ur_null;
+	vkSubpassDesc.pDepthStencilAttachment = ur_null;
+	vkSubpassDesc.preserveAttachmentCount = 0;
+	vkSubpassDesc.pPreserveAttachments = ur_null;
+
+	VkRenderPassCreateInfo vkRenderPassInfo = {};
+	vkRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	vkRenderPassInfo.flags = 0;
+	vkRenderPassInfo.attachmentCount = 1;
+	vkRenderPassInfo.pAttachments = &vkAttachmentDesc;
+	vkRenderPassInfo.subpassCount = 1;
+	vkRenderPassInfo.pSubpasses = &vkSubpassDesc;
+	vkRenderPassInfo.dependencyCount = 0;
+	vkRenderPassInfo.pDependencies = ur_null;
+
+	res = vkCreateRenderPass(vkDevice, &vkRenderPassInfo, ur_null, &this->vkRenderPass);
+	if (res != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateRenderPass failed with VkResult = ") + VkResultToString(res));
 	}
 
 	return Result(Success);
@@ -979,14 +1088,22 @@ Result GrafCanvasVulkan::Present()
 	// TODO: image layout transition to "present" state must be done at this point
 	// VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 
+	// TEMP: execute image transition render pass
+	VkQueue vkQueueGraphicsQueue;
+	vkGetDeviceQueue(vkDevice, grafDeviceVulkan->GetVkDeviceGraphicsQueueId(), 0, &vkQueueGraphicsQueue);
+	VkSubmitInfo vkSubmitInfo = {};
+	vkSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	vkResetFences(vkDevice, 1, &this->vkSubmitFence);
+	vkQueueSubmit(vkQueueGraphicsQueue, 1, &vkSubmitInfo, this->vkSubmitFence);
+
 	// present current image
 
 	VkSwapchainKHR swapChains[] = { this->vkSwapChain };
 
 	VkPresentInfoKHR vkPresentInfo = {};
 	vkPresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	vkPresentInfo.waitSemaphoreCount = 0;
-	vkPresentInfo.pWaitSemaphores = ur_null;
+	vkPresentInfo.waitSemaphoreCount = 1;
+	vkPresentInfo.pWaitSemaphores = &this->vkSemaphoreImageAcquired; // make sure an image acquired during the previous vkAcquireNextImageKHR will available at presentation time
 	vkPresentInfo.swapchainCount = ur_array_size(swapChains);
 	vkPresentInfo.pSwapchains = swapChains;
 	vkPresentInfo.pImageIndices = &this->swapChainCurrentImageId;
@@ -1002,7 +1119,6 @@ Result GrafCanvasVulkan::Present()
 	vkQueueWaitIdle(vkDevicePresentQueue);
 
 	// acquire next available image to use as RT
-
 	Result res  = this->AcquireNextImage();
 	if (Failed(res))
 		return res;
@@ -1123,7 +1239,7 @@ Result GrafImageVulkan::CreateVkImageViews()
 	case VK_IMAGE_TYPE_1D: vkViewType = VK_IMAGE_VIEW_TYPE_1D; break;
 	case VK_IMAGE_TYPE_2D: vkViewType = VK_IMAGE_VIEW_TYPE_2D; break;
 	case VK_IMAGE_TYPE_3D: vkViewType = VK_IMAGE_VIEW_TYPE_3D; break;
-	// TODO: handle texture arrays
+	// NOTE: handle texture arrays
 	//VK_IMAGE_VIEW_TYPE_CUBE;
 	//VK_IMAGE_VIEW_TYPE_1D_ARRAY;
 	//VK_IMAGE_VIEW_TYPE_2D_ARRAY;
@@ -1210,25 +1326,9 @@ Result GrafRenderPassVulkan::Initialize(GrafDevice* grafDevice)
 	}
 	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
 
-	//VkAttachmentDescription vkAttachmentDescs[] = { {} };
+	// TODO:
 
-	VkRenderPassCreateInfo vkRenderPassInfo = {};
-	vkRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	vkRenderPassInfo.flags = 0;
-	vkRenderPassInfo.attachmentCount = 0;
-	vkRenderPassInfo.pAttachments = ur_null; // VkAttachmentDescription*
-	vkRenderPassInfo.subpassCount = 0;
-	vkRenderPassInfo.pSubpasses = ur_null; // VkSubpassDescription*
-	vkRenderPassInfo.dependencyCount = 0;
-	vkRenderPassInfo.pDependencies = ur_null; // VkSubpassDependency*
-
-	VkResult res = vkCreateRenderPass(vkDevice, &vkRenderPassInfo, ur_null, &this->vkRenderPass);
-	if (res != VK_SUCCESS)
-	{
-		return ResultError(Failure, std::string("GrafPassVulkan: vkCreateRenderPass failed with VkResult = ") + VkResultToString(res));
-	}
-
-	return Result(Success);
+	return Result(NotImplemented);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
