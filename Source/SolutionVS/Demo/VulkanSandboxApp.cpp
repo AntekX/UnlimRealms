@@ -36,10 +36,12 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
 	std::unique_ptr<GrafDevice> grafDevice;
 	std::unique_ptr<GrafCanvas> grafCanvas;
+	std::unique_ptr<GrafCommandList> grafMainCmdList;
 	std::unique_ptr<GrafRenderPass> grafRenderPass_Demo;
-	auto& deinitializeGfxSystem = [&grafSystem, &grafDevice, &grafCanvas, &grafRenderPass_Demo]() -> void {
+	auto& deinitializeGfxSystem = [&grafSystem, &grafDevice, &grafCanvas, &grafMainCmdList, &grafRenderPass_Demo]() -> void {
 		// order matters!
 		grafRenderPass_Demo.reset();
+		grafMainCmdList.reset();
 		grafCanvas.reset();
 		grafDevice.reset();
 		grafSystem.reset();
@@ -60,6 +62,12 @@ int VulkanSandboxApp::Run()
 		if (Failed(grafRes)) break;
 
 		grafRes = grafCanvas->Initialize(grafDevice.get());
+		if (Failed(grafRes)) break;
+
+		grafRes = grafSystem->CreateCommandList(grafMainCmdList);
+		if (Failed(grafRes)) break;
+
+		grafRes = grafMainCmdList->Initialize(grafDevice.get());
 		if (Failed(grafRes)) break;
 
 		//grafRes = grafSystem->CreateRenderPass(grafRenderPass_Demo);
@@ -96,6 +104,23 @@ int VulkanSandboxApp::Run()
 		}
 	}
 
+	// animated clear color test
+	static const ur_float clearColorDelay = 2.0f;
+	static const ur_float4 clearColors[] = {
+		{ 0.0f, 0.0f, 0.0f, 1.0f },
+		{ 0.0f, 0.0f, 1.0f, 1.0f },
+		{ 0.0f, 1.0f, 0.0f, 1.0f },
+		{ 0.0f, 1.0f, 1.0f, 1.0f },
+		{ 1.0f, 0.0f, 0.0f, 1.0f },
+		{ 1.0f, 0.0f, 1.0f, 1.0f },
+		{ 1.0f, 1.0f, 0.0f, 1.0f },
+		{ 1.0f, 1.0f, 1.0f, 1.0f },
+	};
+	ur_uint crntColorId = 0;
+	ur_uint nextColorId = (crntColorId + 1) % ur_array_size(clearColors);
+	ur_float crntColorWeight = 0.0f;
+	ur_float4 crntClearColor(0.0f);
+
 	// Main message loop:
 	ClockTime timer = Clock::now();
 	MSG msg;
@@ -113,6 +138,8 @@ int VulkanSandboxApp::Run()
 			winInput->ProcessMsg(msg);
 			break;
 		}
+		if (msg.message == WM_QUIT)
+			break;
 		auto inputDelay = Clock::now() - timeBefore;
 		timer += inputDelay;  // skip input delay
 
@@ -121,8 +148,7 @@ int VulkanSandboxApp::Run()
 		{
 			canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 			canvasHeight = realm.GetCanvas()->GetClientBound().Height();
-			// TODO: resize frame buffer(s)
-			if (grafCanvas != ur_null)
+			if (grafSystem != ur_null)
 			{
 				grafCanvas->Initialize(grafDevice.get());
 			}
@@ -145,6 +171,17 @@ int VulkanSandboxApp::Run()
 			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f;  // to seconds
 
 			// TODO: animate things here
+			
+			// clear color animation
+			crntColorWeight += elapsedTime / clearColorDelay;
+			if (crntColorWeight >= 1.0f)
+			{
+				ur_float intPart;
+				crntColorWeight = std::modf(crntColorWeight, &intPart);
+				crntColorId = (crntColorId + ur_uint(intPart)) % ur_array_size(clearColors);
+				nextColorId = (crntColorId + 1) % ur_array_size(clearColors);
+			}
+			crntClearColor = ur_float4::Lerp(clearColors[crntColorId], clearColors[nextColorId], crntColorWeight);
 
 			ctx.progress = ur_float(1.0f);
 		});
@@ -154,7 +191,18 @@ int VulkanSandboxApp::Run()
 			
 			updateFrameJob->WaitProgress(ur_float(1.0f));  // wait till portion of data required for this draw call is fully updated
 
-			// TODO: draw primtives here
+			if (grafSystem != ur_null)
+			{
+				grafMainCmdList->Begin();
+			
+				grafMainCmdList->ImageMemoryBarrier(grafCanvas->GetTargetImage(), GrafImageState::Current, GrafImageState::Common);
+				grafMainCmdList->ClearColorImage(grafCanvas->GetTargetImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
+				
+				// TODO: draw primtives here
+
+				grafMainCmdList->End();
+				grafDevice->Submit(grafMainCmdList.get());
+			}
 		});
 
 		drawFrameJob->Wait();
@@ -323,6 +371,11 @@ Result GrafCommandList::SetFenceState(GrafFence* grafFence, GrafFenceState state
 	return Result(NotImplemented);
 }
 
+Result GrafCommandList::ClearColorImage(GrafImage* grafImage, GrafClearValue clearValue)
+{
+	return Result(NotImplemented);
+}
+
 GrafFence::GrafFence(GrafSystem &grafSystem) :
 	GrafDeviceEntity(grafSystem)
 {
@@ -377,9 +430,15 @@ Result GrafCanvas::Present()
 	return Result(NotImplemented);
 }
 
+GrafImage* GrafCanvas::GetTargetImage()
+{
+	return ur_null;
+}
+
 GrafImage::GrafImage(GrafSystem &grafSystem) :
 	GrafDeviceEntity(grafSystem)
 {
+	this->imageState = GrafImageState::Undefined;
 }
 
 GrafImage::~GrafImage()
@@ -420,6 +479,7 @@ Result GrafRenderPass::Initialize(GrafDevice* grafDevice)
 #endif
 
 #define UR_GRAF_VULKAN_IMPLICIT_WAIT_DEVICE 1
+#define UR_GRAF_VULKAN_CANVAS_IMPLICIT_NEXT_IMAGE_TRANSITION_TO_COMMON 0
 
 #if defined(UR_GRAF_LOG_LEVEL_DEBUG)
 #define LogNoteGrafDbg(text) GetRealm().GetLog().WriteLine(text, Log::Note)
@@ -820,7 +880,7 @@ Result GrafDeviceVulkan::Submit(GrafCommandList* grafCommandList)
 	GrafCommandListVulkan* grafCommandListVulkan = static_cast<GrafCommandListVulkan*>(grafCommandList);
 	VkCommandBuffer vkCommandBuffer = grafCommandListVulkan->GetVkCommandBuffer();
 	
-	// NOTE: support submission to dofferent queue families
+	// NOTE: support submission to different queue families
 	// currently everything's done on the graphics queue
 	VkQueue vkSubmissionQueue;
 	vkGetDeviceQueue(this->vkDevice, this->deviceGraphicsQueueId, 0, &vkSubmissionQueue);
@@ -963,11 +1023,14 @@ Result GrafCommandListVulkan::ImageMemoryBarrier(GrafImage* grafImage, GrafImage
 	if (ur_null == grafImage)
 		return Result(InvalidArgs);
 
+	if (grafImage->GetState() == dstState)
+		return Result(Success);
+
 	VkImageMemoryBarrier vkImageBarrier = {};
 	vkImageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	vkImageBarrier.srcAccessMask = 0;
 	vkImageBarrier.dstAccessMask = 0;
-	vkImageBarrier.oldLayout = GrafUtilsVulkan::GrafToVkImageLayout(srcState);
+	vkImageBarrier.oldLayout = GrafUtilsVulkan::GrafToVkImageLayout(GrafImageState::Current == srcState ? grafImage->GetState() : srcState);
 	vkImageBarrier.newLayout = GrafUtilsVulkan::GrafToVkImageLayout(dstState);
 	vkImageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	vkImageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -984,6 +1047,8 @@ Result GrafCommandListVulkan::ImageMemoryBarrier(GrafImage* grafImage, GrafImage
 	
 	vkCmdPipelineBarrier(this->vkCommandBuffer, vkStageSrc, vkStageDst, VkDependencyFlags(0), 0, ur_null, 0, ur_null, 1, &vkImageBarrier);
 
+	static_cast<GrafImageVulkan*>(grafImage)->SetState(dstState);
+	
 	return Result(Success);
 }
 
@@ -1005,6 +1070,25 @@ Result GrafCommandListVulkan::SetFenceState(GrafFence* grafFence, GrafFenceState
 	default:
 		return ResultError(InvalidArgs, "GrafCommandListVulkan: SetFenceState failed, invalid GrafFenceState");
 	};
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::ClearColorImage(GrafImage* grafImage, GrafClearValue clearValue)
+{
+	if (ur_null == grafImage)
+		return Result(InvalidArgs);
+
+	VkImage vkImage = static_cast<GrafImageVulkan*>(grafImage)->GetVkImage();
+	VkImageLayout vkImageLayout = GrafUtilsVulkan::GrafToVkImageLayout(grafImage->GetState());
+	VkClearColorValue& vkClearValue = reinterpret_cast<VkClearColorValue&>(clearValue);
+	VkImageSubresourceRange vkClearRange = {};
+	vkClearRange.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(grafImage->GetDesc().Usage);
+	vkClearRange.levelCount = grafImage->GetDesc().MipLevels;
+	vkClearRange.baseArrayLayer = 0;
+	vkClearRange.layerCount = 1;
+	
+	vkCmdClearColorImage(this->vkCommandBuffer, vkImage, vkImageLayout, &vkClearValue, 1, &vkClearRange);
 
 	return Result(Success);
 }
@@ -1405,6 +1489,17 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 		return urRes;
 	}
 
+	#if (UR_GRAF_VULKAN_CANVAS_IMPLICIT_NEXT_IMAGE_TRANSITION_TO_COMMON)
+	// initial image layout transition into common state
+	// TODO: use separate command list to avoid synchronization
+	// (prev frame command list can be used here as it is guaranteed not to be in use at the initialization point)
+	GrafImage* swapChainNextImage = this->swapChainImages[this->swapChainCurrentImageId].get();
+	this->imageTransitionCmdList->Begin();
+	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
+	this->imageTransitionCmdList->End();
+	grafDeviceVulkan->Submit(this->imageTransitionCmdList.get());
+	#endif
+
 	// TEMP: hardcoded render pass for swap chain images transition test
 
 	/*VkAttachmentDescription vkAttachmentDesc = {};
@@ -1467,12 +1562,7 @@ Result GrafCanvasVulkan::Present()
 	
 	GrafImage* swapChainCurrentImage = this->swapChainImages[this->swapChainCurrentImageId].get();
 	this->imageTransitionCmdList->Begin();
-	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainCurrentImage, GrafImageState::Undefined, GrafImageState::Common);
-	// TODO: move Clear to GrafComamndList
-	VkClearColorValue clearValue = { { 0.0f, 0.0f, 1.0f, 1.0f } };
-	VkImageSubresourceRange clearRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-	vkCmdClearColorImage(static_cast<GrafCommandListVulkan*>(this->imageTransitionCmdList.get())->GetVkCommandBuffer(), static_cast<GrafImageVulkan*>(swapChainCurrentImage)->GetVkImage(), VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
-	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainCurrentImage, GrafImageState::Common, GrafImageState::Present);
+	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainCurrentImage, GrafImageState::Current, GrafImageState::Present);
 	this->imageTransitionCmdList->End();
 	grafDeviceVulkan->Submit(this->imageTransitionCmdList.get());
 
@@ -1494,17 +1584,21 @@ Result GrafCanvasVulkan::Present()
 		return ResultError(Failure, std::string("GrafCanvasVulkan: vkQueuePresentKHR failed with VkResult = ") + VkResultToString(vkRes));
 	
 	// acquire next available image to use as RT
+
 	Result res = this->AcquireNextImage();
 	if (Failed(res))
 		return res;
 
-	// do image layout transition to render target state
+	#if (UR_GRAF_VULKAN_CANVAS_IMPLICIT_NEXT_IMAGE_TRANSITION_TO_COMMON)
+	// do image layout transition to common state
 	
 	GrafImage* swapChainNextImage = this->swapChainImages[this->swapChainCurrentImageId].get();
 	this->imageTransitionCmdList->Begin();
-	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Undefined, GrafImageState::Common);
+	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
 	this->imageTransitionCmdList->End();
 	grafDeviceVulkan->Submit(this->imageTransitionCmdList.get());
+	
+	#endif
 
 	return Result(Success);
 }
@@ -1523,7 +1617,9 @@ Result GrafCanvasVulkan::AcquireNextImage()
 
 GrafImage* GrafCanvasVulkan::GetTargetImage()
 {
-	return ur_null;
+	if (this->swapChainImages.empty())
+		return ur_null;
+	return this->swapChainImages[this->swapChainCurrentImageId].get();;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

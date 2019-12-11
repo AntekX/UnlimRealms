@@ -671,7 +671,7 @@ namespace UnlimRealms
 			return *(TVector3<T>*)this;
 		}
 
-		static TVector4<T> Lerp(TVector4<T> &output, const TVector4<T> &v0, const TVector4<T> &v1, T s)
+		static void Lerp(TVector4<T> &output, const TVector4<T> &v0, const TVector4<T> &v1, T s)
 		{
 			output.x = v0.x * (T(1) - s) + v1.x * s;
 			output.y = v0.y * (T(1) - s) + v1.y * s;

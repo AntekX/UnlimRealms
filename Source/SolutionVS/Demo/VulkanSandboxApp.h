@@ -115,6 +115,7 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class GrafImageState
 	{
+		Current = -1,
 		Undefined = 0,
 		Common,
 		ColorWrite,
@@ -134,6 +135,17 @@ namespace UnlimRealms
 		ur_uint3 Size;
 		ur_uint MipLevels;
 		GrafImageUsageFlags Usage;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct GrafClearValue
+	{
+		union
+		{
+			ur_float f32[4];
+			ur_int i32[4];
+			ur_uint u32[4];
+		};
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -276,6 +288,8 @@ namespace UnlimRealms
 		virtual Result ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState);
 		
 		virtual Result SetFenceState(GrafFence* grafFence, GrafFenceState state);
+
+		virtual Result ClearColorImage(GrafImage* grafImage, GrafClearValue clearValue);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -316,6 +330,8 @@ namespace UnlimRealms
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams = InitParams::Default);
 
 		virtual Result Present();
+
+		virtual GrafImage* GetTargetImage();
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -336,9 +352,12 @@ namespace UnlimRealms
 
 		inline const GrafImageDesc& GetDesc() const;
 
+		inline const GrafImageState& GetState() const;
+
 	protected:
 
 		GrafImageDesc imageDesc;
+		GrafImageState imageState;
 	};
 
 	inline const GrafImageDesc& GrafImage::GetDesc() const
@@ -346,11 +365,10 @@ namespace UnlimRealms
 		return this->imageDesc;
 	}
 
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//class /*UR_DECL*/ GrafRenderTarget : public GrafDeviceEntity
-	//{
-	//public:
-	//};
+	inline const GrafImageState& GrafImage::GetState() const
+	{
+		return this->imageState;
+	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafRenderPass : public GrafDeviceEntity
@@ -520,6 +538,8 @@ namespace UnlimRealms
 
 		virtual Result SetFenceState(GrafFence* grafFence, GrafFenceState state);
 
+		virtual Result ClearColorImage(GrafImage* grafImage, GrafClearValue clearValue);
+
 		inline VkCommandBuffer GetVkCommandBuffer() const;
 
 		inline VkFence GetVkSubmitFence() const;
@@ -600,8 +620,6 @@ namespace UnlimRealms
 		std::vector<std::unique_ptr<GrafImage>> swapChainImages;
 		ur_uint32 swapChainCurrentImageId;
 		std::unique_ptr<GrafCommandList> imageTransitionCmdList;
-		
-		// TODO: reconsider, following code used for test presentation code
 		VkSemaphore vkSemaphoreImageAcquired;
 	};
 
@@ -626,6 +644,9 @@ namespace UnlimRealms
 
 		Result CreateVkImageViews();
 
+		friend class GrafCommandListVulkan;
+		inline void SetState(GrafImageState& state);
+
 		ur_bool imageExternalHandle;
 		VkImage vkImage;
 		VkImageView vkImageView;
@@ -634,6 +655,11 @@ namespace UnlimRealms
 	inline VkImage GrafImageVulkan::GetVkImage() const
 	{
 		return this->vkImage;
+	}
+
+	inline void GrafImageVulkan::SetState(GrafImageState& state)
+	{
+		this->imageState = state;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
