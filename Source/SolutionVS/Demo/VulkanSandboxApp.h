@@ -21,6 +21,8 @@ namespace UnlimRealms
 	// forward declarations
 	class GrafSystem;
 	class GrafDevice;
+	class GrafCommandList;
+	class GrafFence;
 	class GrafCanvas;
 	class GrafImage;
 	class GrafRenderPass;
@@ -52,6 +54,14 @@ namespace UnlimRealms
 		GrafDeviceTypeFlag_Compute = (1 << 1),
 		GrafDeviceTypeFlag_Transfer = (1 << 2)
 	};*/
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class GrafFenceState
+	{
+		Undefined = -1,
+		Reset,
+		Signaled
+	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class GrafFormat
@@ -92,14 +102,28 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	enum class GrafImageUsage
+	enum class GrafImageUsageFlag
 	{
 		Undefined = 0,
+		TransferSrc = (1 << 0),
+		TransferDst = (1 << 1),
+		ColorRenderTarget = (1 << 2),
+		DepthStencilRenderTarget = (1 << 3)
+	};
+	typedef ur_uint GrafImageUsageFlags;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class GrafImageState
+	{
+		Undefined = 0,
+		Common,
+		ColorWrite,
+		DepthStencilWrite,
+		DepthStencilRead,
+		ShaderRead,
 		TransferSrc,
 		TransferDst,
-		ColorRenderTarget,
-		DepthStencilRenderTarget,
-		Count
+		Present
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,7 +133,7 @@ namespace UnlimRealms
 		GrafFormat Format;
 		ur_uint3 Size;
 		ur_uint MipLevels;
-		GrafImageUsage Usage;
+		GrafImageUsageFlags Usage;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -124,6 +148,10 @@ namespace UnlimRealms
 		virtual Result Initialize(Canvas *canvas);
 
 		virtual Result CreateDevice(std::unique_ptr<GrafDevice>& grafDevice);
+
+		virtual Result CreateCommandList(std::unique_ptr<GrafCommandList>& grafCommandList);
+
+		virtual Result CreateFence(std::unique_ptr<GrafFence>& grafFence);
 
 		virtual Result CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas);
 		
@@ -184,9 +212,13 @@ namespace UnlimRealms
 
 		virtual Result Initialize(ur_uint deviceId);
 
+		virtual Result Submit(GrafCommandList* grafCommandList);
+
 		virtual Result WaitIdle();
 
 		inline ur_uint GetDeviceId();
+
+		inline const GrafPhysicalDeviceDesc* GetPhysicalDeviceDesc(ur_uint deviceId);
 
 	private:
 
@@ -196,6 +228,11 @@ namespace UnlimRealms
 	inline ur_uint GrafDevice::GetDeviceId()
 	{
 		return deviceId;
+	}
+
+	inline const GrafPhysicalDeviceDesc* GrafDevice::GetPhysicalDeviceDesc(ur_uint deviceId)
+	{
+		return this->GetGrafSystem().GetPhysicalDeviceDesc(this->deviceId);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -220,6 +257,44 @@ namespace UnlimRealms
 	{
 		return this->grafDevice;
 	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafCommandList : public GrafDeviceEntity
+	{
+	public:
+
+		GrafCommandList(GrafSystem &grafSystem);
+
+		~GrafCommandList();
+
+		virtual Result Initialize(GrafDevice *grafDevice);
+
+		virtual Result Begin();
+
+		virtual Result End();
+
+		virtual Result ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState);
+		
+		virtual Result SetFenceState(GrafFence* grafFence, GrafFenceState state);
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafFence : public GrafDeviceEntity
+	{
+	public:
+
+		GrafFence(GrafSystem &grafSystem);
+
+		~GrafFence();
+
+		virtual Result Initialize(GrafDevice *grafDevice);
+
+		virtual Result SetState(GrafFenceState state);
+
+		virtual Result GetState(GrafFenceState& state);
+
+		virtual Result WaitSignaled();
+	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafCanvas : public GrafDeviceEntity
@@ -317,6 +392,10 @@ namespace UnlimRealms
 
 		virtual Result CreateDevice(std::unique_ptr<GrafDevice>& grafDevice);
 
+		virtual Result CreateCommandList(std::unique_ptr<GrafCommandList>& grafCommandList);
+
+		virtual Result CreateFence(std::unique_ptr<GrafFence>& grafFence);
+
 		virtual Result CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas);
 
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
@@ -355,6 +434,8 @@ namespace UnlimRealms
 		~GrafDeviceVulkan();
 
 		virtual Result Initialize(ur_uint deviceId);
+
+		virtual Result Submit(GrafCommandList* grafCommandList);
 
 		virtual Result WaitIdle();
 
@@ -421,6 +502,78 @@ namespace UnlimRealms
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafCommandListVulkan : public GrafCommandList
+	{
+	public:
+
+		GrafCommandListVulkan(GrafSystem &grafSystem);
+
+		~GrafCommandListVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice);
+
+		virtual Result Begin();
+
+		virtual Result End();
+
+		virtual Result ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState);
+
+		virtual Result SetFenceState(GrafFence* grafFence, GrafFenceState state);
+
+		inline VkCommandBuffer GetVkCommandBuffer() const;
+
+		inline VkFence GetVkSubmitFence() const;
+
+	private:
+
+		Result Deinitialize();
+
+		VkCommandBuffer vkCommandBuffer;
+		VkFence vkSubmitFence;
+	};
+
+	inline VkCommandBuffer GrafCommandListVulkan::GetVkCommandBuffer() const
+	{
+		return this->vkCommandBuffer;
+	}
+
+	inline VkFence GrafCommandListVulkan::GetVkSubmitFence() const
+	{
+		return this->vkSubmitFence;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafFenceVulkan : public GrafFence
+	{
+	public:
+
+		GrafFenceVulkan(GrafSystem &grafSystem);
+
+		~GrafFenceVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice);
+
+		virtual Result SetState(GrafFenceState state);
+
+		virtual Result GetState(GrafFenceState& state);
+
+		virtual Result WaitSignaled();
+
+		inline VkEvent GetVkEvent() const;
+
+	private:
+
+		Result Deinitialize();
+
+		VkEvent vkEvent;
+	};
+
+	inline VkEvent GrafFenceVulkan::GetVkEvent() const
+	{
+		return this->vkEvent;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafCanvasVulkan : public GrafCanvas
 	{
 	public:
@@ -446,11 +599,10 @@ namespace UnlimRealms
 		VkSwapchainKHR vkSwapChain;
 		std::vector<std::unique_ptr<GrafImage>> swapChainImages;
 		ur_uint32 swapChainCurrentImageId;
+		std::unique_ptr<GrafCommandList> imageTransitionCmdList;
 		
 		// TODO: reconsider, following code used for test presentation code
 		VkSemaphore vkSemaphoreImageAcquired;
-		VkFence vkSubmitFence;
-		VkRenderPass vkRenderPass;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -515,9 +667,11 @@ namespace UnlimRealms
 	{
 	public:
 
-		static inline VkImageUsageFlags GrafToVkImageUsage(GrafImageUsage usage);
-		static inline GrafImageUsage VkToGrafImageUsage(VkImageUsageFlags usage);
+		static inline VkImageUsageFlags GrafToVkImageUsage(GrafImageUsageFlags usage);
+		static inline GrafImageUsageFlags VkToGrafImageUsage(VkImageUsageFlags usage);
 		static inline VkImageType GrafToVkImageType(GrafImageType imageType);
+		static inline VkImageAspectFlags GrafToVkImageUsageAspect(GrafImageUsageFlags usage);
+		static inline VkImageLayout GrafToVkImageLayout(GrafImageState imageState);
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
 	};

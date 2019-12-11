@@ -189,6 +189,21 @@ Result GrafSystem::Initialize(Canvas *canvas)
 	return Result(NotImplemented);
 }
 
+Result GrafSystem::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafSystem::CreateCommandList(std::unique_ptr<GrafCommandList>& grafCommandList)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafSystem::CreateFence(std::unique_ptr<GrafFence>& grafFence)
+{
+	return Result(NotImplemented);
+}
+
 Result GrafSystem::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
 {
 	return Result(NotImplemented);
@@ -200,11 +215,6 @@ Result GrafSystem::CreateImage(std::unique_ptr<GrafImage>& grafImage)
 }
 
 Result GrafSystem::CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass)
-{
-	return Result(NotImplemented);
-}
-
-Result GrafSystem::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
 {
 	return Result(NotImplemented);
 }
@@ -252,6 +262,11 @@ Result GrafDevice::Initialize(ur_uint deviceId)
 	return Result(NotImplemented);
 }
 
+Result GrafDevice::Submit(GrafCommandList* grafCommandList)
+{
+	return Result(NotImplemented);
+}
+
 Result GrafDevice::WaitIdle()
 {
 	return Result(NotImplemented);
@@ -270,6 +285,71 @@ GrafDeviceEntity::~GrafDeviceEntity()
 Result GrafDeviceEntity::Initialize(GrafDevice *grafDevice)
 {
 	this->grafDevice = grafDevice;
+	return Result(NotImplemented);
+}
+
+GrafCommandList::GrafCommandList(GrafSystem &grafSystem) : 
+	GrafDeviceEntity(grafSystem)
+{
+}
+
+GrafCommandList::~GrafCommandList()
+{
+}
+
+Result GrafCommandList::Initialize(GrafDevice *grafDevice)
+{
+	GrafDeviceEntity::Initialize(grafDevice);
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::Begin()
+{
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::End()
+{
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::SetFenceState(GrafFence* grafFence, GrafFenceState state)
+{
+	return Result(NotImplemented);
+}
+
+GrafFence::GrafFence(GrafSystem &grafSystem) :
+	GrafDeviceEntity(grafSystem)
+{
+}
+
+GrafFence::~GrafFence()
+{
+}
+
+Result GrafFence::Initialize(GrafDevice *grafDevice)
+{
+	GrafDeviceEntity::Initialize(grafDevice);
+	return Result(NotImplemented);
+}
+
+Result GrafFence::SetState(GrafFenceState state)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafFence::GetState(GrafFenceState& state)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafFence::WaitSignaled()
+{
 	return Result(NotImplemented);
 }
 
@@ -552,6 +632,18 @@ Result GrafSystemVulkan::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
 	return Result(Success);
 }
 
+Result GrafSystemVulkan::CreateCommandList(std::unique_ptr<GrafCommandList>& grafCommandList)
+{
+	grafCommandList.reset(new GrafCommandListVulkan(*this));
+	return Result(Success);
+}
+
+Result GrafSystemVulkan::CreateFence(std::unique_ptr<GrafFence>& grafFence)
+{
+	grafFence.reset(new GrafFenceVulkan(*this));
+	return Result(Success);
+}
+
 Result GrafSystemVulkan::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
 {
 	grafCanvas.reset(new GrafCanvasVulkan(*this));
@@ -704,7 +796,7 @@ Result GrafDeviceVulkan::Initialize(ur_uint deviceId)
 
 	VkCommandPoolCreateInfo vkCommandPoolInfo = {};
 	vkCommandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	vkCommandPoolInfo.flags = 0;
+	vkCommandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // command buffers will be resseted implicitly at vkBeginCommandBuffer
 	vkCommandPoolInfo.queueFamilyIndex = this->deviceGraphicsQueueId;
 
 	res = vkCreateCommandPool(this->vkDevice, &vkCommandPoolInfo, ur_null, &this->vkGraphicsCommandPool);
@@ -720,11 +812,301 @@ Result GrafDeviceVulkan::Initialize(ur_uint deviceId)
 	return Result(Success);
 }
 
+Result GrafDeviceVulkan::Submit(GrafCommandList* grafCommandList)
+{
+	if (ur_null == grafCommandList)
+		return Result(InvalidArgs);
+
+	GrafCommandListVulkan* grafCommandListVulkan = static_cast<GrafCommandListVulkan*>(grafCommandList);
+	VkCommandBuffer vkCommandBuffer = grafCommandListVulkan->GetVkCommandBuffer();
+	
+	// NOTE: support submission to dofferent queue families
+	// currently everything's done on the graphics queue
+	VkQueue vkSubmissionQueue;
+	vkGetDeviceQueue(this->vkDevice, this->deviceGraphicsQueueId, 0, &vkSubmissionQueue);
+
+	VkSubmitInfo vkSubmitInfo = {};
+	vkSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	vkSubmitInfo.waitSemaphoreCount = 0;
+	vkSubmitInfo.pWaitSemaphores = ur_null;
+    vkSubmitInfo.pWaitDstStageMask = ur_null;
+	vkSubmitInfo.commandBufferCount = 1;
+	vkSubmitInfo.pCommandBuffers = &vkCommandBuffer;
+	vkSubmitInfo.signalSemaphoreCount = 0;
+	vkSubmitInfo.pSignalSemaphores = ur_null;
+
+	VkResult vkRes = vkQueueSubmit(vkSubmissionQueue, 1, &vkSubmitInfo, grafCommandListVulkan->GetVkSubmitFence());
+	if (vkRes != VK_SUCCESS)
+		return ResultError(Failure, std::string("GrafDeviceVulkan: vkQueueSubmit failed with VkResult = ") + VkResultToString(vkRes));
+
+	return Result(Success);
+}
+
 Result GrafDeviceVulkan::WaitIdle()
 {
 	VkResult res = vkDeviceWaitIdle(this->vkDevice);
 	if (res != VK_SUCCESS)
 		return ResultError(Failure, std::string("GrafDeviceVulkan: vkDeviceWaitIdle failed with VkResult = ") + VkResultToString(res));
+	return Result(Success);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+GrafCommandListVulkan::GrafCommandListVulkan(GrafSystem &grafSystem) :
+	GrafCommandList(grafSystem)
+{
+	this->vkCommandBuffer = VK_NULL_HANDLE;
+	this->vkSubmitFence = VK_NULL_HANDLE;
+}
+
+GrafCommandListVulkan::~GrafCommandListVulkan()
+{
+	this->Deinitialize();
+}
+
+Result GrafCommandListVulkan::Deinitialize()
+{
+	if (this->vkSubmitFence != VK_NULL_HANDLE)
+	{
+		vkWaitForFences(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), 1, &this->vkSubmitFence, true, ~ur_uint64(0));
+		vkDestroyFence(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSubmitFence, ur_null);
+		this->vkSubmitFence = VK_NULL_HANDLE;
+	}
+
+	if (this->vkCommandBuffer != VK_NULL_HANDLE)
+	{
+		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
+		vkFreeCommandBuffers(grafDeviceVulkan->GetVkDevice(), grafDeviceVulkan->GetVkGraphicsCommandPool(), 1, &this->vkCommandBuffer);
+		this->vkCommandBuffer = VK_NULL_HANDLE;
+	}
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::Initialize(GrafDevice *grafDevice)
+{
+	this->Deinitialize();
+	
+	GrafCommandList::Initialize(grafDevice);
+
+	// validate logical device 
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+	{
+		return ResultError(InvalidArgs, std::string("GrafCommandListVulkan: failed to initialize, invalid GrafDevice"));
+	}
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+	// allocate command bufer
+
+	VkCommandBufferAllocateInfo vkCommandBufferInfo = {};
+	vkCommandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	vkCommandBufferInfo.commandPool = grafDeviceVulkan->GetVkGraphicsCommandPool();
+	vkCommandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	vkCommandBufferInfo.commandBufferCount = 1;
+
+	VkResult vkRes = vkAllocateCommandBuffers(vkDevice, &vkCommandBufferInfo, &this->vkCommandBuffer);
+	if (vkRes != VK_SUCCESS)
+		return ResultError(Failure, std::string("GrafCommandListVulkan: vkAllocateCommandBuffers failed with VkResult = ") + VkResultToString(vkRes));
+
+	// submission sync object
+	
+	VkFenceCreateInfo vkFenceInfo = {};
+	vkFenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	vkFenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	vkRes = vkCreateFence(vkDevice, &vkFenceInfo, ur_null, &this->vkSubmitFence);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafCommandListVulkan: vkCreateFence failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::Begin()
+{
+	if (VK_NULL_HANDLE == this->vkCommandBuffer)
+		return Result(NotInitialized);
+
+	VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
+	vkWaitForFences(vkDevice, 1, &this->vkSubmitFence, true, ~ur_uint64(0)); // make sure command buffer is no longer used (previous submission can still be executed)
+	vkResetFences(vkDevice, 1, &this->vkSubmitFence);
+
+	VkCommandBufferBeginInfo vkBeginInfo = {};
+	vkBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	vkBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	VkResult vkRes = vkBeginCommandBuffer(this->vkCommandBuffer, &vkBeginInfo);
+	if (vkRes != VK_SUCCESS)
+		return ResultError(Failure, std::string("GrafCommandListVulkan: vkBeginCommandBuffer failed with VkResult = ") + VkResultToString(vkRes));
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::End()
+{
+	if (VK_NULL_HANDLE == this->vkCommandBuffer)
+		return Result(NotInitialized);
+
+	VkResult vkRes = vkEndCommandBuffer(this->vkCommandBuffer);
+	if (vkRes != VK_SUCCESS)
+		return ResultError(Failure, std::string("GrafCommandListVulkan: vkEndCommandBuffer failed with VkResult = ") + VkResultToString(vkRes));
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState)
+{
+	if (ur_null == grafImage)
+		return Result(InvalidArgs);
+
+	VkImageMemoryBarrier vkImageBarrier = {};
+	vkImageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	vkImageBarrier.srcAccessMask = 0;
+	vkImageBarrier.dstAccessMask = 0;
+	vkImageBarrier.oldLayout = GrafUtilsVulkan::GrafToVkImageLayout(srcState);
+	vkImageBarrier.newLayout = GrafUtilsVulkan::GrafToVkImageLayout(dstState);
+	vkImageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	vkImageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	vkImageBarrier.image = static_cast<GrafImageVulkan*>(grafImage)->GetVkImage();
+	vkImageBarrier.subresourceRange.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(grafImage->GetDesc().Usage);
+	vkImageBarrier.subresourceRange.baseMipLevel = 0;
+	vkImageBarrier.subresourceRange.levelCount = (ur_uint32)grafImage->GetDesc().MipLevels;
+	vkImageBarrier.subresourceRange.baseArrayLayer = 0;
+	vkImageBarrier.subresourceRange.layerCount = 1;
+
+	// deduce stage mask values from source and destination layouts
+	VkPipelineStageFlags vkStageSrc = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	VkPipelineStageFlags vkStageDst = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	
+	vkCmdPipelineBarrier(this->vkCommandBuffer, vkStageSrc, vkStageDst, VkDependencyFlags(0), 0, ur_null, 0, ur_null, 1, &vkImageBarrier);
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::SetFenceState(GrafFence* grafFence, GrafFenceState state)
+{
+	if (ur_null == grafFence)
+		return Result(InvalidArgs);
+
+	VkPipelineStageFlags vkPipelineStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	VkEvent vkFenceEvent = static_cast<GrafFenceVulkan*>(grafFence)->GetVkEvent();
+	switch (state)
+	{
+	case GrafFenceState::Signaled:
+		vkCmdSetEvent(this->vkCommandBuffer, vkFenceEvent, vkPipelineStage);
+		break;
+	case GrafFenceState::Reset:
+		vkCmdResetEvent(this->vkCommandBuffer, vkFenceEvent, vkPipelineStage);
+		break;
+	default:
+		return ResultError(InvalidArgs, "GrafCommandListVulkan: SetFenceState failed, invalid GrafFenceState");
+	};
+
+	return Result(Success);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+GrafFenceVulkan::GrafFenceVulkan(GrafSystem &grafSystem) :
+	GrafFence(grafSystem)
+{
+	this->vkEvent = VK_NULL_HANDLE;
+}
+
+GrafFenceVulkan::~GrafFenceVulkan()
+{
+	this->Deinitialize();
+}
+
+Result GrafFenceVulkan::Deinitialize()
+{
+	if (this->vkEvent != VK_NULL_HANDLE)
+	{
+		vkDestroyEvent(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkEvent, ur_null);
+		this->vkEvent = VK_NULL_HANDLE;
+	}
+
+	return Result(Success);
+}
+
+Result GrafFenceVulkan::Initialize(GrafDevice *grafDevice)
+{
+	this->Deinitialize();
+
+	GrafFence::Initialize(grafDevice);
+
+	// validate logical device 
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+	{
+		return ResultError(InvalidArgs, std::string("GrafFenceVulkan: failed to initialize, invalid GrafDevice"));
+	}
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+	// create synchronization object
+
+	VkEventCreateInfo vkEventInfo = {};
+	vkEventInfo.sType = VK_STRUCTURE_TYPE_EVENT_CREATE_INFO;
+	vkEventInfo.flags = 0;
+
+	VkResult vkRes = vkCreateEvent(vkDevice, &vkEventInfo, ur_null, &this->vkEvent);
+	if (vkRes != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafFenceVulkan: vkCreateEvent failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	return Result(Success);
+}
+
+Result GrafFenceVulkan::SetState(GrafFenceState state)
+{
+	VkResult vkRes = VK_SUCCESS;
+	
+	switch (state)
+	{
+	case GrafFenceState::Reset:
+		vkRes = vkResetEvent(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkEvent);
+		break;
+	case GrafFenceState::Signaled:
+		vkRes = vkSetEvent(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkEvent);
+		break;
+	default:
+		return ResultError(InvalidArgs, "GrafFenceVulkan: SetState failed, invalid GrafFenceState");
+	};
+	
+	if (vkRes != VK_SUCCESS)
+		return ResultError(Failure, std::string("GrafFenceVulkan: vkResetEvent failed with VkResult = ") + VkResultToString(vkRes));
+	
+	return Result(Success);
+}
+
+Result GrafFenceVulkan::WaitSignaled()
+{
+	Result res(Success);
+	
+	GrafFenceState state;
+	do
+	{
+		res = this->GetState(state);
+	} while (state != GrafFenceState::Signaled && !Failed(res));
+	
+	return res;
+}
+
+Result GrafFenceVulkan::GetState(GrafFenceState& state)
+{
+	VkResult vkRes = vkGetEventStatus(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkEvent);
+	if (VK_EVENT_SET == vkRes)
+		state = GrafFenceState::Signaled;
+	else if (VK_EVENT_RESET == vkRes)
+		state = GrafFenceState::Reset;
+	else
+		return ResultError(Failure, std::string("GrafFenceVulkan: vkGetEventStatus failed with VkResult = ") + VkResultToString(vkRes));
 	return Result(Success);
 }
 
@@ -737,9 +1119,7 @@ GrafCanvasVulkan::GrafCanvasVulkan(GrafSystem &grafSystem) :
 	this->vkSwapChain = VK_NULL_HANDLE;
 	this->vkDevicePresentQueueId = 0;
 	this->vkSemaphoreImageAcquired = VK_NULL_HANDLE;
-	this->vkSubmitFence = VK_NULL_HANDLE;
 	this->swapChainCurrentImageId = 0;
-	this->vkRenderPass = VK_NULL_HANDLE;
 }
 
 GrafCanvasVulkan::~GrafCanvasVulkan()
@@ -749,24 +1129,13 @@ GrafCanvasVulkan::~GrafCanvasVulkan()
 
 Result GrafCanvasVulkan::Deinitialize()
 {
-	if (this->vkRenderPass != VK_NULL_HANDLE)
-	{
-		vkDestroyRenderPass(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkRenderPass, ur_null);
-		this->vkRenderPass = VK_NULL_HANDLE;
-
-	}
-
 	if (this->vkSemaphoreImageAcquired != VK_NULL_HANDLE)
 	{
 		vkDestroySemaphore(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSemaphoreImageAcquired, ur_null);
 		this->vkSemaphoreImageAcquired = VK_NULL_HANDLE;
 	}
 
-	if (this->vkSubmitFence != VK_NULL_HANDLE)
-	{
-		vkDestroyFence(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSubmitFence, ur_null);
-		this->vkSubmitFence = VK_NULL_HANDLE;
-	}
+	this->imageTransitionCmdList.reset();
 	
 	this->swapChainImages.clear();
 
@@ -949,7 +1318,7 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 	vkSwapChainInfo.imageColorSpace = vkSurfaceFormat.colorSpace;
 	vkSwapChainInfo.imageExtent = vkSurfaceExtent;
 	vkSwapChainInfo.imageArrayLayers = 1;
-	vkSwapChainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	vkSwapChainInfo.imageUsage = (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 	vkSwapChainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // the same graphics queue is used (vkDeviceGraphicsQueueId)
 	vkSwapChainInfo.queueFamilyIndexCount = vkDevicePresentQueueCount;
 	vkSwapChainInfo.pQueueFamilyIndices = vkDevicePresentQueueIds;
@@ -974,7 +1343,7 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 	std::vector<VkImage> vkSwapChainImages(vkSwapChainImageRealCount);
 	vkGetSwapchainImagesKHR(vkDevice, this->vkSwapChain, &vkSwapChainImageRealCount, vkSwapChainImages.data());
 
-	this->swapChainImages.resize(vkSwapChainImages.size());
+	this->swapChainImages.reserve(vkSwapChainImages.size());
 	for (VkImage& vkImage : vkSwapChainImages)
 	{
 		GrafImage::InitParams imageParams = {};
@@ -1012,18 +1381,24 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 
 	VkFenceCreateInfo vkFenceInfo = {};
 	vkFenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	vkFenceInfo.flags = 0;
+	vkFenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-	res = vkCreateFence(vkDevice, &vkFenceInfo, ur_null, &this->vkSubmitFence);
-	if (res != VK_SUCCESS)
+	// create comamnd list for image state/layout transitions
+
+	Result urRes = this->GetGrafSystem().CreateCommandList(this->imageTransitionCmdList);
+	if (Succeeded(urRes))
+	{
+		urRes = this->imageTransitionCmdList->Initialize(grafDevice);
+	}
+	if (Failed(urRes))
 	{
 		this->Deinitialize();
-		return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateFence failed with VkResult = ") + VkResultToString(res));
+		return ResultError(Failure, "GrafCanvasVulkan: failed to create transition command list");
 	}
 
 	// acquire an image to use as a current RT
 	
-	Result urRes = this->AcquireNextImage();
+	urRes = this->AcquireNextImage();
 	if (Failed(urRes))
 	{
 		this->Deinitialize();
@@ -1032,7 +1407,7 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 
 	// TEMP: hardcoded render pass for swap chain images transition test
 
-	VkAttachmentDescription vkAttachmentDesc = {};
+	/*VkAttachmentDescription vkAttachmentDesc = {};
 	vkAttachmentDesc.flags = 0;
 	vkAttachmentDesc.format = VK_FORMAT_B8G8R8_UNORM;
 	vkAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1073,7 +1448,7 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 	if (res != VK_SUCCESS)
 	{
 		return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateRenderPass failed with VkResult = ") + VkResultToString(res));
-	}
+	}*/
 
 	return Result(Success);
 }
@@ -1085,16 +1460,21 @@ Result GrafCanvasVulkan::Present()
 	VkQueue vkDevicePresentQueue;
 	vkGetDeviceQueue(vkDevice, this->vkDevicePresentQueueId, 0, &vkDevicePresentQueue);
 
-	// TODO: image layout transition to "present" state must be done at this point
-	// VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	// do image layout transition to presentation state
 
-	// TEMP: execute image transition render pass
-	VkQueue vkQueueGraphicsQueue;
-	vkGetDeviceQueue(vkDevice, grafDeviceVulkan->GetVkDeviceGraphicsQueueId(), 0, &vkQueueGraphicsQueue);
-	VkSubmitInfo vkSubmitInfo = {};
-	vkSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	vkResetFences(vkDevice, 1, &this->vkSubmitFence);
-	vkQueueSubmit(vkQueueGraphicsQueue, 1, &vkSubmitInfo, this->vkSubmitFence);
+	// TEMP: using single fence to wait till previously submitted work is done
+	// TODO: create per frame objects (command lists, semaphores)
+	
+	GrafImage* swapChainCurrentImage = this->swapChainImages[this->swapChainCurrentImageId].get();
+	this->imageTransitionCmdList->Begin();
+	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainCurrentImage, GrafImageState::Undefined, GrafImageState::Common);
+	// TODO: move Clear to GrafComamndList
+	VkClearColorValue clearValue = { { 0.0f, 0.0f, 1.0f, 1.0f } };
+	VkImageSubresourceRange clearRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+	vkCmdClearColorImage(static_cast<GrafCommandListVulkan*>(this->imageTransitionCmdList.get())->GetVkCommandBuffer(), static_cast<GrafImageVulkan*>(swapChainCurrentImage)->GetVkImage(), VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
+	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainCurrentImage, GrafImageState::Common, GrafImageState::Present);
+	this->imageTransitionCmdList->End();
+	grafDeviceVulkan->Submit(this->imageTransitionCmdList.get());
 
 	// present current image
 
@@ -1103,7 +1483,7 @@ Result GrafCanvasVulkan::Present()
 	VkPresentInfoKHR vkPresentInfo = {};
 	vkPresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	vkPresentInfo.waitSemaphoreCount = 1;
-	vkPresentInfo.pWaitSemaphores = &this->vkSemaphoreImageAcquired; // make sure an image acquired during the previous vkAcquireNextImageKHR will available at presentation time
+	vkPresentInfo.pWaitSemaphores = &this->vkSemaphoreImageAcquired; // make sure an image acquired during the previous vkAcquireNextImageKHR will be available at presentation time
 	vkPresentInfo.swapchainCount = ur_array_size(swapChains);
 	vkPresentInfo.pSwapchains = swapChains;
 	vkPresentInfo.pImageIndices = &this->swapChainCurrentImageId;
@@ -1111,17 +1491,20 @@ Result GrafCanvasVulkan::Present()
 
 	VkResult vkRes = vkQueuePresentKHR(vkDevicePresentQueue, &vkPresentInfo);
 	if (vkRes != VK_SUCCESS)
-	{
 		return ResultError(Failure, std::string("GrafCanvasVulkan: vkQueuePresentKHR failed with VkResult = ") + VkResultToString(vkRes));
-	}
-
-	// TEMP: full synchronization
-	vkQueueWaitIdle(vkDevicePresentQueue);
-
+	
 	// acquire next available image to use as RT
-	Result res  = this->AcquireNextImage();
+	Result res = this->AcquireNextImage();
 	if (Failed(res))
 		return res;
+
+	// do image layout transition to render target state
+	
+	GrafImage* swapChainNextImage = this->swapChainImages[this->swapChainCurrentImageId].get();
+	this->imageTransitionCmdList->Begin();
+	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Undefined, GrafImageState::Common);
+	this->imageTransitionCmdList->End();
+	grafDeviceVulkan->Submit(this->imageTransitionCmdList.get());
 
 	return Result(Success);
 }
@@ -1133,9 +1516,7 @@ Result GrafCanvasVulkan::AcquireNextImage()
 
 	VkResult res = vkAcquireNextImageKHR(vkDevice, this->vkSwapChain, ~ur_uint64(0), this->vkSemaphoreImageAcquired, VK_NULL_HANDLE, &this->swapChainCurrentImageId);
 	if (res != VK_SUCCESS)
-	{
 		return ResultError(Failure, std::string("GrafCanvasVulkan: vkAcquireNextImageKHR failed with VkResult = ") + VkResultToString(res));
-	}
 
 	return Result(Success);
 }
@@ -1248,13 +1629,6 @@ Result GrafImageVulkan::CreateVkImageViews()
 		return ResultError(InvalidArgs, "GrafImageVulkan: failed to create image views, unsupported image type");
 	};
 
-	VkImageUsageFlags vkImageUsage = GrafUtilsVulkan::GrafToVkImageUsage(this->GetDesc().Usage);
-	VkImageAspectFlags vkImageAspectFlags = 0;
-	if (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT & vkImageUsage)
-		vkImageAspectFlags |= VK_IMAGE_ASPECT_COLOR_BIT;
-	if (VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT & vkImageUsage)
-		vkImageAspectFlags |= (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
-
 	VkImageViewCreateInfo vkViewInfo = {};
 	vkViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	vkViewInfo.flags = 0;
@@ -1265,7 +1639,7 @@ Result GrafImageVulkan::CreateVkImageViews()
 	vkViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 	vkViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
 	vkViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-	vkViewInfo.subresourceRange.aspectMask = vkImageAspectFlags;
+	vkViewInfo.subresourceRange.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(this->GetDesc().Usage);
 	vkViewInfo.subresourceRange.baseMipLevel = 0;
 	vkViewInfo.subresourceRange.levelCount = this->GetDesc().MipLevels;
 	vkViewInfo.subresourceRange.baseArrayLayer = 0;
@@ -1274,9 +1648,7 @@ Result GrafImageVulkan::CreateVkImageViews()
 	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice()); // at this point device expected to be validate
 	VkResult res = vkCreateImageView(grafDeviceVulkan->GetVkDevice(), &vkViewInfo, ur_null, &this->vkImageView);
 	if (res != VK_SUCCESS)
-	{
 		return ResultError(Failure, std::string("GrafImageVulkan: vkCreateImageView failed with VkResult = ") + VkResultToString(res));
-	}
 
 	return Result(Success);
 }
@@ -1333,29 +1705,31 @@ Result GrafRenderPassVulkan::Initialize(GrafDevice* grafDevice)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkImageUsageFlags GrafUtilsVulkan::GrafToVkImageUsage(GrafImageUsage usage)
+VkImageUsageFlags GrafUtilsVulkan::GrafToVkImageUsage(GrafImageUsageFlags usage)
 {
 	VkImageUsageFlags vkImageUsage = 0;
-	switch (usage)
-	{
-	case GrafImageUsage::TransferSrc: vkImageUsage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT; break;
-	case GrafImageUsage::TransferDst: vkImageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT; break;
-	case GrafImageUsage::ColorRenderTarget: vkImageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; break;
-	case GrafImageUsage::DepthStencilRenderTarget: vkImageUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; break;
-	};
+	if (usage & (ur_uint)GrafImageUsageFlag::ColorRenderTarget)
+		vkImageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	if (usage & (ur_uint)GrafImageUsageFlag::DepthStencilRenderTarget)
+		vkImageUsage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	if (usage & (ur_uint)GrafImageUsageFlag::TransferSrc)
+		vkImageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	if (usage & (ur_uint)GrafImageUsageFlag::TransferDst)
+		vkImageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	return vkImageUsage;
 }
 
-GrafImageUsage GrafUtilsVulkan::VkToGrafImageUsage(VkImageUsageFlags usage)
+GrafImageUsageFlags GrafUtilsVulkan::VkToGrafImageUsage(VkImageUsageFlags usage)
 {
-	GrafImageUsage grafUsage = GrafImageUsage::Undefined;
-	switch (usage)
-	{
-	case VK_IMAGE_USAGE_TRANSFER_SRC_BIT: grafUsage = GrafImageUsage::TransferSrc; break;
-	case VK_IMAGE_USAGE_TRANSFER_DST_BIT: grafUsage = GrafImageUsage::TransferDst; break;
-	case VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT: grafUsage = GrafImageUsage::ColorRenderTarget; break;
-	case VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT: grafUsage = GrafImageUsage::DepthStencilRenderTarget; break;
-	};
+	GrafImageUsageFlags grafUsage = (ur_uint)GrafImageUsageFlag::Undefined;
+	if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+		grafUsage |= (ur_uint)GrafImageUsageFlag::ColorRenderTarget;
+	if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
+		grafUsage |= (ur_uint)GrafImageUsageFlag::DepthStencilRenderTarget;
+	if (VK_IMAGE_USAGE_TRANSFER_SRC_BIT & usage)
+		grafUsage |= (ur_uint)GrafImageUsageFlag::TransferSrc;
+	if (VK_IMAGE_USAGE_TRANSFER_DST_BIT & usage)
+		grafUsage |= (ur_uint)GrafImageUsageFlag::TransferDst;
 	return grafUsage;
 }
 
@@ -1369,6 +1743,33 @@ VkImageType GrafUtilsVulkan::GrafToVkImageType(GrafImageType imageType)
 	case GrafImageType::Tex3D: vkImageType = VK_IMAGE_TYPE_3D; break;
 	};
 	return vkImageType;
+}
+
+VkImageAspectFlags GrafUtilsVulkan::GrafToVkImageUsageAspect(GrafImageUsageFlags usage)
+{
+	VkImageAspectFlags vkImageAspectFlags = 0;
+	if (usage & (ur_uint)GrafImageUsageFlag::ColorRenderTarget)
+		vkImageAspectFlags |= VK_IMAGE_ASPECT_COLOR_BIT;
+	if (usage & (ur_uint)GrafImageUsageFlag::DepthStencilRenderTarget)
+		vkImageAspectFlags |= (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
+	return vkImageAspectFlags;
+}
+
+VkImageLayout GrafUtilsVulkan::GrafToVkImageLayout(GrafImageState imageState)
+{
+	VkImageLayout vkImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	switch (imageState)
+	{
+	case GrafImageState::Common: vkImageLayout = VK_IMAGE_LAYOUT_GENERAL; break;
+	case GrafImageState::ColorWrite: vkImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; break;
+	case GrafImageState::DepthStencilWrite: vkImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL; break;
+	case GrafImageState::DepthStencilRead: vkImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL; break;
+	case GrafImageState::ShaderRead: vkImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; break;
+	case GrafImageState::TransferSrc: vkImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL; break;
+	case GrafImageState::TransferDst: vkImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; break;
+	case GrafImageState::Present: vkImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; break;
+	};
+	return vkImageLayout;
 }
 
 static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {
