@@ -164,6 +164,9 @@ int VulkanSandboxApp::Run()
 		// update frame
 		auto updateFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void {
 			
+			// reset update progress fence
+			ctx.progress = 0;
+
 			// move timer
 			ClockTime timeNow = Clock::now();
 			auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(timeNow - timer);
@@ -171,7 +174,7 @@ int VulkanSandboxApp::Run()
 			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f;  // to seconds
 
 			// TODO: animate things here
-			
+
 			// clear color animation
 			crntColorWeight += elapsedTime / clearColorDelay;
 			if (crntColorWeight >= 1.0f)
@@ -182,20 +185,21 @@ int VulkanSandboxApp::Run()
 				nextColorId = (crntColorId + 1) % ur_array_size(clearColors);
 			}
 			crntClearColor = ur_float4::Lerp(clearColors[crntColorId], clearColors[nextColorId], crntColorWeight);
-
-			ctx.progress = ur_float(1.0f);
+			ctx.progress = 1;
 		});
 
 		// draw frame
 		auto drawFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void {
 			
-			updateFrameJob->WaitProgress(ur_float(1.0f));  // wait till portion of data required for this draw call is fully updated
+			//updateFrameJob->WaitProgress(0);  // wait till portion of data required for this draw call is fully updated
 
 			if (grafSystem != ur_null)
 			{
 				grafMainCmdList->Begin();
 			
 				grafMainCmdList->ImageMemoryBarrier(grafCanvas->GetTargetImage(), GrafImageState::Current, GrafImageState::Common);
+
+				updateFrameJob->WaitProgress(1); // make sure required data is ready
 				grafMainCmdList->ClearColorImage(grafCanvas->GetTargetImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
 				
 				// TODO: draw primtives here
@@ -479,7 +483,14 @@ Result GrafRenderPass::Initialize(GrafDevice* grafDevice)
 #endif
 
 #define UR_GRAF_VULKAN_IMPLICIT_WAIT_DEVICE 1
-#define UR_GRAF_VULKAN_CANVAS_IMPLICIT_NEXT_IMAGE_TRANSITION_TO_COMMON 0
+
+// vulkan objects destruction safety policy
+#define UR_GRAF_VULKAN_DESTROY_DO_NOT_WAIT 0		// destroy immediately, do not check synchronization objects
+#define UR_GRAF_VULKAN_DESTROY_WAIT_IMMEDIATE 1		// stall thread and wait synchronization object
+#define UR_GRAF_VULKAN_DESTROY_WAIT_DEFERRED 0		// TODO: check if vulkan object is still used on device, and place it into deferred deinitialization list if it is
+
+// enables swap chain image layout automatic transition to general/common state when it becomes a current render target
+#define UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL 0
 
 #if defined(UR_GRAF_LOG_LEVEL_DEBUG)
 #define LogNoteGrafDbg(text) GetRealm().GetLog().WriteLine(text, Log::Note)
@@ -928,7 +939,9 @@ Result GrafCommandListVulkan::Deinitialize()
 {
 	if (this->vkSubmitFence != VK_NULL_HANDLE)
 	{
+		#if (UR_GRAF_VULKAN_DESTROY_WAIT_IMMEDIATE)
 		vkWaitForFences(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), 1, &this->vkSubmitFence, true, ~ur_uint64(0));
+		#endif
 		vkDestroyFence(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSubmitFence, ur_null);
 		this->vkSubmitFence = VK_NULL_HANDLE;
 	}
@@ -992,7 +1005,11 @@ Result GrafCommandListVulkan::Begin()
 		return Result(NotInitialized);
 
 	VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
+	ClockTime timeBefore = Clock::now(); // TEMP: test synchronization delay
 	vkWaitForFences(vkDevice, 1, &this->vkSubmitFence, true, ~ur_uint64(0)); // make sure command buffer is no longer used (previous submission can still be executed)
+	ClockTime timeNow = Clock::now();
+	auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(timeNow - timeBefore);
+	LogNote(std::string("vkWaitForFences time(ns) = ") + std::to_string(deltaTime.count()));
 	vkResetFences(vkDevice, 1, &this->vkSubmitFence);
 
 	VkCommandBufferBeginInfo vkBeginInfo = {};
@@ -1489,7 +1506,7 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 		return urRes;
 	}
 
-	#if (UR_GRAF_VULKAN_CANVAS_IMPLICIT_NEXT_IMAGE_TRANSITION_TO_COMMON)
+	#if (UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL)
 	// initial image layout transition into common state
 	// TODO: use separate command list to avoid synchronization
 	// (prev frame command list can be used here as it is guaranteed not to be in use at the initialization point)
@@ -1589,7 +1606,7 @@ Result GrafCanvasVulkan::Present()
 	if (Failed(res))
 		return res;
 
-	#if (UR_GRAF_VULKAN_CANVAS_IMPLICIT_NEXT_IMAGE_TRANSITION_TO_COMMON)
+	#if (UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL)
 	// do image layout transition to common state
 	
 	GrafImage* swapChainNextImage = this->swapChainImages[this->swapChainCurrentImageId].get();

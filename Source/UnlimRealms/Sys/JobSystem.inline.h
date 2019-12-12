@@ -10,7 +10,7 @@
 namespace UnlimRealms
 {
 
-	inline ur_float Job::GetProgress() const
+	inline ur_uint Job::GetProgress() const
 	{
 		return this->progress;
 	}

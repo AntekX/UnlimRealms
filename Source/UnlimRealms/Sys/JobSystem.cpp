@@ -23,7 +23,7 @@ namespace UnlimRealms
 	{
 		this->interrupt = false;
 		this->state = State::Pending;
-		this->progress = 0.0f;
+		this->progress = 0;
 		this->resultCode = Undefined;
 	}
 
@@ -61,7 +61,7 @@ namespace UnlimRealms
 		while (!this->Finished()) {};
 	}
 
-	void Job::WaitProgress(ur_float expectedProgress)
+	void Job::WaitProgress(ur_uint expectedProgress)
 	{
 		while (this->progress.load() < expectedProgress) {}
 	}

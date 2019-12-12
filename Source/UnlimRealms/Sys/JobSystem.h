@@ -64,11 +64,11 @@ namespace UnlimRealms
 		{
 			DataPtr data;
 			std::atomic<ur_bool> &interrupt;
-			std::atomic<ur_float> &progress;
+			std::atomic<ur_uint> &progress;
 			std::atomic<Result::UID> &resultCode;
 
 			Context(DataPtr &data,
-				std::atomic<ur_bool> &interrupt, std::atomic<ur_float> &progress, std::atomic<Result::UID> &resultCode) :
+				std::atomic<ur_bool> &interrupt, std::atomic<ur_uint> &progress, std::atomic<Result::UID> &resultCode) :
 				data(data), interrupt(interrupt), progress(progress), resultCode(resultCode)
 			{
 			}
@@ -86,9 +86,9 @@ namespace UnlimRealms
 
 		void Wait();
 
-		void WaitProgress(ur_float expectedProgress);
+		void WaitProgress(ur_uint expectedProgress);
 
-		inline ur_float GetProgress() const;
+		inline ur_uint GetProgress() const;
 
 		inline State GetState() const;
 
@@ -108,7 +108,7 @@ namespace UnlimRealms
 		DataPtr data;
 		std::atomic<ur_bool> interrupt;
 		std::atomic<State> state;
-		std::atomic<ur_float> progress;
+		std::atomic<ur_uint> progress;
 		std::atomic<Result::UID> resultCode;
 	};
 

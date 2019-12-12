@@ -263,7 +263,7 @@ int D3D12SandboxApp::Run()
 				cbData.Transform[i] = ur_float4x4::Identity;
 				cbData.Transform[i].Multiply(ur_float4x4::Scaling(spriteScale * (moveDir[i].x < 0.0f ? 1.0f : -1.0f), spriteScale * ur_float(canvasWidth) / canvasHeight, 1.0f));
 				cbData.Transform[i].Multiply(ur_float4x4::Translation(movePos[i].x, movePos[i].y, 0.0f));
-				ctx.progress = ur_float(i + 1);
+				ctx.progress = i + 1;
 			}
 		});
 
@@ -285,7 +285,7 @@ int D3D12SandboxApp::Run()
 			for (ur_uint drawCallIdx = 0; drawCallIdx < DrawCallCount; ++drawCallIdx)
 			{
 				gfxBinding->SetTexture(0, gfxTextures.empty() ? ur_null : gfxTextures[drawCallIdx % gfxTextures.size()].get());
-				updateFrameJob->WaitProgress(ur_float((drawCallIdx + 1) * InstancePerDrawCall)); // wait till portion of data required for this draw call is fully updated
+				updateFrameJob->WaitProgress((drawCallIdx + 1) * InstancePerDrawCall); // wait till portion of data required for this draw call is fully updated
 				cbData.Desc.x = ur_float(drawCallIdx * InstancePerDrawCall);
 				gfxContext->UpdateBuffer(gfxCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, 0);
 				gfxContext->Draw(gfxVB->GetDesc().Size / gfxVB->GetDesc().ElementSize, 0, InstancePerDrawCall, 0);
@@ -323,7 +323,7 @@ int D3D12SandboxApp::Run()
 			for (ur_uint drawCallIdx = 0; drawCallIdx < DrawCallCount; ++drawCallIdx)
 			{
 				gfxBinding->SetTexture(0, gfxTextures.empty() ? ur_null : gfxTextures[drawCallIdx % gfxTextures.size()].get());
-				updateFrameJob->WaitProgress(ur_float((drawCallIdx + 1) * InstancePerDrawCall)); // wait till portion of data required for this draw call is fully updated
+				updateFrameJob->WaitProgress((drawCallIdx + 1) * InstancePerDrawCall); // wait till portion of data required for this draw call is fully updated
 				cbData.Desc.x = ur_float(drawCallIdx * InstancePerDrawCall);
 
 				gfxDrawCallContext->Begin();

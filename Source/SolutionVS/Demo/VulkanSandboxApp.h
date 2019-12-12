@@ -621,6 +621,12 @@ namespace UnlimRealms
 		ur_uint32 swapChainCurrentImageId;
 		std::unique_ptr<GrafCommandList> imageTransitionCmdList;
 		VkSemaphore vkSemaphoreImageAcquired;
+		
+		// per frame data
+		//ur_uint32 frameCount;
+		//ur_uint32 frameIdx;
+		//std::vector<std::unique_ptr<GrafCommandList>> imageTransitionCmdList;
+		//std::vector<VkSemaphore> vkSemaphoreImageAcquired;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
