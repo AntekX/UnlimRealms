@@ -332,7 +332,18 @@ namespace UnlimRealms
 		virtual Result Present();
 
 		virtual GrafImage* GetTargetImage();
+
+		inline ur_uint GetSwapChainImageCount() const;
+
+	protected:
+
+		ur_uint swapChainImageCount;
 	};
+
+	inline ur_uint GrafCanvas::GetSwapChainImageCount() const
+	{
+		return this->swapChainImageCount;
+	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafImage : public GrafDeviceEntity
@@ -381,6 +392,38 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice* grafDevice);
 	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	#define PROFILER_ENABLED 1
+	class /*UR_DECL*/ Profiler
+	{
+	public:
+
+		struct ScopedMarker
+		{
+		public:
+			
+			ScopedMarker(Log* log = ur_null, const char* message = ur_null);
+			~ScopedMarker();
+
+		private:
+
+			Log* log;
+			const char* message;
+		};
+
+		static inline const void Begin();
+
+		static inline const ur_uint64 End(Log* log = ur_null, const char* message = ur_null);
+	};
+
+	#if (PROFILER_ENABLED)
+	#define PROFILE_LINE(code_line, log) { Profiler ::ScopedMarker marker(log, #code_line); code_line; }
+	#define PROFILE(code_line, log, message) { Profiler ::ScopedMarker marker(log, message); code_line; }
+	#else
+	#define PROFILE_LINE(code_line, log) code_line
+	#define PROFILE(code_line, log, message) code_line
+	#endif
 
 } // end namespace UnlimRealms
 
@@ -619,14 +662,13 @@ namespace UnlimRealms
 		VkSwapchainKHR vkSwapChain;
 		std::vector<std::unique_ptr<GrafImage>> swapChainImages;
 		ur_uint32 swapChainCurrentImageId;
-		std::unique_ptr<GrafCommandList> imageTransitionCmdList;
-		VkSemaphore vkSemaphoreImageAcquired;
 		
 		// per frame data
-		//ur_uint32 frameCount;
-		//ur_uint32 frameIdx;
-		//std::vector<std::unique_ptr<GrafCommandList>> imageTransitionCmdList;
-		//std::vector<VkSemaphore> vkSemaphoreImageAcquired;
+		ur_uint32 frameCount;
+		ur_uint32 frameIdx;
+		std::vector<std::unique_ptr<GrafCommandList>> imageTransitionCmdListBegin;
+		std::vector<std::unique_ptr<GrafCommandList>> imageTransitionCmdListEnd;
+		std::vector<VkSemaphore> vkSemaphoreImageAcquired;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

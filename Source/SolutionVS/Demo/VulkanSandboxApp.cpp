@@ -36,12 +36,14 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
 	std::unique_ptr<GrafDevice> grafDevice;
 	std::unique_ptr<GrafCanvas> grafCanvas;
-	std::unique_ptr<GrafCommandList> grafMainCmdList;
+	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
 	std::unique_ptr<GrafRenderPass> grafRenderPass_Demo;
+	ur_uint frameCount = 0;
+	ur_uint frameIdx = 0;
 	auto& deinitializeGfxSystem = [&grafSystem, &grafDevice, &grafCanvas, &grafMainCmdList, &grafRenderPass_Demo]() -> void {
 		// order matters!
 		grafRenderPass_Demo.reset();
-		grafMainCmdList.reset();
+		grafMainCmdList.clear();
 		grafCanvas.reset();
 		grafDevice.reset();
 		grafSystem.reset();
@@ -64,10 +66,17 @@ int VulkanSandboxApp::Run()
 		grafRes = grafCanvas->Initialize(grafDevice.get());
 		if (Failed(grafRes)) break;
 
-		grafRes = grafSystem->CreateCommandList(grafMainCmdList);
-		if (Failed(grafRes)) break;
+		frameCount = std::max(ur_uint32(2), grafCanvas->GetSwapChainImageCount());
+		
+		grafMainCmdList.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			grafRes = grafSystem->CreateCommandList(grafMainCmdList[iframe]);
+			if (Failed(grafRes)) break;
 
-		grafRes = grafMainCmdList->Initialize(grafDevice.get());
+			grafRes = grafMainCmdList[iframe]->Initialize(grafDevice.get());
+			if (Failed(grafRes)) break;
+		}
 		if (Failed(grafRes)) break;
 
 		//grafRes = grafSystem->CreateRenderPass(grafRenderPass_Demo);
@@ -193,19 +202,22 @@ int VulkanSandboxApp::Run()
 			
 			//updateFrameJob->WaitProgress(0);  // wait till portion of data required for this draw call is fully updated
 
+			GrafCommandList* grafCmdListCrnt = grafMainCmdList[frameIdx].get();
+
 			if (grafSystem != ur_null)
 			{
-				grafMainCmdList->Begin();
+				grafCmdListCrnt->Begin();
 			
-				grafMainCmdList->ImageMemoryBarrier(grafCanvas->GetTargetImage(), GrafImageState::Current, GrafImageState::Common);
+				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetTargetImage(), GrafImageState::Current, GrafImageState::Common);
 
 				updateFrameJob->WaitProgress(1); // make sure required data is ready
-				grafMainCmdList->ClearColorImage(grafCanvas->GetTargetImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
+				grafCmdListCrnt->ClearColorImage(grafCanvas->GetTargetImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
 				
 				// TODO: draw primtives here
 
-				grafMainCmdList->End();
-				grafDevice->Submit(grafMainCmdList.get());
+				grafCmdListCrnt->End();
+
+				grafDevice->Submit(grafCmdListCrnt);
 			}
 		});
 
@@ -213,6 +225,9 @@ int VulkanSandboxApp::Run()
 
 		// present & move to next frame
 		grafCanvas->Present();
+
+		// start recording next frame
+		frameIdx = (frameIdx + 1) % frameCount;
 	}
 
 	deinitializeGfxSystem();
@@ -413,6 +428,7 @@ Result GrafFence::WaitSignaled()
 GrafCanvas::GrafCanvas(GrafSystem &grafSystem) :
 	GrafDeviceEntity(grafSystem)
 {
+	this->swapChainImageCount = 0;
 }
 
 GrafCanvas::~GrafCanvas()
@@ -426,6 +442,7 @@ const GrafCanvas::InitParams GrafCanvas::InitParams::Default = {
 Result GrafCanvas::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
 {
 	GrafDeviceEntity::Initialize(grafDevice);
+	this->swapChainImageCount = initParams.SwapChainImageCount;
 	return Result(NotImplemented);
 }
 
@@ -472,6 +489,45 @@ Result GrafRenderPass::Initialize(GrafDevice* grafDevice)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static thread_local ClockTime ProfilerThreadTimerBegin;
+static thread_local ClockTime ProfilerThreadTimerEnd;
+
+inline const void Profiler::Begin()
+{
+#if (PROFILER_ENABLED)
+	ProfilerThreadTimerBegin = Clock::now();
+#endif
+}
+
+inline const ur_uint64 Profiler::End(Log* log, const char* message)
+{
+#if (PROFILER_ENABLED)
+	ProfilerThreadTimerEnd = Clock::now();
+	auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(ProfilerThreadTimerEnd - ProfilerThreadTimerBegin);
+	if (log != ur_null)
+	{
+		log->WriteLine(std::string(message ? message : "") + std::string(" Profiler time (ns) = ") + std::to_string(deltaTime.count()));
+	}
+	return (ur_uint64)deltaTime.count();
+#else
+	return 0;
+#endif
+}
+
+Profiler::ScopedMarker::ScopedMarker(Log* log, const char* message)
+{
+	this->log = log;
+	this->message = message;
+	Profiler::Begin();
+}
+
+Profiler::ScopedMarker::~ScopedMarker()
+{	
+	Profiler::End(this->log, this->message);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GRAF: VULKAN IMPLEMENTATION
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -490,7 +546,7 @@ Result GrafRenderPass::Initialize(GrafDevice* grafDevice)
 #define UR_GRAF_VULKAN_DESTROY_WAIT_DEFERRED 0		// TODO: check if vulkan object is still used on device, and place it into deferred deinitialization list if it is
 
 // enables swap chain image layout automatic transition to general/common state when it becomes a current render target
-#define UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL 0
+#define UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL 1
 
 #if defined(UR_GRAF_LOG_LEVEL_DEBUG)
 #define LogNoteGrafDbg(text) GetRealm().GetLog().WriteLine(text, Log::Note)
@@ -1005,11 +1061,7 @@ Result GrafCommandListVulkan::Begin()
 		return Result(NotInitialized);
 
 	VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
-	ClockTime timeBefore = Clock::now(); // TEMP: test synchronization delay
 	vkWaitForFences(vkDevice, 1, &this->vkSubmitFence, true, ~ur_uint64(0)); // make sure command buffer is no longer used (previous submission can still be executed)
-	ClockTime timeNow = Clock::now();
-	auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(timeNow - timeBefore);
-	LogNote(std::string("vkWaitForFences time(ns) = ") + std::to_string(deltaTime.count()));
 	vkResetFences(vkDevice, 1, &this->vkSubmitFence);
 
 	VkCommandBufferBeginInfo vkBeginInfo = {};
@@ -1219,8 +1271,9 @@ GrafCanvasVulkan::GrafCanvasVulkan(GrafSystem &grafSystem) :
 	this->vkSurface = VK_NULL_HANDLE;
 	this->vkSwapChain = VK_NULL_HANDLE;
 	this->vkDevicePresentQueueId = 0;
-	this->vkSemaphoreImageAcquired = VK_NULL_HANDLE;
 	this->swapChainCurrentImageId = 0;
+	this->frameCount = 0;
+	this->frameIdx = 0;
 }
 
 GrafCanvasVulkan::~GrafCanvasVulkan()
@@ -1230,13 +1283,20 @@ GrafCanvasVulkan::~GrafCanvasVulkan()
 
 Result GrafCanvasVulkan::Deinitialize()
 {
-	if (this->vkSemaphoreImageAcquired != VK_NULL_HANDLE)
-	{
-		vkDestroySemaphore(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSemaphoreImageAcquired, ur_null);
-		this->vkSemaphoreImageAcquired = VK_NULL_HANDLE;
-	}
+	this->frameCount = 0;
+	this->frameIdx = 0;
 
-	this->imageTransitionCmdList.reset();
+	for (auto& vkSemaphore : this->vkSemaphoreImageAcquired)
+	{
+		if (vkSemaphore != VK_NULL_HANDLE)
+		{
+			vkDestroySemaphore(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), vkSemaphore, ur_null);
+		}
+	}
+	this->vkSemaphoreImageAcquired.clear();
+
+	this->imageTransitionCmdListBegin.clear();
+	this->imageTransitionCmdListEnd.clear();
 	
 	this->swapChainImages.clear();
 
@@ -1443,6 +1503,12 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 	vkGetSwapchainImagesKHR(vkDevice, this->vkSwapChain, &vkSwapChainImageRealCount, ur_null);
 	std::vector<VkImage> vkSwapChainImages(vkSwapChainImageRealCount);
 	vkGetSwapchainImagesKHR(vkDevice, this->vkSwapChain, &vkSwapChainImageRealCount, vkSwapChainImages.data());
+	if (0 == vkSwapChainImageRealCount)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, "GrafCanvasVulkan: vkGetSwapchainImagesKHR failed with zero images returned");
+	}
+	this->swapChainImageCount = vkSwapChainImageRealCount;
 
 	this->swapChainImages.reserve(vkSwapChainImages.size());
 	for (VkImage& vkImage : vkSwapChainImages)
@@ -1467,39 +1533,54 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 		this->swapChainImages.push_back(std::move(grafImage));
 	}
 
+	// per frame objects
+
+	this->frameCount = std::max(ur_uint32(2), vkSwapChainImageRealCount - 1);
+	this->frameIdx = ur_uint32(this->frameCount - 1); // first AcquireNextImage will make it 0
+
 	// create presentation sync objects 
 
 	VkSemaphoreCreateInfo vkSemaphoreInfo = {};
 	vkSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 	vkSemaphoreInfo.flags = 0;
 
-	res = vkCreateSemaphore(vkDevice, &vkSemaphoreInfo, ur_null, &this->vkSemaphoreImageAcquired);
-	if (res != VK_SUCCESS)
+	this->vkSemaphoreImageAcquired.reserve(this->frameCount);
+	for (ur_uint32 iframe = 0; iframe < this->frameCount; ++iframe)
 	{
-		this->Deinitialize();
-		return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateSemaphore failed with VkResult = ") + VkResultToString(res));
+		VkSemaphore vkSemaphore;
+		res = vkCreateSemaphore(vkDevice, &vkSemaphoreInfo, ur_null, &vkSemaphore);
+		if (res != VK_SUCCESS)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateSemaphore failed with VkResult = ") + VkResultToString(res));
+		}
+		this->vkSemaphoreImageAcquired.push_back(vkSemaphore);
 	}
-
-	VkFenceCreateInfo vkFenceInfo = {};
-	vkFenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	vkFenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
 	// create comamnd list for image state/layout transitions
 
-	Result urRes = this->GetGrafSystem().CreateCommandList(this->imageTransitionCmdList);
-	if (Succeeded(urRes))
+	this->imageTransitionCmdListBegin.resize(this->frameCount);
+	this->imageTransitionCmdListEnd.resize(this->frameCount);
+	for (ur_uint32 iframe = 0; iframe < this->frameCount; ++iframe)
 	{
-		urRes = this->imageTransitionCmdList->Initialize(grafDevice);
-	}
-	if (Failed(urRes))
-	{
-		this->Deinitialize();
-		return ResultError(Failure, "GrafCanvasVulkan: failed to create transition command list");
+		Result urRes = Success;
+		urRes &= this->GetGrafSystem().CreateCommandList(this->imageTransitionCmdListBegin[iframe]);
+		urRes &= this->GetGrafSystem().CreateCommandList(this->imageTransitionCmdListEnd[iframe]);
+		if (Succeeded(urRes))
+		{
+			urRes &= this->imageTransitionCmdListBegin[iframe]->Initialize(grafDevice);
+			urRes &= this->imageTransitionCmdListEnd[iframe]->Initialize(grafDevice);
+		}
+		if (Failed(urRes))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, "GrafCanvasVulkan: failed to create transition command list");
+		}
 	}
 
 	// acquire an image to use as a current RT
 	
-	urRes = this->AcquireNextImage();
+	Result urRes = this->AcquireNextImage();
 	if (Failed(urRes))
 	{
 		this->Deinitialize();
@@ -1508,13 +1589,12 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 
 	#if (UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL)
 	// initial image layout transition into common state
-	// TODO: use separate command list to avoid synchronization
-	// (prev frame command list can be used here as it is guaranteed not to be in use at the initialization point)
 	GrafImage* swapChainNextImage = this->swapChainImages[this->swapChainCurrentImageId].get();
-	this->imageTransitionCmdList->Begin();
-	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
-	this->imageTransitionCmdList->End();
-	grafDeviceVulkan->Submit(this->imageTransitionCmdList.get());
+	GrafCommandList* imageTransitionCmdListBeginCrnt = this->imageTransitionCmdListBegin[this->frameIdx].get();
+	imageTransitionCmdListBeginCrnt->Begin();
+	imageTransitionCmdListBeginCrnt->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
+	imageTransitionCmdListBeginCrnt->End();
+	grafDeviceVulkan->Submit(imageTransitionCmdListBeginCrnt);
 	#endif
 
 	// TEMP: hardcoded render pass for swap chain images transition test
@@ -1578,10 +1658,11 @@ Result GrafCanvasVulkan::Present()
 	// TODO: create per frame objects (command lists, semaphores)
 	
 	GrafImage* swapChainCurrentImage = this->swapChainImages[this->swapChainCurrentImageId].get();
-	this->imageTransitionCmdList->Begin();
-	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainCurrentImage, GrafImageState::Current, GrafImageState::Present);
-	this->imageTransitionCmdList->End();
-	grafDeviceVulkan->Submit(this->imageTransitionCmdList.get());
+	GrafCommandList* imageTransitionCmdListEndCrnt = this->imageTransitionCmdListEnd[this->frameIdx].get();
+	PROFILE_LINE(imageTransitionCmdListEndCrnt->Begin(); ,&this->GetRealm().GetLog());
+	imageTransitionCmdListEndCrnt->ImageMemoryBarrier(swapChainCurrentImage, GrafImageState::Current, GrafImageState::Present);
+	imageTransitionCmdListEndCrnt->End();
+	grafDeviceVulkan->Submit(imageTransitionCmdListEndCrnt);
 
 	// present current image
 
@@ -1590,7 +1671,7 @@ Result GrafCanvasVulkan::Present()
 	VkPresentInfoKHR vkPresentInfo = {};
 	vkPresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	vkPresentInfo.waitSemaphoreCount = 1;
-	vkPresentInfo.pWaitSemaphores = &this->vkSemaphoreImageAcquired; // make sure an image acquired during the previous vkAcquireNextImageKHR will be available at presentation time
+	vkPresentInfo.pWaitSemaphores = &this->vkSemaphoreImageAcquired[this->frameIdx]; // make sure an image acquired during the previous vkAcquireNextImageKHR will be available at presentation time
 	vkPresentInfo.swapchainCount = ur_array_size(swapChains);
 	vkPresentInfo.pSwapchains = swapChains;
 	vkPresentInfo.pImageIndices = &this->swapChainCurrentImageId;
@@ -1610,10 +1691,11 @@ Result GrafCanvasVulkan::Present()
 	// do image layout transition to common state
 	
 	GrafImage* swapChainNextImage = this->swapChainImages[this->swapChainCurrentImageId].get();
-	this->imageTransitionCmdList->Begin();
-	this->imageTransitionCmdList->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
-	this->imageTransitionCmdList->End();
-	grafDeviceVulkan->Submit(this->imageTransitionCmdList.get());
+	GrafCommandList* imageTransitionCmdListBeginNext = this->imageTransitionCmdListBegin[this->frameIdx].get();
+	PROFILE_LINE(imageTransitionCmdListBeginNext->Begin();, &this->GetRealm().GetLog());
+	imageTransitionCmdListBeginNext->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
+	imageTransitionCmdListBeginNext->End();
+	grafDeviceVulkan->Submit(imageTransitionCmdListBeginNext);
 	
 	#endif
 
@@ -1625,7 +1707,9 @@ Result GrafCanvasVulkan::AcquireNextImage()
 	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
 	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
 
-	VkResult res = vkAcquireNextImageKHR(vkDevice, this->vkSwapChain, ~ur_uint64(0), this->vkSemaphoreImageAcquired, VK_NULL_HANDLE, &this->swapChainCurrentImageId);
+	this->frameIdx = (this->frameIdx + 1) % this->frameCount;
+
+	VkResult res = vkAcquireNextImageKHR(vkDevice, this->vkSwapChain, ~ur_uint64(0), this->vkSemaphoreImageAcquired[this->frameIdx], VK_NULL_HANDLE, &this->swapChainCurrentImageId);
 	if (res != VK_SUCCESS)
 		return ResultError(Failure, std::string("GrafCanvasVulkan: vkAcquireNextImageKHR failed with VkResult = ") + VkResultToString(res));
 
