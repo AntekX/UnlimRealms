@@ -40,7 +40,8 @@ int VulkanSandboxApp::Run()
 		Result res = realm.GetStorage().Open(file, "sample_vs.spv", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
 		if (Succeeded(res))
 		{
-			sampleVSBufferSize = file->GetSize();
+			ur_size fileSize = file->GetSize();
+			sampleVSBufferSize = fileSize;// (fileSize + 3) / 4 * 4;
 			sampleVSBuffer.reset(new ur_byte[sampleVSBufferSize]);
 			file->Read(sampleVSBufferSize, sampleVSBuffer.get());
 		}
@@ -52,7 +53,8 @@ int VulkanSandboxApp::Run()
 		Result res = realm.GetStorage().Open(file, "sample_ps.spv", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
 		if (Succeeded(res))
 		{
-			samplePSBufferSize = file->GetSize();
+			ur_size fileSize = file->GetSize();
+			samplePSBufferSize = fileSize;// (fileSize + 3) / 4 * 4;
 			samplePSBuffer.reset(new ur_byte[samplePSBufferSize]);
 			file->Read(samplePSBufferSize, samplePSBuffer.get());
 		}
@@ -68,9 +70,11 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafRenderPass> grafRenderPass_Demo;
 	ur_uint frameCount = 0;
 	ur_uint frameIdx = 0;
-	auto& deinitializeGfxSystem = [&grafSystem, &grafDevice, &grafCanvas, &grafMainCmdList, &grafRenderPass_Demo]() -> void {
+	auto& deinitializeGfxSystem = [&]() -> void {
 		// order matters!
 		grafRenderPass_Demo.reset();
+		grafShaderSampleVS.reset();
+		grafShaderSamplePS.reset();
 		grafMainCmdList.clear();
 		grafCanvas.reset();
 		grafDevice.reset();
@@ -99,7 +103,7 @@ int VulkanSandboxApp::Run()
 
 		grafRes = grafSystem->CreateShader(grafShaderSamplePS);
 		if (Failed(grafRes)) break;
-		grafRes = grafShaderSamplePS->Initialize(grafDevice.get(), { GrafShaderType::Vertex, samplePSBuffer.get(), samplePSBufferSize });
+		grafRes = grafShaderSamplePS->Initialize(grafDevice.get(), { GrafShaderType::Pixel, samplePSBuffer.get(), samplePSBufferSize });
 		if (Failed(grafRes)) break;
 
 		frameCount = std::max(ur_uint32(2), grafCanvas->GetSwapChainImageCount());
@@ -525,6 +529,7 @@ GrafShader::~GrafShader()
 
 Result GrafShader::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 {
+	GrafDeviceEntity::Initialize(grafDevice);
 	this->shaderType = initParams.ShaderType;
 	return Result(NotImplemented);
 }
