@@ -32,10 +32,38 @@ int VulkanSandboxApp::Run()
 	input->Initialize();
 	realm.SetInput(std::move(input));
 
+	// load shader data
+	std::unique_ptr<ur_byte[]> sampleVSBuffer;
+	ur_size sampleVSBufferSize = 0;
+	{
+		std::unique_ptr<File> file;
+		Result res = realm.GetStorage().Open(file, "sample_vs.spv", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
+		if (Succeeded(res))
+		{
+			sampleVSBufferSize = file->GetSize();
+			sampleVSBuffer.reset(new ur_byte[sampleVSBufferSize]);
+			file->Read(sampleVSBufferSize, sampleVSBuffer.get());
+		}
+	}
+	std::unique_ptr<ur_byte[]> samplePSBuffer;
+	ur_size samplePSBufferSize = 0;
+	{
+		std::unique_ptr<File> file;
+		Result res = realm.GetStorage().Open(file, "sample_ps.spv", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
+		if (Succeeded(res))
+		{
+			samplePSBufferSize = file->GetSize();
+			samplePSBuffer.reset(new ur_byte[samplePSBufferSize]);
+			file->Read(samplePSBufferSize, samplePSBuffer.get());
+		}
+	}
+
 	// initialize gfx system
 	std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
 	std::unique_ptr<GrafDevice> grafDevice;
 	std::unique_ptr<GrafCanvas> grafCanvas;
+	std::unique_ptr<GrafShader> grafShaderSampleVS;
+	std::unique_ptr<GrafShader> grafShaderSamplePS;
 	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
 	std::unique_ptr<GrafRenderPass> grafRenderPass_Demo;
 	ur_uint frameCount = 0;
@@ -56,14 +84,22 @@ int VulkanSandboxApp::Run()
 		
 		grafRes = grafSystem->CreateDevice(grafDevice);
 		if (Failed(grafRes)) break;
-	
 		grafRes = grafDevice->Initialize(grafSystem->GetRecommendedDeviceId());
 		if (Failed(grafRes)) break;
 
 		grafRes = grafSystem->CreateCanvas(grafCanvas);
 		if (Failed(grafRes)) break;
-
 		grafRes = grafCanvas->Initialize(grafDevice.get());
+		if (Failed(grafRes)) break;
+
+		grafRes = grafSystem->CreateShader(grafShaderSampleVS);
+		if (Failed(grafRes)) break;
+		grafRes = grafShaderSampleVS->Initialize(grafDevice.get(), { GrafShaderType::Vertex, sampleVSBuffer.get(), sampleVSBufferSize });
+		if (Failed(grafRes)) break;
+
+		grafRes = grafSystem->CreateShader(grafShaderSamplePS);
+		if (Failed(grafRes)) break;
+		grafRes = grafShaderSamplePS->Initialize(grafDevice.get(), { GrafShaderType::Vertex, samplePSBuffer.get(), samplePSBufferSize });
 		if (Failed(grafRes)) break;
 
 		frameCount = std::max(ur_uint32(2), grafCanvas->GetSwapChainImageCount());
@@ -73,7 +109,6 @@ int VulkanSandboxApp::Run()
 		{
 			grafRes = grafSystem->CreateCommandList(grafMainCmdList[iframe]);
 			if (Failed(grafRes)) break;
-
 			grafRes = grafMainCmdList[iframe]->Initialize(grafDevice.get());
 			if (Failed(grafRes)) break;
 		}
@@ -81,7 +116,6 @@ int VulkanSandboxApp::Run()
 
 		//grafRes = grafSystem->CreateRenderPass(grafRenderPass_Demo);
 		//if (Failed(grafRes)) break;
-
 		//grafRes = grafRenderPass_Demo->Initialize(grafDevice.get());
 		//if (Failed(grafRes)) break;
 
@@ -98,6 +132,8 @@ int VulkanSandboxApp::Run()
 		//realm.AddComponent(Component::GetUID<GrafSystem>(), std::unique_ptr<Component>(static_cast<Component*>(std::move(grafSystem))));
 		//GrafSystem* grafSystem = realm.GetComponent<GrafSystem>();
 	}
+
+	// initialize sample primitive renering
 
 	// initialize ImguiRender
 	ImguiRender* imguiRender = realm.AddComponent<ImguiRender>(realm);
@@ -277,6 +313,11 @@ Result GrafSystem::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
 }
 
 Result GrafSystem::CreateImage(std::unique_ptr<GrafImage>& grafImage)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafSystem::CreateShader(std::unique_ptr<GrafShader>& grafShader)
 {
 	return Result(NotImplemented);
 }
@@ -470,6 +511,21 @@ Result GrafImage::Initialize(GrafDevice *grafDevice, const InitParams& initParam
 {
 	GrafDeviceEntity::Initialize(grafDevice);
 	this->imageDesc = initParams.ImageDesc;
+	return Result(NotImplemented);
+}
+
+GrafShader::GrafShader(GrafSystem &grafSystem) :
+	GrafDeviceEntity(grafSystem)
+{
+}
+
+GrafShader::~GrafShader()
+{
+}
+
+Result GrafShader::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+{
+	this->shaderType = initParams.ShaderType;
 	return Result(NotImplemented);
 }
 
@@ -780,6 +836,12 @@ Result GrafSystemVulkan::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
 Result GrafSystemVulkan::CreateImage(std::unique_ptr<GrafImage>& grafImage)
 {
 	grafImage.reset(new GrafImageVulkan(*this));
+	return Result(Success);
+}
+
+Result GrafSystemVulkan::CreateShader(std::unique_ptr<GrafShader>& grafShader)
+{
+	grafShader.reset(new GrafShaderVulkan(*this));
 	return Result(Success);
 }
 
@@ -1587,8 +1649,9 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 		return urRes;
 	}
 
-	#if (UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL)
 	// initial image layout transition into common state
+
+	#if (UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL)
 	GrafImage* swapChainNextImage = this->swapChainImages[this->swapChainCurrentImageId].get();
 	GrafCommandList* imageTransitionCmdListBeginCrnt = this->imageTransitionCmdListBegin[this->frameIdx].get();
 	imageTransitionCmdListBeginCrnt->Begin();
@@ -1654,9 +1717,6 @@ Result GrafCanvasVulkan::Present()
 
 	// do image layout transition to presentation state
 
-	// TEMP: using single fence to wait till previously submitted work is done
-	// TODO: create per frame objects (command lists, semaphores)
-	
 	GrafImage* swapChainCurrentImage = this->swapChainImages[this->swapChainCurrentImageId].get();
 	GrafCommandList* imageTransitionCmdListEndCrnt = this->imageTransitionCmdListEnd[this->frameIdx].get();
 	PROFILE_LINE(imageTransitionCmdListEndCrnt->Begin(); ,&this->GetRealm().GetLog());
@@ -1687,16 +1747,16 @@ Result GrafCanvasVulkan::Present()
 	if (Failed(res))
 		return res;
 
-	#if (UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL)
+	
 	// do image layout transition to common state
 	
+	#if (UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL)
 	GrafImage* swapChainNextImage = this->swapChainImages[this->swapChainCurrentImageId].get();
 	GrafCommandList* imageTransitionCmdListBeginNext = this->imageTransitionCmdListBegin[this->frameIdx].get();
 	PROFILE_LINE(imageTransitionCmdListBeginNext->Begin();, &this->GetRealm().GetLog());
 	imageTransitionCmdListBeginNext->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
 	imageTransitionCmdListBeginNext->End();
 	grafDeviceVulkan->Submit(imageTransitionCmdListBeginNext);
-	
 	#endif
 
 	return Result(Success);
@@ -1846,6 +1906,60 @@ Result GrafImageVulkan::CreateVkImageViews()
 	VkResult res = vkCreateImageView(grafDeviceVulkan->GetVkDevice(), &vkViewInfo, ur_null, &this->vkImageView);
 	if (res != VK_SUCCESS)
 		return ResultError(Failure, std::string("GrafImageVulkan: vkCreateImageView failed with VkResult = ") + VkResultToString(res));
+
+	return Result(Success);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+GrafShaderVulkan::GrafShaderVulkan(GrafSystem &grafSystem) : 
+	GrafShader(grafSystem)
+{
+	this->vkShaderModule = VK_NULL_HANDLE;
+}
+
+GrafShaderVulkan::~GrafShaderVulkan()
+{
+	this->Deinitialize();
+}
+
+Result GrafShaderVulkan::Deinitialize()
+{
+	if (this->vkShaderModule != VK_NULL_HANDLE)
+	{
+		vkDestroyShaderModule(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkShaderModule, ur_null);
+		this->vkShaderModule = VK_NULL_HANDLE;
+	}
+
+	return Result(Success);
+}
+
+Result GrafShaderVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+{
+	this->Deinitialize();
+
+	GrafShader::Initialize(grafDevice, initParams);
+
+	// validate logical device 
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+	{
+		return ResultError(InvalidArgs, std::string("GrafShaderVulkan: failed to initialize, invalid GrafDevice"));
+	}
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+	// create shader module
+
+	VkShaderModuleCreateInfo vkShaderInfo = {};
+	vkShaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	vkShaderInfo.flags = 0;
+	vkShaderInfo.codeSize = initParams.ByteCodeSize;
+	vkShaderInfo.pCode = (const uint32_t*)initParams.ByteCode;
+
+	VkResult vkRes = vkCreateShaderModule(vkDevice, &vkShaderInfo, ur_null, &this->vkShaderModule);
+	if (vkRes != VK_SUCCESS)
+		return ResultError(Failure, std::string("GrafShaderVulkan: vkCreateShaderModule failed with VkResult = ") + VkResultToString(vkRes));
 
 	return Result(Success);
 }

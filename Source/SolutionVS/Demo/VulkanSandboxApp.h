@@ -25,6 +25,7 @@ namespace UnlimRealms
 	class GrafFence;
 	class GrafCanvas;
 	class GrafImage;
+	class GrafShader;
 	class GrafRenderPass;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -149,6 +150,16 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class GrafShaderType
+	{
+		Undefined = -1,
+		Vertex,
+		Pixel,
+		Compute,
+		Count
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafSystem : public RealmEntity
 	{
 	public:
@@ -168,6 +179,8 @@ namespace UnlimRealms
 		virtual Result CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas);
 		
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
+
+		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 		
 		virtual Result CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
 
@@ -382,6 +395,36 @@ namespace UnlimRealms
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafShader : public GrafDeviceEntity
+	{
+	public:
+
+		struct /*UR_DECL*/ InitParams
+		{
+			GrafShaderType ShaderType;
+			ur_byte* ByteCode;
+			ur_size ByteCodeSize;
+		};
+
+		GrafShader(GrafSystem &grafSystem);
+
+		~GrafShader();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline const GrafShaderType& GetShaderType() const;
+
+	protected:
+
+		GrafShaderType shaderType;
+	};
+
+	inline const GrafShaderType& GrafShader::GetShaderType() const
+	{
+		return this->shaderType;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafRenderPass : public GrafDeviceEntity
 	{
 	public:
@@ -460,6 +503,8 @@ namespace UnlimRealms
 		virtual Result CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas);
 
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
+
+		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 
 		virtual Result CreatePass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
 
@@ -708,6 +753,31 @@ namespace UnlimRealms
 	inline void GrafImageVulkan::SetState(GrafImageState& state)
 	{
 		this->imageState = state;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafShaderVulkan : public GrafShader
+	{
+	public:
+
+		GrafShaderVulkan(GrafSystem &grafSystem);
+
+		~GrafShaderVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline VkShaderModule GetVkShaderModule() const;
+
+	private:
+
+		Result Deinitialize();
+
+		VkShaderModule vkShaderModule;
+	};
+
+	inline VkShaderModule GrafShaderVulkan::GetVkShaderModule() const
+	{
+		return this->vkShaderModule;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
