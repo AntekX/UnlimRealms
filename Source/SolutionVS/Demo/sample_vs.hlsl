@@ -1,3 +1,6 @@
+
+#if (0)
+
 static const uint InstanceCount = 24;
 cbuffer Common : register(b0)
 {
@@ -34,9 +37,7 @@ PS_INPUT main(VS_INPUT input, uint instanceID : SV_InstanceID, uint vertexID : S
 {
 	PS_INPUT output;
 
-	output.pos = float4(input.pos.xyz, 1.0);
-	//output.pos = mul(Transform[instanceID + uint(Desc.x)], float4(input.pos.xyz, 1.0f));
-	//output.pos = float4(input.pos.xyz, 1.0f);
+	output.pos = mul(Transform[instanceID + uint(Desc.x)], float4(input.pos.xyz, 1.0f));
 	output.col = input.col;
 	//output.col.xyz = Colors[(instanceID + vertexID) % ColorsCount] * 0.5 + 0.5;
 	//output.col.xyz = Colors[uint(Desc.x / (InstanceCount / 3))];
@@ -46,3 +47,37 @@ PS_INPUT main(VS_INPUT input, uint instanceID : SV_InstanceID, uint vertexID : S
 
 	return output;
 }
+
+#else
+
+// super simple triangle test
+
+struct PS_INPUT
+{
+	float4 pos	: SV_POSITION;
+	float4 col	: COLOR0;
+};
+
+static const float3 TestTrianlePos[3] = {
+	{ 0.0,-0.5, 0.0 },
+	{ 0.5, 0.5, 0.0 },
+	{-0.5, 0.5, 0.0 }
+};
+static const float3 TestTrianleCol[3] = {
+	{ 1, 0, 0 },
+	{ 0, 1, 0 },
+	{ 0, 0, 1 }
+};
+
+PS_INPUT main(uint vertexID : SV_VertexID)
+{
+	PS_INPUT output;
+
+	output.pos = float4(TestTrianlePos[vertexID % 3].xyz, 1.0);
+	output.col.xyz = TestTrianleCol[vertexID % 3].xyz;
+	output.col.w = 1.0;
+
+	return output;
+}
+
+#endif

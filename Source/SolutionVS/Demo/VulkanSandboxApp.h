@@ -27,6 +27,7 @@ namespace UnlimRealms
 	class GrafImage;
 	class GrafShader;
 	class GrafRenderPass;
+	class GrafPipeline;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct /*UR_DECL*/ GrafPhysicalDeviceDesc
@@ -183,6 +184,8 @@ namespace UnlimRealms
 		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 		
 		virtual Result CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
+
+		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
 
 		virtual ur_uint GetRecommendedDeviceId();
 
@@ -344,7 +347,9 @@ namespace UnlimRealms
 
 		virtual Result Present();
 
-		virtual GrafImage* GetTargetImage();
+		virtual GrafImage* GetCurrentImage();
+
+		virtual GrafImage* GetSwapChainImage(ur_uint imageId);
 
 		inline ur_uint GetSwapChainImageCount() const;
 
@@ -404,7 +409,9 @@ namespace UnlimRealms
 			GrafShaderType ShaderType;
 			ur_byte* ByteCode;
 			ur_size ByteCodeSize;
+			const char* EntryPoint;
 		};
+		static const char* DefaultEntryPoint;
 
 		GrafShader(GrafSystem &grafSystem);
 
@@ -414,14 +421,22 @@ namespace UnlimRealms
 
 		inline const GrafShaderType& GetShaderType() const;
 
+		inline const std::string& GetEntryPoint() const;
+
 	protected:
 
 		GrafShaderType shaderType;
+		std::string entryPoint;
 	};
 
 	inline const GrafShaderType& GrafShader::GetShaderType() const
 	{
 		return this->shaderType;
+	}
+
+	inline const std::string& GrafShader::GetEntryPoint() const
+	{
+		return this->entryPoint;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -437,7 +452,25 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	#define PROFILER_ENABLED 1
+	class /*UR_DECL*/ GrafPipeline : public GrafDeviceEntity
+	{
+	public:
+
+		struct /*UR_DECL*/ InitParams
+		{
+			std::vector<GrafShader*> ShaderStages;
+			GrafImage* RenderTarget; // TEMP: passing render target directly for test, render spass should be used instead
+		};
+
+		GrafPipeline(GrafSystem &grafSystem);
+
+		~GrafPipeline();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	#define PROFILER_ENABLED 0
 	class /*UR_DECL*/ Profiler
 	{
 	public:
@@ -506,10 +539,12 @@ namespace UnlimRealms
 
 		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 
-		virtual Result CreatePass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
+		virtual Result CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
+
+		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
 
 		inline VkInstance GetVkInstance() const;
-		
+
 		inline VkPhysicalDevice GetVkPhysicalDevice(ur_uint deviceId) const;
 
 	private:
@@ -694,7 +729,9 @@ namespace UnlimRealms
 
 		virtual Result Present();
 
-		virtual GrafImage* GetTargetImage();
+		virtual GrafImage* GetCurrentImage();
+
+		virtual GrafImage* GetSwapChainImage(ur_uint imageId);
 
 	private:
 
@@ -707,7 +744,7 @@ namespace UnlimRealms
 		VkSwapchainKHR vkSwapChain;
 		std::vector<std::unique_ptr<GrafImage>> swapChainImages;
 		ur_uint32 swapChainCurrentImageId;
-		
+
 		// per frame data
 		ur_uint32 frameCount;
 		ur_uint32 frameIdx;
@@ -731,6 +768,8 @@ namespace UnlimRealms
 
 		inline VkImage GetVkImage() const;
 
+		inline VkImageView GetVkImageView() const;
+
 	private:
 
 		Result Deinitialize();
@@ -748,6 +787,11 @@ namespace UnlimRealms
 	inline VkImage GrafImageVulkan::GetVkImage() const
 	{
 		return this->vkImage;
+	}
+
+	inline VkImageView GrafImageVulkan::GetVkImageView() const
+	{
+		return this->vkImageView;
 	}
 
 	inline void GrafImageVulkan::SetState(GrafImageState& state)
@@ -807,6 +851,42 @@ namespace UnlimRealms
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafPipelineVulkan : public GrafPipeline
+	{
+	public:
+
+		GrafPipelineVulkan(GrafSystem &grafSystem);
+
+		~GrafPipelineVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline const VkPipeline GetVkPipeline() const;
+
+		inline const VkRenderPass GetVkRenderPass() const;
+
+	protected:
+
+		Result Deinitialize();
+
+		VkPipeline vkPipeline;
+		VkPipelineLayout vkPipelineLayout;
+
+		// TEMP:
+		VkRenderPass vkRenderPass;
+	};
+
+	inline const VkPipeline GrafPipelineVulkan::GetVkPipeline() const
+	{
+		return this->vkPipeline;
+	}
+
+	inline const VkRenderPass GrafPipelineVulkan::GetVkRenderPass() const
+	{
+		return this->vkRenderPass;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafUtilsVulkan
 	{
 	public:
@@ -816,6 +896,7 @@ namespace UnlimRealms
 		static inline VkImageType GrafToVkImageType(GrafImageType imageType);
 		static inline VkImageAspectFlags GrafToVkImageUsageAspect(GrafImageUsageFlags usage);
 		static inline VkImageLayout GrafToVkImageLayout(GrafImageState imageState);
+		static inline VkShaderStageFlagBits GrafToVkShaderStage(GrafShaderType shaderType);
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
 	};

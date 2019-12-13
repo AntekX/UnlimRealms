@@ -67,47 +67,67 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafShader> grafShaderSampleVS;
 	std::unique_ptr<GrafShader> grafShaderSamplePS;
 	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
-	std::unique_ptr<GrafRenderPass> grafRenderPass_Demo;
+	std::vector<std::unique_ptr<GrafRenderPass>> grafRenderPassSample;
+	std::vector<std::unique_ptr<GrafPipeline>> grafPipelineSample;
+	std::vector<VkFramebuffer> renderPassFrameBuffer; // TEMP
 	ur_uint frameCount = 0;
 	ur_uint frameIdx = 0;
+	auto& deinitializeGfxFrameObjects = [&]() -> void {
+		// order matters!
+		if (grafDevice.get()) grafDevice->WaitIdle();
+		for (auto& vkFrameBuffer : renderPassFrameBuffer)
+		{
+			vkDestroyFramebuffer(static_cast<GrafDeviceVulkan*>(grafDevice.get())->GetVkDevice(), vkFrameBuffer, ur_null);
+		}
+		renderPassFrameBuffer.clear();
+		grafPipelineSample.clear();
+		grafRenderPassSample.clear();
+		grafMainCmdList.clear();
+	};
 	auto& deinitializeGfxSystem = [&]() -> void {
 		// order matters!
-		grafRenderPass_Demo.reset();
+		deinitializeGfxFrameObjects();
 		grafShaderSampleVS.reset();
 		grafShaderSamplePS.reset();
-		grafMainCmdList.clear();
 		grafCanvas.reset();
 		grafDevice.reset();
 		grafSystem.reset();
 	};
 	Result grafRes = NotInitialized;
-	do
+	auto& initializeGfxCore = [&]() -> void
 	{
 		grafRes = grafSystem->Initialize(realm.GetCanvas());
-		if (Failed(grafRes) || 0 == grafSystem->GetPhysicalDeviceCount()) break;
+		if (Failed(grafRes) || 0 == grafSystem->GetPhysicalDeviceCount()) return;
 		
 		grafRes = grafSystem->CreateDevice(grafDevice);
-		if (Failed(grafRes)) break;
+		if (Failed(grafRes)) return;
 		grafRes = grafDevice->Initialize(grafSystem->GetRecommendedDeviceId());
-		if (Failed(grafRes)) break;
+		if (Failed(grafRes)) return;
 
 		grafRes = grafSystem->CreateCanvas(grafCanvas);
-		if (Failed(grafRes)) break;
+		if (Failed(grafRes)) return;
 		grafRes = grafCanvas->Initialize(grafDevice.get());
-		if (Failed(grafRes)) break;
+		if (Failed(grafRes)) return;
 
 		grafRes = grafSystem->CreateShader(grafShaderSampleVS);
-		if (Failed(grafRes)) break;
-		grafRes = grafShaderSampleVS->Initialize(grafDevice.get(), { GrafShaderType::Vertex, sampleVSBuffer.get(), sampleVSBufferSize });
-		if (Failed(grafRes)) break;
+		if (Failed(grafRes)) return;
+		grafRes = grafShaderSampleVS->Initialize(grafDevice.get(), { GrafShaderType::Vertex, sampleVSBuffer.get(), sampleVSBufferSize, GrafShader::DefaultEntryPoint });
+		if (Failed(grafRes)) return;
 
 		grafRes = grafSystem->CreateShader(grafShaderSamplePS);
-		if (Failed(grafRes)) break;
-		grafRes = grafShaderSamplePS->Initialize(grafDevice.get(), { GrafShaderType::Pixel, samplePSBuffer.get(), samplePSBufferSize });
-		if (Failed(grafRes)) break;
+		if (Failed(grafRes)) return;
+		grafRes = grafShaderSamplePS->Initialize(grafDevice.get(), { GrafShaderType::Pixel, samplePSBuffer.get(), samplePSBufferSize, GrafShader::DefaultEntryPoint });
+		if (Failed(grafRes)) return;
+	};
+	auto& initializeGfxFrameObjects = [&]() -> void
+	{
+		if (Failed(grafRes)) return;
 
-		frameCount = std::max(ur_uint32(2), grafCanvas->GetSwapChainImageCount());
-		
+		// TEMP: frame count must be equal to number of swap chain images for now, because we render directly into them!!!
+		// one frame -> one swap chain image -> one render pass -> one pipeline config
+		frameCount = grafCanvas->GetSwapChainImageCount();
+		frameIdx = 0;
+
 		grafMainCmdList.resize(frameCount);
 		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
 		{
@@ -116,14 +136,57 @@ int VulkanSandboxApp::Run()
 			grafRes = grafMainCmdList[iframe]->Initialize(grafDevice.get());
 			if (Failed(grafRes)) break;
 		}
-		if (Failed(grafRes)) break;
+		if (Failed(grafRes)) return;
 
-		//grafRes = grafSystem->CreateRenderPass(grafRenderPass_Demo);
+		//grafRes = grafSystem->CreateRenderPass(grafRenderPass);
 		//if (Failed(grafRes)) break;
-		//grafRes = grafRenderPass_Demo->Initialize(grafDevice.get());
+		//grafRes = grafRenderPass->Initialize(grafDevice.get());
 		//if (Failed(grafRes)) break;
 
-	} while (false);
+		grafPipelineSample.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			grafRes = grafSystem->CreatePipeline(grafPipelineSample[iframe]);
+			if (Failed(grafRes)) break;
+			GrafPipeline::InitParams samplePipelineParams = {};
+			samplePipelineParams.ShaderStages.reserve(2);
+			samplePipelineParams.ShaderStages.push_back(grafShaderSampleVS.get());
+			samplePipelineParams.ShaderStages.push_back(grafShaderSamplePS.get());
+			samplePipelineParams.RenderTarget = grafCanvas->GetSwapChainImage(iframe);
+			grafRes = grafPipelineSample[iframe]->Initialize(grafDevice.get(), samplePipelineParams);
+			if (Failed(grafRes)) break;
+		}
+		if (Failed(grafRes)) return;
+
+		renderPassFrameBuffer.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			VkImageView attachmentViews[] = { static_cast<GrafImageVulkan*>(grafCanvas->GetSwapChainImage(iframe))->GetVkImageView() };
+			VkFramebufferCreateInfo vkFramebufferInfo = {};
+			vkFramebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			vkFramebufferInfo.flags = 0;
+			vkFramebufferInfo.renderPass = static_cast<GrafPipelineVulkan*>(grafPipelineSample[iframe].get())->GetVkRenderPass();
+			vkFramebufferInfo.attachmentCount = ur_array_size(attachmentViews);
+			vkFramebufferInfo.pAttachments = attachmentViews;
+			vkFramebufferInfo.width = (ur_uint32)grafCanvas->GetSwapChainImage(iframe)->GetDesc().Size.x;
+			vkFramebufferInfo.height = (ur_uint32)grafCanvas->GetSwapChainImage(iframe)->GetDesc().Size.y;
+			vkFramebufferInfo.layers = 1;
+			VkFramebuffer vkFramebuffer;
+			VkResult vkRes = vkCreateFramebuffer(static_cast<GrafDeviceVulkan*>(grafDevice.get())->GetVkDevice(), &vkFramebufferInfo, ur_null, &vkFramebuffer);
+			if (vkRes != VK_SUCCESS)
+			{
+				grafRes = Failure;
+				break;
+			}
+			renderPassFrameBuffer[iframe] = vkFramebuffer;
+		}
+		if (Failed(grafRes)) return;
+	};
+	initializeGfxCore();
+	if (Succeeded(grafRes))
+	{
+		initializeGfxFrameObjects();
+	}
 	if (Failed(grafRes))
 	{
 		deinitializeGfxSystem();
@@ -185,7 +248,6 @@ int VulkanSandboxApp::Run()
 			// forward msg to WinInput system
 			WinInput* winInput = static_cast<WinInput*>(realm.GetInput());
 			winInput->ProcessMsg(msg);
-			break;
 		}
 		if (msg.message == WM_QUIT)
 			break;
@@ -200,6 +262,8 @@ int VulkanSandboxApp::Run()
 			if (grafSystem != ur_null)
 			{
 				grafCanvas->Initialize(grafDevice.get());
+				deinitializeGfxFrameObjects();
+				initializeGfxFrameObjects();
 			}
 		}
 
@@ -248,11 +312,27 @@ int VulkanSandboxApp::Run()
 			{
 				grafCmdListCrnt->Begin();
 			
-				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetTargetImage(), GrafImageState::Current, GrafImageState::Common);
+				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
 
 				updateFrameJob->WaitProgress(1); // make sure required data is ready
-				grafCmdListCrnt->ClearColorImage(grafCanvas->GetTargetImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
+				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
 				
+				// TEMP: explicit debug rendering commands
+				VkRenderPassBeginInfo vkPassBeginInfo = {};
+				vkPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+				vkPassBeginInfo.renderPass = static_cast<GrafPipelineVulkan*>(grafPipelineSample[frameIdx].get())->GetVkRenderPass();
+				vkPassBeginInfo.framebuffer = renderPassFrameBuffer[frameIdx];
+				vkPassBeginInfo.renderArea.offset = { 0, 0 };
+				vkPassBeginInfo.renderArea.extent.width = (ur_uint32)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
+				vkPassBeginInfo.renderArea.extent.height = (ur_uint32)grafCanvas->GetCurrentImage()->GetDesc().Size.y;
+				vkPassBeginInfo.clearValueCount = 0;
+				vkPassBeginInfo.pClearValues = ur_null;
+				VkCommandBuffer vkCommandBuffer = static_cast<GrafCommandListVulkan*>(grafCmdListCrnt)->GetVkCommandBuffer();
+				vkCmdBeginRenderPass(vkCommandBuffer, &vkPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+				vkCmdBindPipeline(vkCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, static_cast<GrafPipelineVulkan*>(grafPipelineSample[frameIdx].get())->GetVkPipeline());
+				vkCmdDraw(vkCommandBuffer, 3, 1, 0, 0);
+				vkCmdEndRenderPass(vkCommandBuffer);
+
 				// TODO: draw primtives here
 
 				grafCmdListCrnt->End();
@@ -327,6 +407,11 @@ Result GrafSystem::CreateShader(std::unique_ptr<GrafShader>& grafShader)
 }
 
 Result GrafSystem::CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafSystem::CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline)
 {
 	return Result(NotImplemented);
 }
@@ -496,7 +581,12 @@ Result GrafCanvas::Present()
 	return Result(NotImplemented);
 }
 
-GrafImage* GrafCanvas::GetTargetImage()
+GrafImage* GrafCanvas::GetCurrentImage()
+{
+	return ur_null;
+}
+
+GrafImage* GrafCanvas::GetSwapChainImage(ur_uint imageId)
 {
 	return ur_null;
 }
@@ -518,6 +608,8 @@ Result GrafImage::Initialize(GrafDevice *grafDevice, const InitParams& initParam
 	return Result(NotImplemented);
 }
 
+const char* GrafShader::DefaultEntryPoint = "main";
+
 GrafShader::GrafShader(GrafSystem &grafSystem) :
 	GrafDeviceEntity(grafSystem)
 {
@@ -531,6 +623,22 @@ Result GrafShader::Initialize(GrafDevice *grafDevice, const InitParams& initPara
 {
 	GrafDeviceEntity::Initialize(grafDevice);
 	this->shaderType = initParams.ShaderType;
+	this->entryPoint = (initParams.EntryPoint ? initParams.EntryPoint : DefaultEntryPoint);
+	return Result(NotImplemented);
+}
+
+GrafPipeline::GrafPipeline(GrafSystem &grafSystem) :
+	GrafDeviceEntity(grafSystem)
+{
+}
+
+GrafPipeline::~GrafPipeline()
+{
+}
+
+Result GrafPipeline::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+{
+	GrafDeviceEntity::Initialize(grafDevice);
 	return Result(NotImplemented);
 }
 
@@ -850,9 +958,15 @@ Result GrafSystemVulkan::CreateShader(std::unique_ptr<GrafShader>& grafShader)
 	return Result(Success);
 }
 
-Result GrafSystemVulkan::CreatePass(std::unique_ptr<GrafRenderPass>& grafRenderPass)
+Result GrafSystemVulkan::CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass)
 {
 	grafRenderPass.reset(new GrafRenderPassVulkan(*this));
+	return Result(Success);
+}
+
+Result GrafSystemVulkan::CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline)
+{
+	grafPipeline.reset(new GrafPipelineVulkan(*this));
 	return Result(Success);
 }
 
@@ -1602,7 +1716,7 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 
 	// per frame objects
 
-	this->frameCount = std::max(ur_uint32(2), vkSwapChainImageRealCount - 1);
+	this->frameCount = vkSwapChainImageRealCount; // command list(s) and sync object(s) per image
 	this->frameIdx = ur_uint32(this->frameCount - 1); // first AcquireNextImage will make it 0
 
 	// create presentation sync objects 
@@ -1665,51 +1779,6 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 	grafDeviceVulkan->Submit(imageTransitionCmdListBeginCrnt);
 	#endif
 
-	// TEMP: hardcoded render pass for swap chain images transition test
-
-	/*VkAttachmentDescription vkAttachmentDesc = {};
-	vkAttachmentDesc.flags = 0;
-	vkAttachmentDesc.format = VK_FORMAT_B8G8R8_UNORM;
-	vkAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-	vkAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	vkAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	vkAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	vkAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	vkAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	vkAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-	VkAttachmentReference vkColorAttachmentRef = {};
-	vkColorAttachmentRef.attachment = 0;
-	vkColorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-	VkSubpassDescription vkSubpassDesc = {};
-	vkSubpassDesc.flags = 0;
-	vkSubpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	vkSubpassDesc.inputAttachmentCount = 0;
-	vkSubpassDesc.pInputAttachments = ur_null;
-	vkSubpassDesc.colorAttachmentCount = 1;
-	vkSubpassDesc.pColorAttachments = &vkColorAttachmentRef;
-	vkSubpassDesc.pResolveAttachments = ur_null;
-	vkSubpassDesc.pDepthStencilAttachment = ur_null;
-	vkSubpassDesc.preserveAttachmentCount = 0;
-	vkSubpassDesc.pPreserveAttachments = ur_null;
-
-	VkRenderPassCreateInfo vkRenderPassInfo = {};
-	vkRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	vkRenderPassInfo.flags = 0;
-	vkRenderPassInfo.attachmentCount = 1;
-	vkRenderPassInfo.pAttachments = &vkAttachmentDesc;
-	vkRenderPassInfo.subpassCount = 1;
-	vkRenderPassInfo.pSubpasses = &vkSubpassDesc;
-	vkRenderPassInfo.dependencyCount = 0;
-	vkRenderPassInfo.pDependencies = ur_null;
-
-	res = vkCreateRenderPass(vkDevice, &vkRenderPassInfo, ur_null, &this->vkRenderPass);
-	if (res != VK_SUCCESS)
-	{
-		return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateRenderPass failed with VkResult = ") + VkResultToString(res));
-	}*/
-
 	return Result(Success);
 }
 
@@ -1724,7 +1793,7 @@ Result GrafCanvasVulkan::Present()
 
 	GrafImage* swapChainCurrentImage = this->swapChainImages[this->swapChainCurrentImageId].get();
 	GrafCommandList* imageTransitionCmdListEndCrnt = this->imageTransitionCmdListEnd[this->frameIdx].get();
-	PROFILE_LINE(imageTransitionCmdListEndCrnt->Begin(); ,&this->GetRealm().GetLog());
+	imageTransitionCmdListEndCrnt->Begin();
 	imageTransitionCmdListEndCrnt->ImageMemoryBarrier(swapChainCurrentImage, GrafImageState::Current, GrafImageState::Present);
 	imageTransitionCmdListEndCrnt->End();
 	grafDeviceVulkan->Submit(imageTransitionCmdListEndCrnt);
@@ -1752,13 +1821,12 @@ Result GrafCanvasVulkan::Present()
 	if (Failed(res))
 		return res;
 
-	
 	// do image layout transition to common state
 	
 	#if (UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL)
 	GrafImage* swapChainNextImage = this->swapChainImages[this->swapChainCurrentImageId].get();
 	GrafCommandList* imageTransitionCmdListBeginNext = this->imageTransitionCmdListBegin[this->frameIdx].get();
-	PROFILE_LINE(imageTransitionCmdListBeginNext->Begin();, &this->GetRealm().GetLog());
+	imageTransitionCmdListBeginNext->Begin();
 	imageTransitionCmdListBeginNext->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
 	imageTransitionCmdListBeginNext->End();
 	grafDeviceVulkan->Submit(imageTransitionCmdListBeginNext);
@@ -1781,11 +1849,16 @@ Result GrafCanvasVulkan::AcquireNextImage()
 	return Result(Success);
 }
 
-GrafImage* GrafCanvasVulkan::GetTargetImage()
+GrafImage* GrafCanvasVulkan::GetCurrentImage()
 {
-	if (this->swapChainImages.empty())
+	return this->GetSwapChainImage((ur_uint)this->swapChainCurrentImageId);
+}
+
+GrafImage* GrafCanvasVulkan::GetSwapChainImage(ur_uint imageId)
+{
+	if ((ur_size)imageId > this->swapChainImages.size())
 		return ur_null;
-	return this->swapChainImages[this->swapChainCurrentImageId].get();;
+	return this->swapChainImages[imageId].get();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1971,6 +2044,289 @@ Result GrafShaderVulkan::Initialize(GrafDevice *grafDevice, const InitParams& in
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+GrafPipelineVulkan::GrafPipelineVulkan(GrafSystem &grafSystem) :
+	GrafPipeline(grafSystem)
+{
+	this->vkPipeline = VK_NULL_HANDLE;
+	this->vkPipelineLayout = VK_NULL_HANDLE;
+	this->vkRenderPass = VK_NULL_HANDLE;
+}
+
+GrafPipelineVulkan::~GrafPipelineVulkan()
+{
+	this->Deinitialize();
+}
+
+Result GrafPipelineVulkan::Deinitialize()
+{
+	if (this->vkPipelineLayout != VK_NULL_HANDLE)
+	{
+		vkDestroyPipelineLayout(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipelineLayout, ur_null);
+		this->vkPipelineLayout = VK_NULL_HANDLE;
+	}
+	if (this->vkPipeline != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipeline, ur_null);
+		this->vkPipeline = VK_NULL_HANDLE;
+	}
+	if (this->vkRenderPass != VK_NULL_HANDLE)
+	{
+		vkDestroyRenderPass(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkRenderPass, ur_null);
+		this->vkRenderPass = VK_NULL_HANDLE;
+	}
+
+	return Result(Success);
+}
+
+Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+{
+	this->Deinitialize();
+
+	GrafPipeline::Initialize(grafDevice, initParams);
+
+	// validate logical device 
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+	{
+		return ResultError(InvalidArgs, std::string("GrafPipelineVulkan: failed to initialize, invalid GrafDevice"));
+	}
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+	VkResult vkRes = VK_SUCCESS;
+
+	// TEMP: hardcoded test render pass
+
+	VkAttachmentDescription vkAttachmentDesc = {};
+	vkAttachmentDesc.flags = 0;
+	vkAttachmentDesc.format = GrafUtilsVulkan::GrafToVkFormat(initParams.RenderTarget->GetDesc().Format);
+	vkAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+	vkAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	vkAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	vkAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	vkAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	vkAttachmentDesc.initialLayout = GrafUtilsVulkan::GrafToVkImageLayout(initParams.RenderTarget->GetState());
+	vkAttachmentDesc.finalLayout = (VK_IMAGE_LAYOUT_UNDEFINED == vkAttachmentDesc.initialLayout ? VK_IMAGE_LAYOUT_GENERAL : vkAttachmentDesc.initialLayout);
+
+	VkAttachmentReference vkColorAttachmentRef = {};
+	vkColorAttachmentRef.attachment = 0;
+	vkColorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription vkSubpassDesc = {};
+	vkSubpassDesc.flags = 0;
+	vkSubpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	vkSubpassDesc.inputAttachmentCount = 0;
+	vkSubpassDesc.pInputAttachments = ur_null;
+	vkSubpassDesc.colorAttachmentCount = 1;
+	vkSubpassDesc.pColorAttachments = &vkColorAttachmentRef;
+	vkSubpassDesc.pResolveAttachments = ur_null;
+	vkSubpassDesc.pDepthStencilAttachment = ur_null;
+	vkSubpassDesc.preserveAttachmentCount = 0;
+	vkSubpassDesc.pPreserveAttachments = ur_null;
+
+	VkRenderPassCreateInfo vkRenderPassInfo = {};
+	vkRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	vkRenderPassInfo.flags = 0;
+	vkRenderPassInfo.attachmentCount = 1;
+	vkRenderPassInfo.pAttachments = &vkAttachmentDesc;
+	vkRenderPassInfo.subpassCount = 1;
+	vkRenderPassInfo.pSubpasses = &vkSubpassDesc;
+	vkRenderPassInfo.dependencyCount = 0;
+	vkRenderPassInfo.pDependencies = ur_null;
+
+	vkRes = vkCreateRenderPass(vkDevice, &vkRenderPassInfo, ur_null, &this->vkRenderPass);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafPipelineVulkan: vkCreateRenderPass failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	// TEMP: hardcoded pipeline state for test purpose
+	// TODO: must be described through GRAF structures and converted into vulkan here
+
+	// shader stages
+
+	std::vector<VkPipelineShaderStageCreateInfo> vkShaderStagesInfo(initParams.ShaderStages.size());
+	for (ur_size istage = 0; istage < initParams.ShaderStages.size(); ++istage)
+	{
+		GrafShader* grafShader = initParams.ShaderStages[istage];
+		VkPipelineShaderStageCreateInfo& vkShaderStageInfo = vkShaderStagesInfo[istage];
+		vkShaderStageInfo = {};
+		vkShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		vkShaderStageInfo.flags = 0;
+		vkShaderStageInfo.stage = GrafUtilsVulkan::GrafToVkShaderStage(grafShader->GetShaderType());
+		vkShaderStageInfo.module = static_cast<GrafShaderVulkan*>(grafShader)->GetVkShaderModule();
+		vkShaderStageInfo.pName = grafShader->GetEntryPoint().c_str();
+	}
+
+	// pipeline layout
+
+	VkPipelineLayoutCreateInfo vkPipelineLayoutInfo = {};
+	vkPipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	vkPipelineLayoutInfo.flags = 0;
+	vkPipelineLayoutInfo.setLayoutCount = 0;
+	vkPipelineLayoutInfo.pSetLayouts = ur_null;
+	vkPipelineLayoutInfo.pushConstantRangeCount = 0;
+	vkPipelineLayoutInfo.pPushConstantRanges = ur_null;
+
+	vkRes = vkCreatePipelineLayout(vkDevice, &vkPipelineLayoutInfo, ur_null, &this->vkPipelineLayout);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafPipelineVulkan: vkCreatePipelineLayout failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	// vertex input
+
+	VkPipelineVertexInputStateCreateInfo vkVertxInputStateInfo = {};
+	vkVertxInputStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vkVertxInputStateInfo.flags = 0;
+	vkVertxInputStateInfo.vertexBindingDescriptionCount = 0;
+	vkVertxInputStateInfo.pVertexBindingDescriptions = ur_null;
+	vkVertxInputStateInfo.vertexAttributeDescriptionCount = 0;
+	vkVertxInputStateInfo.pVertexAttributeDescriptions = ur_null;
+
+	// input assembly
+
+	VkPipelineInputAssemblyStateCreateInfo vkInputAssemblyInfo = {};
+	vkInputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	vkInputAssemblyInfo.flags = 0;
+	vkInputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	vkInputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
+
+	//  tessellation state
+
+	// VkPipelineTessellationStateCreateInfo;
+
+	// viewport & scissors
+
+	// TEMP: initialize view port from current render target
+	VkViewport vkViewport = {};
+	vkViewport.x = 0.0f;
+	vkViewport.y = 0.0f;
+	vkViewport.width = (ur_float)initParams.RenderTarget->GetDesc().Size.x;
+	vkViewport.height = (ur_float)initParams.RenderTarget->GetDesc().Size.y;
+	vkViewport.minDepth = 0.0f;
+	vkViewport.maxDepth = 1.0f;
+
+	VkRect2D vkScissorRect = { { (int32_t)vkViewport.x, (int32_t)vkViewport.y}, { (uint32_t)vkViewport.width, (uint32_t)vkViewport.height} };
+
+	VkPipelineViewportStateCreateInfo vkViewportStateInfo = {};
+	vkViewportStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	vkViewportStateInfo.flags = 0;
+	vkViewportStateInfo.viewportCount = 1;
+	vkViewportStateInfo.pViewports = &vkViewport;
+	vkViewportStateInfo.scissorCount = 1;
+	vkViewportStateInfo.pScissors = &vkScissorRect;
+
+	// rasterizer state
+
+	VkPipelineRasterizationStateCreateInfo vkRasterStateInfo = {};
+	vkRasterStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	vkRasterStateInfo.flags = 0;
+	vkRasterStateInfo.depthClampEnable = VK_FALSE;
+	vkRasterStateInfo.rasterizerDiscardEnable = VK_FALSE;
+	vkRasterStateInfo.polygonMode = VK_POLYGON_MODE_FILL;
+	vkRasterStateInfo.cullMode = VK_CULL_MODE_NONE;
+	vkRasterStateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	vkRasterStateInfo.depthBiasEnable = VK_FALSE;
+	vkRasterStateInfo.depthBiasConstantFactor = 0.0f;
+	vkRasterStateInfo.depthBiasClamp = 0.0f;
+	vkRasterStateInfo.depthBiasSlopeFactor = 0.0f;
+	vkRasterStateInfo.lineWidth = 1.0f;
+
+	// multisampling
+
+	VkPipelineMultisampleStateCreateInfo vkMultisampleStateInfo = {};
+	vkMultisampleStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	vkMultisampleStateInfo.flags = 0;
+	vkMultisampleStateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	vkMultisampleStateInfo.sampleShadingEnable = VK_FALSE;
+	vkMultisampleStateInfo.minSampleShading = 1.0f;
+	vkMultisampleStateInfo.pSampleMask = ur_null;
+	vkMultisampleStateInfo.alphaToCoverageEnable = VK_FALSE;
+	vkMultisampleStateInfo.alphaToOneEnable = VK_FALSE;
+
+	// depth stencil state
+
+	VkPipelineDepthStencilStateCreateInfo vkDepthStencilStateInfo = {};
+	vkDepthStencilStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	vkDepthStencilStateInfo.flags = 0;
+	vkDepthStencilStateInfo.depthTestEnable = VK_FALSE;
+	vkDepthStencilStateInfo.depthWriteEnable = VK_FALSE;
+	vkDepthStencilStateInfo.depthCompareOp = VK_COMPARE_OP_NEVER;
+	vkDepthStencilStateInfo.depthBoundsTestEnable = VK_FALSE;
+	vkDepthStencilStateInfo.stencilTestEnable = VK_FALSE;
+	vkDepthStencilStateInfo.front = {};
+	vkDepthStencilStateInfo.back = {};
+	vkDepthStencilStateInfo.minDepthBounds = 0.0f;
+	vkDepthStencilStateInfo.maxDepthBounds = 0.0f;
+
+	// color blend state
+
+	VkPipelineColorBlendAttachmentState vkAttachmentBlendState = {};
+	vkAttachmentBlendState.blendEnable = VK_FALSE;
+	vkAttachmentBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	vkAttachmentBlendState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	vkAttachmentBlendState.colorBlendOp = VK_BLEND_OP_ADD;
+	vkAttachmentBlendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	vkAttachmentBlendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	vkAttachmentBlendState.alphaBlendOp = VK_BLEND_OP_ADD;
+	vkAttachmentBlendState.colorWriteMask = (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT);
+
+	VkPipelineColorBlendStateCreateInfo vkColorBlendStateInfo = {};
+	vkColorBlendStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	vkColorBlendStateInfo.flags = 0;
+	vkColorBlendStateInfo.logicOpEnable = VK_FALSE;
+	vkColorBlendStateInfo.logicOp = VK_LOGIC_OP_COPY;
+	vkColorBlendStateInfo.attachmentCount = 1;
+	vkColorBlendStateInfo.pAttachments = &vkAttachmentBlendState;
+	vkColorBlendStateInfo.blendConstants[0] = 0.0f;
+	vkColorBlendStateInfo.blendConstants[1] = 0.0f;
+	vkColorBlendStateInfo.blendConstants[2] = 0.0f;
+	vkColorBlendStateInfo.blendConstants[3] = 0.0f;
+
+	// dynamic state
+
+	VkPipelineDynamicStateCreateInfo vkDynamicStateInfo = {};
+	vkDynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	vkDynamicStateInfo.flags = 0;
+	vkDynamicStateInfo.dynamicStateCount = 0;
+	vkDynamicStateInfo.pDynamicStates = ur_null;
+
+	// create pipeline object
+
+	VkGraphicsPipelineCreateInfo vkPipelineInfo = {};
+	vkPipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	vkPipelineInfo.flags = 0; // NOTE: consider VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR for debug purpose
+	vkPipelineInfo.stageCount = (ur_uint32)vkShaderStagesInfo.size();
+	vkPipelineInfo.pStages = vkShaderStagesInfo.data();
+	vkPipelineInfo.pVertexInputState = &vkVertxInputStateInfo;
+	vkPipelineInfo.pInputAssemblyState = &vkInputAssemblyInfo;
+	vkPipelineInfo.pTessellationState = ur_null;
+	vkPipelineInfo.pViewportState = &vkViewportStateInfo;
+	vkPipelineInfo.pRasterizationState = &vkRasterStateInfo;
+	vkPipelineInfo.pMultisampleState = &vkMultisampleStateInfo;
+	vkPipelineInfo.pDepthStencilState = &vkDepthStencilStateInfo;
+	vkPipelineInfo.pColorBlendState = &vkColorBlendStateInfo;
+	vkPipelineInfo.pDynamicState = &vkDynamicStateInfo;
+	vkPipelineInfo.layout = this->vkPipelineLayout;
+	vkPipelineInfo.renderPass = this->vkRenderPass;
+	vkPipelineInfo.subpass = 0;
+	vkPipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+	vkPipelineInfo.basePipelineIndex = -1;
+
+	vkRes = vkCreateGraphicsPipelines(vkDevice, VK_NULL_HANDLE, 1, &vkPipelineInfo, ur_null, &this->vkPipeline);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafPipelineVulkan: vkCreateGraphicsPipelines failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	return Result(Success);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 GrafRenderPassVulkan::GrafRenderPassVulkan(GrafSystem& grafSystem) :
 	GrafRenderPass(grafSystem)
 {
@@ -2086,6 +2442,18 @@ VkImageLayout GrafUtilsVulkan::GrafToVkImageLayout(GrafImageState imageState)
 	case GrafImageState::Present: vkImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; break;
 	};
 	return vkImageLayout;
+}
+
+VkShaderStageFlagBits GrafUtilsVulkan::GrafToVkShaderStage(GrafShaderType shaderType)
+{
+	VkShaderStageFlagBits vkShaderStage = VkShaderStageFlagBits(0);
+	switch (shaderType)
+	{
+	case GrafShaderType::Vertex: vkShaderStage = VK_SHADER_STAGE_VERTEX_BIT;  break;
+	case GrafShaderType::Pixel: vkShaderStage = VK_SHADER_STAGE_FRAGMENT_BIT;  break;
+	case GrafShaderType::Compute: vkShaderStage = VK_SHADER_STAGE_COMPUTE_BIT;  break;
+	};
+	return vkShaderStage;
 }
 
 static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {
