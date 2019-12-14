@@ -27,6 +27,7 @@ namespace UnlimRealms
 	class GrafImage;
 	class GrafShader;
 	class GrafRenderPass;
+	class GrafRenderTarget;
 	class GrafPipeline;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -130,7 +131,7 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	struct GrafImageDesc
+	struct /*UR_DECL*/ GrafImageDesc
 	{
 		GrafImageType Type;
 		GrafFormat Format;
@@ -140,7 +141,7 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	struct GrafClearValue
+	struct /*UR_DECL*/ GrafClearValue
 	{
 		union
 		{
@@ -161,6 +162,17 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct /*UR_DECL*/ GrafViewportDesc
+	{
+		ur_float X;
+		ur_float Y;
+		ur_float Width;
+		ur_float Height;
+		ur_float Near;
+		ur_float Far;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafSystem : public RealmEntity
 	{
 	public:
@@ -178,12 +190,14 @@ namespace UnlimRealms
 		virtual Result CreateFence(std::unique_ptr<GrafFence>& grafFence);
 
 		virtual Result CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas);
-		
+
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
 
 		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
-		
+
 		virtual Result CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
+
+		virtual Result CreateRenderTarget(std::unique_ptr<GrafRenderTarget>& grafRenderTarget);
 
 		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
 
@@ -306,6 +320,18 @@ namespace UnlimRealms
 		virtual Result SetFenceState(GrafFence* grafFence, GrafFenceState state);
 
 		virtual Result ClearColorImage(GrafImage* grafImage, GrafClearValue clearValue);
+
+		virtual Result SetViewport(const GrafViewportDesc& grafViewportDesc, ur_bool resetScissorsRect = false);
+
+		virtual Result SetScissorsRect(const RectI& scissorsRect);
+
+		virtual Result BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget);
+
+		virtual Result EndRenderPass();
+
+		virtual Result BindPipeline(GrafPipeline* grafPipeline);
+
+		virtual Result Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -353,14 +379,22 @@ namespace UnlimRealms
 
 		inline ur_uint GetSwapChainImageCount() const;
 
+		inline ur_uint GetCurrentImageId() const;
+
 	protected:
 
 		ur_uint swapChainImageCount;
+		ur_uint swapChainCurrentImageId;
 	};
 
 	inline ur_uint GrafCanvas::GetSwapChainImageCount() const
 	{
 		return this->swapChainImageCount;
+	}
+
+	inline ur_uint GrafCanvas::GetCurrentImageId() const
+	{
+		return this->swapChainCurrentImageId;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -452,14 +486,59 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafRenderTarget : public GrafDeviceEntity
+	{
+	public:
+
+		struct /*UR_DECL*/ InitParams
+		{
+			GrafRenderPass* RenderPass;
+			std::vector<GrafImage*> Images;
+		};
+
+		GrafRenderTarget(GrafSystem &grafSystem);
+
+		~GrafRenderTarget();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline GrafRenderPass* GetRenderPass() const;
+
+		inline GrafImage* GetImage(ur_uint imageId) const;
+
+		inline ur_uint GetImageCount() const;
+
+	protected:
+
+		GrafRenderPass* renderPass;
+		std::vector<GrafImage*> images;
+	};
+
+	GrafRenderPass* GrafRenderTarget::GetRenderPass() const
+	{
+		return this->renderPass;
+	}
+
+	GrafImage* GrafRenderTarget::GetImage(ur_uint imageId) const
+	{
+		return (imageId < this->images.size() ? this->images[imageId] : ur_null);
+	}
+
+	ur_uint GrafRenderTarget::GetImageCount() const
+	{
+		return (ur_uint)this->images.size();
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafPipeline : public GrafDeviceEntity
 	{
 	public:
 
 		struct /*UR_DECL*/ InitParams
 		{
+			GrafRenderPass* RenderPass;
 			std::vector<GrafShader*> ShaderStages;
-			GrafImage* RenderTarget; // TEMP: passing render target directly for test, render spass should be used instead
+			GrafViewportDesc ViewportDesc;
 		};
 
 		GrafPipeline(GrafSystem &grafSystem);
@@ -540,6 +619,8 @@ namespace UnlimRealms
 		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 
 		virtual Result CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
+
+		virtual Result CreateRenderTarget(std::unique_ptr<GrafRenderTarget>& grafRenderTarget);
 
 		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
 
@@ -663,6 +744,18 @@ namespace UnlimRealms
 
 		virtual Result ClearColorImage(GrafImage* grafImage, GrafClearValue clearValue);
 
+		virtual Result SetViewport(const GrafViewportDesc& grafViewportDesc, ur_bool resetScissorsRect = false);
+
+		virtual Result SetScissorsRect(const RectI& scissorsRect);
+
+		virtual Result BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget);
+
+		virtual Result EndRenderPass();
+
+		virtual Result BindPipeline(GrafPipeline* grafPipeline);
+
+		virtual Result Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance);
+
 		inline VkCommandBuffer GetVkCommandBuffer() const;
 
 		inline VkFence GetVkSubmitFence() const;
@@ -743,7 +836,6 @@ namespace UnlimRealms
 		VkSurfaceKHR vkSurface;
 		VkSwapchainKHR vkSwapChain;
 		std::vector<std::unique_ptr<GrafImage>> swapChainImages;
-		ur_uint32 swapChainCurrentImageId;
 
 		// per frame data
 		ur_uint32 frameCount;
@@ -843,12 +935,36 @@ namespace UnlimRealms
 		Result Deinitialize();
 
 		VkRenderPass vkRenderPass;
-		VkPipelineLayout vkPipelineLayout;
 	};
 
 	inline VkRenderPass GrafRenderPassVulkan::GetVkRenderPass() const
 	{
 		return this->vkRenderPass;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafRenderTargetVulkan : public GrafRenderTarget
+	{
+	public:
+
+		GrafRenderTargetVulkan(GrafSystem &grafSystem);
+
+		~GrafRenderTargetVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline VkFramebuffer GetVkFramebuffer() const;
+
+	private:
+
+		Result Deinitialize();
+
+		VkFramebuffer vkFramebuffer;
+	};
+
+	inline VkFramebuffer GrafRenderTargetVulkan::GetVkFramebuffer() const
+	{
+		return this->vkFramebuffer;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -872,19 +988,11 @@ namespace UnlimRealms
 
 		VkPipeline vkPipeline;
 		VkPipelineLayout vkPipelineLayout;
-
-		// TEMP:
-		VkRenderPass vkRenderPass;
 	};
 
 	inline const VkPipeline GrafPipelineVulkan::GetVkPipeline() const
 	{
 		return this->vkPipeline;
-	}
-
-	inline const VkRenderPass GrafPipelineVulkan::GetVkRenderPass() const
-	{
-		return this->vkRenderPass;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

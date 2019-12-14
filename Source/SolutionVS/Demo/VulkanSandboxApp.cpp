@@ -64,27 +64,23 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafCanvas> grafCanvas;
 	std::unique_ptr<GrafShader> grafShaderSampleVS;
 	std::unique_ptr<GrafShader> grafShaderSamplePS;
+	std::unique_ptr<GrafRenderPass> grafRenderPassSample;
+	std::unique_ptr<GrafPipeline> grafPipelineSample;
+	std::vector<std::unique_ptr<GrafRenderTarget>> grafRenderTarget;
 	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
-	std::vector<std::unique_ptr<GrafRenderPass>> grafRenderPassSample;
-	std::vector<std::unique_ptr<GrafPipeline>> grafPipelineSample;
-	std::vector<VkFramebuffer> renderPassFrameBuffer; // TEMP
 	ur_uint frameCount = 0;
 	ur_uint frameIdx = 0;
 	auto& deinitializeGfxFrameObjects = [&]() -> void {
 		// order matters!
 		if (grafDevice.get()) grafDevice->WaitIdle();
-		for (auto& vkFrameBuffer : renderPassFrameBuffer)
-		{
-			vkDestroyFramebuffer(static_cast<GrafDeviceVulkan*>(grafDevice.get())->GetVkDevice(), vkFrameBuffer, ur_null);
-		}
-		renderPassFrameBuffer.clear();
-		grafPipelineSample.clear();
-		grafRenderPassSample.clear();
+		grafRenderTarget.clear();
 		grafMainCmdList.clear();
 	};
 	auto& deinitializeGfxSystem = [&]() -> void {
 		// order matters!
 		deinitializeGfxFrameObjects();
+		grafPipelineSample.reset();
+		grafRenderPassSample.reset();
 		grafShaderSampleVS.reset();
 		grafShaderSamplePS.reset();
 		grafCanvas.reset();
@@ -116,14 +112,45 @@ int VulkanSandboxApp::Run()
 		if (Failed(grafRes)) return;
 		grafRes = grafShaderSamplePS->Initialize(grafDevice.get(), { GrafShaderType::Pixel, samplePSBuffer.get(), samplePSBufferSize, GrafShader::DefaultEntryPoint });
 		if (Failed(grafRes)) return;
+
+		grafRes = grafSystem->CreateRenderPass(grafRenderPassSample);
+		if (Failed(grafRes)) return;
+		grafRes = grafRenderPassSample->Initialize(grafDevice.get());
+		if (Failed(grafRes)) return;
+
+		grafRes = grafSystem->CreatePipeline(grafPipelineSample);
+		if (Failed(grafRes)) return;
+		GrafPipeline::InitParams samplePipelineParams = {};
+		samplePipelineParams.RenderPass = grafRenderPassSample.get();
+		samplePipelineParams.ShaderStages.push_back(grafShaderSampleVS.get());
+		samplePipelineParams.ShaderStages.push_back(grafShaderSamplePS.get());
+		samplePipelineParams.ViewportDesc.Width = (ur_float)grafCanvas->GetSwapChainImage(0)->GetDesc().Size.x;
+		samplePipelineParams.ViewportDesc.Height = (ur_float)grafCanvas->GetSwapChainImage(0)->GetDesc().Size.y;
+		samplePipelineParams.ViewportDesc.Near = 0.0f;
+		samplePipelineParams.ViewportDesc.Far = 1.0f;
+		grafRes = grafPipelineSample->Initialize(grafDevice.get(), samplePipelineParams);
+		if (Failed(grafRes)) return;
 	};
 	auto& initializeGfxFrameObjects = [&]() -> void
 	{
 		if (Failed(grafRes)) return;
 
-		// TEMP: frame count must be equal to number of swap chain images for now, because we render directly into them!!!
-		// one frame -> one swap chain image -> one render pass -> one pipeline config
-		frameCount = grafCanvas->GetSwapChainImageCount();
+		// RT count must be equal swap chain size (one RT wraps on SC image)
+		grafRenderTarget.resize(grafCanvas->GetSwapChainImageCount());
+		for (ur_uint imageIdx = 0; imageIdx < grafCanvas->GetSwapChainImageCount(); ++imageIdx)
+		{
+			grafRes = grafSystem->CreateRenderTarget(grafRenderTarget[imageIdx]);
+			if (Failed(grafRes)) break;
+			GrafRenderTarget::InitParams renderTargetParams = {};
+			renderTargetParams.RenderPass = grafRenderPassSample.get();
+			renderTargetParams.Images.push_back(grafCanvas->GetSwapChainImage(imageIdx));
+			grafRes = grafRenderTarget[imageIdx]->Initialize(grafDevice.get(), renderTargetParams);
+			if (Failed(grafRes)) break;
+		}
+		if (Failed(grafRes)) return;
+
+		// number of recorded frames can differ from swap chain size
+		frameCount = std::max(ur_uint(1), grafCanvas->GetSwapChainImageCount() - 1);
 		frameIdx = 0;
 
 		grafMainCmdList.resize(frameCount);
@@ -133,50 +160,6 @@ int VulkanSandboxApp::Run()
 			if (Failed(grafRes)) break;
 			grafRes = grafMainCmdList[iframe]->Initialize(grafDevice.get());
 			if (Failed(grafRes)) break;
-		}
-		if (Failed(grafRes)) return;
-
-		//grafRes = grafSystem->CreateRenderPass(grafRenderPass);
-		//if (Failed(grafRes)) break;
-		//grafRes = grafRenderPass->Initialize(grafDevice.get());
-		//if (Failed(grafRes)) break;
-
-		grafPipelineSample.resize(frameCount);
-		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
-		{
-			grafRes = grafSystem->CreatePipeline(grafPipelineSample[iframe]);
-			if (Failed(grafRes)) break;
-			GrafPipeline::InitParams samplePipelineParams = {};
-			samplePipelineParams.ShaderStages.reserve(2);
-			samplePipelineParams.ShaderStages.push_back(grafShaderSampleVS.get());
-			samplePipelineParams.ShaderStages.push_back(grafShaderSamplePS.get());
-			samplePipelineParams.RenderTarget = grafCanvas->GetSwapChainImage(iframe);
-			grafRes = grafPipelineSample[iframe]->Initialize(grafDevice.get(), samplePipelineParams);
-			if (Failed(grafRes)) break;
-		}
-		if (Failed(grafRes)) return;
-
-		renderPassFrameBuffer.resize(frameCount);
-		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
-		{
-			VkImageView attachmentViews[] = { static_cast<GrafImageVulkan*>(grafCanvas->GetSwapChainImage(iframe))->GetVkImageView() };
-			VkFramebufferCreateInfo vkFramebufferInfo = {};
-			vkFramebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			vkFramebufferInfo.flags = 0;
-			vkFramebufferInfo.renderPass = static_cast<GrafPipelineVulkan*>(grafPipelineSample[iframe].get())->GetVkRenderPass();
-			vkFramebufferInfo.attachmentCount = ur_array_size(attachmentViews);
-			vkFramebufferInfo.pAttachments = attachmentViews;
-			vkFramebufferInfo.width = (ur_uint32)grafCanvas->GetSwapChainImage(iframe)->GetDesc().Size.x;
-			vkFramebufferInfo.height = (ur_uint32)grafCanvas->GetSwapChainImage(iframe)->GetDesc().Size.y;
-			vkFramebufferInfo.layers = 1;
-			VkFramebuffer vkFramebuffer;
-			VkResult vkRes = vkCreateFramebuffer(static_cast<GrafDeviceVulkan*>(grafDevice.get())->GetVkDevice(), &vkFramebufferInfo, ur_null, &vkFramebuffer);
-			if (vkRes != VK_SUCCESS)
-			{
-				grafRes = Failure;
-				break;
-			}
-			renderPassFrameBuffer[iframe] = vkFramebuffer;
 		}
 		if (Failed(grafRes)) return;
 	};
@@ -304,34 +287,26 @@ int VulkanSandboxApp::Run()
 			
 			//updateFrameJob->WaitProgress(0);  // wait till portion of data required for this draw call is fully updated
 
-			GrafCommandList* grafCmdListCrnt = grafMainCmdList[frameIdx].get();
-
 			if (grafSystem != ur_null)
 			{
+				GrafCommandList* grafCmdListCrnt = grafMainCmdList[frameIdx].get();
+
 				grafCmdListCrnt->Begin();
 			
 				updateFrameJob->WaitProgress(1); // make sure required data is ready
 				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
 				
-				// TEMP: explicit debug rendering commands
-				#if (1)
-				VkRenderPassBeginInfo vkPassBeginInfo = {};
-				vkPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-				vkPassBeginInfo.renderPass = static_cast<GrafPipelineVulkan*>(grafPipelineSample[frameIdx].get())->GetVkRenderPass();
-				vkPassBeginInfo.framebuffer = renderPassFrameBuffer[frameIdx];
-				vkPassBeginInfo.renderArea.offset = { 0, 0 };
-				vkPassBeginInfo.renderArea.extent.width = (ur_uint32)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
-				vkPassBeginInfo.renderArea.extent.height = (ur_uint32)grafCanvas->GetCurrentImage()->GetDesc().Size.y;
-				vkPassBeginInfo.clearValueCount = 0;
-				vkPassBeginInfo.pClearValues = ur_null;
-				VkCommandBuffer vkCommandBuffer = static_cast<GrafCommandListVulkan*>(grafCmdListCrnt)->GetVkCommandBuffer();
-				vkCmdBeginRenderPass(vkCommandBuffer, &vkPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-				vkCmdBindPipeline(vkCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, static_cast<GrafPipelineVulkan*>(grafPipelineSample[frameIdx].get())->GetVkPipeline());
-				vkCmdDraw(vkCommandBuffer, 3, 4, 0, 0);
-				vkCmdEndRenderPass(vkCommandBuffer);
-				#endif
+				GrafViewportDesc grafViewport = {};
+				grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
+				grafViewport.Height = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.y;
+				grafViewport.Near = 0.0f;
+				grafViewport.Far = 1.0f;
+				grafCmdListCrnt->SetViewport(grafViewport, true);
 
-				// TODO: draw primtives here
+				grafCmdListCrnt->BeginRenderPass(grafRenderPassSample.get(), grafRenderTarget[grafCanvas->GetCurrentImageId()].get());
+				grafCmdListCrnt->BindPipeline(grafPipelineSample.get());
+				grafCmdListCrnt->Draw(3, 4, 0, 0);
+				grafCmdListCrnt->EndRenderPass();
 
 				grafCmdListCrnt->End();
 
@@ -341,11 +316,14 @@ int VulkanSandboxApp::Run()
 
 		drawFrameJob->Wait();
 
-		// present & move to next frame
-		grafCanvas->Present();
+		if (grafSystem != ur_null)
+		{
+			// present & move to next frame
+			grafCanvas->Present();
 
-		// start recording next frame
-		frameIdx = (frameIdx + 1) % frameCount;
+			// start recording next frame
+			frameIdx = (frameIdx + 1) % frameCount;
+		}
 	}
 
 	deinitializeGfxSystem();
@@ -405,6 +383,11 @@ Result GrafSystem::CreateShader(std::unique_ptr<GrafShader>& grafShader)
 }
 
 Result GrafSystem::CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafSystem::CreateRenderTarget(std::unique_ptr<GrafRenderTarget>& grafRenderTarget)
 {
 	return Result(NotImplemented);
 }
@@ -523,6 +506,36 @@ Result GrafCommandList::ClearColorImage(GrafImage* grafImage, GrafClearValue cle
 	return Result(NotImplemented);
 }
 
+Result GrafCommandList::SetViewport(const GrafViewportDesc& grafViewportDesc, ur_bool resetScissorsRect)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::SetScissorsRect(const RectI& scissorsRect)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::EndRenderPass()
+{
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::BindPipeline(GrafPipeline* grafPipeline)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance)
+{
+	return Result(NotImplemented);
+}
+
 GrafFence::GrafFence(GrafSystem &grafSystem) :
 	GrafDeviceEntity(grafSystem)
 {
@@ -557,6 +570,7 @@ GrafCanvas::GrafCanvas(GrafSystem &grafSystem) :
 	GrafDeviceEntity(grafSystem)
 {
 	this->swapChainImageCount = 0;
+	this->swapChainCurrentImageId = 0;
 }
 
 GrafCanvas::~GrafCanvas()
@@ -625,6 +639,25 @@ Result GrafShader::Initialize(GrafDevice *grafDevice, const InitParams& initPara
 	return Result(NotImplemented);
 }
 
+GrafRenderTarget::GrafRenderTarget(GrafSystem &grafSystem) :
+	GrafDeviceEntity(grafSystem)
+{
+	this->renderPass = ur_null;
+}
+
+GrafRenderTarget::~GrafRenderTarget()
+{
+}
+
+Result GrafRenderTarget::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+{
+	GrafDeviceEntity::Initialize(grafDevice);
+	this->renderPass = initParams.RenderPass;
+	this->images.resize(initParams.Images.size());
+	memcpy(this->images.data(), initParams.Images.data(), initParams.Images.size() * sizeof(GrafImage*));
+	return Result(NotImplemented);
+}
+
 GrafPipeline::GrafPipeline(GrafSystem &grafSystem) :
 	GrafDeviceEntity(grafSystem)
 {
@@ -637,6 +670,11 @@ GrafPipeline::~GrafPipeline()
 Result GrafPipeline::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 {
 	GrafDeviceEntity::Initialize(grafDevice);
+	return Result(NotImplemented);
+}
+
+Result SetViewport(const GrafViewportDesc& viewportDesc)
+{
 	return Result(NotImplemented);
 }
 
@@ -959,6 +997,12 @@ Result GrafSystemVulkan::CreateShader(std::unique_ptr<GrafShader>& grafShader)
 Result GrafSystemVulkan::CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass)
 {
 	grafRenderPass.reset(new GrafRenderPassVulkan(*this));
+	return Result(Success);
+}
+
+Result GrafSystemVulkan::CreateRenderTarget(std::unique_ptr<GrafRenderTarget>& grafRenderTarget)
+{
+	grafRenderTarget.reset(new GrafRenderTargetVulkan(*this));
 	return Result(Success);
 }
 
@@ -1341,6 +1385,92 @@ Result GrafCommandListVulkan::ClearColorImage(GrafImage* grafImage, GrafClearVal
 	return Result(Success);
 }
 
+Result GrafCommandListVulkan::SetViewport(const GrafViewportDesc& grafViewportDesc, ur_bool resetScissorsRect)
+{
+	VkViewport vkViewport = {};
+	vkViewport.x = grafViewportDesc.X;
+	vkViewport.y = grafViewportDesc.Y;
+	vkViewport.width = grafViewportDesc.Width;
+	vkViewport.height = grafViewportDesc.Height;
+	vkViewport.minDepth = grafViewportDesc.Near;
+	vkViewport.maxDepth = grafViewportDesc.Far;
+	
+	vkCmdSetViewport(vkCommandBuffer, 0, 1, &vkViewport);
+
+	if (resetScissorsRect)
+	{
+		RectI scissorsRect;
+		scissorsRect.Min.x = ur_int(grafViewportDesc.X);
+		scissorsRect.Min.y = ur_int(grafViewportDesc.Y);
+		scissorsRect.Max.x = ur_int(grafViewportDesc.X + grafViewportDesc.Width);
+		scissorsRect.Max.y = ur_int(grafViewportDesc.Y + grafViewportDesc.Height);
+
+		return SetScissorsRect(scissorsRect);
+	}
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::SetScissorsRect(const RectI& scissorsRect)
+{
+	if (scissorsRect.IsInsideOut())
+		return Result(InvalidArgs);
+
+	VkRect2D vkScissors;
+	vkScissors.offset.x = (ur_int32)scissorsRect.Min.x;
+	vkScissors.offset.y = (ur_int32)scissorsRect.Min.y;
+	vkScissors.extent.width = scissorsRect.Width();
+	vkScissors.extent.height = scissorsRect.Height();
+	
+	vkCmdSetScissor(vkCommandBuffer, 0, 1, &vkScissors);
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget)
+{
+	if (ur_null == grafRenderPass || ur_null == grafRenderTarget || 0 == grafRenderTarget->GetImageCount())
+		return Result(InvalidArgs);
+
+	VkRenderPassBeginInfo vkPassBeginInfo = {};
+	vkPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	vkPassBeginInfo.renderPass = static_cast<GrafRenderPassVulkan*>(grafRenderPass)->GetVkRenderPass();
+	vkPassBeginInfo.framebuffer = static_cast<GrafRenderTargetVulkan*>(grafRenderTarget)->GetVkFramebuffer();
+	vkPassBeginInfo.renderArea.offset = { 0, 0 };
+	vkPassBeginInfo.renderArea.extent.width = (ur_uint32)grafRenderTarget->GetImage(0)->GetDesc().Size.x;
+	vkPassBeginInfo.renderArea.extent.height = (ur_uint32)grafRenderTarget->GetImage(0)->GetDesc().Size.y;
+	vkPassBeginInfo.clearValueCount = 0;
+	vkPassBeginInfo.pClearValues = ur_null;
+
+	vkCmdBeginRenderPass(this->vkCommandBuffer, &vkPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::EndRenderPass()
+{
+	vkCmdEndRenderPass(this->vkCommandBuffer);
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::BindPipeline(GrafPipeline* grafPipeline)
+{
+	if (ur_null == grafPipeline)
+		return Result(InvalidArgs);
+
+	vkCmdBindPipeline(vkCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, static_cast<GrafPipelineVulkan*>(grafPipeline)->GetVkPipeline());
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance)
+{
+	vkCmdDraw(this->vkCommandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+
+	return Result(Success);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 GrafFenceVulkan::GrafFenceVulkan(GrafSystem &grafSystem) :
@@ -1450,7 +1580,6 @@ GrafCanvasVulkan::GrafCanvasVulkan(GrafSystem &grafSystem) :
 	this->vkSurface = VK_NULL_HANDLE;
 	this->vkSwapChain = VK_NULL_HANDLE;
 	this->vkDevicePresentQueueId = 0;
-	this->swapChainCurrentImageId = 0;
 	this->frameCount = 0;
 	this->frameIdx = 0;
 }
@@ -1464,6 +1593,11 @@ Result GrafCanvasVulkan::Deinitialize()
 {
 	this->frameCount = 0;
 	this->frameIdx = 0;
+	this->swapChainImageCount = 0;
+	this->swapChainCurrentImageId = 0;
+
+	this->imageTransitionCmdListBegin.clear();
+	this->imageTransitionCmdListEnd.clear();
 
 	for (auto& vkSemaphore : this->vkSemaphoreImageAcquired)
 	{
@@ -1482,9 +1616,6 @@ Result GrafCanvasVulkan::Deinitialize()
 		}
 	}
 	this->vkSemaphoreRenderFinished.clear();
-
-	this->imageTransitionCmdListBegin.clear();
-	this->imageTransitionCmdListEnd.clear();
 	
 	this->swapChainImages.clear();
 
@@ -1697,6 +1828,7 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 		return ResultError(Failure, "GrafCanvasVulkan: vkGetSwapchainImagesKHR failed with zero images returned");
 	}
 	this->swapChainImageCount = vkSwapChainImageRealCount;
+	this->swapChainCurrentImageId = 0;
 
 	this->swapChainImages.reserve(vkSwapChainImages.size());
 	for (VkImage& vkImage : vkSwapChainImages)
@@ -2120,31 +2252,19 @@ Result GrafShaderVulkan::Initialize(GrafDevice *grafDevice, const InitParams& in
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-GrafPipelineVulkan::GrafPipelineVulkan(GrafSystem &grafSystem) :
-	GrafPipeline(grafSystem)
+GrafRenderPassVulkan::GrafRenderPassVulkan(GrafSystem& grafSystem) :
+	GrafRenderPass(grafSystem)
 {
-	this->vkPipeline = VK_NULL_HANDLE;
-	this->vkPipelineLayout = VK_NULL_HANDLE;
 	this->vkRenderPass = VK_NULL_HANDLE;
 }
 
-GrafPipelineVulkan::~GrafPipelineVulkan()
+GrafRenderPassVulkan::~GrafRenderPassVulkan()
 {
 	this->Deinitialize();
 }
 
-Result GrafPipelineVulkan::Deinitialize()
+Result GrafRenderPassVulkan::Deinitialize()
 {
-	if (this->vkPipelineLayout != VK_NULL_HANDLE)
-	{
-		vkDestroyPipelineLayout(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipelineLayout, ur_null);
-		this->vkPipelineLayout = VK_NULL_HANDLE;
-	}
-	if (this->vkPipeline != VK_NULL_HANDLE)
-	{
-		vkDestroyPipeline(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipeline, ur_null);
-		this->vkPipeline = VK_NULL_HANDLE;
-	}
 	if (this->vkRenderPass != VK_NULL_HANDLE)
 	{
 		vkDestroyRenderPass(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkRenderPass, ur_null);
@@ -2154,33 +2274,32 @@ Result GrafPipelineVulkan::Deinitialize()
 	return Result(Success);
 }
 
-Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+Result GrafRenderPassVulkan::Initialize(GrafDevice* grafDevice)
 {
 	this->Deinitialize();
 
-	GrafPipeline::Initialize(grafDevice, initParams);
+	GrafRenderPass::Initialize(grafDevice);
 
 	// validate logical device 
 
 	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
 	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
 	{
-		return ResultError(InvalidArgs, std::string("GrafPipelineVulkan: failed to initialize, invalid GrafDevice"));
+		return ResultError(InvalidArgs, std::string("GrafImageVulkan: failed to initialize, invalid GrafDevice"));
 	}
 	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
-	VkResult vkRes = VK_SUCCESS;
 
-	// TEMP: hardcoded test render pass
+	// TEMP: hardcoded test pass configuration
 
 	VkAttachmentDescription vkAttachmentDesc = {};
 	vkAttachmentDesc.flags = 0;
-	vkAttachmentDesc.format = GrafUtilsVulkan::GrafToVkFormat(initParams.RenderTarget->GetDesc().Format);
+	vkAttachmentDesc.format = VK_FORMAT_B8G8R8A8_UNORM;
 	vkAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
 	vkAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 	vkAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	vkAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	vkAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	vkAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_GENERAL;// GrafUtilsVulkan::GrafToVkImageLayout(initParams.RenderTarget->GetState());
+	vkAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_GENERAL;// GrafUtilsVulkan::GrafToVkImageLayout(image->GetState());
 	vkAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_GENERAL;// (VK_IMAGE_LAYOUT_UNDEFINED == vkAttachmentDesc.initialLayout ? VK_IMAGE_LAYOUT_GENERAL : vkAttachmentDesc.initialLayout);
 
 	VkAttachmentReference vkColorAttachmentRef = {};
@@ -2209,12 +2328,138 @@ Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& 
 	vkRenderPassInfo.dependencyCount = 0;
 	vkRenderPassInfo.pDependencies = ur_null;
 
-	vkRes = vkCreateRenderPass(vkDevice, &vkRenderPassInfo, ur_null, &this->vkRenderPass);
+	VkResult vkRes = vkCreateRenderPass(vkDevice, &vkRenderPassInfo, ur_null, &this->vkRenderPass);
 	if (vkRes != VK_SUCCESS)
 	{
 		this->Deinitialize();
-		return ResultError(Failure, std::string("GrafPipelineVulkan: vkCreateRenderPass failed with VkResult = ") + VkResultToString(vkRes));
+		return ResultError(Failure, std::string("GrafRenderPassVulkan: vkCreateRenderPass failed with VkResult = ") + VkResultToString(vkRes));
 	}
+
+	return Result(Success);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+GrafRenderTargetVulkan::GrafRenderTargetVulkan(GrafSystem &grafSystem) :
+	GrafRenderTarget(grafSystem)
+{
+	this->vkFramebuffer = VK_NULL_HANDLE;
+}
+
+GrafRenderTargetVulkan::~GrafRenderTargetVulkan()
+{
+	this->Deinitialize();
+}
+
+Result GrafRenderTargetVulkan::Deinitialize()
+{
+	if (this->vkFramebuffer != VK_NULL_HANDLE)
+	{
+		vkDestroyFramebuffer(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkFramebuffer, ur_null);
+		this->vkFramebuffer = VK_NULL_HANDLE;
+	}
+
+	this->images.clear();
+	this->renderPass = ur_null;
+
+	return Result(Success);
+}
+
+Result GrafRenderTargetVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+{
+	this->Deinitialize();
+
+	if (ur_null == initParams.RenderPass || initParams.Images.empty())
+		return Result(InvalidArgs);
+
+	GrafRenderTarget::Initialize(grafDevice, initParams);
+
+	// validate logical device
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+	{
+		return ResultError(InvalidArgs, std::string("GrafImageVulkan: failed to initialize, invalid GrafDevice"));
+	}
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+	// create frame buffer object
+
+	std::vector<VkImageView> attachmentViews(initParams.Images.size());
+	for (ur_size iimage = 0; iimage < initParams.Images.size(); ++iimage)
+	{
+		attachmentViews[iimage] = static_cast<GrafImageVulkan*>(initParams.Images[iimage])->GetVkImageView();
+	}
+
+	VkFramebufferCreateInfo vkFramebufferInfo = {};
+	vkFramebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	vkFramebufferInfo.flags = 0;
+	vkFramebufferInfo.renderPass = static_cast<GrafRenderPassVulkan*>(initParams.RenderPass)->GetVkRenderPass();
+	vkFramebufferInfo.attachmentCount = (ur_uint32)attachmentViews.size();
+	vkFramebufferInfo.pAttachments = attachmentViews.data();
+	vkFramebufferInfo.width = (ur_uint32)initParams.Images[0]->GetDesc().Size.x;
+	vkFramebufferInfo.height = (ur_uint32)initParams.Images[0]->GetDesc().Size.y;
+	vkFramebufferInfo.layers = 1;
+
+	VkResult vkRes = vkCreateFramebuffer(vkDevice, &vkFramebufferInfo, ur_null, &this->vkFramebuffer);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafRenderTargetVulkan: vkCreateFramebuffer failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	return Result(Success);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+GrafPipelineVulkan::GrafPipelineVulkan(GrafSystem &grafSystem) :
+	GrafPipeline(grafSystem)
+{
+	this->vkPipeline = VK_NULL_HANDLE;
+	this->vkPipelineLayout = VK_NULL_HANDLE;
+}
+
+GrafPipelineVulkan::~GrafPipelineVulkan()
+{
+	this->Deinitialize();
+}
+
+Result GrafPipelineVulkan::Deinitialize()
+{
+	if (this->vkPipelineLayout != VK_NULL_HANDLE)
+	{
+		vkDestroyPipelineLayout(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipelineLayout, ur_null);
+		this->vkPipelineLayout = VK_NULL_HANDLE;
+	}
+	if (this->vkPipeline != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipeline, ur_null);
+		this->vkPipeline = VK_NULL_HANDLE;
+	}
+
+	return Result(Success);
+}
+
+Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+{
+	this->Deinitialize();
+
+	if (ur_null == initParams.RenderPass)
+		return Result(InvalidArgs);
+
+	GrafPipeline::Initialize(grafDevice, initParams);
+
+	// validate logical device 
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+	{
+		return ResultError(InvalidArgs, std::string("GrafPipelineVulkan: failed to initialize, invalid GrafDevice"));
+	}
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+	VkRenderPass vkRenderPass = static_cast<GrafRenderPassVulkan*>(initParams.RenderPass)->GetVkRenderPass();
+	VkResult vkRes = VK_SUCCESS;
 
 	// TEMP: hardcoded pipeline state for test purpose
 	// TODO: must be described through GRAF structures and converted into vulkan here
@@ -2275,14 +2520,13 @@ Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& 
 
 	// viewport & scissors
 
-	// TEMP: initialize view port from current render target
 	VkViewport vkViewport = {};
-	vkViewport.x = 0.0f;
-	vkViewport.y = 0.0f;
-	vkViewport.width = (ur_float)initParams.RenderTarget->GetDesc().Size.x;
-	vkViewport.height = (ur_float)initParams.RenderTarget->GetDesc().Size.y;
-	vkViewport.minDepth = 0.0f;
-	vkViewport.maxDepth = 1.0f;
+	vkViewport.x = initParams.ViewportDesc.X;
+	vkViewport.y = initParams.ViewportDesc.Y;
+	vkViewport.width = initParams.ViewportDesc.Width;
+	vkViewport.height = initParams.ViewportDesc.Height;
+	vkViewport.minDepth = initParams.ViewportDesc.Near;
+	vkViewport.maxDepth = initParams.ViewportDesc.Far;
 
 	VkRect2D vkScissorRect = { { (int32_t)vkViewport.x, (int32_t)vkViewport.y}, { (uint32_t)vkViewport.width, (uint32_t)vkViewport.height} };
 
@@ -2363,11 +2607,23 @@ Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& 
 
 	// dynamic state
 
+	VkDynamicState vkDynamicStates[] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR,
+		VK_DYNAMIC_STATE_LINE_WIDTH,
+		VK_DYNAMIC_STATE_DEPTH_BIAS,
+		VK_DYNAMIC_STATE_BLEND_CONSTANTS,
+		VK_DYNAMIC_STATE_DEPTH_BOUNDS,
+		VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
+		VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
+		VK_DYNAMIC_STATE_STENCIL_REFERENCE
+	};
+
 	VkPipelineDynamicStateCreateInfo vkDynamicStateInfo = {};
 	vkDynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 	vkDynamicStateInfo.flags = 0;
-	vkDynamicStateInfo.dynamicStateCount = 0;
-	vkDynamicStateInfo.pDynamicStates = ur_null;
+	vkDynamicStateInfo.dynamicStateCount = ur_array_size(vkDynamicStates);
+	vkDynamicStateInfo.pDynamicStates = vkDynamicStates;
 
 	// create pipeline object
 
@@ -2386,7 +2642,7 @@ Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& 
 	vkPipelineInfo.pColorBlendState = &vkColorBlendStateInfo;
 	vkPipelineInfo.pDynamicState = &vkDynamicStateInfo;
 	vkPipelineInfo.layout = this->vkPipelineLayout;
-	vkPipelineInfo.renderPass = this->vkRenderPass;
+	vkPipelineInfo.renderPass = vkRenderPass;
 	vkPipelineInfo.subpass = 0;
 	vkPipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 	vkPipelineInfo.basePipelineIndex = -1;
@@ -2399,56 +2655,6 @@ Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& 
 	}
 
 	return Result(Success);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-GrafRenderPassVulkan::GrafRenderPassVulkan(GrafSystem& grafSystem) :
-	GrafRenderPass(grafSystem)
-{
-	this->vkRenderPass = VK_NULL_HANDLE;
-	this->vkPipelineLayout = VK_NULL_HANDLE;
-}
-
-GrafRenderPassVulkan::~GrafRenderPassVulkan()
-{
-	this->Deinitialize();
-}
-
-Result GrafRenderPassVulkan::Deinitialize()
-{
-	if (this->vkPipelineLayout != VK_NULL_HANDLE)
-	{
-		vkDestroyPipelineLayout(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipelineLayout, ur_null);
-		this->vkPipelineLayout = VK_NULL_HANDLE;
-	}
-	if (this->vkRenderPass != VK_NULL_HANDLE)
-	{
-		vkDestroyRenderPass(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkRenderPass, ur_null);
-		this->vkRenderPass = VK_NULL_HANDLE;
-	}
-
-	return Result(Success);
-}
-
-Result GrafRenderPassVulkan::Initialize(GrafDevice* grafDevice)
-{
-	this->Deinitialize();
-
-	GrafRenderPass::Initialize(grafDevice);
-
-	// validate logical device 
-
-	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
-	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
-	{
-		return ResultError(InvalidArgs, std::string("GrafImageVulkan: failed to initialize, invalid GrafDevice"));
-	}
-	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
-
-	// TODO:
-
-	return Result(NotImplemented);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
