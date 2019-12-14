@@ -12,9 +12,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_ LPWSTR    lpCmdLine,
                      _In_ int       nCmdShow)
 {
-	VoxelPlanetApp demoApp;
+	//VoxelPlanetApp demoApp;
 	//D3D12SandboxApp demoApp;
-	//VulkanSandboxApp demoApp;
+	VulkanSandboxApp demoApp;
 	
 	return demoApp.Run();
 }

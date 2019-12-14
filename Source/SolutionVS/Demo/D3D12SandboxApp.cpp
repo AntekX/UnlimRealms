@@ -205,7 +205,7 @@ int D3D12SandboxApp::Run()
 	// Main message loop:
 	MSG msg;
 	ZeroMemory(&msg, sizeof(msg));
-	while (msg.message != WM_QUIT)
+	while (msg.message != WM_QUIT && !realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::Escape))
 	{
 		// process messages first
 		ClockTime timeBefore = Clock::now();
@@ -216,8 +216,9 @@ int D3D12SandboxApp::Run()
 			// forward msg to WinInput system
 			WinInput *winInput = static_cast<WinInput*>(realm.GetInput());
 			winInput->ProcessMsg(msg);
-			break;
 		}
+		if (msg.message == WM_QUIT)
+			break;
 		auto timeDelta = Clock::now() - timeBefore;
 		timer += timeDelta; // skip input delay
 

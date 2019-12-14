@@ -40,8 +40,7 @@ int VulkanSandboxApp::Run()
 		Result res = realm.GetStorage().Open(file, "sample_vs.spv", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
 		if (Succeeded(res))
 		{
-			ur_size fileSize = file->GetSize();
-			sampleVSBufferSize = fileSize;// (fileSize + 3) / 4 * 4;
+			sampleVSBufferSize = file->GetSize();
 			sampleVSBuffer.reset(new ur_byte[sampleVSBufferSize]);
 			file->Read(sampleVSBufferSize, sampleVSBuffer.get());
 		}
@@ -53,8 +52,7 @@ int VulkanSandboxApp::Run()
 		Result res = realm.GetStorage().Open(file, "sample_ps.spv", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
 		if (Succeeded(res))
 		{
-			ur_size fileSize = file->GetSize();
-			samplePSBufferSize = fileSize;// (fileSize + 3) / 4 * 4;
+			samplePSBufferSize = file->GetSize();
 			samplePSBuffer.reset(new ur_byte[samplePSBufferSize]);
 			file->Read(samplePSBufferSize, samplePSBuffer.get());
 		}
@@ -312,12 +310,11 @@ int VulkanSandboxApp::Run()
 			{
 				grafCmdListCrnt->Begin();
 			
-				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
-
 				updateFrameJob->WaitProgress(1); // make sure required data is ready
 				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
 				
 				// TEMP: explicit debug rendering commands
+				#if (1)
 				VkRenderPassBeginInfo vkPassBeginInfo = {};
 				vkPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 				vkPassBeginInfo.renderPass = static_cast<GrafPipelineVulkan*>(grafPipelineSample[frameIdx].get())->GetVkRenderPass();
@@ -330,8 +327,9 @@ int VulkanSandboxApp::Run()
 				VkCommandBuffer vkCommandBuffer = static_cast<GrafCommandListVulkan*>(grafCmdListCrnt)->GetVkCommandBuffer();
 				vkCmdBeginRenderPass(vkCommandBuffer, &vkPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 				vkCmdBindPipeline(vkCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, static_cast<GrafPipelineVulkan*>(grafPipelineSample[frameIdx].get())->GetVkPipeline());
-				vkCmdDraw(vkCommandBuffer, 3, 1, 0, 0);
+				vkCmdDraw(vkCommandBuffer, 3, 4, 0, 0);
 				vkCmdEndRenderPass(vkCommandBuffer);
+				#endif
 
 				// TODO: draw primtives here
 
@@ -1476,6 +1474,15 @@ Result GrafCanvasVulkan::Deinitialize()
 	}
 	this->vkSemaphoreImageAcquired.clear();
 
+	for (auto& vkSemaphore : this->vkSemaphoreRenderFinished)
+	{
+		if (vkSemaphore != VK_NULL_HANDLE)
+		{
+			vkDestroySemaphore(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), vkSemaphore, ur_null);
+		}
+	}
+	this->vkSemaphoreRenderFinished.clear();
+
 	this->imageTransitionCmdListBegin.clear();
 	this->imageTransitionCmdListEnd.clear();
 	
@@ -1738,6 +1745,19 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 		this->vkSemaphoreImageAcquired.push_back(vkSemaphore);
 	}
 
+	this->vkSemaphoreRenderFinished.reserve(this->frameCount);
+	for (ur_uint32 iframe = 0; iframe < this->frameCount; ++iframe)
+	{
+		VkSemaphore vkSemaphore;
+		res = vkCreateSemaphore(vkDevice, &vkSemaphoreInfo, ur_null, &vkSemaphore);
+		if (res != VK_SUCCESS)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafCanvasVulkan: vkCreateSemaphore failed with VkResult = ") + VkResultToString(res));
+		}
+		this->vkSemaphoreRenderFinished.push_back(vkSemaphore);
+	}
+
 	// create comamnd list for image state/layout transitions
 
 	this->imageTransitionCmdListBegin.resize(this->frameCount);
@@ -1776,7 +1796,26 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 	imageTransitionCmdListBeginCrnt->Begin();
 	imageTransitionCmdListBeginCrnt->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
 	imageTransitionCmdListBeginCrnt->End();
-	grafDeviceVulkan->Submit(imageTransitionCmdListBeginCrnt);
+	{
+		// submit with semaphore (wait image's acquired before using it as render target)
+		GrafCommandListVulkan* grafCommandListVulkan = static_cast<GrafCommandListVulkan*>(imageTransitionCmdListBeginCrnt);
+		VkCommandBuffer vkCommandBuffer = grafCommandListVulkan->GetVkCommandBuffer();
+		VkQueue vkSubmissionQueue;
+		vkGetDeviceQueue(vkDevice, grafDeviceVulkan->GetVkDeviceGraphicsQueueId(), 0, &vkSubmissionQueue);
+		VkPipelineStageFlags waitStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+		VkSubmitInfo vkSubmitInfo = {};
+		vkSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		vkSubmitInfo.waitSemaphoreCount = 1;
+		vkSubmitInfo.pWaitSemaphores = &this->vkSemaphoreImageAcquired[this->frameIdx];
+		vkSubmitInfo.pWaitDstStageMask = &waitStageFlags;
+		vkSubmitInfo.commandBufferCount = 1;
+		vkSubmitInfo.pCommandBuffers = &vkCommandBuffer;
+		vkSubmitInfo.signalSemaphoreCount = 0;
+		vkSubmitInfo.pSignalSemaphores = ur_null;
+		VkResult vkRes = vkQueueSubmit(vkSubmissionQueue, 1, &vkSubmitInfo, grafCommandListVulkan->GetVkSubmitFence());
+		if (vkRes != VK_SUCCESS)
+			return ResultError(Failure, std::string("GrafDeviceVulkan: vkQueueSubmit failed with VkResult = ") + VkResultToString(vkRes));
+	}
 	#endif
 
 	return Result(Success);
@@ -1796,7 +1835,25 @@ Result GrafCanvasVulkan::Present()
 	imageTransitionCmdListEndCrnt->Begin();
 	imageTransitionCmdListEndCrnt->ImageMemoryBarrier(swapChainCurrentImage, GrafImageState::Current, GrafImageState::Present);
 	imageTransitionCmdListEndCrnt->End();
-	grafDeviceVulkan->Submit(imageTransitionCmdListEndCrnt);
+	{
+		// submit with semaphore (signal rendering's finished before presenting )
+		GrafCommandListVulkan* grafCommandListVulkan = static_cast<GrafCommandListVulkan*>(imageTransitionCmdListEndCrnt);
+		VkCommandBuffer vkCommandBuffer = grafCommandListVulkan->GetVkCommandBuffer();
+		VkQueue vkSubmissionQueue;
+		vkGetDeviceQueue(vkDevice, grafDeviceVulkan->GetVkDeviceGraphicsQueueId(), 0, &vkSubmissionQueue);
+		VkSubmitInfo vkSubmitInfo = {};
+		vkSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		vkSubmitInfo.waitSemaphoreCount = 0;
+		vkSubmitInfo.pWaitSemaphores = ur_null;
+		vkSubmitInfo.pWaitDstStageMask = ur_null;
+		vkSubmitInfo.commandBufferCount = 1;
+		vkSubmitInfo.pCommandBuffers = &vkCommandBuffer;
+		vkSubmitInfo.signalSemaphoreCount = 1;
+		vkSubmitInfo.pSignalSemaphores = &this->vkSemaphoreRenderFinished[this->frameIdx];
+		VkResult vkRes = vkQueueSubmit(vkSubmissionQueue, 1, &vkSubmitInfo, grafCommandListVulkan->GetVkSubmitFence());
+		if (vkRes != VK_SUCCESS)
+			return ResultError(Failure, std::string("GrafDeviceVulkan: vkQueueSubmit failed with VkResult = ") + VkResultToString(vkRes));
+	}
 
 	// present current image
 
@@ -1805,7 +1862,7 @@ Result GrafCanvasVulkan::Present()
 	VkPresentInfoKHR vkPresentInfo = {};
 	vkPresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	vkPresentInfo.waitSemaphoreCount = 1;
-	vkPresentInfo.pWaitSemaphores = &this->vkSemaphoreImageAcquired[this->frameIdx]; // make sure an image acquired during the previous vkAcquireNextImageKHR will be available at presentation time
+	vkPresentInfo.pWaitSemaphores = &this->vkSemaphoreRenderFinished[this->frameIdx]; // make sure rendering's finished before presenting
 	vkPresentInfo.swapchainCount = ur_array_size(swapChains);
 	vkPresentInfo.pSwapchains = swapChains;
 	vkPresentInfo.pImageIndices = &this->swapChainCurrentImageId;
@@ -1829,7 +1886,26 @@ Result GrafCanvasVulkan::Present()
 	imageTransitionCmdListBeginNext->Begin();
 	imageTransitionCmdListBeginNext->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
 	imageTransitionCmdListBeginNext->End();
-	grafDeviceVulkan->Submit(imageTransitionCmdListBeginNext);
+	{
+		// submit with semaphore (wait image's acquired before using it as render target)
+		GrafCommandListVulkan* grafCommandListVulkan = static_cast<GrafCommandListVulkan*>(imageTransitionCmdListBeginNext);
+		VkCommandBuffer vkCommandBuffer = grafCommandListVulkan->GetVkCommandBuffer();
+		VkQueue vkSubmissionQueue;
+		vkGetDeviceQueue(vkDevice, grafDeviceVulkan->GetVkDeviceGraphicsQueueId(), 0, &vkSubmissionQueue);
+		VkPipelineStageFlags waitStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+		VkSubmitInfo vkSubmitInfo = {};
+		vkSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		vkSubmitInfo.waitSemaphoreCount = 1;
+		vkSubmitInfo.pWaitSemaphores = &this->vkSemaphoreImageAcquired[this->frameIdx];
+		vkSubmitInfo.pWaitDstStageMask = &waitStageFlags;
+		vkSubmitInfo.commandBufferCount = 1;
+		vkSubmitInfo.pCommandBuffers = &vkCommandBuffer;
+		vkSubmitInfo.signalSemaphoreCount = 0;
+		vkSubmitInfo.pSignalSemaphores = ur_null;
+		VkResult vkRes = vkQueueSubmit(vkSubmissionQueue, 1, &vkSubmitInfo, grafCommandListVulkan->GetVkSubmitFence());
+		if (vkRes != VK_SUCCESS)
+			return ResultError(Failure, std::string("GrafDeviceVulkan: vkQueueSubmit failed with VkResult = ") + VkResultToString(vkRes));
+	}
 	#endif
 
 	return Result(Success);
@@ -2100,16 +2176,16 @@ Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& 
 	vkAttachmentDesc.flags = 0;
 	vkAttachmentDesc.format = GrafUtilsVulkan::GrafToVkFormat(initParams.RenderTarget->GetDesc().Format);
 	vkAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-	vkAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	vkAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 	vkAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	vkAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	vkAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	vkAttachmentDesc.initialLayout = GrafUtilsVulkan::GrafToVkImageLayout(initParams.RenderTarget->GetState());
-	vkAttachmentDesc.finalLayout = (VK_IMAGE_LAYOUT_UNDEFINED == vkAttachmentDesc.initialLayout ? VK_IMAGE_LAYOUT_GENERAL : vkAttachmentDesc.initialLayout);
+	vkAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_GENERAL;// GrafUtilsVulkan::GrafToVkImageLayout(initParams.RenderTarget->GetState());
+	vkAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_GENERAL;// (VK_IMAGE_LAYOUT_UNDEFINED == vkAttachmentDesc.initialLayout ? VK_IMAGE_LAYOUT_GENERAL : vkAttachmentDesc.initialLayout);
 
 	VkAttachmentReference vkColorAttachmentRef = {};
 	vkColorAttachmentRef.attachment = 0;
-	vkColorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	vkColorAttachmentRef.layout = VK_IMAGE_LAYOUT_GENERAL;
 
 	VkSubpassDescription vkSubpassDesc = {};
 	vkSubpassDesc.flags = 0;

@@ -751,6 +751,7 @@ namespace UnlimRealms
 		std::vector<std::unique_ptr<GrafCommandList>> imageTransitionCmdListBegin;
 		std::vector<std::unique_ptr<GrafCommandList>> imageTransitionCmdListEnd;
 		std::vector<VkSemaphore> vkSemaphoreImageAcquired;
+		std::vector<VkSemaphore> vkSemaphoreRenderFinished;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

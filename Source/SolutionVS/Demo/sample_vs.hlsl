@@ -59,21 +59,28 @@ struct PS_INPUT
 };
 
 static const float3 TestTrianlePos[3] = {
-	{ 0.0,-0.5, 0.0 },
-	{ 0.5, 0.5, 0.0 },
-	{-0.5, 0.5, 0.0 }
+	{ 0.0, 0.5, 0.0 },
+	{ 0.5,-0.5, 0.0 },
+	{-0.5,-0.5, 0.0 }
 };
 static const float3 TestTrianleCol[3] = {
 	{ 1, 0, 0 },
 	{ 0, 1, 0 },
 	{ 0, 0, 1 }
 };
+static const float3 InstancePos[4] = {
+	{-0.5, 0.5, 0.0 },
+	{ 0.5, 0.5, 0.0 },
+	{-0.5,-0.5, 0.0 },
+	{ 0.5,-0.5, 0.0 }
+};
 
-PS_INPUT main(uint vertexID : SV_VertexID)
+PS_INPUT main(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
 {
 	PS_INPUT output;
 
-	output.pos = float4(TestTrianlePos[vertexID % 3].xyz, 1.0);
+	output.pos.xyz = TestTrianlePos[vertexID % 3].xyz + InstancePos[instanceID % 4].xyz;
+	output.pos.w = 1.0;
 	output.col.xyz = TestTrianleCol[vertexID % 3].xyz;
 	output.col.w = 1.0;
 
