@@ -25,6 +25,7 @@ namespace UnlimRealms
 	class GrafFence;
 	class GrafCanvas;
 	class GrafImage;
+	class GrafBuffer;
 	class GrafShader;
 	class GrafRenderPass;
 	class GrafRenderTarget;
@@ -42,7 +43,7 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	enum class GrafPresentMode
+	enum class /*UR_DECL*/ GrafPresentMode
 	{
 		Immediate = 0,
 		VerticalSync,
@@ -59,7 +60,7 @@ namespace UnlimRealms
 	};*/
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	enum class GrafFenceState
+	enum class /*UR_DECL*/ GrafFenceState
 	{
 		Undefined = -1,
 		Reset,
@@ -67,7 +68,7 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	enum class GrafFormat
+	enum class /*UR_DECL*/ GrafFormat
 	{
 		Unsupported = -1,
 		Undefined = 0,
@@ -91,11 +92,15 @@ namespace UnlimRealms
 		B8G8R8A8_UINT,
 		B8G8R8A8_SINT,
 		B8G8R8A8_SRGB,
+		R32_SFLOAT,
+		R32G32_SFLOAT,
+		R32G32B32_SFLOAT,
+		R32G32B32A32_SFLOAT,
 		Count
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	enum class GrafImageType
+	enum class /*UR_DECL*/ GrafImageType
 	{
 		Undefined = 0,
 		Tex1D,
@@ -105,7 +110,7 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	enum class GrafImageUsageFlag
+	enum class /*UR_DECL*/ GrafImageUsageFlag
 	{
 		Undefined = 0,
 		TransferSrc = (1 << 0),
@@ -116,7 +121,7 @@ namespace UnlimRealms
 	typedef ur_uint GrafImageUsageFlags;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	enum class GrafImageState
+	enum class /*UR_DECL*/ GrafImageState
 	{
 		Current = -1,
 		Undefined = 0,
@@ -141,6 +146,22 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class /*UR_DECL*/ GrafBufferUsageFlag
+	{
+		VertexBuffer = (1 << 0),
+		IndexBuffer = (1 << 1),
+		ConstantBuffer = (1 << 2)
+	};
+	typedef ur_uint GrafBufferUsageFlags;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct /*UR_DECL*/ GrafBufferDesc
+	{
+		ur_size SizeInBytes;
+		GrafBufferUsageFlags Usage;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct /*UR_DECL*/ GrafClearValue
 	{
 		union
@@ -152,7 +173,7 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	enum class GrafShaderType
+	enum class /*UR_DECL*/ GrafShaderType
 	{
 		Undefined = -1,
 		Vertex,
@@ -170,6 +191,41 @@ namespace UnlimRealms
 		ur_float Height;
 		ur_float Near;
 		ur_float Far;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class /*UR_DECL*/ GrafPrimitiveTopology
+	{
+		PointList,
+		LineList,
+		LineStrip,
+		TriangleList,
+		TriangleStrip,
+		TriangleFan
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class /*UR_DECL*/ GrafVertexInputType
+	{
+		PerVertex,
+		PerInstance
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct /*UR_DECL*/ GrafVertexElementDesc
+	{
+		GrafFormat Format;
+		ur_uint Offset;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct /*UR_DECL*/ GrafVertexInputDesc
+	{
+		GrafVertexInputType InputType;
+		ur_uint BindingIdx;
+		ur_uint Stride;
+		ur_uint ElementCount;
+		GrafVertexElementDesc* Elements;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,6 +248,8 @@ namespace UnlimRealms
 		virtual Result CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas);
 
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
+
+		virtual Result CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer);
 
 		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 
@@ -331,6 +389,8 @@ namespace UnlimRealms
 
 		virtual Result BindPipeline(GrafPipeline* grafPipeline);
 
+		virtual Result BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx);
+
 		virtual Result Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance);
 	};
 
@@ -431,6 +491,38 @@ namespace UnlimRealms
 	inline const GrafImageState& GrafImage::GetState() const
 	{
 		return this->imageState;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafBuffer : public GrafDeviceEntity
+	{
+	public:
+
+		struct /*UR_DECL*/ InitParams
+		{
+			GrafBufferDesc BufferDesc;
+		};
+
+		GrafBuffer(GrafSystem &grafSystem);
+
+		~GrafBuffer();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		virtual Result Upload(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		virtual Result Readback(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		inline const GrafBufferDesc& GetDesc() const;
+
+	protected:
+
+		GrafBufferDesc bufferDesc;
+	};
+
+	inline const GrafBufferDesc& GrafBuffer::GetDesc() const
+	{
+		return this->bufferDesc;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -537,8 +629,13 @@ namespace UnlimRealms
 		struct /*UR_DECL*/ InitParams
 		{
 			GrafRenderPass* RenderPass;
-			std::vector<GrafShader*> ShaderStages;
+			ur_uint ShaderStageCount;
+			GrafShader** ShaderStages;
 			GrafViewportDesc ViewportDesc;
+			GrafPrimitiveTopology PrimitiveTopology;
+			ur_uint VertexInputCount;
+			GrafVertexInputDesc* VertexInputDesc;
+			static const InitParams Default;
 		};
 
 		GrafPipeline(GrafSystem &grafSystem);
@@ -615,6 +712,8 @@ namespace UnlimRealms
 		virtual Result CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas);
 
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
+
+		virtual Result CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer);
 
 		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 
@@ -753,6 +852,8 @@ namespace UnlimRealms
 		virtual Result EndRenderPass();
 
 		virtual Result BindPipeline(GrafPipeline* grafPipeline);
+
+		virtual Result BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx);
 
 		virtual Result Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance);
 
@@ -893,6 +994,39 @@ namespace UnlimRealms
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafBufferVulkan : public GrafBuffer
+	{
+	public:
+
+		GrafBufferVulkan(GrafSystem &grafSystem);
+
+		~GrafBufferVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		virtual Result Upload(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		virtual Result Readback(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		inline VkBuffer GetVkBuffer() const;
+
+	private:
+
+		Result Deinitialize();
+
+		VkBuffer vkBuffer;
+		VkDeviceMemory vkDeviceMemory;
+		VkDeviceSize vkDeviceMemoryOffset;
+		VkDeviceSize vkDeviceMemorySize;
+		VkDeviceSize vkDeviceMemoryAlignment;
+	};
+
+	inline VkBuffer GrafBufferVulkan::GetVkBuffer() const
+	{
+		return this->vkBuffer;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafShaderVulkan : public GrafShader
 	{
 	public:
@@ -1005,7 +1139,9 @@ namespace UnlimRealms
 		static inline VkImageType GrafToVkImageType(GrafImageType imageType);
 		static inline VkImageAspectFlags GrafToVkImageUsageAspect(GrafImageUsageFlags usage);
 		static inline VkImageLayout GrafToVkImageLayout(GrafImageState imageState);
+		static inline VkBufferUsageFlags GrafToVkBufferUsage(GrafBufferUsageFlags usage);
 		static inline VkShaderStageFlagBits GrafToVkShaderStage(GrafShaderType shaderType);
+		static inline VkPrimitiveTopology GrafToVkPrimitiveTopology(GrafPrimitiveTopology topology);
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
 	};

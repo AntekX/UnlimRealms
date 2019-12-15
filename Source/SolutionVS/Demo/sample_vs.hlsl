@@ -52,10 +52,16 @@ PS_INPUT main(VS_INPUT input, uint instanceID : SV_InstanceID, uint vertexID : S
 
 // super simple triangle test
 
+struct VS_INPUT
+{
+	float3 pos		: POSITION;
+	float3 color	: COLOR0;
+};
+
 struct PS_INPUT
 {
-	float4 pos	: SV_POSITION;
-	float4 col	: COLOR0;
+	float4 pos		: SV_POSITION;
+	float4 color	: COLOR0;
 };
 
 static const float3 TestTrianlePos[3] = {
@@ -75,14 +81,21 @@ static const float3 InstancePos[4] = {
 	{ 0.5,-0.5, 0.0 }
 };
 
-PS_INPUT main(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
+PS_INPUT main(VS_INPUT input, uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
 {
 	PS_INPUT output;
 
+#if (0)
+	// no VB test
 	output.pos.xyz = TestTrianlePos[vertexID % 3].xyz + InstancePos[instanceID % 4].xyz;
+	output.color.xyz = TestTrianleCol[vertexID % 3].xyz;
+#else
+	// read from VB
+	output.pos.xyz = input.pos.xyz + InstancePos[instanceID % 4].xyz;
+	output.color.xyz = input.color.xyz;
+#endif
+	output.color.w = 1.0;
 	output.pos.w = 1.0;
-	output.col.xyz = TestTrianleCol[vertexID % 3].xyz;
-	output.col.w = 1.0;
 
 	return output;
 }

@@ -58,12 +58,25 @@ int VulkanSandboxApp::Run()
 		}
 	}
 
+	// sample primitive data
+	struct VertexSample
+	{
+		ur_float3 pos;
+		ur_float3 color;
+	};
+	VertexSample verticesSample[] = {
+		{ { 0.0f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+		{ { 0.5f,-0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+		{ {-0.5f,-0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
+	};
+
 	// initialize gfx system
 	std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
 	std::unique_ptr<GrafDevice> grafDevice;
 	std::unique_ptr<GrafCanvas> grafCanvas;
 	std::unique_ptr<GrafShader> grafShaderSampleVS;
 	std::unique_ptr<GrafShader> grafShaderSamplePS;
+	std::unique_ptr<GrafBuffer> grafVBSample;
 	std::unique_ptr<GrafRenderPass> grafRenderPassSample;
 	std::unique_ptr<GrafPipeline> grafPipelineSample;
 	std::vector<std::unique_ptr<GrafRenderTarget>> grafRenderTarget;
@@ -81,6 +94,7 @@ int VulkanSandboxApp::Run()
 		deinitializeGfxFrameObjects();
 		grafPipelineSample.reset();
 		grafRenderPassSample.reset();
+		grafVBSample.reset();
 		grafShaderSampleVS.reset();
 		grafShaderSamplePS.reset();
 		grafCanvas.reset();
@@ -88,7 +102,7 @@ int VulkanSandboxApp::Run()
 		grafSystem.reset();
 	};
 	Result grafRes = NotInitialized;
-	auto& initializeGfxCore = [&]() -> void
+	auto& initializeGfxSystem = [&]() -> void
 	{
 		grafRes = grafSystem->Initialize(realm.GetCanvas());
 		if (Failed(grafRes) || 0 == grafSystem->GetPhysicalDeviceCount()) return;
@@ -113,6 +127,16 @@ int VulkanSandboxApp::Run()
 		grafRes = grafShaderSamplePS->Initialize(grafDevice.get(), { GrafShaderType::Pixel, samplePSBuffer.get(), samplePSBufferSize, GrafShader::DefaultEntryPoint });
 		if (Failed(grafRes)) return;
 
+		grafRes = grafSystem->CreateBuffer(grafVBSample);
+		if (Failed(grafRes)) return;
+		GrafBuffer::InitParams grafVBSampleParams;
+		grafVBSampleParams.BufferDesc.SizeInBytes = sizeof(verticesSample);
+		grafVBSampleParams.BufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer;
+		grafRes = grafVBSample->Initialize(grafDevice.get(), grafVBSampleParams);
+		if (Failed(grafRes)) return;
+		grafRes = grafVBSample->Upload((ur_byte*)verticesSample);
+		if (Failed(grafRes)) return;
+
 		grafRes = grafSystem->CreateRenderPass(grafRenderPassSample);
 		if (Failed(grafRes)) return;
 		grafRes = grafRenderPassSample->Initialize(grafDevice.get());
@@ -120,14 +144,24 @@ int VulkanSandboxApp::Run()
 
 		grafRes = grafSystem->CreatePipeline(grafPipelineSample);
 		if (Failed(grafRes)) return;
-		GrafPipeline::InitParams samplePipelineParams = {};
+		GrafShader* sampleShaderStages[] = {
+			grafShaderSampleVS.get(),
+			grafShaderSamplePS.get()
+		};
+		GrafVertexElementDesc sampleVertexElements[] = {
+			{ GrafFormat::R32G32B32_SFLOAT, 0 },
+			{ GrafFormat::R32G32B32_SFLOAT, 12 }
+		};
+		GrafVertexInputDesc sampleVertexInputs[] = {{
+			GrafVertexInputType::PerVertex, 0, sizeof(VertexSample),
+			ur_array_size(sampleVertexElements), sampleVertexElements
+		}};
+		GrafPipeline::InitParams samplePipelineParams = GrafPipeline::InitParams::Default;
 		samplePipelineParams.RenderPass = grafRenderPassSample.get();
-		samplePipelineParams.ShaderStages.push_back(grafShaderSampleVS.get());
-		samplePipelineParams.ShaderStages.push_back(grafShaderSamplePS.get());
-		samplePipelineParams.ViewportDesc.Width = (ur_float)grafCanvas->GetSwapChainImage(0)->GetDesc().Size.x;
-		samplePipelineParams.ViewportDesc.Height = (ur_float)grafCanvas->GetSwapChainImage(0)->GetDesc().Size.y;
-		samplePipelineParams.ViewportDesc.Near = 0.0f;
-		samplePipelineParams.ViewportDesc.Far = 1.0f;
+		samplePipelineParams.ShaderStageCount = ur_array_size(sampleShaderStages);
+		samplePipelineParams.ShaderStages = sampleShaderStages;
+		samplePipelineParams.VertexInputCount = ur_array_size(sampleVertexInputs);
+		samplePipelineParams.VertexInputDesc = sampleVertexInputs;
 		grafRes = grafPipelineSample->Initialize(grafDevice.get(), samplePipelineParams);
 		if (Failed(grafRes)) return;
 	};
@@ -135,7 +169,7 @@ int VulkanSandboxApp::Run()
 	{
 		if (Failed(grafRes)) return;
 
-		// RT count must be equal swap chain size (one RT wraps on SC image)
+		// RT count must be equal to swap chain size (one RT wraps on swap chain image)
 		grafRenderTarget.resize(grafCanvas->GetSwapChainImageCount());
 		for (ur_uint imageIdx = 0; imageIdx < grafCanvas->GetSwapChainImageCount(); ++imageIdx)
 		{
@@ -152,7 +186,6 @@ int VulkanSandboxApp::Run()
 		// number of recorded frames can differ from swap chain size
 		frameCount = std::max(ur_uint(1), grafCanvas->GetSwapChainImageCount() - 1);
 		frameIdx = 0;
-
 		grafMainCmdList.resize(frameCount);
 		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
 		{
@@ -163,7 +196,7 @@ int VulkanSandboxApp::Run()
 		}
 		if (Failed(grafRes)) return;
 	};
-	initializeGfxCore();
+	initializeGfxSystem();
 	if (Succeeded(grafRes))
 	{
 		initializeGfxFrameObjects();
@@ -305,6 +338,7 @@ int VulkanSandboxApp::Run()
 
 				grafCmdListCrnt->BeginRenderPass(grafRenderPassSample.get(), grafRenderTarget[grafCanvas->GetCurrentImageId()].get());
 				grafCmdListCrnt->BindPipeline(grafPipelineSample.get());
+				grafCmdListCrnt->BindVertexBuffer(grafVBSample.get(), 0);
 				grafCmdListCrnt->Draw(3, 4, 0, 0);
 				grafCmdListCrnt->EndRenderPass();
 
@@ -373,6 +407,11 @@ Result GrafSystem::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
 }
 
 Result GrafSystem::CreateImage(std::unique_ptr<GrafImage>& grafImage)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafSystem::CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer)
 {
 	return Result(NotImplemented);
 }
@@ -531,6 +570,11 @@ Result GrafCommandList::BindPipeline(GrafPipeline* grafPipeline)
 	return Result(NotImplemented);
 }
 
+Result GrafCommandList::BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx)
+{
+	return Result(NotImplemented);
+}
+
 Result GrafCommandList::Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance)
 {
 	return Result(NotImplemented);
@@ -620,6 +664,32 @@ Result GrafImage::Initialize(GrafDevice *grafDevice, const InitParams& initParam
 	return Result(NotImplemented);
 }
 
+GrafBuffer::GrafBuffer(GrafSystem &grafSystem) :
+	GrafDeviceEntity(grafSystem)
+{
+}
+
+GrafBuffer::~GrafBuffer()
+{
+}
+
+Result GrafBuffer::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+{
+	GrafDeviceEntity::Initialize(grafDevice);
+	this->bufferDesc = initParams.BufferDesc;
+	return Result(NotImplemented);
+}
+
+Result GrafBuffer::Upload(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafBuffer::Readback(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	return Result(NotImplemented);
+}
+
 const char* GrafShader::DefaultEntryPoint = "main";
 
 GrafShader::GrafShader(GrafSystem &grafSystem) :
@@ -657,6 +727,16 @@ Result GrafRenderTarget::Initialize(GrafDevice *grafDevice, const InitParams& in
 	memcpy(this->images.data(), initParams.Images.data(), initParams.Images.size() * sizeof(GrafImage*));
 	return Result(NotImplemented);
 }
+
+const GrafPipeline::InitParams GrafPipeline::InitParams::Default = {
+	ur_null, // RenderPass
+	0, // ShaderStageCount
+	ur_null, // GrafShader**
+	{ 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f }, //GrafViewportDesc
+	GrafPrimitiveTopology::TriangleList, // GrafPrimitiveTopology
+	0, // VertexInputCount
+	ur_null, // GrafVertexInputDesc
+};
 
 GrafPipeline::GrafPipeline(GrafSystem &grafSystem) :
 	GrafDeviceEntity(grafSystem)
@@ -985,6 +1065,12 @@ Result GrafSystemVulkan::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
 Result GrafSystemVulkan::CreateImage(std::unique_ptr<GrafImage>& grafImage)
 {
 	grafImage.reset(new GrafImageVulkan(*this));
+	return Result(Success);
+}
+
+Result GrafSystemVulkan::CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer)
+{
+	grafBuffer.reset(new GrafBufferVulkan(*this));
 	return Result(Success);
 }
 
@@ -1460,6 +1546,18 @@ Result GrafCommandListVulkan::BindPipeline(GrafPipeline* grafPipeline)
 		return Result(InvalidArgs);
 
 	vkCmdBindPipeline(vkCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, static_cast<GrafPipelineVulkan*>(grafPipeline)->GetVkPipeline());
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx)
+{
+	if (ur_null == grafVertexBuffer)
+		return Result(InvalidArgs);
+
+	VkBuffer vkBuffers[] = { static_cast<GrafBufferVulkan*>(grafVertexBuffer)->GetVkBuffer() };
+	VkDeviceSize vkOffsets[] = { 0 };
+	vkCmdBindVertexBuffers(vkCommandBuffer, bindingIdx, 1, vkBuffers, vkOffsets);
 
 	return Result(Success);
 }
@@ -2198,6 +2296,183 @@ Result GrafImageVulkan::CreateVkImageViews()
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+GrafBufferVulkan::GrafBufferVulkan(GrafSystem &grafSystem) :
+	GrafBuffer(grafSystem)
+{
+	this->vkBuffer = VK_NULL_HANDLE;
+	this->vkDeviceMemory = VK_NULL_HANDLE;
+	this->vkDeviceMemoryOffset = 0;
+	this->vkDeviceMemorySize = 0;
+	this->vkDeviceMemoryAlignment = 0;
+}
+
+GrafBufferVulkan::~GrafBufferVulkan()
+{
+	this->Deinitialize();
+}
+
+Result GrafBufferVulkan::Deinitialize()
+{
+	this->vkDeviceMemoryOffset = 0;
+	this->vkDeviceMemorySize = 0;
+	this->vkDeviceMemoryAlignment = 0;
+	if (this->vkDeviceMemory != VK_NULL_HANDLE)
+	{
+		vkFreeMemory(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDeviceMemory, ur_null);
+		this->vkDeviceMemory = VK_NULL_HANDLE;
+	}
+	if (this->vkBuffer != VK_NULL_HANDLE)
+	{
+		vkDestroyBuffer(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkBuffer, ur_null);
+		this->vkBuffer = VK_NULL_HANDLE;
+	}
+
+	return Result(Success);
+}
+
+Result GrafBufferVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+{
+	this->Deinitialize();
+
+	GrafBuffer::Initialize(grafDevice, initParams);
+
+	// validate logical device
+
+	GrafSystemVulkan& grafSystemVulkan = static_cast<GrafSystemVulkan&>(this->GetGrafSystem());
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+	{
+		return ResultError(InvalidArgs, std::string("GrafBufferVulkan: failed to initialize, invalid GrafDevice"));
+	}
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+	VkPhysicalDevice vkPhysicalDevice = grafSystemVulkan.GetVkPhysicalDevice(grafDeviceVulkan->GetDeviceId());
+	ur_uint32 vkDeviceGraphicsQueueId = (ur_uint32)grafDeviceVulkan->GetVkDeviceGraphicsQueueId();
+
+	// create buffer
+
+	VkBufferCreateInfo vkBufferInfo = {};
+	vkBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	vkBufferInfo.flags = 0;
+	vkBufferInfo.size = (VkDeviceSize)initParams.BufferDesc.SizeInBytes;
+	vkBufferInfo.usage = GrafUtilsVulkan::GrafToVkBufferUsage(initParams.BufferDesc.Usage);
+	vkBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	vkBufferInfo.queueFamilyIndexCount = 1;
+	vkBufferInfo.pQueueFamilyIndices = &vkDeviceGraphicsQueueId;
+
+	VkResult vkRes = vkCreateBuffer(vkDevice, &vkBufferInfo, ur_null, &this->vkBuffer);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafBufferVulkan: vkCreateBuffer failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	// TODO: move allocation to GrafDevice (allocate big chunks of memory and return offsets, consider integrating VulkanAllocator)
+	// request buffer memory requirements and find corresponding physical device memory type for allocation
+
+	// TEMP: test, cpu accessible memory for direct mapping
+	VkMemoryPropertyFlags vkMemoryPropertiesExpected = (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	VkMemoryRequirements vkMemoryRequirements = {};
+	vkGetBufferMemoryRequirements(vkDevice, this->vkBuffer, &vkMemoryRequirements);
+
+	VkPhysicalDeviceMemoryProperties vkDeviceMemoryProperties;
+	vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &vkDeviceMemoryProperties);
+
+	VkMemoryAllocateInfo vkAllocateInfo = {};
+	vkAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	vkAllocateInfo.allocationSize = vkMemoryRequirements.size;
+	vkAllocateInfo.memoryTypeIndex = ur_uint32(-1);
+	for (ur_uint32 itype = 0; itype < vkDeviceMemoryProperties.memoryTypeCount; ++itype)
+	{
+		if (vkDeviceMemoryProperties.memoryTypes[itype].propertyFlags & vkMemoryPropertiesExpected)
+		{
+			vkAllocateInfo.memoryTypeIndex = itype;
+			break;
+		}
+	}
+	if (ur_uint32(-1) == vkAllocateInfo.memoryTypeIndex)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, "GrafBufferVulkan: failed to find required memory type");
+	}
+
+	// allocate memory
+
+	vkRes = vkAllocateMemory(vkDevice, &vkAllocateInfo, ur_null, &this->vkDeviceMemory);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafBufferVulkan: vkAllocateMemory failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	// bind device memory allocation to buffer
+
+	vkRes = vkBindBufferMemory(vkDevice, this->vkBuffer, this->vkDeviceMemory, 0);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafBufferVulkan: vkBindBufferMemory failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	this->vkDeviceMemoryOffset = 0;
+	this->vkDeviceMemorySize = vkMemoryRequirements.size;
+	this->vkDeviceMemoryAlignment = vkMemoryRequirements.alignment;
+
+	return Result(Success);
+}
+
+Result GrafBufferVulkan::Upload(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	if (0 == dataSize)
+		dataSize = this->GetDesc().SizeInBytes; // entire allocation range
+
+	if (ur_null == dataPtr || dstOffset + dataSize > this->vkDeviceMemorySize)
+		return Result(InvalidArgs);
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+	void* mappedMemoryPtr = ur_null;
+	VkResult vkRes = vkMapMemory(vkDevice, this->vkDeviceMemory, this->vkDeviceMemoryOffset + dstOffset, dataSize, 0, &mappedMemoryPtr);
+	if (vkRes != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafBufferVulkan: vkMapMemory failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	memcpy(mappedMemoryPtr, dataPtr + srcOffset, dataSize);
+
+	vkUnmapMemory(vkDevice, this->vkDeviceMemory);
+
+	return Result(Success);
+}
+
+Result GrafBufferVulkan::Readback(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	if (0 == dataSize)
+		dataSize = this->GetDesc().SizeInBytes; // entire allocation range
+
+	if (ur_null == dataPtr || srcOffset + dataSize > this->vkDeviceMemorySize)
+		return Result(InvalidArgs);
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+	void* mappedMemoryPtr = ur_null;
+	VkResult vkRes = vkMapMemory(vkDevice, this->vkDeviceMemory, this->vkDeviceMemoryOffset + srcOffset, dataSize, 0, &mappedMemoryPtr);
+	if (vkRes != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafBufferVulkan: vkMapMemory failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	memcpy(dataPtr + dstOffset, mappedMemoryPtr, dataSize);
+
+	vkUnmapMemory(vkDevice, this->vkDeviceMemory);
+
+	return Result(Success);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 GrafShaderVulkan::GrafShaderVulkan(GrafSystem &grafSystem) : 
 	GrafShader(grafSystem)
 {
@@ -2466,8 +2741,8 @@ Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& 
 
 	// shader stages
 
-	std::vector<VkPipelineShaderStageCreateInfo> vkShaderStagesInfo(initParams.ShaderStages.size());
-	for (ur_size istage = 0; istage < initParams.ShaderStages.size(); ++istage)
+	std::vector<VkPipelineShaderStageCreateInfo> vkShaderStagesInfo(initParams.ShaderStageCount);
+	for (ur_uint istage = 0; istage < initParams.ShaderStageCount; ++istage)
 	{
 		GrafShader* grafShader = initParams.ShaderStages[istage];
 		VkPipelineShaderStageCreateInfo& vkShaderStageInfo = vkShaderStagesInfo[istage];
@@ -2498,20 +2773,49 @@ Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& 
 
 	// vertex input
 
+	ur_uint vertexInputTotalElementCount = 0;
+	for (ur_uint ivb = 0; ivb < initParams.VertexInputCount; ++ivb)
+	{
+		vertexInputTotalElementCount += initParams.VertexInputDesc[ivb].ElementCount;
+	}
+
+	std::vector<VkVertexInputAttributeDescription> vkVertexAttributes(vertexInputTotalElementCount);
+	std::vector<VkVertexInputBindingDescription> vkVertexBindingDescs(initParams.VertexInputCount);
+	ur_uint vertexAttributesOffset = 0;
+	for (ur_uint ivb = 0; ivb < initParams.VertexInputCount; ++ivb)
+	{
+		const GrafVertexInputDesc& grafVertexInputDesc = initParams.VertexInputDesc[ivb];
+		VkVertexInputBindingDescription& vkVertexBindingDesc = vkVertexBindingDescs[ivb];
+		vkVertexBindingDesc.binding = (ur_uint32)grafVertexInputDesc.BindingIdx;
+		vkVertexBindingDesc.stride = (ur_uint32)grafVertexInputDesc.Stride;
+		vkVertexBindingDesc.inputRate = (GrafVertexInputType::PerInstance == grafVertexInputDesc.InputType ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX);
+
+		for (ur_uint ielem = 0; ielem < grafVertexInputDesc.ElementCount; ++ielem)
+		{
+			const GrafVertexElementDesc& grafVertexElement = grafVertexInputDesc.Elements[ielem];
+			VkVertexInputAttributeDescription& vkVertexAttribute = vkVertexAttributes[vertexAttributesOffset + ielem];
+			vkVertexAttribute.location = (ur_uint32)ielem;
+			vkVertexAttribute.binding = (ur_uint32)ivb;
+			vkVertexAttribute.format = GrafUtilsVulkan::GrafToVkFormat(grafVertexElement.Format);
+			vkVertexAttribute.offset = (ur_uint32)grafVertexElement.Offset;
+		}
+		vertexAttributesOffset += grafVertexInputDesc.ElementCount;
+	}
+
 	VkPipelineVertexInputStateCreateInfo vkVertxInputStateInfo = {};
 	vkVertxInputStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	vkVertxInputStateInfo.flags = 0;
-	vkVertxInputStateInfo.vertexBindingDescriptionCount = 0;
-	vkVertxInputStateInfo.pVertexBindingDescriptions = ur_null;
-	vkVertxInputStateInfo.vertexAttributeDescriptionCount = 0;
-	vkVertxInputStateInfo.pVertexAttributeDescriptions = ur_null;
+	vkVertxInputStateInfo.vertexBindingDescriptionCount = (ur_uint32)vkVertexBindingDescs.size();
+	vkVertxInputStateInfo.pVertexBindingDescriptions = vkVertexBindingDescs.data();
+	vkVertxInputStateInfo.vertexAttributeDescriptionCount = (ur_uint32)vkVertexAttributes.size();
+	vkVertxInputStateInfo.pVertexAttributeDescriptions = vkVertexAttributes.data();
 
 	// input assembly
 
 	VkPipelineInputAssemblyStateCreateInfo vkInputAssemblyInfo = {};
 	vkInputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	vkInputAssemblyInfo.flags = 0;
-	vkInputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	vkInputAssemblyInfo.topology = GrafUtilsVulkan::GrafToVkPrimitiveTopology(initParams.PrimitiveTopology);
 	vkInputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
 
 	//  tessellation state
@@ -2726,6 +3030,18 @@ VkImageLayout GrafUtilsVulkan::GrafToVkImageLayout(GrafImageState imageState)
 	return vkImageLayout;
 }
 
+VkBufferUsageFlags GrafUtilsVulkan::GrafToVkBufferUsage(GrafBufferUsageFlags usage)
+{
+	VkBufferUsageFlags vkUsage = 0;
+	if (usage & (ur_uint)GrafBufferUsageFlag::VertexBuffer)
+		vkUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	if (usage & (ur_uint)GrafBufferUsageFlag::IndexBuffer)
+		vkUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+	if (usage & (ur_uint)GrafBufferUsageFlag::ConstantBuffer)
+		vkUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	return vkUsage;
+}
+
 VkShaderStageFlagBits GrafUtilsVulkan::GrafToVkShaderStage(GrafShaderType shaderType)
 {
 	VkShaderStageFlagBits vkShaderStage = VkShaderStageFlagBits(0);
@@ -2736,6 +3052,21 @@ VkShaderStageFlagBits GrafUtilsVulkan::GrafToVkShaderStage(GrafShaderType shader
 	case GrafShaderType::Compute: vkShaderStage = VK_SHADER_STAGE_COMPUTE_BIT;  break;
 	};
 	return vkShaderStage;
+}
+
+VkPrimitiveTopology GrafUtilsVulkan::GrafToVkPrimitiveTopology(GrafPrimitiveTopology topology)
+{
+	VkPrimitiveTopology vkTopology = VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
+	switch (topology)
+	{
+	case GrafPrimitiveTopology::PointList: vkTopology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST; break;
+	case GrafPrimitiveTopology::LineList: vkTopology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST; break;
+	case GrafPrimitiveTopology::LineStrip: vkTopology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; break;
+	case GrafPrimitiveTopology::TriangleList: vkTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
+	case GrafPrimitiveTopology::TriangleStrip: vkTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;
+	case GrafPrimitiveTopology::TriangleFan: vkTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN; break;
+	};
+	return vkTopology;
 }
 
 static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {
@@ -2759,7 +3090,11 @@ static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {
 	VK_FORMAT_B8G8R8A8_SNORM,
 	VK_FORMAT_B8G8R8A8_UINT,
 	VK_FORMAT_B8G8R8A8_SINT,
-	VK_FORMAT_B8G8R8A8_SRGB
+	VK_FORMAT_B8G8R8A8_SRGB,
+	VK_FORMAT_R32_SFLOAT,
+	VK_FORMAT_R32G32_SFLOAT,
+	VK_FORMAT_R32G32B32_SFLOAT,
+	VK_FORMAT_R32G32B32A32_SFLOAT
 };
 VkFormat GrafUtilsVulkan::GrafToVkFormat(GrafFormat grafFormat)
 {
@@ -2768,190 +3103,190 @@ VkFormat GrafUtilsVulkan::GrafToVkFormat(GrafFormat grafFormat)
 
 static const GrafFormat VkToGrafFormatLUT[VK_FORMAT_END_RANGE + 1] = {
 	GrafFormat::Undefined,
-	GrafFormat::Unsupported,		// VK_FORMAT_R4G4_UNORM_PACK8 = 1,
-	GrafFormat::Unsupported,		// VK_FORMAT_R4G4B4A4_UNORM_PACK16 = 2,
-	GrafFormat::Unsupported,		// VK_FORMAT_B4G4R4A4_UNORM_PACK16 = 3,
-	GrafFormat::Unsupported,		// VK_FORMAT_R5G6B5_UNORM_PACK16 = 4,
-	GrafFormat::Unsupported,		// VK_FORMAT_B5G6R5_UNORM_PACK16 = 5,
-	GrafFormat::Unsupported,		// VK_FORMAT_R5G5B5A1_UNORM_PACK16 = 6,
-	GrafFormat::Unsupported,		// VK_FORMAT_B5G5R5A1_UNORM_PACK16 = 7,
-	GrafFormat::Unsupported,		// VK_FORMAT_A1R5G5B5_UNORM_PACK16 = 8,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8_UNORM = 9,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8_SNORM = 10,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8_USCALED = 11,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8_SSCALED = 12,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8_UINT = 13,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8_SINT = 14,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8_SRGB = 15,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_UNORM = 16,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_SNORM = 17,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_USCALED = 18,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_SSCALED = 19,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_UINT = 20,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_SINT = 21,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8G8_SRGB = 22,
-	GrafFormat::R8G8B8_UNORM,		// VK_FORMAT_R8G8B8_UNORM = 23,
-	GrafFormat::R8G8B8_SNORM,		// VK_FORMAT_R8G8B8_SNORM = 24,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8G8B8_USCALED = 25,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8G8B8_SSCALED = 26,
-	GrafFormat::R8G8B8_UINT,		// VK_FORMAT_R8G8B8_UINT = 27,
-	GrafFormat::R8G8B8_SINT,		// VK_FORMAT_R8G8B8_SINT = 28,
-	GrafFormat::R8G8B8_SRGB,		// VK_FORMAT_R8G8B8_SRGB = 29,
-	GrafFormat::B8G8R8_UNORM,		// VK_FORMAT_B8G8R8_UNORM = 30,
-	GrafFormat::B8G8R8_SNORM,		// VK_FORMAT_B8G8R8_SNORM = 31,
-	GrafFormat::Unsupported,		// VK_FORMAT_B8G8R8_USCALED = 32,
-	GrafFormat::Unsupported,		// VK_FORMAT_B8G8R8_SSCALED = 33,
-	GrafFormat::B8G8R8_UINT,		// VK_FORMAT_B8G8R8_UINT = 34,
-	GrafFormat::B8G8R8_SINT,		// VK_FORMAT_B8G8R8_SINT = 35,
-	GrafFormat::B8G8R8_SRGB,		// VK_FORMAT_B8G8R8_SRGB = 36,
-	GrafFormat::R8G8B8A8_UNORM,		// VK_FORMAT_R8G8B8A8_UNORM = 37,
-	GrafFormat::R8G8B8A8_SNORM,		// VK_FORMAT_R8G8B8A8_SNORM = 38,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8G8B8A8_USCALED = 39,
-	GrafFormat::Unsupported,		// VK_FORMAT_R8G8B8A8_SSCALED = 40,
-	GrafFormat::R8G8B8A8_UINT,		// VK_FORMAT_R8G8B8A8_UINT = 41,
-	GrafFormat::R8G8B8A8_SINT,		// VK_FORMAT_R8G8B8A8_SINT = 42,
-	GrafFormat::R8G8B8A8_SRGB,		// VK_FORMAT_R8G8B8A8_SRGB = 43,
-	GrafFormat::B8G8R8A8_UNORM,		// VK_FORMAT_B8G8R8A8_UNORM = 44,
-	GrafFormat::B8G8R8A8_SNORM,		// VK_FORMAT_B8G8R8A8_SNORM = 45,
-	GrafFormat::Unsupported,		// VK_FORMAT_B8G8R8A8_USCALED = 46,
-	GrafFormat::Unsupported,		// VK_FORMAT_B8G8R8A8_SSCALED = 47,
-	GrafFormat::B8G8R8A8_UINT,		// VK_FORMAT_B8G8R8A8_UINT = 48,
-	GrafFormat::B8G8R8A8_SINT,		// VK_FORMAT_B8G8R8A8_SINT = 49,
-	GrafFormat::B8G8R8A8_SRGB,		// VK_FORMAT_B8G8R8A8_SRGB = 50,
-	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_UNORM_PACK32 = 51,
-	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_SNORM_PACK32 = 52,
-	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_USCALED_PACK32 = 53,
-	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_SSCALED_PACK32 = 54,
-	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_UINT_PACK32 = 55,
-	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_SINT_PACK32 = 56,
-	GrafFormat::Unsupported,		// VK_FORMAT_A8B8G8R8_SRGB_PACK32 = 57,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_UNORM_PACK32 = 58,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_SNORM_PACK32 = 59,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_USCALED_PACK32 = 60,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_SSCALED_PACK32 = 61,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_UINT_PACK32 = 62,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2R10G10B10_SINT_PACK32 = 63,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_UNORM_PACK32 = 64,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_SNORM_PACK32 = 65,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_USCALED_PACK32 = 66,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_SSCALED_PACK32 = 67,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_UINT_PACK32 = 68,
-	GrafFormat::Unsupported,		// VK_FORMAT_A2B10G10R10_SINT_PACK32 = 69,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16_UNORM = 70,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16_SNORM = 71,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16_USCALED = 72,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16_SSCALED = 73,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16_UINT = 74,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16_SINT = 75,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16_SFLOAT = 76,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_UNORM = 77,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_SNORM = 78,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_USCALED = 79,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_SSCALED = 80,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_UINT = 81,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_SINT = 82,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16_SFLOAT = 83,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_UNORM = 84,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_SNORM = 85,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_USCALED = 86,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_SSCALED = 87,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_UINT = 88,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_SINT = 89,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16_SFLOAT = 90,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_UNORM = 91,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_SNORM = 92,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_USCALED = 93,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_SSCALED = 94,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_UINT = 95,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_SINT = 96,
-	GrafFormat::Unsupported,		// VK_FORMAT_R16G16B16A16_SFLOAT = 97,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32_UINT = 98,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32_SINT = 99,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32_SFLOAT = 100,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32G32_UINT = 101,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32G32_SINT = 102,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32G32_SFLOAT = 103,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32_UINT = 104,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32_SINT = 105,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32_SFLOAT = 106,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32A32_UINT = 107,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32A32_SINT = 108,
-	GrafFormat::Unsupported,		// VK_FORMAT_R32G32B32A32_SFLOAT = 109,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64_UINT = 110,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64_SINT = 111,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64_SFLOAT = 112,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64G64_UINT = 113,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64G64_SINT = 114,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64G64_SFLOAT = 115,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64_UINT = 116,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64_SINT = 117,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64_SFLOAT = 118,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64A64_UINT = 119,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64A64_SINT = 120,
-	GrafFormat::Unsupported,		// VK_FORMAT_R64G64B64A64_SFLOAT = 121,
-	GrafFormat::Unsupported,		// VK_FORMAT_B10G11R11_UFLOAT_PACK32 = 122,
-	GrafFormat::Unsupported,		// VK_FORMAT_E5B9G9R9_UFLOAT_PACK32 = 123,
-	GrafFormat::Unsupported,		// VK_FORMAT_D16_UNORM = 124,
-	GrafFormat::Unsupported,		// VK_FORMAT_X8_D24_UNORM_PACK32 = 125,
-	GrafFormat::Unsupported,		// VK_FORMAT_D32_SFLOAT = 126,
-	GrafFormat::Unsupported,		// VK_FORMAT_S8_UINT = 127,
-	GrafFormat::Unsupported,		// VK_FORMAT_D16_UNORM_S8_UINT = 128,
-	GrafFormat::Unsupported,		// VK_FORMAT_D24_UNORM_S8_UINT = 129,
-	GrafFormat::Unsupported,		// VK_FORMAT_D32_SFLOAT_S8_UINT = 130,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC1_RGB_UNORM_BLOCK = 131,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC1_RGB_SRGB_BLOCK = 132,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC1_RGBA_UNORM_BLOCK = 133,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC1_RGBA_SRGB_BLOCK = 134,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC2_UNORM_BLOCK = 135,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC2_SRGB_BLOCK = 136,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC3_UNORM_BLOCK = 137,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC3_SRGB_BLOCK = 138,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC4_UNORM_BLOCK = 139,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC4_SNORM_BLOCK = 140,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC5_UNORM_BLOCK = 141,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC5_SNORM_BLOCK = 142,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC6H_UFLOAT_BLOCK = 143,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC6H_SFLOAT_BLOCK = 144,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC7_UNORM_BLOCK = 145,
-	GrafFormat::Unsupported,		// VK_FORMAT_BC7_SRGB_BLOCK = 146,
-	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK = 147,
-	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK = 148,
-	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK = 149,
-	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK = 150,
-	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK = 151,
-	GrafFormat::Unsupported,		// VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK = 152,
-	GrafFormat::Unsupported,		// VK_FORMAT_EAC_R11_UNORM_BLOCK = 153,
-	GrafFormat::Unsupported,		// VK_FORMAT_EAC_R11_SNORM_BLOCK = 154,
-	GrafFormat::Unsupported,		// VK_FORMAT_EAC_R11G11_UNORM_BLOCK = 155,
-	GrafFormat::Unsupported,		// VK_FORMAT_EAC_R11G11_SNORM_BLOCK = 156,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_4x4_UNORM_BLOCK = 157,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_4x4_SRGB_BLOCK = 158,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_5x4_UNORM_BLOCK = 159,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_5x4_SRGB_BLOCK = 160,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_5x5_UNORM_BLOCK = 161,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_5x5_SRGB_BLOCK = 162,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_6x5_UNORM_BLOCK = 163,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_6x5_SRGB_BLOCK = 164,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_6x6_UNORM_BLOCK = 165,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_6x6_SRGB_BLOCK = 166,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x5_UNORM_BLOCK = 167,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x5_SRGB_BLOCK = 168,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x6_UNORM_BLOCK = 169,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x6_SRGB_BLOCK = 170,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x8_UNORM_BLOCK = 171,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_8x8_SRGB_BLOCK = 172,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x5_UNORM_BLOCK = 173,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x5_SRGB_BLOCK = 174,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x6_UNORM_BLOCK = 175,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x6_SRGB_BLOCK = 176,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x8_UNORM_BLOCK = 177,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x8_SRGB_BLOCK = 178,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x10_UNORM_BLOCK = 179,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_10x10_SRGB_BLOCK = 180,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_12x10_UNORM_BLOCK = 181,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_12x10_SRGB_BLOCK = 182,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_12x12_UNORM_BLOCK = 183,
-	GrafFormat::Unsupported,		// VK_FORMAT_ASTC_12x12_SRGB_BLOCK = 184,
+	GrafFormat::Unsupported,			// VK_FORMAT_R4G4_UNORM_PACK8 = 1,
+	GrafFormat::Unsupported,			// VK_FORMAT_R4G4B4A4_UNORM_PACK16 = 2,
+	GrafFormat::Unsupported,			// VK_FORMAT_B4G4R4A4_UNORM_PACK16 = 3,
+	GrafFormat::Unsupported,			// VK_FORMAT_R5G6B5_UNORM_PACK16 = 4,
+	GrafFormat::Unsupported,			// VK_FORMAT_B5G6R5_UNORM_PACK16 = 5,
+	GrafFormat::Unsupported,			// VK_FORMAT_R5G5B5A1_UNORM_PACK16 = 6,
+	GrafFormat::Unsupported,			// VK_FORMAT_B5G5R5A1_UNORM_PACK16 = 7,
+	GrafFormat::Unsupported,			// VK_FORMAT_A1R5G5B5_UNORM_PACK16 = 8,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8_UNORM = 9,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8_SNORM = 10,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8_USCALED = 11,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8_SSCALED = 12,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8_UINT = 13,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8_SINT = 14,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8_SRGB = 15,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8G8_UNORM = 16,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8G8_SNORM = 17,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8G8_USCALED = 18,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8G8_SSCALED = 19,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8G8_UINT = 20,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8G8_SINT = 21,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8G8_SRGB = 22,
+	GrafFormat::R8G8B8_UNORM,			// VK_FORMAT_R8G8B8_UNORM = 23,
+	GrafFormat::R8G8B8_SNORM,			// VK_FORMAT_R8G8B8_SNORM = 24,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8G8B8_USCALED = 25,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8G8B8_SSCALED = 26,
+	GrafFormat::R8G8B8_UINT,			// VK_FORMAT_R8G8B8_UINT = 27,
+	GrafFormat::R8G8B8_SINT,			// VK_FORMAT_R8G8B8_SINT = 28,
+	GrafFormat::R8G8B8_SRGB,			// VK_FORMAT_R8G8B8_SRGB = 29,
+	GrafFormat::B8G8R8_UNORM,			// VK_FORMAT_B8G8R8_UNORM = 30,
+	GrafFormat::B8G8R8_SNORM,			// VK_FORMAT_B8G8R8_SNORM = 31,
+	GrafFormat::Unsupported,			// VK_FORMAT_B8G8R8_USCALED = 32,
+	GrafFormat::Unsupported,			// VK_FORMAT_B8G8R8_SSCALED = 33,
+	GrafFormat::B8G8R8_UINT,			// VK_FORMAT_B8G8R8_UINT = 34,
+	GrafFormat::B8G8R8_SINT,			// VK_FORMAT_B8G8R8_SINT = 35,
+	GrafFormat::B8G8R8_SRGB,			// VK_FORMAT_B8G8R8_SRGB = 36,
+	GrafFormat::R8G8B8A8_UNORM,			// VK_FORMAT_R8G8B8A8_UNORM = 37,
+	GrafFormat::R8G8B8A8_SNORM,			// VK_FORMAT_R8G8B8A8_SNORM = 38,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8G8B8A8_USCALED = 39,
+	GrafFormat::Unsupported,			// VK_FORMAT_R8G8B8A8_SSCALED = 40,
+	GrafFormat::R8G8B8A8_UINT,			// VK_FORMAT_R8G8B8A8_UINT = 41,
+	GrafFormat::R8G8B8A8_SINT,			// VK_FORMAT_R8G8B8A8_SINT = 42,
+	GrafFormat::R8G8B8A8_SRGB,			// VK_FORMAT_R8G8B8A8_SRGB = 43,
+	GrafFormat::B8G8R8A8_UNORM,			// VK_FORMAT_B8G8R8A8_UNORM = 44,
+	GrafFormat::B8G8R8A8_SNORM,			// VK_FORMAT_B8G8R8A8_SNORM = 45,
+	GrafFormat::Unsupported,			// VK_FORMAT_B8G8R8A8_USCALED = 46,
+	GrafFormat::Unsupported,			// VK_FORMAT_B8G8R8A8_SSCALED = 47,
+	GrafFormat::B8G8R8A8_UINT,			// VK_FORMAT_B8G8R8A8_UINT = 48,
+	GrafFormat::B8G8R8A8_SINT,			// VK_FORMAT_B8G8R8A8_SINT = 49,
+	GrafFormat::B8G8R8A8_SRGB,			// VK_FORMAT_B8G8R8A8_SRGB = 50,
+	GrafFormat::Unsupported,			// VK_FORMAT_A8B8G8R8_UNORM_PACK32 = 51,
+	GrafFormat::Unsupported,			// VK_FORMAT_A8B8G8R8_SNORM_PACK32 = 52,
+	GrafFormat::Unsupported,			// VK_FORMAT_A8B8G8R8_USCALED_PACK32 = 53,
+	GrafFormat::Unsupported,			// VK_FORMAT_A8B8G8R8_SSCALED_PACK32 = 54,
+	GrafFormat::Unsupported,			// VK_FORMAT_A8B8G8R8_UINT_PACK32 = 55,
+	GrafFormat::Unsupported,			// VK_FORMAT_A8B8G8R8_SINT_PACK32 = 56,
+	GrafFormat::Unsupported,			// VK_FORMAT_A8B8G8R8_SRGB_PACK32 = 57,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2R10G10B10_UNORM_PACK32 = 58,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2R10G10B10_SNORM_PACK32 = 59,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2R10G10B10_USCALED_PACK32 = 60,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2R10G10B10_SSCALED_PACK32 = 61,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2R10G10B10_UINT_PACK32 = 62,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2R10G10B10_SINT_PACK32 = 63,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2B10G10R10_UNORM_PACK32 = 64,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2B10G10R10_SNORM_PACK32 = 65,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2B10G10R10_USCALED_PACK32 = 66,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2B10G10R10_SSCALED_PACK32 = 67,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2B10G10R10_UINT_PACK32 = 68,
+	GrafFormat::Unsupported,			// VK_FORMAT_A2B10G10R10_SINT_PACK32 = 69,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16_UNORM = 70,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16_SNORM = 71,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16_USCALED = 72,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16_SSCALED = 73,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16_UINT = 74,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16_SINT = 75,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16_SFLOAT = 76,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16_UNORM = 77,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16_SNORM = 78,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16_USCALED = 79,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16_SSCALED = 80,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16_UINT = 81,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16_SINT = 82,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16_SFLOAT = 83,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16_UNORM = 84,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16_SNORM = 85,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16_USCALED = 86,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16_SSCALED = 87,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16_UINT = 88,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16_SINT = 89,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16_SFLOAT = 90,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16A16_UNORM = 91,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16A16_SNORM = 92,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16A16_USCALED = 93,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16A16_SSCALED = 94,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16A16_UINT = 95,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16A16_SINT = 96,
+	GrafFormat::Unsupported,			// VK_FORMAT_R16G16B16A16_SFLOAT = 97,
+	GrafFormat::Unsupported,			// VK_FORMAT_R32_UINT = 98,
+	GrafFormat::Unsupported,			// VK_FORMAT_R32_SINT = 99,
+	GrafFormat::R32_SFLOAT,				// VK_FORMAT_R32_SFLOAT = 100,
+	GrafFormat::Unsupported,			// VK_FORMAT_R32G32_UINT = 101,
+	GrafFormat::Unsupported,			// VK_FORMAT_R32G32_SINT = 102,
+	GrafFormat::R32G32_SFLOAT,			// VK_FORMAT_R32G32_SFLOAT = 103,
+	GrafFormat::Unsupported,			// VK_FORMAT_R32G32B32_UINT = 104,
+	GrafFormat::Unsupported,			// VK_FORMAT_R32G32B32_SINT = 105,
+	GrafFormat::R32G32B32_SFLOAT,		// VK_FORMAT_R32G32B32_SFLOAT = 106,
+	GrafFormat::Unsupported,			// VK_FORMAT_R32G32B32A32_UINT = 107,
+	GrafFormat::Unsupported,			// VK_FORMAT_R32G32B32A32_SINT = 108,
+	GrafFormat::R32G32B32A32_SFLOAT,	// VK_FORMAT_R32G32B32A32_SFLOAT = 109,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64_UINT = 110,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64_SINT = 111,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64_SFLOAT = 112,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64G64_UINT = 113,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64G64_SINT = 114,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64G64_SFLOAT = 115,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64G64B64_UINT = 116,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64G64B64_SINT = 117,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64G64B64_SFLOAT = 118,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64G64B64A64_UINT = 119,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64G64B64A64_SINT = 120,
+	GrafFormat::Unsupported,			// VK_FORMAT_R64G64B64A64_SFLOAT = 121,
+	GrafFormat::Unsupported,			// VK_FORMAT_B10G11R11_UFLOAT_PACK32 = 122,
+	GrafFormat::Unsupported,			// VK_FORMAT_E5B9G9R9_UFLOAT_PACK32 = 123,
+	GrafFormat::Unsupported,			// VK_FORMAT_D16_UNORM = 124,
+	GrafFormat::Unsupported,			// VK_FORMAT_X8_D24_UNORM_PACK32 = 125,
+	GrafFormat::Unsupported,			// VK_FORMAT_D32_SFLOAT = 126,
+	GrafFormat::Unsupported,			// VK_FORMAT_S8_UINT = 127,
+	GrafFormat::Unsupported,			// VK_FORMAT_D16_UNORM_S8_UINT = 128,
+	GrafFormat::Unsupported,			// VK_FORMAT_D24_UNORM_S8_UINT = 129,
+	GrafFormat::Unsupported,			// VK_FORMAT_D32_SFLOAT_S8_UINT = 130,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC1_RGB_UNORM_BLOCK = 131,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC1_RGB_SRGB_BLOCK = 132,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC1_RGBA_UNORM_BLOCK = 133,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC1_RGBA_SRGB_BLOCK = 134,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC2_UNORM_BLOCK = 135,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC2_SRGB_BLOCK = 136,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC3_UNORM_BLOCK = 137,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC3_SRGB_BLOCK = 138,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC4_UNORM_BLOCK = 139,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC4_SNORM_BLOCK = 140,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC5_UNORM_BLOCK = 141,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC5_SNORM_BLOCK = 142,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC6H_UFLOAT_BLOCK = 143,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC6H_SFLOAT_BLOCK = 144,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC7_UNORM_BLOCK = 145,
+	GrafFormat::Unsupported,			// VK_FORMAT_BC7_SRGB_BLOCK = 146,
+	GrafFormat::Unsupported,			// VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK = 147,
+	GrafFormat::Unsupported,			// VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK = 148,
+	GrafFormat::Unsupported,			// VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK = 149,
+	GrafFormat::Unsupported,			// VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK = 150,
+	GrafFormat::Unsupported,			// VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK = 151,
+	GrafFormat::Unsupported,			// VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK = 152,
+	GrafFormat::Unsupported,			// VK_FORMAT_EAC_R11_UNORM_BLOCK = 153,
+	GrafFormat::Unsupported,			// VK_FORMAT_EAC_R11_SNORM_BLOCK = 154,
+	GrafFormat::Unsupported,			// VK_FORMAT_EAC_R11G11_UNORM_BLOCK = 155,
+	GrafFormat::Unsupported,			// VK_FORMAT_EAC_R11G11_SNORM_BLOCK = 156,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_4x4_UNORM_BLOCK = 157,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_4x4_SRGB_BLOCK = 158,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_5x4_UNORM_BLOCK = 159,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_5x4_SRGB_BLOCK = 160,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_5x5_UNORM_BLOCK = 161,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_5x5_SRGB_BLOCK = 162,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_6x5_UNORM_BLOCK = 163,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_6x5_SRGB_BLOCK = 164,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_6x6_UNORM_BLOCK = 165,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_6x6_SRGB_BLOCK = 166,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_8x5_UNORM_BLOCK = 167,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_8x5_SRGB_BLOCK = 168,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_8x6_UNORM_BLOCK = 169,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_8x6_SRGB_BLOCK = 170,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_8x8_UNORM_BLOCK = 171,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_8x8_SRGB_BLOCK = 172,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_10x5_UNORM_BLOCK = 173,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_10x5_SRGB_BLOCK = 174,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_10x6_UNORM_BLOCK = 175,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_10x6_SRGB_BLOCK = 176,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_10x8_UNORM_BLOCK = 177,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_10x8_SRGB_BLOCK = 178,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_10x10_UNORM_BLOCK = 179,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_10x10_SRGB_BLOCK = 180,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_12x10_UNORM_BLOCK = 181,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_12x10_SRGB_BLOCK = 182,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_12x12_UNORM_BLOCK = 183,
+	GrafFormat::Unsupported,			// VK_FORMAT_ASTC_12x12_SRGB_BLOCK = 184,
 };
 GrafFormat GrafUtilsVulkan::VkToGrafFormat(VkFormat vkFormat)
 {
