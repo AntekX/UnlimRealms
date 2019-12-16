@@ -179,9 +179,13 @@ int VulkanSandboxApp::Run()
 		{
 			grafRes = grafSystem->CreateRenderTarget(grafRenderTarget[imageIdx]);
 			if (Failed(grafRes)) break;
+			GrafImage* renderTargetImages[] = {
+				grafCanvas->GetSwapChainImage(imageIdx)
+			};
 			GrafRenderTarget::InitParams renderTargetParams = {};
 			renderTargetParams.RenderPass = grafRenderPassSample.get();
-			renderTargetParams.Images.push_back(grafCanvas->GetSwapChainImage(imageIdx));
+			renderTargetParams.Images = renderTargetImages;
+			renderTargetParams.ImageCount = ur_array_size(renderTargetImages);
 			grafRes = grafRenderTarget[imageIdx]->Initialize(grafDevice.get(), renderTargetParams);
 			if (Failed(grafRes)) break;
 		}
@@ -771,8 +775,8 @@ Result GrafRenderTarget::Initialize(GrafDevice *grafDevice, const InitParams& in
 {
 	GrafDeviceEntity::Initialize(grafDevice);
 	this->renderPass = initParams.RenderPass;
-	this->images.resize(initParams.Images.size());
-	memcpy(this->images.data(), initParams.Images.data(), initParams.Images.size() * sizeof(GrafImage*));
+	this->images.resize(initParams.ImageCount);
+	memcpy(this->images.data(), initParams.Images, initParams.ImageCount * sizeof(GrafImage*));
 	return Result(NotImplemented);
 }
 
@@ -2691,7 +2695,7 @@ Result GrafRenderTargetVulkan::Initialize(GrafDevice *grafDevice, const InitPara
 {
 	this->Deinitialize();
 
-	if (ur_null == initParams.RenderPass || initParams.Images.empty())
+	if (ur_null == initParams.RenderPass || 0 == initParams.ImageCount)
 		return Result(InvalidArgs);
 
 	GrafRenderTarget::Initialize(grafDevice, initParams);
@@ -2707,8 +2711,8 @@ Result GrafRenderTargetVulkan::Initialize(GrafDevice *grafDevice, const InitPara
 
 	// create frame buffer object
 
-	std::vector<VkImageView> attachmentViews(initParams.Images.size());
-	for (ur_size iimage = 0; iimage < initParams.Images.size(); ++iimage)
+	std::vector<VkImageView> attachmentViews(initParams.ImageCount);
+	for (ur_size iimage = 0; iimage < initParams.ImageCount; ++iimage)
 	{
 		attachmentViews[iimage] = static_cast<GrafImageVulkan*>(initParams.Images[iimage])->GetVkImageView();
 	}

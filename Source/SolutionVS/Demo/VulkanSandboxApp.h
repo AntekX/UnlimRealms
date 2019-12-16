@@ -597,7 +597,8 @@ namespace UnlimRealms
 		struct /*UR_DECL*/ InitParams
 		{
 			GrafRenderPass* RenderPass;
-			std::vector<GrafImage*> Images;
+			ur_uint ImageCount;
+			GrafImage** Images;
 		};
 
 		GrafRenderTarget(GrafSystem &grafSystem);
