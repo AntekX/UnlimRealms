@@ -52,7 +52,7 @@ PS_INPUT main(VS_INPUT input, uint instanceID : SV_InstanceID, uint vertexID : S
 
 // super simple triangle test
 
-#pragma pack_matrix(row_major)
+//#pragma pack_matrix(row_major)
 
 cbuffer Common : register(b0)
 {

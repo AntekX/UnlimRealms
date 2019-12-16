@@ -374,6 +374,7 @@ int VulkanSandboxApp::Run()
 				ur_float4x4 testTransform = ur_float4x4::Identity;
 				testTransform.r[3].x = sampleAnimPos.x;
 				testTransform.r[3].y = sampleAnimPos.y;
+				testTransform.Transpose();
 				grafCBSample[frameIdx]->Write((ur_byte*)&testTransform);
 				grafPipelineVulkan->UpdateConstantBuffer(frameIdx, grafCBSample[frameIdx].get());
 				grafPipelineVulkan->BindDescriptorSet(frameIdx, grafCmdListCrnt);

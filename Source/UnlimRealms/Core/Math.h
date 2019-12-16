@@ -799,6 +799,23 @@ namespace UnlimRealms
 			*this = Identity;
 		}
 
+		static TMatrix<T>& Transpose(TMatrix<T> &m)
+		{
+			ur_float t;
+			t = m.r[0][1]; m.r[0][1] = m.r[1][0]; m.r[1][0] = t;
+			t = m.r[0][2]; m.r[0][2] = m.r[2][0]; m.r[2][0] = t;
+			t = m.r[0][3]; m.r[0][3] = m.r[3][0]; m.r[3][0] = t;
+			t = m.r[1][2]; m.r[1][2] = m.r[2][1]; m.r[2][1] = t;
+			t = m.r[1][3]; m.r[1][3] = m.r[3][1]; m.r[3][1] = t;
+			t = m.r[2][3]; m.r[2][3] = m.r[3][2]; m.r[3][2] = t;
+			return m;
+		}
+
+		TMatrix<T>& Transpose()
+		{
+			return Transpose(*this);
+		}
+
 		static TMatrix<T>& Translation(TMatrix<T> &m, T x, T y, T z)
 		{
 			m.r[0].x = 1; m.r[0].y = 0; m.r[0].z = 0; m.r[0].w = 0;
