@@ -117,7 +117,7 @@ int VulkanSandboxApp::Run()
 
 		grafRes = grafSystem->CreateCanvas(grafCanvas);
 		if (Failed(grafRes)) return;
-		grafRes = grafCanvas->Initialize(grafDevice.get());
+		grafRes = grafCanvas->Initialize(grafDevice.get(), GrafCanvas::InitParams::Default);
 		if (Failed(grafRes)) return;
 
 		grafRes = grafSystem->CreateShader(grafShaderSampleVS);
@@ -300,7 +300,7 @@ int VulkanSandboxApp::Run()
 			canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
 			if (grafSystem != ur_null && canvasValid)
 			{
-				grafCanvas->Initialize(grafDevice.get());
+				grafCanvas->Initialize(grafDevice.get(), GrafCanvas::InitParams::Default);
 				deinitializeGfxFrameObjects();
 				initializeGfxFrameObjects();
 			}
@@ -797,11 +797,6 @@ GrafPipeline::~GrafPipeline()
 Result GrafPipeline::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 {
 	GrafDeviceEntity::Initialize(grafDevice);
-	return Result(NotImplemented);
-}
-
-Result SetViewport(const GrafViewportDesc& viewportDesc)
-{
 	return Result(NotImplemented);
 }
 

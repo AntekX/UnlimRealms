@@ -439,7 +439,7 @@ namespace UnlimRealms
 
 		~GrafCanvas();
 
-		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams = InitParams::Default);
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
 		virtual Result Present();
 
@@ -931,7 +931,7 @@ namespace UnlimRealms
 
 		~GrafCanvasVulkan();
 
-		virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams = InitParams::Default);
+		virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams);
 
 		virtual Result Present();
 
