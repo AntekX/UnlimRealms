@@ -26,6 +26,7 @@ int VulkanSandboxApp::Run()
 	realm.SetCanvas(std::move(canvas));
 	ur_uint canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 	ur_uint canvasHeight = realm.GetCanvas()->GetClientBound().Height();
+	ur_bool canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
 
 	// create input system
 	std::unique_ptr<WinInput> input(new WinInput(realm));
@@ -58,7 +59,7 @@ int VulkanSandboxApp::Run()
 		}
 	}
 
-	// sample primitive data
+	// sample mesh data
 	struct VertexSample
 	{
 		ur_float3 pos;
@@ -81,6 +82,7 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafPipeline> grafPipelineSample;
 	std::vector<std::unique_ptr<GrafRenderTarget>> grafRenderTarget;
 	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
+	std::vector<std::unique_ptr<GrafBuffer>> grafCBSample;
 	ur_uint frameCount = 0;
 	ur_uint frameIdx = 0;
 	auto& deinitializeGfxFrameObjects = [&]() -> void {
@@ -88,6 +90,7 @@ int VulkanSandboxApp::Run()
 		if (grafDevice.get()) grafDevice->WaitIdle();
 		grafRenderTarget.clear();
 		grafMainCmdList.clear();
+		grafCBSample.clear();
 	};
 	auto& deinitializeGfxSystem = [&]() -> void {
 		// order matters!
@@ -130,11 +133,12 @@ int VulkanSandboxApp::Run()
 		grafRes = grafSystem->CreateBuffer(grafVBSample);
 		if (Failed(grafRes)) return;
 		GrafBuffer::InitParams grafVBSampleParams;
-		grafVBSampleParams.BufferDesc.SizeInBytes = sizeof(verticesSample);
 		grafVBSampleParams.BufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer;
+		grafVBSampleParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+		grafVBSampleParams.BufferDesc.SizeInBytes = sizeof(verticesSample);
 		grafRes = grafVBSample->Initialize(grafDevice.get(), grafVBSampleParams);
 		if (Failed(grafRes)) return;
-		grafRes = grafVBSample->Upload((ur_byte*)verticesSample);
+		grafRes = grafVBSample->Write((ur_byte*)verticesSample);
 		if (Failed(grafRes)) return;
 
 		grafRes = grafSystem->CreateRenderPass(grafRenderPassSample);
@@ -195,6 +199,20 @@ int VulkanSandboxApp::Run()
 			if (Failed(grafRes)) break;
 		}
 		if (Failed(grafRes)) return;
+				
+		GrafBuffer::InitParams grafCBSampleParams;
+		grafCBSampleParams.BufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::ConstantBuffer;
+		grafCBSampleParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+		grafCBSampleParams.BufferDesc.SizeInBytes = sizeof(ur_float4x4);
+		grafCBSample.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			grafRes = grafSystem->CreateBuffer(grafCBSample[iframe]);
+			if (Failed(grafRes)) break;
+			grafRes = grafCBSample[iframe]->Initialize(grafDevice.get(), grafCBSampleParams);
+			if (Failed(grafRes)) break;
+		}
+		if (Failed(grafRes)) return;
 	};
 	initializeGfxSystem();
 	if (Succeeded(grafRes))
@@ -247,6 +265,12 @@ int VulkanSandboxApp::Run()
 	ur_float crntColorWeight = 0.0f;
 	ur_float4 crntClearColor(0.0f);
 
+	// sample animation
+	static const ur_float sampleAnimDelay = 1.0f;
+	static const ur_float sampleAnimRadius = 0.1f;
+	ur_float sampleAnimElapsedTime = 0;
+	ur_float2 sampleAnimPos(0.0f);
+
 	// Main message loop:
 	ClockTime timer = Clock::now();
 	MSG msg;
@@ -273,7 +297,8 @@ int VulkanSandboxApp::Run()
 		{
 			canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 			canvasHeight = realm.GetCanvas()->GetClientBound().Height();
-			if (grafSystem != ur_null)
+			canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
+			if (grafSystem != ur_null && canvasValid)
 			{
 				grafCanvas->Initialize(grafDevice.get());
 				deinitializeGfxFrameObjects();
@@ -313,6 +338,13 @@ int VulkanSandboxApp::Run()
 			}
 			crntClearColor = ur_float4::Lerp(clearColors[crntColorId], clearColors[nextColorId], crntColorWeight);
 			ctx.progress = 1;
+
+			// sample aniamtion
+
+			sampleAnimElapsedTime += elapsedTime;
+			sampleAnimPos.x = cosf(sampleAnimElapsedTime / sampleAnimDelay * MathConst<ur_float>::Pi * 2.0f) * sampleAnimRadius;
+			sampleAnimPos.y = sinf(sampleAnimElapsedTime / sampleAnimDelay * MathConst<ur_float>::Pi * 2.0f) * sampleAnimRadius;
+			ctx.progress = 2;
 		});
 
 		// draw frame
@@ -320,7 +352,7 @@ int VulkanSandboxApp::Run()
 			
 			//updateFrameJob->WaitProgress(0);  // wait till portion of data required for this draw call is fully updated
 
-			if (grafSystem != ur_null)
+			if (grafSystem != ur_null && canvasValid)
 			{
 				GrafCommandList* grafCmdListCrnt = grafMainCmdList[frameIdx].get();
 
@@ -336,6 +368,16 @@ int VulkanSandboxApp::Run()
 				grafViewport.Far = 1.0f;
 				grafCmdListCrnt->SetViewport(grafViewport, true);
 
+				// TEMP: constant buffers test
+				updateFrameJob->WaitProgress(2); // wait till animation params are up to date
+				GrafPipelineVulkan* grafPipelineVulkan = static_cast<GrafPipelineVulkan*>(grafPipelineSample.get());
+				ur_float4x4 testTransform = ur_float4x4::Identity;
+				testTransform.r[3].x = sampleAnimPos.x;
+				testTransform.r[3].y = sampleAnimPos.y;
+				grafCBSample[frameIdx]->Write((ur_byte*)&testTransform);
+				grafPipelineVulkan->UpdateConstantBuffer(frameIdx, grafCBSample[frameIdx].get());
+				grafPipelineVulkan->BindDescriptorSet(frameIdx, grafCmdListCrnt);
+
 				grafCmdListCrnt->BeginRenderPass(grafRenderPassSample.get(), grafRenderTarget[grafCanvas->GetCurrentImageId()].get());
 				grafCmdListCrnt->BindPipeline(grafPipelineSample.get());
 				grafCmdListCrnt->BindVertexBuffer(grafVBSample.get(), 0);
@@ -350,7 +392,7 @@ int VulkanSandboxApp::Run()
 
 		drawFrameJob->Wait();
 
-		if (grafSystem != ur_null)
+		if (grafSystem != ur_null && canvasValid)
 		{
 			// present & move to next frame
 			grafCanvas->Present();
@@ -680,12 +722,17 @@ Result GrafBuffer::Initialize(GrafDevice *grafDevice, const InitParams& initPara
 	return Result(NotImplemented);
 }
 
-Result GrafBuffer::Upload(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+Result GrafBuffer::Write(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 {
 	return Result(NotImplemented);
 }
 
-Result GrafBuffer::Readback(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+Result GrafBuffer::Read(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafBuffer::Transfer(GrafBuffer* dstBuffer, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 {
 	return Result(NotImplemented);
 }
@@ -2369,8 +2416,7 @@ Result GrafBufferVulkan::Initialize(GrafDevice *grafDevice, const InitParams& in
 	// TODO: move allocation to GrafDevice (allocate big chunks of memory and return offsets, consider integrating VulkanAllocator)
 	// request buffer memory requirements and find corresponding physical device memory type for allocation
 
-	// TEMP: test, cpu accessible memory for direct mapping
-	VkMemoryPropertyFlags vkMemoryPropertiesExpected = (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	VkMemoryPropertyFlags vkMemoryPropertiesExpected = GrafUtilsVulkan::GrafToVkMemoryProperties(initParams.BufferDesc.MemoryType);
 
 	VkMemoryRequirements vkMemoryRequirements = {};
 	vkGetBufferMemoryRequirements(vkDevice, this->vkBuffer, &vkMemoryRequirements);
@@ -2421,7 +2467,7 @@ Result GrafBufferVulkan::Initialize(GrafDevice *grafDevice, const InitParams& in
 	return Result(Success);
 }
 
-Result GrafBufferVulkan::Upload(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+Result GrafBufferVulkan::Write(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 {
 	if (0 == dataSize)
 		dataSize = this->GetDesc().SizeInBytes; // entire allocation range
@@ -2446,7 +2492,7 @@ Result GrafBufferVulkan::Upload(ur_byte* dataPtr, ur_size dataSize, ur_size srcO
 	return Result(Success);
 }
 
-Result GrafBufferVulkan::Readback(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+Result GrafBufferVulkan::Read(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 {
 	if (0 == dataSize)
 		dataSize = this->GetDesc().SizeInBytes; // entire allocation range
@@ -2469,6 +2515,11 @@ Result GrafBufferVulkan::Readback(ur_byte*& dataPtr, ur_size dataSize, ur_size s
 	vkUnmapMemory(vkDevice, this->vkDeviceMemory);
 
 	return Result(Success);
+}
+
+Result GrafBufferVulkan::Transfer(GrafBuffer* dstBuffer, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	return Result(NotImplemented);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2693,6 +2744,8 @@ GrafPipelineVulkan::GrafPipelineVulkan(GrafSystem &grafSystem) :
 {
 	this->vkPipeline = VK_NULL_HANDLE;
 	this->vkPipelineLayout = VK_NULL_HANDLE;
+	this->vkDescriptorSetLayout = VK_NULL_HANDLE;
+	this->vkDescriptorPool = VK_NULL_HANDLE;
 }
 
 GrafPipelineVulkan::~GrafPipelineVulkan()
@@ -2702,10 +2755,25 @@ GrafPipelineVulkan::~GrafPipelineVulkan()
 
 Result GrafPipelineVulkan::Deinitialize()
 {
+	if (!this->vkDescriptorSets.empty())
+	{
+		vkFreeDescriptorSets(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDescriptorPool, 1, this->vkDescriptorSets.data());
+		this->vkDescriptorSets.clear();
+	}
 	if (this->vkPipelineLayout != VK_NULL_HANDLE)
 	{
 		vkDestroyPipelineLayout(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipelineLayout, ur_null);
 		this->vkPipelineLayout = VK_NULL_HANDLE;
+	}
+	if (this->vkDescriptorSetLayout != VK_NULL_HANDLE)
+	{
+		vkDestroyDescriptorSetLayout(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDescriptorSetLayout, ur_null);
+		this->vkDescriptorSetLayout = VK_NULL_HANDLE;
+	}
+	if (this->vkDescriptorPool != VK_NULL_HANDLE)
+	{
+		vkDestroyDescriptorPool(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDescriptorPool, ur_null);
+		this->vkDescriptorPool = VK_NULL_HANDLE;
 	}
 	if (this->vkPipeline != VK_NULL_HANDLE)
 	{
@@ -2756,11 +2824,61 @@ Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& 
 
 	// pipeline layout
 
+	// TEMP: hardcoded sample layout
+	VkDescriptorSetLayoutBinding vkDescriptorSetBindingInfo = {};
+	vkDescriptorSetBindingInfo.binding = 0;
+	vkDescriptorSetBindingInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	vkDescriptorSetBindingInfo.descriptorCount = 1;
+	vkDescriptorSetBindingInfo.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	vkDescriptorSetBindingInfo.pImmutableSamplers = ur_null;
+	
+	VkDescriptorSetLayoutCreateInfo vkDescriptorSetInfo = {};
+	vkDescriptorSetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	vkDescriptorSetInfo.bindingCount = 1;
+	vkDescriptorSetInfo.pBindings = &vkDescriptorSetBindingInfo;
+	vkRes = vkCreateDescriptorSetLayout(vkDevice, &vkDescriptorSetInfo, ur_null, &this->vkDescriptorSetLayout);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafPipelineVulkan: vkCreateDescriptorSetLayout failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	VkDescriptorPoolSize vkDescriptorPoolSize = {};
+	vkDescriptorPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	vkDescriptorPoolSize.descriptorCount = 3;
+
+	VkDescriptorPoolCreateInfo vkDescriptorPoolInfo = {};
+	vkDescriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	vkDescriptorPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	vkDescriptorPoolInfo.maxSets = 3;
+	vkDescriptorPoolInfo.poolSizeCount = 1;
+	vkDescriptorPoolInfo.pPoolSizes = &vkDescriptorPoolSize;
+	vkRes = vkCreateDescriptorPool(vkDevice, &vkDescriptorPoolInfo, ur_null, &this->vkDescriptorPool);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafPipelineVulkan: vkCreateDescriptorPool failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	VkDescriptorSetAllocateInfo vkDescriptorSetAllocateInfo = {};
+	vkDescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	vkDescriptorSetAllocateInfo.descriptorPool = this->vkDescriptorPool;
+	vkDescriptorSetAllocateInfo.descriptorSetCount = 3;
+	std::vector<VkDescriptorSetLayout> vkDescritorSetLayouts(3, this->vkDescriptorSetLayout);
+	vkDescriptorSetAllocateInfo.pSetLayouts = vkDescritorSetLayouts.data();
+	this->vkDescriptorSets.resize(vkDescriptorSetAllocateInfo.descriptorSetCount);
+	vkRes = vkAllocateDescriptorSets(vkDevice, &vkDescriptorSetAllocateInfo, this->vkDescriptorSets.data());
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("vkAllocateDescriptorSets: vkCreateDescriptorPool failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
 	VkPipelineLayoutCreateInfo vkPipelineLayoutInfo = {};
 	vkPipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	vkPipelineLayoutInfo.flags = 0;
-	vkPipelineLayoutInfo.setLayoutCount = 0;
-	vkPipelineLayoutInfo.pSetLayouts = ur_null;
+	vkPipelineLayoutInfo.setLayoutCount = 1;
+	vkPipelineLayoutInfo.pSetLayouts = &this->vkDescriptorSetLayout;
 	vkPipelineLayoutInfo.pushConstantRangeCount = 0;
 	vkPipelineLayoutInfo.pPushConstantRanges = ur_null;
 
@@ -2961,6 +3079,42 @@ Result GrafPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& 
 	return Result(Success);
 }
 
+Result GrafPipelineVulkan::UpdateConstantBuffer(ur_uint setIdx, GrafBuffer* buffer)
+{
+	VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
+	setIdx = (setIdx % this->vkDescriptorSets.size());
+
+	VkDescriptorBufferInfo vkDescriptorBufferInfo = {};
+	vkDescriptorBufferInfo.buffer = static_cast<GrafBufferVulkan*>(buffer)->GetVkBuffer();
+	vkDescriptorBufferInfo.offset = 0;
+	vkDescriptorBufferInfo.range = (VkDeviceSize)buffer->GetDesc().SizeInBytes;
+
+	VkWriteDescriptorSet vkWriteDescriptorSet = {};
+	vkWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	vkWriteDescriptorSet.dstSet = this->vkDescriptorSets[setIdx];
+	vkWriteDescriptorSet.dstBinding = 0;
+	vkWriteDescriptorSet.dstArrayElement = 0;
+	vkWriteDescriptorSet.descriptorCount = 1;
+	vkWriteDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	vkWriteDescriptorSet.pImageInfo = ur_null;
+	vkWriteDescriptorSet.pBufferInfo = &vkDescriptorBufferInfo;
+	vkWriteDescriptorSet.pTexelBufferView = ur_null;
+
+	vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, ur_null);
+
+	return Result(Success);
+}
+
+Result GrafPipelineVulkan::BindDescriptorSet(ur_uint setIdx, GrafCommandList* commandList)
+{
+	setIdx = (setIdx % this->vkDescriptorSets.size());
+
+	VkCommandBuffer vkCommandBuffer = static_cast<GrafCommandListVulkan*>(commandList)->GetVkCommandBuffer();
+	vkCmdBindDescriptorSets(vkCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->vkPipelineLayout, 0, 1, &this->vkDescriptorSets[setIdx], 0, ur_null);
+
+	return Result(Success);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 VkImageUsageFlags GrafUtilsVulkan::GrafToVkImageUsage(GrafImageUsageFlags usage)
@@ -3040,6 +3194,16 @@ VkBufferUsageFlags GrafUtilsVulkan::GrafToVkBufferUsage(GrafBufferUsageFlags usa
 	if (usage & (ur_uint)GrafBufferUsageFlag::ConstantBuffer)
 		vkUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 	return vkUsage;
+}
+
+VkMemoryPropertyFlags GrafUtilsVulkan::GrafToVkMemoryProperties(GrafDeviceMemoryFlags memoryType)
+{
+	VkMemoryPropertyFlags vkMemoryProperties = 0;
+	if (memoryType & (ur_uint)GrafDeviceMemoryFlag::GpuLocal)
+		vkMemoryProperties |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	if (memoryType & (ur_uint)GrafDeviceMemoryFlag::CpuVisible)
+		vkMemoryProperties |= (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	return vkMemoryProperties;
 }
 
 VkShaderStageFlagBits GrafUtilsVulkan::GrafToVkShaderStage(GrafShaderType shaderType)

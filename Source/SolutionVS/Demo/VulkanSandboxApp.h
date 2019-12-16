@@ -43,6 +43,15 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class /*UR_DECL*/ GrafDeviceMemoryFlag
+	{
+		Undefined = 0,
+		GpuLocal = (1 << 0),
+		CpuVisible = (1 << 1)
+	};
+	typedef ur_uint GrafDeviceMemoryFlags;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class /*UR_DECL*/ GrafPresentMode
 	{
 		Immediate = 0,
@@ -157,8 +166,9 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct /*UR_DECL*/ GrafBufferDesc
 	{
-		ur_size SizeInBytes;
 		GrafBufferUsageFlags Usage;
+		GrafDeviceMemoryFlags MemoryType;
+		ur_size SizeInBytes;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -509,9 +519,11 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
-		virtual Result Upload(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+		virtual Result Write(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
-		virtual Result Readback(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		virtual Result Transfer(GrafBuffer* dstBuffer, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
 		inline const GrafBufferDesc& GetDesc() const;
 
@@ -1004,9 +1016,11 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
-		virtual Result Upload(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+		virtual Result Write(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
-		virtual Result Readback(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		virtual Result Transfer(GrafBuffer* dstBuffer, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
 		inline VkBuffer GetVkBuffer() const;
 
@@ -1116,12 +1130,21 @@ namespace UnlimRealms
 
 		inline const VkRenderPass GetVkRenderPass() const;
 
+		// TEMP: updated descriptor sets directly
+		Result UpdateConstantBuffer(ur_uint setIdx, GrafBuffer* buffer);
+		Result BindDescriptorSet(ur_uint setIdx, GrafCommandList* commandList);
+
 	protected:
 
 		Result Deinitialize();
 
 		VkPipeline vkPipeline;
 		VkPipelineLayout vkPipelineLayout;
+
+		// TEMP: descriptors sample
+		VkDescriptorSetLayout vkDescriptorSetLayout;
+		VkDescriptorPool vkDescriptorPool; // TODO: should be part of GrafDevice, consider to grow/shrink allocated pool automatically
+		std::vector<VkDescriptorSet> vkDescriptorSets;
 	};
 
 	inline const VkPipeline GrafPipelineVulkan::GetVkPipeline() const
@@ -1140,6 +1163,7 @@ namespace UnlimRealms
 		static inline VkImageAspectFlags GrafToVkImageUsageAspect(GrafImageUsageFlags usage);
 		static inline VkImageLayout GrafToVkImageLayout(GrafImageState imageState);
 		static inline VkBufferUsageFlags GrafToVkBufferUsage(GrafBufferUsageFlags usage);
+		static inline VkMemoryPropertyFlags GrafToVkMemoryProperties(GrafDeviceMemoryFlags memoryType);
 		static inline VkShaderStageFlagBits GrafToVkShaderStage(GrafShaderType shaderType);
 		static inline VkPrimitiveTopology GrafToVkPrimitiveTopology(GrafPrimitiveTopology topology);
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);

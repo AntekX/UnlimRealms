@@ -52,6 +52,13 @@ PS_INPUT main(VS_INPUT input, uint instanceID : SV_InstanceID, uint vertexID : S
 
 // super simple triangle test
 
+#pragma pack_matrix(row_major)
+
+cbuffer Common : register(b0)
+{
+	float4x4 Transform;
+};
+
 struct VS_INPUT
 {
 	float3 pos		: POSITION;
@@ -86,12 +93,13 @@ PS_INPUT main(VS_INPUT input, uint vertexID : SV_VertexID, uint instanceID : SV_
 	PS_INPUT output;
 
 #if (0)
-	// no VB test
+	// no VB/CB test
 	output.pos.xyz = TestTrianlePos[vertexID % 3].xyz + InstancePos[instanceID % 4].xyz;
 	output.color.xyz = TestTrianleCol[vertexID % 3].xyz;
 #else
 	// read from VB
 	output.pos.xyz = input.pos.xyz + InstancePos[instanceID % 4].xyz;
+	output.pos.xy += Transform[3].xy;
 	output.color.xyz = input.color.xyz;
 #endif
 	output.color.w = 1.0;
