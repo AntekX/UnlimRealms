@@ -99,7 +99,7 @@ PS_INPUT main(VS_INPUT input, uint vertexID : SV_VertexID, uint instanceID : SV_
 #else
 	// read from VB
 	output.pos.xyz = input.pos.xyz + InstancePos[instanceID % 4].xyz;
-	output.pos.xy += Transform[3].xy;
+	output.pos.xy += Transform[instanceID % 4].xy;
 	output.color.xyz = input.color.xyz;
 #endif
 	output.color.w = 1.0;

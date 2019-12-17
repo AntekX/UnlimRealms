@@ -29,6 +29,8 @@ namespace UnlimRealms
 	class GrafShader;
 	class GrafRenderPass;
 	class GrafRenderTarget;
+	class GrafDescriptorTableLayout;
+	class GrafDescriptorTable;
 	class GrafPipeline;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -193,6 +195,17 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class /*UR_DECL*/ GrafShaderStageFlag
+	{
+		Undefined = -1,
+		Vertex = (0x1 << 0),
+		Pixel = (0x1 << 1),
+		Compute = (0x1 << 2),
+		All = (Vertex | Pixel | Compute)
+	};
+	typedef ur_uint GrafShaderStageFlags;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct /*UR_DECL*/ GrafViewportDesc
 	{
 		ur_float X;
@@ -234,8 +247,33 @@ namespace UnlimRealms
 		GrafVertexInputType InputType;
 		ur_uint BindingIdx;
 		ur_uint Stride;
-		ur_uint ElementCount;
 		GrafVertexElementDesc* Elements;
+		ur_uint ElementCount;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class GrafDescriptorType
+	{
+		Undefined = -1,
+		ConstantBuffer,
+		Texture,
+		Sampler,
+		Count
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct /*UR_DECL*/ GrafDescriptorRangeDesc
+	{
+		GrafDescriptorType Type;
+		ur_uint BindingCount;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct /*UR_DECL*/ GrafDescriptorTableLayoutDesc
+	{
+		GrafShaderStageFlags ShaderStageVisibility;
+		GrafDescriptorRangeDesc* DescriptorRanges;
+		ur_uint DescriptorRangeCount;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -266,6 +304,10 @@ namespace UnlimRealms
 		virtual Result CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
 
 		virtual Result CreateRenderTarget(std::unique_ptr<GrafRenderTarget>& grafRenderTarget);
+
+		virtual Result CreateDescriptorTableLayout(std::unique_ptr<GrafDescriptorTableLayout>& grafDescriptorTableLayout);
+		
+		virtual Result CreateDescriptorTable(std::unique_ptr<GrafDescriptorTable>& grafDescriptorTable);
 
 		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
 
@@ -398,6 +440,8 @@ namespace UnlimRealms
 		virtual Result EndRenderPass();
 
 		virtual Result BindPipeline(GrafPipeline* grafPipeline);
+
+		virtual Result BindDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline);
 
 		virtual Result BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx);
 
@@ -597,8 +641,8 @@ namespace UnlimRealms
 		struct /*UR_DECL*/ InitParams
 		{
 			GrafRenderPass* RenderPass;
-			ur_uint ImageCount;
 			GrafImage** Images;
+			ur_uint ImageCount;
 		};
 
 		GrafRenderTarget(GrafSystem &grafSystem);
@@ -635,6 +679,65 @@ namespace UnlimRealms
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafDescriptorTableLayout : public GrafDeviceEntity
+	{
+	public:
+
+		struct /*UR_DECL*/ InitParams
+		{
+			GrafDescriptorTableLayoutDesc LayoutDesc;
+		};
+
+		GrafDescriptorTableLayout(GrafSystem &grafSystem);
+
+		~GrafDescriptorTableLayout();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline const GrafDescriptorTableLayoutDesc& GetLayoutDesc() const;
+
+	protected:
+
+		GrafDescriptorTableLayoutDesc layoutDesc;
+		std::vector<GrafDescriptorRangeDesc> descriptorRanges;
+	};
+
+	inline const GrafDescriptorTableLayoutDesc& GrafDescriptorTableLayout::GetLayoutDesc() const
+	{
+		return this->layoutDesc;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafDescriptorTable : public GrafDeviceEntity
+	{
+	public:
+
+		struct /*UR_DECL*/ InitParams
+		{
+			GrafDescriptorTableLayout* Layout;
+		};
+
+		GrafDescriptorTable(GrafSystem &grafSystem);
+
+		~GrafDescriptorTable();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		virtual Result SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_uint bufferOfs = 0, ur_uint bufferRange = 0);
+
+		inline GrafDescriptorTableLayout* GetLayout() const;
+
+	protected:
+
+		GrafDescriptorTableLayout* layout;
+	};
+
+	inline GrafDescriptorTableLayout* GrafDescriptorTable::GetLayout() const
+	{
+		return this->layout;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafPipeline : public GrafDeviceEntity
 	{
 	public:
@@ -642,12 +745,14 @@ namespace UnlimRealms
 		struct /*UR_DECL*/ InitParams
 		{
 			GrafRenderPass* RenderPass;
-			ur_uint ShaderStageCount;
 			GrafShader** ShaderStages;
-			GrafViewportDesc ViewportDesc;
-			GrafPrimitiveTopology PrimitiveTopology;
-			ur_uint VertexInputCount;
+			ur_uint ShaderStageCount;
+			GrafDescriptorTableLayout** DescriptorTableLayouts;
+			ur_uint DescriptorTableLayoutCount;
 			GrafVertexInputDesc* VertexInputDesc;
+			ur_uint VertexInputCount;
+			GrafPrimitiveTopology PrimitiveTopology;
+			GrafViewportDesc ViewportDesc;
 			static const InitParams Default;
 		};
 
@@ -733,6 +838,10 @@ namespace UnlimRealms
 		virtual Result CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
 
 		virtual Result CreateRenderTarget(std::unique_ptr<GrafRenderTarget>& grafRenderTarget);
+
+		virtual Result CreateDescriptorTableLayout(std::unique_ptr<GrafDescriptorTableLayout>& grafDescriptorTableLayout);
+
+		virtual Result CreateDescriptorTable(std::unique_ptr<GrafDescriptorTable>& grafDescriptorTable);
 
 		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
 
@@ -865,6 +974,8 @@ namespace UnlimRealms
 		virtual Result EndRenderPass();
 
 		virtual Result BindPipeline(GrafPipeline* grafPipeline);
+
+		virtual Result BindDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline);
 
 		virtual Result BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx);
 
@@ -1115,6 +1226,59 @@ namespace UnlimRealms
 	{
 		return this->vkFramebuffer;
 	}
+	
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafDescriptorTableLayoutVulkan : public GrafDescriptorTableLayout
+	{
+	public:
+
+		GrafDescriptorTableLayoutVulkan(GrafSystem &grafSystem);
+
+		~GrafDescriptorTableLayoutVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline VkDescriptorSetLayout GetVkDescriptorSetLayout() const;
+
+	private:
+
+		Result Deinitialize();
+
+		VkDescriptorSetLayout vkDescriptorSetLayout;
+	};
+
+	inline VkDescriptorSetLayout GrafDescriptorTableLayoutVulkan::GetVkDescriptorSetLayout() const
+	{
+		return this->vkDescriptorSetLayout;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafDescriptorTableVulkan : public GrafDescriptorTable
+	{
+	public:
+
+		GrafDescriptorTableVulkan(GrafSystem &grafSystem);
+
+		~GrafDescriptorTableVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		virtual Result SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_uint bufferOfs = 0, ur_uint bufferRange = 0);
+
+		inline VkDescriptorSet GetVkDescriptorSet() const;
+
+	private:
+
+		Result Deinitialize();
+
+		VkDescriptorSet vkDescriptorSet;
+		VkDescriptorPool vkDescriptorPool;
+	};
+
+	inline VkDescriptorSet GrafDescriptorTableVulkan::GetVkDescriptorSet() const
+	{
+		return this->vkDescriptorSet;
+	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafPipelineVulkan : public GrafPipeline
@@ -1127,9 +1291,9 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
-		inline const VkPipeline GetVkPipeline() const;
+		inline VkPipeline GetVkPipeline() const;
 
-		inline const VkRenderPass GetVkRenderPass() const;
+		inline VkPipelineLayout GetVkPipelineLayout() const;
 
 		// TEMP: updated descriptor sets directly
 		Result UpdateConstantBuffer(ur_uint setIdx, GrafBuffer* buffer);
@@ -1148,9 +1312,14 @@ namespace UnlimRealms
 		std::vector<VkDescriptorSet> vkDescriptorSets;
 	};
 
-	inline const VkPipeline GrafPipelineVulkan::GetVkPipeline() const
+	inline VkPipeline GrafPipelineVulkan::GetVkPipeline() const
 	{
 		return this->vkPipeline;
+	}
+
+	inline VkPipelineLayout GrafPipelineVulkan::GetVkPipelineLayout() const
+	{
+		return this->vkPipelineLayout;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1166,6 +1335,8 @@ namespace UnlimRealms
 		static inline VkBufferUsageFlags GrafToVkBufferUsage(GrafBufferUsageFlags usage);
 		static inline VkMemoryPropertyFlags GrafToVkMemoryProperties(GrafDeviceMemoryFlags memoryType);
 		static inline VkShaderStageFlagBits GrafToVkShaderStage(GrafShaderType shaderType);
+		static inline VkShaderStageFlags GrafToVkShaderStage(GrafShaderStageFlags shaderStages);
+		static inline VkDescriptorType GrafToVkDescriptorType(GrafDescriptorType descriptorType);
 		static inline VkPrimitiveTopology GrafToVkPrimitiveTopology(GrafPrimitiveTopology topology);
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
