@@ -11,6 +11,7 @@
 #include "Resources/Resources.h"
 #include "Core/Math.h"
 #include "ImguiRender/ImguiRender.h"
+#include "3rdParty/ResIL/include/IL/il.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
@@ -84,6 +85,7 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafShader> grafShaderSampleVS;
 	std::unique_ptr<GrafShader> grafShaderSamplePS;
 	std::unique_ptr<GrafBuffer> grafVBSample;
+	std::unique_ptr<GrafImage> grafImageSample;
 	std::unique_ptr<GrafRenderPass> grafRenderPassSample;
 	std::unique_ptr<GrafDescriptorTableLayout> grafBindingLayoutSample;
 	std::unique_ptr<GrafPipeline> grafPipelineSample;
@@ -292,6 +294,10 @@ int VulkanSandboxApp::Run()
 		//realm.AddComponent(Component::GetUID<GrafSystem>(), std::unique_ptr<Component>(static_cast<Component*>(std::move(grafSystem))));
 		//GrafSystem* grafSystem = realm.GetComponent<GrafSystem>();
 	}
+
+	// load & upload sample image
+	//GrafCommandList* uploadCommadList = grafMainCmdList[frameIdx].get();
+	//grafRes = GrafUtils::CreateImageFromFile(grafDevice.get(), uploadCommadList, grafImageSample, "../Res/testimage.dds");
 
 	// initialize sample primitive renering
 
@@ -701,6 +707,26 @@ Result GrafCommandList::Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint
 	return Result(NotImplemented);
 }
 
+Result GrafCommandList::Copy(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::Copy(GrafBuffer* srcBuffer, GrafImage* dstImage, ur_size bufferOffset, BoxI imageRegion)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset, BoxI imageRegion)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafCommandList::Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion, BoxI dstRegion)
+{
+	return Result(NotImplemented);
+}
+
 GrafFence::GrafFence(GrafSystem &grafSystem) :
 	GrafDeviceEntity(grafSystem)
 {
@@ -785,6 +811,16 @@ Result GrafImage::Initialize(GrafDevice *grafDevice, const InitParams& initParam
 	return Result(NotImplemented);
 }
 
+Result GrafImage::Write(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	return Result(NotImplemented);
+}
+
+Result GrafImage::Read(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	return Result(NotImplemented);
+}
+
 GrafBuffer::GrafBuffer(GrafSystem &grafSystem) :
 	GrafDeviceEntity(grafSystem)
 {
@@ -807,11 +843,6 @@ Result GrafBuffer::Write(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, 
 }
 
 Result GrafBuffer::Read(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
-{
-	return Result(NotImplemented);
-}
-
-Result GrafBuffer::Transfer(GrafBuffer* dstBuffer, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 {
 	return Result(NotImplemented);
 }
@@ -943,6 +974,97 @@ Result GrafRenderPass::Initialize(GrafDevice* grafDevice)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+Result GrafUtils::CreateImageFromFile(GrafDevice* grafDevice, GrafCommandList* grafUploadCmdList, std::unique_ptr<GrafImage> &grafImage, const std::string &resName)
+{
+	if (ur_null == grafDevice)
+		return Result(InvalidArgs);
+
+	Realm& realm = grafDevice->GetRealm();
+	GrafSystem& grafSystem = grafDevice->GetGrafSystem();
+
+	ILconst_string ilResName;
+#ifdef _UNICODE
+	// convert name
+	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> strConverter;
+	std::wstring resNameW = strConverter.from_bytes(resName);
+	ilResName = resNameW.c_str();
+#else
+	ilResName = resName.c_str();
+#endif
+
+	ILuint imageId;
+	ilInit();
+	ilGenImages(1, &imageId);
+	ilBindImage(imageId);
+	ilSetInteger(IL_KEEP_DXTC_DATA, IL_TRUE);
+	ilSetInteger(IL_DECOMPRESS_DXTC, IL_FALSE);
+	if (ilLoadImage(ilResName) == IL_FALSE)
+		return LogResult(Failure, realm.GetLog(), Log::Error, "CreateTextureFromFile: failed to load image " + resName);
+
+	ILint ilWidth, ilHeight, ilMips, ilFormat, ilDXTFormat, ilBpp, ilBpc;
+	ilGetImageInteger(IL_IMAGE_WIDTH, &ilWidth);
+	ilGetImageInteger(IL_IMAGE_HEIGHT, &ilHeight);
+	ilGetImageInteger(IL_IMAGE_FORMAT, &ilFormat);
+	ilGetImageInteger(IL_IMAGE_BPP, &ilBpp);
+	ilGetImageInteger(IL_IMAGE_BPC, &ilBpc);
+	ilGetImageInteger(IL_NUM_MIPMAPS, &ilMips);
+	ilGetImageInteger(IL_DXTC_DATA_FORMAT, &ilDXTFormat);
+
+	struct LevelData
+	{
+		ur_byte* Ptr;
+		ur_uint RowPitch;
+	};
+	std::vector<LevelData> levelData(ilMips + 1);
+	levelData[0].Ptr = (ur_byte*)ilGetData();
+	levelData[0].RowPitch = (ur_uint)ilWidth * ilBpp * ilBpc;
+
+	// TODO: use cpu visible GrafBuffer to upload data to GrafImage
+
+	GrafImageDesc imageDesc;
+	imageDesc.Type = GrafImageType::Tex2D;
+	imageDesc.Format = GrafFormat::R8G8B8A8_UNORM;
+	imageDesc.Size.x = (ur_uint)ilWidth;
+	imageDesc.Size.y = (ur_uint)ilHeight;
+	imageDesc.Size.z = 1;
+	imageDesc.MipLevels = 1;// (ur_uint)ilMips + 1;
+	imageDesc.Usage = (ur_uint)GrafImageUsageFlag::ShaderInput;
+	imageDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
+	if (ilDXTFormat != IL_DXT_NO_COMP)
+	{
+		switch (ilDXTFormat)
+		{
+		case IL_DXT1: imageDesc.Format = GrafFormat::BC1_RGBA_UNORM_BLOCK; break;
+		case IL_DXT5: imageDesc.Format = GrafFormat::BC3_UNORM_BLOCK; break;
+		}
+		levelData[0].Ptr = (ur_byte*)ilGetDXTCData();
+	}
+	/*for (ur_uint i = 1; i < imageDesc.MipLevels; ++i)
+	{
+		levelData[i].RowPitch = levelData[i - 1].RowPitch / 2;
+		levelData[i].Ptr = (ur_byte*)(ilDXTFormat != IL_DXT_NO_COMP ? ilGetMipDXTCData(i - 1) : ilGetMipData(i - 1));
+	}*/
+
+	std::unique_ptr<GrafImage> newImage;
+	Result res = grafSystem.CreateImage(newImage);
+	if (Succeeded(res))
+	{
+		res = newImage->Initialize(grafDevice, { imageDesc });
+		if (Succeeded(res))
+		{
+			//newImage->Write(levelData[0].Ptr);
+		}
+	}
+
+	ilDeleteImages(1, &imageId);
+
+	grafImage = std::move(newImage);
+
+	return Result(Success);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 static thread_local ClockTime ProfilerThreadTimerBegin;
 static thread_local ClockTime ProfilerThreadTimerEnd;
 
@@ -1009,10 +1131,11 @@ Profiler::ScopedMarker::~ScopedMarker()
 
 // binding offsets per descriptor type
 // spir-v bytecode compiled from HLSL must use "-fvk-<b,s,t,u>-shift N M" command to apply offsets to corresponding register types (b,s,t,u)
-#define UR_GRAF_VULKAN_BINDNIG_OFS_BUFFER 0
-#define UR_GRAF_VULKAN_BINDNIG_OFS_SAMPLER 256
-#define UR_GRAF_VULKAN_BINDNIG_OFS_TEXTURE 512
-#define UR_GRAF_VULKAN_BINDNIG_OFS_UAVRES 768
+static const ur_uint VulkanBindingsPerSpace = 256;
+static const ur_uint VulkanBindingOffsetBuffer = 0;
+static const ur_uint VulkanBindingOffsetSampler = VulkanBindingOffsetBuffer + VulkanBindingsPerSpace;
+static const ur_uint VulkanBindingOffsetTexture = VulkanBindingOffsetSampler + VulkanBindingsPerSpace;
+static const ur_uint VulkanBindingOffsetRWResource = VulkanBindingOffsetTexture + VulkanBindingsPerSpace;
 
 #if defined(UR_GRAF_VULKAN_DEBUG_LAYER)
 static const char* VulkanLayers[] = {
@@ -1770,6 +1893,111 @@ Result GrafCommandListVulkan::Draw(ur_uint vertexCount, ur_uint instanceCount, u
 	return Result(Success);
 }
 
+Result GrafCommandListVulkan::Copy(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	if (ur_null == srcBuffer || ur_null == dstBuffer)
+		return Result(InvalidArgs);
+
+	VkBufferCopy vkBufferCopy = {};
+	vkBufferCopy.srcOffset = (VkDeviceSize)srcOffset;
+	vkBufferCopy.dstOffset = (VkDeviceSize)dstOffset;
+	vkBufferCopy.size = VkDeviceSize(dataSize > 0 ? dataSize : srcBuffer->GetDesc().SizeInBytes);
+
+	vkCmdCopyBuffer(this->vkCommandBuffer, static_cast<GrafBufferVulkan*>(srcBuffer)->GetVkBuffer(), static_cast<GrafBufferVulkan*>(dstBuffer)->GetVkBuffer(), 1, &vkBufferCopy);
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::Copy(GrafBuffer* srcBuffer, GrafImage* dstImage, ur_size bufferOffset, BoxI imageRegion)
+{
+	if (ur_null == srcBuffer || ur_null == dstImage)
+		return Result(InvalidArgs);
+
+	VkBufferImageCopy vkBufferImageCopy = {};
+	vkBufferImageCopy.bufferOffset = bufferOffset;
+	vkBufferImageCopy.bufferRowLength = 0;
+	vkBufferImageCopy.bufferImageHeight = 0;
+	vkBufferImageCopy.imageOffset.x = (ur_int32)imageRegion.Min.x;
+	vkBufferImageCopy.imageOffset.y = (ur_int32)imageRegion.Min.y;
+	vkBufferImageCopy.imageOffset.z = (ur_int32)imageRegion.Min.z;
+	vkBufferImageCopy.imageExtent.width = (ur_uint32)(imageRegion.SizeX() > 0 ? imageRegion.SizeX() : dstImage->GetDesc().Size.x);
+	vkBufferImageCopy.imageExtent.height = (ur_uint32)(imageRegion.SizeY() > 0 ? imageRegion.SizeY() : dstImage->GetDesc().Size.y);
+	vkBufferImageCopy.imageExtent.depth = (ur_uint32)(imageRegion.SizeZ() > 0 ? imageRegion.SizeZ() : dstImage->GetDesc().Size.z);
+	vkBufferImageCopy.imageSubresource.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(dstImage->GetDesc().Usage);
+	vkBufferImageCopy.imageSubresource.mipLevel = 0;
+	vkBufferImageCopy.imageSubresource.baseArrayLayer = 0;
+	vkBufferImageCopy.imageSubresource.layerCount = 1;
+
+	vkCmdCopyBufferToImage(this->vkCommandBuffer, static_cast<GrafBufferVulkan*>(srcBuffer)->GetVkBuffer(),
+		static_cast<GrafImageVulkan*>(dstImage)->GetVkImage(), GrafUtilsVulkan::GrafToVkImageLayout(dstImage->GetState()),
+		1, &vkBufferImageCopy);
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset, BoxI imageRegion)
+{
+	if (ur_null == srcImage || ur_null == dstBuffer)
+		return Result(InvalidArgs);
+
+	VkBufferImageCopy vkBufferImageCopy = {};
+	vkBufferImageCopy.bufferOffset = bufferOffset;
+	vkBufferImageCopy.bufferRowLength = 0;
+	vkBufferImageCopy.bufferImageHeight = 0;
+	vkBufferImageCopy.imageOffset.x = (ur_int32)imageRegion.Min.x;
+	vkBufferImageCopy.imageOffset.y = (ur_int32)imageRegion.Min.y;
+	vkBufferImageCopy.imageOffset.z = (ur_int32)imageRegion.Min.z;
+	vkBufferImageCopy.imageExtent.width = (ur_uint32)(imageRegion.SizeX() > 0 ? imageRegion.SizeX() : srcImage->GetDesc().Size.x);
+	vkBufferImageCopy.imageExtent.height = (ur_uint32)(imageRegion.SizeY() > 0 ? imageRegion.SizeY() : srcImage->GetDesc().Size.y);
+	vkBufferImageCopy.imageExtent.depth = (ur_uint32)(imageRegion.SizeZ() > 0 ? imageRegion.SizeZ() : srcImage->GetDesc().Size.z);
+	vkBufferImageCopy.imageSubresource.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(srcImage->GetDesc().Usage);
+	vkBufferImageCopy.imageSubresource.mipLevel = 0;
+	vkBufferImageCopy.imageSubresource.baseArrayLayer = 0;
+	vkBufferImageCopy.imageSubresource.layerCount = 1;
+
+	vkCmdCopyImageToBuffer(this->vkCommandBuffer, static_cast<GrafImageVulkan*>(srcImage)->GetVkImage(), GrafUtilsVulkan::GrafToVkImageLayout(srcImage->GetState()),
+		static_cast<GrafBufferVulkan*>(dstBuffer)->GetVkBuffer(),
+		1, &vkBufferImageCopy);
+
+	return Result(Success);
+}
+
+Result GrafCommandListVulkan::Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion, BoxI dstRegion)
+{
+	if (ur_null == srcImage || ur_null == dstImage)
+		return Result(InvalidArgs);
+
+	ur_int3 srcSize = srcRegion.Size();
+	ur_int3 dstSize = dstRegion.Size();
+	if (srcSize != dstSize)
+		return Result(InvalidArgs);
+
+	VkImageCopy vkImageCopy = {};
+	vkImageCopy.srcSubresource.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(srcImage->GetDesc().Usage);
+	vkImageCopy.srcSubresource.mipLevel = 0;
+	vkImageCopy.srcSubresource.baseArrayLayer = 0;
+	vkImageCopy.srcSubresource.layerCount = 1;
+	vkImageCopy.srcOffset.x = (ur_int32)srcRegion.Min.x;
+	vkImageCopy.srcOffset.y = (ur_int32)srcRegion.Min.y;
+	vkImageCopy.srcOffset.z = (ur_int32)srcRegion.Min.z;
+	vkImageCopy.dstSubresource.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(dstImage->GetDesc().Usage);
+	vkImageCopy.dstSubresource.mipLevel = 0;
+	vkImageCopy.dstSubresource.baseArrayLayer = 0;
+	vkImageCopy.dstSubresource.layerCount = 1;
+	vkImageCopy.dstOffset.x = (ur_int32)srcRegion.Min.x;
+	vkImageCopy.dstOffset.y = (ur_int32)srcRegion.Min.y;
+	vkImageCopy.dstOffset.z = (ur_int32)srcRegion.Min.z;
+	vkImageCopy.extent.width = (ur_uint32)(srcSize.x > 0 ? srcSize.x : srcImage->GetDesc().Size.x);
+	vkImageCopy.extent.height = (ur_uint32)(srcSize.y > 0 ? srcSize.y : srcImage->GetDesc().Size.y);
+	vkImageCopy.extent.depth = (ur_uint32)(srcSize.z > 0 ? srcSize.z : srcImage->GetDesc().Size.z);
+
+	vkCmdCopyImage(this->vkCommandBuffer, static_cast<GrafImageVulkan*>(srcImage)->GetVkImage(), GrafUtilsVulkan::GrafToVkImageLayout(srcImage->GetState()),
+		static_cast<GrafImageVulkan*>(dstImage)->GetVkImage(), GrafUtilsVulkan::GrafToVkImageLayout(dstImage->GetState()),
+		1, &vkImageCopy);
+
+	return Result(Success);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 GrafFenceVulkan::GrafFenceVulkan(GrafSystem &grafSystem) :
@@ -2140,6 +2368,7 @@ Result GrafCanvasVulkan::Initialize(GrafDevice* grafDevice, const InitParams& in
 		imageParams.ImageDesc.Size.z = 0;
 		imageParams.ImageDesc.MipLevels = 1;
 		imageParams.ImageDesc.Usage = GrafUtilsVulkan::VkToGrafImageUsage(vkSwapChainInfo.imageUsage);
+		imageParams.ImageDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 		
 		std::unique_ptr<GrafImage> grafImage;
 		grafSystemVulkan.CreateImage(grafImage);
@@ -2376,6 +2605,10 @@ GrafImageVulkan::GrafImageVulkan(GrafSystem &grafSystem) :
 	this->imageExternalHandle = false;
 	this->vkImage = VK_NULL_HANDLE;
 	this->vkImageView = VK_NULL_HANDLE;
+	this->vkDeviceMemory = VK_NULL_HANDLE;
+	this->vkDeviceMemoryOffset = 0;
+	this->vkDeviceMemorySize = 0;
+	this->vkDeviceMemoryAlignment = 0;
 }
 
 GrafImageVulkan::~GrafImageVulkan()
@@ -2396,6 +2629,15 @@ Result GrafImageVulkan::Deinitialize()
 	}
 	this->vkImage = VK_NULL_HANDLE;
 	this->imageExternalHandle = false;
+	
+	this->vkDeviceMemoryOffset = 0;
+	this->vkDeviceMemorySize = 0;
+	this->vkDeviceMemoryAlignment = 0;
+	if (this->vkDeviceMemory != VK_NULL_HANDLE)
+	{
+		vkFreeMemory(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDeviceMemory, ur_null);
+		this->vkDeviceMemory = VK_NULL_HANDLE;
+	}
 
 	return Result(Success);
 }
@@ -2405,16 +2647,158 @@ Result GrafImageVulkan::Initialize(GrafDevice *grafDevice, const InitParams& ini
 	this->Deinitialize();
 
 	GrafImage::Initialize(grafDevice, initParams);
+
+	// validate logical device
+
+	GrafSystemVulkan& grafSystemVulkan = static_cast<GrafSystemVulkan&>(this->GetGrafSystem());
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+	if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+	{
+		return ResultError(InvalidArgs, std::string("GrafImageVulkan: failed to initialize, invalid GrafDevice"));
+	}
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+	VkPhysicalDevice vkPhysicalDevice = grafSystemVulkan.GetVkPhysicalDevice(grafDeviceVulkan->GetDeviceId());
+	ur_uint32 vkDeviceGraphicsQueueId = (ur_uint32)grafDeviceVulkan->GetVkDeviceGraphicsQueueId();
 	
-	// TODO
+	// create image
+
+	ur_bool isStagingImage = (initParams.ImageDesc.MemoryType & (ur_uint)GrafDeviceMemoryFlag::CpuVisible);
+	VkImageCreateInfo vkImageInfo = {};
+	vkImageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	vkImageInfo.flags = 0;
+	vkImageInfo.imageType = GrafUtilsVulkan::GrafToVkImageType(initParams.ImageDesc.Type);
+	vkImageInfo.format = GrafUtilsVulkan::GrafToVkFormat(initParams.ImageDesc.Format);
+	vkImageInfo.extent.width = (ur_uint32)initParams.ImageDesc.Size.x;
+	vkImageInfo.extent.height = (ur_uint32)initParams.ImageDesc.Size.y;
+	vkImageInfo.extent.depth = (ur_uint32)initParams.ImageDesc.Size.z;
+	vkImageInfo.mipLevels = (ur_uint32)initParams.ImageDesc.MipLevels;
+	vkImageInfo.arrayLayers = 1;
+	vkImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	vkImageInfo.tiling = (isStagingImage ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL);
+	vkImageInfo.usage = GrafUtilsVulkan::GrafToVkImageUsage(initParams.ImageDesc.Usage);
+	vkImageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	vkImageInfo.queueFamilyIndexCount = 1;
+	vkImageInfo.pQueueFamilyIndices = &vkDeviceGraphicsQueueId;
+	vkImageInfo.initialLayout = (isStagingImage ? VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED);
+
+	VkResult vkRes = vkCreateImage(vkDevice, &vkImageInfo, ur_null, &this->vkImage);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafImageVulkan: vkCreateImage failed with VkResult = ") + VkResultToString(vkRes));
+	}
 
 	// create views
 
 	Result res = this->CreateVkImageViews();
 	if (Failed(res))
+	{
+		this->Deinitialize();
 		return res;
+	}
+
+	// TODO: move allocation to GrafDevice (allocate big chunks of memory and return offsets, consider integrating VulkanAllocator)
+	// request image memory requirements and find corresponding physical device memory type for allocation
+
+	VkMemoryPropertyFlags vkMemoryPropertiesExpected = GrafUtilsVulkan::GrafToVkMemoryProperties(initParams.ImageDesc.MemoryType);
+
+	VkMemoryRequirements vkMemoryRequirements = {};
+	vkGetImageMemoryRequirements(vkDevice, this->vkImage, &vkMemoryRequirements);
+
+	VkPhysicalDeviceMemoryProperties vkDeviceMemoryProperties;
+	vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &vkDeviceMemoryProperties);
+
+	VkMemoryAllocateInfo vkAllocateInfo = {};
+	vkAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	vkAllocateInfo.allocationSize = vkMemoryRequirements.size;
+	vkAllocateInfo.memoryTypeIndex = ur_uint32(-1);
+	for (ur_uint32 itype = 0; itype < vkDeviceMemoryProperties.memoryTypeCount; ++itype)
+	{
+		if (vkDeviceMemoryProperties.memoryTypes[itype].propertyFlags & vkMemoryPropertiesExpected)
+		{
+			vkAllocateInfo.memoryTypeIndex = itype;
+			break;
+		}
+	}
+	if (ur_uint32(-1) == vkAllocateInfo.memoryTypeIndex)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, "GrafImageVulkan: failed to find required memory type");
+	}
+
+	// allocate memory
+
+	vkRes = vkAllocateMemory(vkDevice, &vkAllocateInfo, ur_null, &this->vkDeviceMemory);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafImageVulkan: vkAllocateMemory failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	// bind device memory allocation to buffer
+
+	vkRes = vkBindImageMemory(vkDevice, this->vkImage, this->vkDeviceMemory, 0);
+	if (vkRes != VK_SUCCESS)
+	{
+		this->Deinitialize();
+		return ResultError(Failure, std::string("GrafImageVulkan: vkBindBufferMemory failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	this->vkDeviceMemoryOffset = 0;
+	this->vkDeviceMemorySize = vkMemoryRequirements.size;
+	this->vkDeviceMemoryAlignment = vkMemoryRequirements.alignment;
 	
-	return Result(NotImplemented);
+	return Result(Success);
+}
+
+Result GrafImageVulkan::Write(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	if (0 == dataSize)
+		dataSize = this->vkDeviceMemorySize; // entire allocation range
+
+	if (ur_null == dataPtr || dstOffset + dataSize > this->vkDeviceMemorySize)
+		return Result(InvalidArgs);
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+	void* mappedMemoryPtr = ur_null;
+	VkResult vkRes = vkMapMemory(vkDevice, this->vkDeviceMemory, this->vkDeviceMemoryOffset + dstOffset, dataSize, 0, &mappedMemoryPtr);
+	if (vkRes != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafImageVulkan: vkMapMemory failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	memcpy(mappedMemoryPtr, dataPtr + srcOffset, dataSize);
+
+	vkUnmapMemory(vkDevice, this->vkDeviceMemory);
+
+	return Result(Success);
+}
+
+Result GrafImageVulkan::Read(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+{
+	if (0 == dataSize)
+		dataSize = this->vkDeviceMemorySize; // entire allocation range
+
+	if (ur_null == dataPtr || srcOffset + dataSize > this->vkDeviceMemorySize)
+		return Result(InvalidArgs);
+
+	GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
+	VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+	void* mappedMemoryPtr = ur_null;
+	VkResult vkRes = vkMapMemory(vkDevice, this->vkDeviceMemory, this->vkDeviceMemoryOffset + srcOffset, dataSize, 0, &mappedMemoryPtr);
+	if (vkRes != VK_SUCCESS)
+	{
+		return ResultError(Failure, std::string("GrafImageVulkan: vkMapMemory failed with VkResult = ") + VkResultToString(vkRes));
+	}
+
+	memcpy(dataPtr + dstOffset, mappedMemoryPtr, dataSize);
+
+	vkUnmapMemory(vkDevice, this->vkDeviceMemory);
+
+	return Result(Success);
 }
 
 Result GrafImageVulkan::InitializeFromVkImage(GrafDevice *grafDevice, const InitParams& initParams, VkImage vkImage)
@@ -2669,11 +3053,6 @@ Result GrafBufferVulkan::Read(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOf
 	vkUnmapMemory(vkDevice, this->vkDeviceMemory);
 
 	return Result(Success);
-}
-
-Result GrafBufferVulkan::Transfer(GrafBuffer* dstBuffer, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
-{
-	return Result(NotImplemented);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3499,6 +3878,8 @@ VkImageUsageFlags GrafUtilsVulkan::GrafToVkImageUsage(GrafImageUsageFlags usage)
 		vkImageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	if (usage & (ur_uint)GrafImageUsageFlag::TransferDst)
 		vkImageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	if (usage & (ur_uint)GrafImageUsageFlag::ShaderInput)
+		vkImageUsage |= (VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 	return vkImageUsage;
 }
 
@@ -3513,6 +3894,10 @@ GrafImageUsageFlags GrafUtilsVulkan::VkToGrafImageUsage(VkImageUsageFlags usage)
 		grafUsage |= (ur_uint)GrafImageUsageFlag::TransferSrc;
 	if (VK_IMAGE_USAGE_TRANSFER_DST_BIT & usage)
 		grafUsage |= (ur_uint)GrafImageUsageFlag::TransferDst;
+	if (usage & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT)
+		grafUsage |= (ur_uint)GrafImageUsageFlag::ShaderInput;
+	if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
+		grafUsage |= (ur_uint)GrafImageUsageFlag::ShaderInput;
 	return grafUsage;
 }
 
@@ -3614,9 +3999,9 @@ VkDescriptorType GrafUtilsVulkan::GrafToVkDescriptorType(GrafDescriptorType desc
 }
 
 static const ur_uint32 GrafToVkDescriptorBindingOffsetLUT[(ur_uint)GrafDescriptorType::Count] = {
-	UR_GRAF_VULKAN_BINDNIG_OFS_BUFFER,
-	UR_GRAF_VULKAN_BINDNIG_OFS_SAMPLER,
-	UR_GRAF_VULKAN_BINDNIG_OFS_TEXTURE
+	VulkanBindingOffsetBuffer,
+	VulkanBindingOffsetSampler,
+	VulkanBindingOffsetTexture
 };
 
 ur_uint32 GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(GrafDescriptorType descriptorType)
@@ -3664,7 +4049,13 @@ static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {
 	VK_FORMAT_R32_SFLOAT,
 	VK_FORMAT_R32G32_SFLOAT,
 	VK_FORMAT_R32G32B32_SFLOAT,
-	VK_FORMAT_R32G32B32A32_SFLOAT
+	VK_FORMAT_R32G32B32A32_SFLOAT,
+	VK_FORMAT_BC1_RGB_UNORM_BLOCK,
+	VK_FORMAT_BC1_RGB_SRGB_BLOCK,
+	VK_FORMAT_BC1_RGBA_UNORM_BLOCK,
+	VK_FORMAT_BC1_RGBA_SRGB_BLOCK,
+	VK_FORMAT_BC3_UNORM_BLOCK,
+	VK_FORMAT_BC3_SRGB_BLOCK,
 };
 VkFormat GrafUtilsVulkan::GrafToVkFormat(GrafFormat grafFormat)
 {
@@ -3803,14 +4194,14 @@ static const GrafFormat VkToGrafFormatLUT[VK_FORMAT_END_RANGE + 1] = {
 	GrafFormat::Unsupported,			// VK_FORMAT_D16_UNORM_S8_UINT = 128,
 	GrafFormat::Unsupported,			// VK_FORMAT_D24_UNORM_S8_UINT = 129,
 	GrafFormat::Unsupported,			// VK_FORMAT_D32_SFLOAT_S8_UINT = 130,
-	GrafFormat::Unsupported,			// VK_FORMAT_BC1_RGB_UNORM_BLOCK = 131,
-	GrafFormat::Unsupported,			// VK_FORMAT_BC1_RGB_SRGB_BLOCK = 132,
-	GrafFormat::Unsupported,			// VK_FORMAT_BC1_RGBA_UNORM_BLOCK = 133,
-	GrafFormat::Unsupported,			// VK_FORMAT_BC1_RGBA_SRGB_BLOCK = 134,
+	GrafFormat::BC1_RGB_UNORM_BLOCK,	// VK_FORMAT_BC1_RGB_UNORM_BLOCK = 131,
+	GrafFormat::BC1_RGB_SRGB_BLOCK,		// VK_FORMAT_BC1_RGB_SRGB_BLOCK = 132,
+	GrafFormat::BC1_RGBA_UNORM_BLOCK,	// VK_FORMAT_BC1_RGBA_UNORM_BLOCK = 133,
+	GrafFormat::BC1_RGBA_SRGB_BLOCK,	// VK_FORMAT_BC1_RGBA_SRGB_BLOCK = 134,
 	GrafFormat::Unsupported,			// VK_FORMAT_BC2_UNORM_BLOCK = 135,
 	GrafFormat::Unsupported,			// VK_FORMAT_BC2_SRGB_BLOCK = 136,
-	GrafFormat::Unsupported,			// VK_FORMAT_BC3_UNORM_BLOCK = 137,
-	GrafFormat::Unsupported,			// VK_FORMAT_BC3_SRGB_BLOCK = 138,
+	GrafFormat::BC3_UNORM_BLOCK,		// VK_FORMAT_BC3_UNORM_BLOCK = 137,
+	GrafFormat::BC3_SRGB_BLOCK,			// VK_FORMAT_BC3_SRGB_BLOCK = 138,
 	GrafFormat::Unsupported,			// VK_FORMAT_BC4_UNORM_BLOCK = 139,
 	GrafFormat::Unsupported,			// VK_FORMAT_BC4_SNORM_BLOCK = 140,
 	GrafFormat::Unsupported,			// VK_FORMAT_BC5_UNORM_BLOCK = 141,

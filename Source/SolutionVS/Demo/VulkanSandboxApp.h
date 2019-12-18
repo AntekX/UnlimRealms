@@ -107,6 +107,12 @@ namespace UnlimRealms
 		R32G32_SFLOAT,
 		R32G32B32_SFLOAT,
 		R32G32B32A32_SFLOAT,
+		BC1_RGB_UNORM_BLOCK,
+		BC1_RGB_SRGB_BLOCK,
+		BC1_RGBA_UNORM_BLOCK,
+		BC1_RGBA_SRGB_BLOCK,
+		BC3_UNORM_BLOCK,
+		BC3_SRGB_BLOCK,
 		Count
 	};
 
@@ -127,7 +133,8 @@ namespace UnlimRealms
 		TransferSrc = (1 << 0),
 		TransferDst = (1 << 1),
 		ColorRenderTarget = (1 << 2),
-		DepthStencilRenderTarget = (1 << 3)
+		DepthStencilRenderTarget = (1 << 3),
+		ShaderInput = (1 << 4)
 	};
 	typedef ur_uint GrafImageUsageFlags;
 
@@ -154,6 +161,7 @@ namespace UnlimRealms
 		ur_uint3 Size;
 		ur_uint MipLevels;
 		GrafImageUsageFlags Usage;
+		GrafDeviceMemoryFlags MemoryType;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -459,6 +467,14 @@ namespace UnlimRealms
 		virtual Result BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx);
 
 		virtual Result Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance);
+
+		virtual Result Copy(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		virtual Result Copy(GrafBuffer* srcBuffer, GrafImage* dstImage, ur_size bufferOffset = 0, BoxI imageRegion = {});
+
+		virtual Result Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset = 0, BoxI imageRegion = {});
+
+		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = {}, BoxI dstRegion = {});
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -540,6 +556,10 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
+		virtual Result Write(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
 		inline const GrafImageDesc& GetDesc() const;
 
 		inline const GrafImageState& GetState() const;
@@ -579,8 +599,6 @@ namespace UnlimRealms
 		virtual Result Write(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
 		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
-
-		virtual Result Transfer(GrafBuffer* dstBuffer, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
 		inline const GrafBufferDesc& GetDesc() const;
 
@@ -774,6 +792,14 @@ namespace UnlimRealms
 		~GrafPipeline();
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafUtils
+	{
+	public:
+
+		static Result CreateImageFromFile(GrafDevice *grafDevice, GrafCommandList* grafUploadCmdList, std::unique_ptr<GrafImage> &grafImage, const std::string &resName);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -994,6 +1020,14 @@ namespace UnlimRealms
 
 		virtual Result Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance);
 
+		virtual Result Copy(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		virtual Result Copy(GrafBuffer* srcBuffer, GrafImage* dstImage, ur_size bufferOffset = 0, BoxI imageRegion = {});
+
+		virtual Result Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset = 0, BoxI imageRegion = {});
+
+		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = {}, BoxI dstRegion = {});
+
 		inline VkCommandBuffer GetVkCommandBuffer() const;
 
 		inline VkFence GetVkSubmitFence() const;
@@ -1095,6 +1129,10 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
+		virtual Result Write(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
 		Result InitializeFromVkImage(GrafDevice *grafDevice, const InitParams& initParams, VkImage vkImage);
 
 		inline VkImage GetVkImage() const;
@@ -1113,6 +1151,10 @@ namespace UnlimRealms
 		ur_bool imageExternalHandle;
 		VkImage vkImage;
 		VkImageView vkImageView;
+		VkDeviceMemory vkDeviceMemory;
+		VkDeviceSize vkDeviceMemoryOffset;
+		VkDeviceSize vkDeviceMemorySize;
+		VkDeviceSize vkDeviceMemoryAlignment;
 	};
 
 	inline VkImage GrafImageVulkan::GetVkImage() const
@@ -1144,8 +1186,6 @@ namespace UnlimRealms
 		virtual Result Write(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
 		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
-
-		virtual Result Transfer(GrafBuffer* dstBuffer, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
 		inline VkBuffer GetVkBuffer() const;
 

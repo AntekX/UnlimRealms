@@ -1247,6 +1247,11 @@ namespace UnlimRealms
 
 		TBoundingBox(const TBoundingBox<T> &bb) : Min(bb.Min), Max(bb.Max) {}
 
+		TVector3<T> Size() const
+		{
+			return this->Max - this->Min;
+		}
+
 		T SizeX() const
 		{
 			return this->Max.x - this->Min.x;
@@ -1415,11 +1420,12 @@ namespace UnlimRealms
 	typedef TVector4<ur_float>			Vector4;
 	typedef TMatrix<ur_float>			Matrix;
 	typedef TVector4<ur_float>			Color;
-	typedef TBoundingSphere<ur_float>	BoundingSphere;
-	typedef TBoundingBox<ur_float>		BoundingBox;
 	typedef TRect<ur_float>				RectF;
 	typedef TRect<ur_double>			RectD;
 	typedef TRect<ur_int>				RectI;
+	typedef TBoundingSphere<ur_float>	BoundingSphere;
+	typedef TBoundingBox<ur_float>		BoundingBox;
+	typedef TBoundingBox<ur_int>		BoxI;
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
