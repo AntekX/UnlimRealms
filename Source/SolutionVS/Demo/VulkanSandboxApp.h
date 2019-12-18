@@ -252,12 +252,24 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// note: binding ids from different spaces can overlap
+	enum class GrafDescriptorSpaceType
+	{
+		Undefined = -1,
+		Buffer,
+		Sampler,
+		Texture,
+		RWResource,
+		Count
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class GrafDescriptorType
 	{
 		Undefined = -1,
-		ConstantBuffer,
-		Texture,
-		Sampler,
+		ConstantBuffer,	// space: Buffer
+		Sampler,		// space: Sampler
+		Texture,		// space: Texture
 		Count
 	};
 
@@ -265,6 +277,7 @@ namespace UnlimRealms
 	struct /*UR_DECL*/ GrafDescriptorRangeDesc
 	{
 		GrafDescriptorType Type;
+		ur_uint BindingOffset;
 		ur_uint BindingCount;
 	};
 
@@ -1337,6 +1350,7 @@ namespace UnlimRealms
 		static inline VkShaderStageFlagBits GrafToVkShaderStage(GrafShaderType shaderType);
 		static inline VkShaderStageFlags GrafToVkShaderStage(GrafShaderStageFlags shaderStages);
 		static inline VkDescriptorType GrafToVkDescriptorType(GrafDescriptorType descriptorType);
+		static inline ur_uint32 GrafToVkDescriptorBindingOffset(GrafDescriptorType descriptorType);
 		static inline VkPrimitiveTopology GrafToVkPrimitiveTopology(GrafPrimitiveTopology topology);
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);

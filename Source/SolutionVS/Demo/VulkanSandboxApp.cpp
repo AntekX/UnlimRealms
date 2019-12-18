@@ -93,16 +93,18 @@ int VulkanSandboxApp::Run()
 	std::vector<std::unique_ptr<GrafDescriptorTable>> grafBindingSample;
 	ur_uint frameCount = 0;
 	ur_uint frameIdx = 0;
-	auto& deinitializeGfxFrameObjects = [&]() -> void {
-		// order matters!
+	auto& deinitializeGfxCanvasObjects = [&]() -> void {
 		if (grafDevice.get()) grafDevice->WaitIdle();
 		grafRenderTarget.clear();
+	};
+	auto& deinitializeGfxFrameObjects = [&]() -> void {
 		grafBindingSample.clear();
 		grafMainCmdList.clear();
 		grafCBSample.clear();
 	};
 	auto& deinitializeGfxSystem = [&]() -> void {
 		// order matters!
+		deinitializeGfxCanvasObjects();
 		deinitializeGfxFrameObjects();
 		grafPipelineSample.reset();
 		grafRenderPassSample.reset();
@@ -117,33 +119,45 @@ int VulkanSandboxApp::Run()
 	Result grafRes = NotInitialized;
 	auto& initializeGfxSystem = [&]() -> void
 	{
+		// system
 		grafRes = grafSystem->Initialize(realm.GetCanvas());
 		if (Failed(grafRes) || 0 == grafSystem->GetPhysicalDeviceCount()) return;
 		
+		// device
 		grafRes = grafSystem->CreateDevice(grafDevice);
 		if (Failed(grafRes)) return;
 		grafRes = grafDevice->Initialize(grafSystem->GetRecommendedDeviceId());
 		if (Failed(grafRes)) return;
 
+		// presentation canvas (swapchain)
 		grafRes = grafSystem->CreateCanvas(grafCanvas);
 		if (Failed(grafRes)) return;
 		grafRes = grafCanvas->Initialize(grafDevice.get(), GrafCanvas::InitParams::Default);
 		if (Failed(grafRes)) return;
 
+		// color render target pass
+		grafRes = grafSystem->CreateRenderPass(grafRenderPassSample);
+		if (Failed(grafRes)) return;
+		grafRes = grafRenderPassSample->Initialize(grafDevice.get());
+		if (Failed(grafRes)) return;
+
+		// vertex shader sample
 		grafRes = grafSystem->CreateShader(grafShaderSampleVS);
 		if (Failed(grafRes)) return;
 		grafRes = grafShaderSampleVS->Initialize(grafDevice.get(), { GrafShaderType::Vertex, sampleVSBuffer.get(), sampleVSBufferSize, GrafShader::DefaultEntryPoint });
 		if (Failed(grafRes)) return;
 
+		// pixel shader sample
 		grafRes = grafSystem->CreateShader(grafShaderSamplePS);
 		if (Failed(grafRes)) return;
 		grafRes = grafShaderSamplePS->Initialize(grafDevice.get(), { GrafShaderType::Pixel, samplePSBuffer.get(), samplePSBufferSize, GrafShader::DefaultEntryPoint });
 		if (Failed(grafRes)) return;
 
+		// shader bindings layout sample
 		grafRes = grafSystem->CreateDescriptorTableLayout(grafBindingLayoutSample);
 		if (Failed(grafRes)) return;
 		GrafDescriptorRangeDesc grafBindingLayoutSampleRanges[] = {
-			GrafDescriptorType::ConstantBuffer, 1
+			GrafDescriptorType::ConstantBuffer, 0, 1
 		};
 		GrafDescriptorTableLayoutDesc grafBindingLayoutSampleDesc = {
 			GrafShaderStageFlags((ur_uint)GrafShaderStageFlag::Vertex | (ur_uint)GrafShaderStageFlag::Pixel),
@@ -152,6 +166,7 @@ int VulkanSandboxApp::Run()
 		grafRes = grafBindingLayoutSample->Initialize(grafDevice.get(), { grafBindingLayoutSampleDesc });
 		if (Failed(grafRes)) return;
 
+		// vertex buffer sample
 		grafRes = grafSystem->CreateBuffer(grafVBSample);
 		if (Failed(grafRes)) return;
 		GrafBuffer::InitParams grafVBSampleParams;
@@ -163,11 +178,7 @@ int VulkanSandboxApp::Run()
 		grafRes = grafVBSample->Write((ur_byte*)verticesSample);
 		if (Failed(grafRes)) return;
 
-		grafRes = grafSystem->CreateRenderPass(grafRenderPassSample);
-		if (Failed(grafRes)) return;
-		grafRes = grafRenderPassSample->Initialize(grafDevice.get());
-		if (Failed(grafRes)) return;
-
+		// graphics pipeline for sample rendering
 		grafRes = grafSystem->CreatePipeline(grafPipelineSample);
 		if (Failed(grafRes)) return;
 		GrafShader* sampleShaderStages[] = {
@@ -200,6 +211,54 @@ int VulkanSandboxApp::Run()
 	{
 		if (Failed(grafRes)) return;
 
+		// number of recorded (in flight) frames
+		// can differ from swap chain size
+		frameCount = std::max(ur_uint(1), grafCanvas->GetSwapChainImageCount() - 1);
+		frameIdx = 0;
+
+		// command lists (per frame)
+		grafMainCmdList.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			grafRes = grafSystem->CreateCommandList(grafMainCmdList[iframe]);
+			if (Failed(grafRes)) break;
+			grafRes = grafMainCmdList[iframe]->Initialize(grafDevice.get());
+			if (Failed(grafRes)) break;
+		}
+		if (Failed(grafRes)) return;
+
+		// sample shader decriptor tables (per frame & per draw call)
+		// tables share the same layout but store unique per frame/call data
+		grafBindingSample.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			grafRes = grafSystem->CreateDescriptorTable(grafBindingSample[iframe]);
+			if (Failed(grafRes)) break;
+			grafRes = grafBindingSample[iframe]->Initialize(grafDevice.get(), { grafBindingLayoutSample.get() });
+			if (Failed(grafRes)) break;
+		}
+		if (Failed(grafRes)) return;
+
+		// sample shader constant buffer (per frame & per draw call)
+		GrafBuffer::InitParams grafCBSampleParams;
+		grafCBSampleParams.BufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::ConstantBuffer;
+		grafCBSampleParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+		grafCBSampleParams.BufferDesc.SizeInBytes = sizeof(SampleCBData);
+		grafCBSample.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			grafRes = grafSystem->CreateBuffer(grafCBSample[iframe]);
+			if (Failed(grafRes)) break;
+			grafRes = grafCBSample[iframe]->Initialize(grafDevice.get(), grafCBSampleParams);
+			if (Failed(grafRes)) break;
+		}
+		if (Failed(grafRes)) return;
+	};
+	auto& initializeGfxCanvasObjects = [&]() -> void
+	{
+		if (Failed(grafRes)) return;
+
+		// render targets
 		// RT count must be equal to swap chain size (one RT wraps on swap chain image)
 		grafRenderTarget.resize(grafCanvas->GetSwapChainImageCount());
 		for (ur_uint imageIdx = 0; imageIdx < grafCanvas->GetSwapChainImageCount(); ++imageIdx)
@@ -217,49 +276,10 @@ int VulkanSandboxApp::Run()
 			if (Failed(grafRes)) break;
 		}
 		if (Failed(grafRes)) return;
-
-		// number of recorded frames can differ from swap chain size
-		frameCount = std::max(ur_uint(1), grafCanvas->GetSwapChainImageCount() - 1);
-		frameIdx = 0;
-		grafMainCmdList.resize(frameCount);
-		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
-		{
-			grafRes = grafSystem->CreateCommandList(grafMainCmdList[iframe]);
-			if (Failed(grafRes)) break;
-			grafRes = grafMainCmdList[iframe]->Initialize(grafDevice.get());
-			if (Failed(grafRes)) break;
-		}
-		if (Failed(grafRes)) return;
-
-		grafBindingSample.resize(frameCount);
-		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
-		{
-			grafRes = grafSystem->CreateDescriptorTable(grafBindingSample[iframe]);
-			if (Failed(grafRes)) break;
-			grafRes = grafBindingSample[iframe]->Initialize(grafDevice.get(), { grafBindingLayoutSample.get() });
-			if (Failed(grafRes)) break;
-		}
-		if (Failed(grafRes)) return;
-
-		GrafBuffer::InitParams grafCBSampleParams;
-		grafCBSampleParams.BufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::ConstantBuffer;
-		grafCBSampleParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-		grafCBSampleParams.BufferDesc.SizeInBytes = sizeof(SampleCBData);
-		grafCBSample.resize(frameCount);
-		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
-		{
-			grafRes = grafSystem->CreateBuffer(grafCBSample[iframe]);
-			if (Failed(grafRes)) break;
-			grafRes = grafCBSample[iframe]->Initialize(grafDevice.get(), grafCBSampleParams);
-			if (Failed(grafRes)) break;
-		}
-		if (Failed(grafRes)) return;
 	};
 	initializeGfxSystem();
-	if (Succeeded(grafRes))
-	{
-		initializeGfxFrameObjects();
-	}
+	initializeGfxFrameObjects();
+	initializeGfxCanvasObjects();
 	if (Failed(grafRes))
 	{
 		deinitializeGfxSystem();
@@ -342,8 +362,8 @@ int VulkanSandboxApp::Run()
 			if (grafSystem != ur_null && canvasValid)
 			{
 				grafCanvas->Initialize(grafDevice.get(), GrafCanvas::InitParams::Default);
-				deinitializeGfxFrameObjects();
-				initializeGfxFrameObjects();
+				deinitializeGfxCanvasObjects();
+				initializeGfxCanvasObjects();
 			}
 		}
 
@@ -393,19 +413,18 @@ int VulkanSandboxApp::Run()
 		});
 
 		// draw frame
-		auto drawFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void {
-			
-			//updateFrameJob->WaitProgress(0);  // wait till portion of data required for this draw call is fully updated
+		if (grafSystem != ur_null && canvasValid)
+		{
+			auto drawFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void {
 
-			if (grafSystem != ur_null && canvasValid)
-			{
+				// updateFrameJob->Wait(); // wait till update job is fully finished; WaitProgress can be used instead to wait for specific update stage to avoid stalling draw thread
+
 				GrafCommandList* grafCmdListCrnt = grafMainCmdList[frameIdx].get();
-
 				grafCmdListCrnt->Begin();
-			
+
 				updateFrameJob->WaitProgress(1); // make sure required data is ready
 				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
-				
+
 				GrafViewportDesc grafViewport = {};
 				grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
 				grafViewport.Height = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.y;
@@ -434,15 +453,11 @@ int VulkanSandboxApp::Run()
 				grafCmdListCrnt->EndRenderPass();
 
 				grafCmdListCrnt->End();
-
 				grafDevice->Submit(grafCmdListCrnt);
-			}
-		});
+			});
+			
+			drawFrameJob->Wait();
 
-		drawFrameJob->Wait();
-
-		if (grafSystem != ur_null && canvasValid)
-		{
 			// present & move to next frame
 			grafCanvas->Present();
 
@@ -991,6 +1006,13 @@ Profiler::ScopedMarker::~ScopedMarker()
 #else
 #define LogNoteGrafDbg(text)
 #endif
+
+// binding offsets per descriptor type
+// spir-v bytecode compiled from HLSL must use "-fvk-<b,s,t,u>-shift N M" command to apply offsets to corresponding register types (b,s,t,u)
+#define UR_GRAF_VULKAN_BINDNIG_OFS_BUFFER 0
+#define UR_GRAF_VULKAN_BINDNIG_OFS_SAMPLER 256
+#define UR_GRAF_VULKAN_BINDNIG_OFS_TEXTURE 512
+#define UR_GRAF_VULKAN_BINDNIG_OFS_UAVRES 768
 
 #if defined(UR_GRAF_VULKAN_DEBUG_LAYER)
 static const char* VulkanLayers[] = {
@@ -2921,10 +2943,10 @@ Result GrafDescriptorTableLayoutVulkan::Initialize(GrafDevice *grafDevice, const
 	for (ur_uint irange = 0; irange < initParams.LayoutDesc.DescriptorRangeCount; ++irange)
 	{
 		const GrafDescriptorRangeDesc& rangeDesc = initParams.LayoutDesc.DescriptorRanges[irange];
-		for (ur_uint ibinding = 0; ibinding < rangeDesc.BindingCount; ++ibinding)
+		for (ur_uint ibinding = 0; ibinding < rangeDesc.BindingCount; ++ibinding, ++bindingGlobalIdx)
 		{
-			VkDescriptorSetLayoutBinding& vkDescriptorSetBindingInfo = vkDescriptorSetBindingInfos[bindingGlobalIdx++];
-			vkDescriptorSetBindingInfo.binding = ibinding;
+			VkDescriptorSetLayoutBinding& vkDescriptorSetBindingInfo = vkDescriptorSetBindingInfos[bindingGlobalIdx];
+			vkDescriptorSetBindingInfo.binding = ibinding + rangeDesc.BindingOffset + GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(rangeDesc.Type);
 			vkDescriptorSetBindingInfo.descriptorType = GrafUtilsVulkan::GrafToVkDescriptorType(rangeDesc.Type);
 			vkDescriptorSetBindingInfo.descriptorCount = 1;
 			vkDescriptorSetBindingInfo.stageFlags = GrafUtilsVulkan::GrafToVkShaderStage(initParams.LayoutDesc.ShaderStageVisibility);
@@ -3065,7 +3087,7 @@ Result GrafDescriptorTableVulkan::SetConstantBuffer(ur_uint bindingIdx, GrafBuff
 	VkWriteDescriptorSet vkWriteDescriptorSet = {};
 	vkWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	vkWriteDescriptorSet.dstSet = this->vkDescriptorSet;
-	vkWriteDescriptorSet.dstBinding = bindingIdx;
+	vkWriteDescriptorSet.dstBinding = bindingIdx + GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(GrafDescriptorType::ConstantBuffer);
 	vkWriteDescriptorSet.dstArrayElement = 0;
 	vkWriteDescriptorSet.descriptorCount = 1;
 	vkWriteDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -3589,6 +3611,17 @@ VkDescriptorType GrafUtilsVulkan::GrafToVkDescriptorType(GrafDescriptorType desc
 	case GrafDescriptorType::Sampler: vkDescriptorType = VK_DESCRIPTOR_TYPE_SAMPLER; break;
 	};
 	return vkDescriptorType;
+}
+
+static const ur_uint32 GrafToVkDescriptorBindingOffsetLUT[(ur_uint)GrafDescriptorType::Count] = {
+	UR_GRAF_VULKAN_BINDNIG_OFS_BUFFER,
+	UR_GRAF_VULKAN_BINDNIG_OFS_SAMPLER,
+	UR_GRAF_VULKAN_BINDNIG_OFS_TEXTURE
+};
+
+ur_uint32 GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(GrafDescriptorType descriptorType)
+{
+	return GrafToVkDescriptorBindingOffsetLUT[(ur_uint)descriptorType];
 }
 
 VkPrimitiveTopology GrafUtilsVulkan::GrafToVkPrimitiveTopology(GrafPrimitiveTopology topology)
