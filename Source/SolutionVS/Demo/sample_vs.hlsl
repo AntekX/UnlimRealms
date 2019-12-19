@@ -69,6 +69,7 @@ struct PS_INPUT
 {
 	float4 pos		: SV_POSITION;
 	float4 color	: COLOR0;
+	float2 uv		: TEXCOORD0;
 };
 
 static const float3 TestTrianlePos[3] = {
@@ -104,6 +105,9 @@ PS_INPUT main(VS_INPUT input, uint vertexID : SV_VertexID, uint instanceID : SV_
 #endif
 	output.color.w = 1.0;
 	output.pos.w = 1.0;
+
+	output.uv.x = input.pos.x + 0.5;
+	output.uv.y = 0.5 - input.pos.y;
 
 	return output;
 }

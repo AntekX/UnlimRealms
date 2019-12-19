@@ -1408,7 +1408,16 @@ namespace UnlimRealms
 		{
 			return !(this->Min != v.Min || this->Max != v.Max);
 		}
+
+		static const TBoundingBox<T> Zero;
 	};
+
+	template <class T>
+	const TBoundingBox<T> TBoundingBox<T>::Zero = {
+		{ 0, 0, 0 },
+		{ 0, 0, 0 }
+	};
+
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

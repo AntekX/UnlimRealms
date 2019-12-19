@@ -26,6 +26,7 @@ namespace UnlimRealms
 	class GrafCanvas;
 	class GrafImage;
 	class GrafBuffer;
+	class GrafSampler;
 	class GrafShader;
 	class GrafRenderPass;
 	class GrafRenderTarget;
@@ -167,9 +168,12 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class /*UR_DECL*/ GrafBufferUsageFlag
 	{
-		VertexBuffer = (1 << 0),
-		IndexBuffer = (1 << 1),
-		ConstantBuffer = (1 << 2)
+		Undefined = 0,
+		TransferSrc = (1 << 0),
+		TransferDst = (1 << 1),
+		VertexBuffer = (1 << 2),
+		IndexBuffer = (1 << 3),
+		ConstantBuffer = (1 << 4)
 	};
 	typedef ur_uint GrafBufferUsageFlags;
 
@@ -179,6 +183,40 @@ namespace UnlimRealms
 		GrafBufferUsageFlags Usage;
 		GrafDeviceMemoryFlags MemoryType;
 		ur_size SizeInBytes;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class /*UR_DECL*/ GrafFilterType
+	{
+		Nearest,
+		Linear
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class /*UR_DECL*/ GrafAddressMode
+	{
+		Wrap,
+		Mirror,
+		Clamp,
+		Border,
+		MirrorOnce
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct /*UR_DECL*/ GrafSamplerDesc
+	{
+		GrafFilterType FilterMin;
+		GrafFilterType FilterMag;
+		GrafFilterType FilterMip;
+		GrafAddressMode AddressModeU;
+		GrafAddressMode AddressModeV;
+		GrafAddressMode AddressModeW;
+		ur_bool AnisoFilterEanbled;
+		ur_float AnisoFilterMax;
+		ur_float MipLodBias;
+		ur_float MipLodMin;
+		ur_float MipLodMax;
+		static const GrafSamplerDesc Default;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -319,6 +357,8 @@ namespace UnlimRealms
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
 
 		virtual Result CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer);
+
+		virtual Result CreateSampler(std::unique_ptr<GrafSampler>& grafSampler);
 
 		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 
@@ -470,11 +510,11 @@ namespace UnlimRealms
 
 		virtual Result Copy(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
-		virtual Result Copy(GrafBuffer* srcBuffer, GrafImage* dstImage, ur_size bufferOffset = 0, BoxI imageRegion = {});
+		virtual Result Copy(GrafBuffer* srcBuffer, GrafImage* dstImage, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
 
-		virtual Result Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset = 0, BoxI imageRegion = {});
+		virtual Result Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
 
-		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = {}, BoxI dstRegion = {});
+		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -610,6 +650,34 @@ namespace UnlimRealms
 	inline const GrafBufferDesc& GrafBuffer::GetDesc() const
 	{
 		return this->bufferDesc;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafSampler : public GrafDeviceEntity
+	{
+	public:
+
+		struct /*UR_DECL*/ InitParams
+		{
+			GrafSamplerDesc SamplerDesc;
+		};
+
+		GrafSampler(GrafSystem &grafSystem);
+
+		~GrafSampler();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline const GrafSamplerDesc& GetDesc() const;
+
+	protected:
+
+		GrafSamplerDesc samplerDesc;
+	};
+
+	inline const GrafSamplerDesc& GrafSampler::GetDesc() const
+	{
+		return this->samplerDesc;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -756,6 +824,13 @@ namespace UnlimRealms
 
 		virtual Result SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_uint bufferOfs = 0, ur_uint bufferRange = 0);
 
+		virtual Result SetSampledImage(ur_uint bindingIdx, GrafImage* image, GrafSampler* sampler);
+
+		virtual Result SetSampler(ur_uint bindingIdx, GrafSampler* sampler);
+
+		virtual Result SetImage(ur_uint bindingIdx, GrafImage* image);
+
+
 		inline GrafDescriptorTableLayout* GetLayout() const;
 
 	protected:
@@ -799,7 +874,14 @@ namespace UnlimRealms
 	{
 	public:
 
-		static Result CreateImageFromFile(GrafDevice *grafDevice, GrafCommandList* grafUploadCmdList, std::unique_ptr<GrafImage> &grafImage, const std::string &resName);
+		struct ImageData
+		{
+			GrafImageDesc Desc;
+			ur_uint RowPitch;
+			std::vector<std::unique_ptr<GrafBuffer>> MipBuffers;
+		};
+
+		static Result LoadImageFromFile(GrafDevice& grafDevice, const std::string& resName, ImageData& outputImageData);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -871,6 +953,8 @@ namespace UnlimRealms
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
 
 		virtual Result CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer);
+
+		virtual Result CreateSampler(std::unique_ptr<GrafSampler>& grafSampler);
 
 		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 
@@ -1022,11 +1106,11 @@ namespace UnlimRealms
 
 		virtual Result Copy(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
-		virtual Result Copy(GrafBuffer* srcBuffer, GrafImage* dstImage, ur_size bufferOffset = 0, BoxI imageRegion = {});
+		virtual Result Copy(GrafBuffer* srcBuffer, GrafImage* dstImage, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
 
-		virtual Result Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset = 0, BoxI imageRegion = {});
+		virtual Result Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
 
-		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = {}, BoxI dstRegion = {});
+		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
 
 		inline VkCommandBuffer GetVkCommandBuffer() const;
 
@@ -1206,6 +1290,31 @@ namespace UnlimRealms
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class /*UR_DECL*/ GrafSamplerVulkan : public GrafSampler
+	{
+	public:
+
+		GrafSamplerVulkan(GrafSystem &grafSystem);
+
+		~GrafSamplerVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline VkSampler GetVkSampler() const;
+
+	protected:
+
+		Result Deinitialize();
+
+		VkSampler vkSampler;
+	};
+
+	inline VkSampler GrafSamplerVulkan::GetVkSampler() const
+	{
+		return this->vkSampler;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class /*UR_DECL*/ GrafShaderVulkan : public GrafShader
 	{
 	public:
@@ -1318,6 +1427,12 @@ namespace UnlimRealms
 
 		virtual Result SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_uint bufferOfs = 0, ur_uint bufferRange = 0);
 
+		virtual Result SetSampledImage(ur_uint bindingIdx, GrafImage* image, GrafSampler* sampler);
+
+		virtual Result SetSampler(ur_uint bindingIdx, GrafSampler* sampler);
+
+		virtual Result SetImage(ur_uint bindingIdx, GrafImage* image);
+
 		inline VkDescriptorSet GetVkDescriptorSet() const;
 
 	private:
@@ -1392,6 +1507,8 @@ namespace UnlimRealms
 		static inline VkDescriptorType GrafToVkDescriptorType(GrafDescriptorType descriptorType);
 		static inline ur_uint32 GrafToVkDescriptorBindingOffset(GrafDescriptorType descriptorType);
 		static inline VkPrimitiveTopology GrafToVkPrimitiveTopology(GrafPrimitiveTopology topology);
+		static inline VkFilter GrafToVkFilter(GrafFilterType filter);
+		static inline VkSamplerAddressMode GrafToVkAddressMode(GrafAddressMode address);
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
 	};
