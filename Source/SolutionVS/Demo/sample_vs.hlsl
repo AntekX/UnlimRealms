@@ -77,7 +77,7 @@ static const float3 TestTrianlePos[3] = {
 	{ 0.5,-0.5, 0.0 },
 	{-0.5,-0.5, 0.0 }
 };
-static const float3 TestTrianleCol[3] = {
+static const float3 TestTriangleCol[3] = {
 	{ 1, 0, 0 },
 	{ 0, 1, 0 },
 	{ 0, 0, 1 }
@@ -96,7 +96,7 @@ PS_INPUT main(VS_INPUT input, uint vertexID : SV_VertexID, uint instanceID : SV_
 #if (0)
 	// no VB/CB test
 	output.pos.xyz = TestTrianlePos[vertexID % 3].xyz + InstancePos[instanceID % 4].xyz;
-	output.color.xyz = TestTrianleCol[vertexID % 3].xyz;
+	output.color.xyz = TestTriangleCol[vertexID % 3].xyz;
 #else
 	// read from VB
 	output.pos.xyz = input.pos.xyz + InstancePos[instanceID % 4].xyz;

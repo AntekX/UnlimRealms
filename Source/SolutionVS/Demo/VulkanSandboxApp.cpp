@@ -73,9 +73,12 @@ int VulkanSandboxApp::Run()
 		ur_float3 color;
 	};
 	VertexSample verticesSample[] = {
-		{ { 0.0f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+		{ {-0.5f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
 		{ { 0.5f,-0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-		{ {-0.5f,-0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
+		{ {-0.5f,-0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+		{ {-0.5f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+		{ { 0.5f, 0.5f, 0.0f }, { 1.0f, 1.0f, 1.0f } },
+		{ { 0.5f,-0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } }
 	};
 
 	// initialize gfx system
@@ -508,7 +511,7 @@ int VulkanSandboxApp::Run()
 				grafCmdListCrnt->BindPipeline(grafPipelineSample.get());
 				grafCmdListCrnt->BindDescriptorTable(grafBindingSample[frameIdx].get(), grafPipelineSample.get());
 				grafCmdListCrnt->BindVertexBuffer(grafVBSample.get(), 0);
-				grafCmdListCrnt->Draw(3, 4, 0, 0);
+				grafCmdListCrnt->Draw(6, 4, 0, 0);
 				grafCmdListCrnt->EndRenderPass();
 
 				grafCmdListCrnt->End();
