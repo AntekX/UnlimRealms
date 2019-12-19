@@ -156,11 +156,7 @@ int VulkanSandboxApp::Run()
 		// default sampler
 		grafRes = grafSystem->CreateSampler(grafDefaultSampler);
 		if (Failed(grafRes)) return;
-		GrafSamplerDesc samplerDesc = GrafSamplerDesc::Default;
-		samplerDesc.FilterMag = GrafFilterType::Nearest;
-		samplerDesc.FilterMin = GrafFilterType::Nearest;
-		samplerDesc.FilterMip = GrafFilterType::Nearest;
-		grafRes = grafDefaultSampler->Initialize(grafDevice.get(), { /*GrafSamplerDesc::Default*/samplerDesc });
+		grafRes = grafDefaultSampler->Initialize(grafDevice.get(), { GrafSamplerDesc::Default });
 		if (Failed(grafRes)) return;
 
 		// vertex shader sample
@@ -2842,7 +2838,8 @@ Result GrafImageVulkan::Initialize(GrafDevice *grafDevice, const InitParams& ini
 	vkAllocateInfo.memoryTypeIndex = ur_uint32(-1);
 	for (ur_uint32 itype = 0; itype < vkDeviceMemoryProperties.memoryTypeCount; ++itype)
 	{
-		if (vkDeviceMemoryProperties.memoryTypes[itype].propertyFlags & vkMemoryPropertiesExpected)
+		if ((vkDeviceMemoryProperties.memoryTypes[itype].propertyFlags & vkMemoryPropertiesExpected) &&
+			(vkMemoryRequirements.memoryTypeBits & (1 << itype)))
 		{
 			vkAllocateInfo.memoryTypeIndex = itype;
 			break;
@@ -3104,7 +3101,8 @@ Result GrafBufferVulkan::Initialize(GrafDevice *grafDevice, const InitParams& in
 	vkAllocateInfo.memoryTypeIndex = ur_uint32(-1);
 	for (ur_uint32 itype = 0; itype < vkDeviceMemoryProperties.memoryTypeCount; ++itype)
 	{
-		if (vkDeviceMemoryProperties.memoryTypes[itype].propertyFlags & vkMemoryPropertiesExpected)
+		if ((vkDeviceMemoryProperties.memoryTypes[itype].propertyFlags & vkMemoryPropertiesExpected) &&
+			(vkMemoryRequirements.memoryTypeBits & (1 << itype)))
 		{
 			vkAllocateInfo.memoryTypeIndex = itype;
 			break;
