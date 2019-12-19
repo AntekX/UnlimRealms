@@ -156,7 +156,11 @@ int VulkanSandboxApp::Run()
 		// default sampler
 		grafRes = grafSystem->CreateSampler(grafDefaultSampler);
 		if (Failed(grafRes)) return;
-		grafRes = grafDefaultSampler->Initialize(grafDevice.get(), { GrafSamplerDesc::Default });
+		GrafSamplerDesc samplerDesc = GrafSamplerDesc::Default;
+		samplerDesc.FilterMag = GrafFilterType::Nearest;
+		samplerDesc.FilterMin = GrafFilterType::Nearest;
+		samplerDesc.FilterMip = GrafFilterType::Nearest;
+		grafRes = grafDefaultSampler->Initialize(grafDevice.get(), { /*GrafSamplerDesc::Default*/samplerDesc });
 		if (Failed(grafRes)) return;
 
 		// vertex shader sample
@@ -3232,7 +3236,7 @@ Result GrafSamplerVulkan::Initialize(GrafDevice *grafDevice, const InitParams& i
 	VkSamplerCreateInfo vkSamplerInfo = {};
 	vkSamplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	vkSamplerInfo.flags = 0;
-	vkSamplerInfo.magFilter = GrafUtilsVulkan::GrafToVkFilter(initParams.SamplerDesc.FilterMin);
+	vkSamplerInfo.magFilter = GrafUtilsVulkan::GrafToVkFilter(initParams.SamplerDesc.FilterMag);
 	vkSamplerInfo.minFilter = GrafUtilsVulkan::GrafToVkFilter(initParams.SamplerDesc.FilterMin);
 	vkSamplerInfo.mipmapMode = (VkSamplerMipmapMode)GrafUtilsVulkan::GrafToVkFilter(initParams.SamplerDesc.FilterMip);
 	vkSamplerInfo.addressModeU = GrafUtilsVulkan::GrafToVkAddressMode(initParams.SamplerDesc.AddressModeU);
@@ -4326,8 +4330,8 @@ VkFilter GrafUtilsVulkan::GrafToVkFilter(GrafFilterType filter)
 	VkFilter vkFilter = VK_FILTER_MAX_ENUM;
 	switch (filter)
 	{
-	case GrafFilterType::Nearest: vkFilter = VK_FILTER_NEAREST;
-	case GrafFilterType::Linear: vkFilter = VK_FILTER_LINEAR;
+	case GrafFilterType::Nearest: vkFilter = VK_FILTER_NEAREST; break;
+	case GrafFilterType::Linear: vkFilter = VK_FILTER_LINEAR; break;
 	};
 	return vkFilter;
 }
