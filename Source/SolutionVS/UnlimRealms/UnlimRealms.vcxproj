@@ -93,11 +93,12 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x86;_DEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;$(VULKAN_SDK)/Include;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(VULKAN_SDK)/Lib;</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
       <AdditionalIncludeDirectories>../../UnlimRealms/ShaderLib;</AdditionalIncludeDirectories>
@@ -114,11 +115,12 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x64;_DEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;$(VULKAN_SDK)/Include;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(VULKAN_SDK)/Lib;</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
       <AdditionalIncludeDirectories>../../UnlimRealms/ShaderLib;</AdditionalIncludeDirectories>
@@ -137,13 +139,14 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x86;NDEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;$(VULKAN_SDK)/Include;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalLibraryDirectories>$(VULKAN_SDK)/Lib;</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
       <AdditionalIncludeDirectories>../../UnlimRealms/ShaderLib;</AdditionalIncludeDirectories>
@@ -162,13 +165,14 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x64;NDEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;$(VULKAN_SDK)/Include;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalLibraryDirectories>$(VULKAN_SDK)/Lib;</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
       <AdditionalIncludeDirectories>../../UnlimRealms/ShaderLib;</AdditionalIncludeDirectories>
@@ -257,6 +261,10 @@
     <ClInclude Include="..\..\UnlimRealms\Gfx\GfxSystem.h" />
     <ClInclude Include="..\..\UnlimRealms\Gfx\GfxSystem.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Gfx\GfxTypes.h" />
+    <ClInclude Include="..\..\UnlimRealms\Graf\GrafSystem.h" />
+    <ClInclude Include="..\..\UnlimRealms\Graf\GrafSystem.inline.h" />
+    <ClInclude Include="..\..\UnlimRealms\Graf\Vulkan\GrafSystemVulkan.h" />
+    <ClInclude Include="..\..\UnlimRealms\Graf\Vulkan\GrafSystemVulkan.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\HDRRender\HDRRender.h" />
     <ClInclude Include="..\..\UnlimRealms\ImguiRender\ImguiRender.h" />
     <ClInclude Include="..\..\UnlimRealms\Isosurface\Isosurface.h" />
@@ -379,6 +387,8 @@
     <ClCompile Include="..\..\UnlimRealms\Gfx\DXGIUtils\DXGIUtils.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Gfx\GfxSystem.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Gfx\GfxTypes.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Graf\GrafSystem.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Graf\Vulkan\GrafSystemVulkan.cpp" />
     <ClCompile Include="..\..\UnlimRealms\HDRRender\HDRRender.cpp" />
     <ClCompile Include="..\..\UnlimRealms\ImguiRender\ImguiRender.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Isosurface\Isosurface.cpp" />

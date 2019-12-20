@@ -42,13 +42,7 @@ namespace UnlimRealms
 		std::unique_ptr<GfxBuffer> gfxCB;
 		std::unique_ptr<GfxBuffer> gfxVB;
 		std::unique_ptr<GfxBuffer> gfxIB;
-#if (NEW_GAPI)
-		std::unique_ptr<GfxSampler> gfxSampler;
-		std::unique_ptr<GfxPipelineStateObject> gfxPipelineState;
-		std::unique_ptr<GfxResourceBinding> gfxResourceBinding;
-#else
 		std::unique_ptr<GfxPipelineState> gfxPipelineState;
-#endif
 		ClockTime timePoint;
 	};
 

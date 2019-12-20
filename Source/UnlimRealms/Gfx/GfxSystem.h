@@ -13,10 +13,6 @@
 namespace UnlimRealms
 {
 	
-	// WIP time definition
-#define NEW_GAPI 0
-
-
 	// forward declarations
 	class GfxSystem;
 	class GfxEntity;
