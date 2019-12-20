@@ -33,38 +33,6 @@ int VulkanSandboxApp::Run()
 	input->Initialize();
 	realm.SetInput(std::move(input));
 
-	// load shader data
-	std::unique_ptr<ur_byte[]> sampleVSBuffer;
-	ur_size sampleVSBufferSize = 0;
-	{
-		std::unique_ptr<File> file;
-		Result res = realm.GetStorage().Open(file, "sample_vs.spv", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
-		if (Succeeded(res))
-		{
-			sampleVSBufferSize = file->GetSize();
-			sampleVSBuffer.reset(new ur_byte[sampleVSBufferSize]);
-			file->Read(sampleVSBufferSize, sampleVSBuffer.get());
-		}
-	}
-	std::unique_ptr<ur_byte[]> samplePSBuffer;
-	ur_size samplePSBufferSize = 0;
-	{
-		std::unique_ptr<File> file;
-		Result res = realm.GetStorage().Open(file, "sample_ps.spv", ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
-		if (Succeeded(res))
-		{
-			samplePSBufferSize = file->GetSize();
-			samplePSBuffer.reset(new ur_byte[samplePSBufferSize]);
-			file->Read(samplePSBufferSize, samplePSBuffer.get());
-		}
-	}
-
-	// vertex shader CB declaration
-	struct SampleCBData
-	{
-		ur_float4x4 Transform;
-	};
-
 	// sample mesh data
 	struct VertexSample
 	{
@@ -78,6 +46,12 @@ int VulkanSandboxApp::Run()
 		{ {-0.5f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
 		{ { 0.5f, 0.5f, 0.0f }, { 1.0f, 1.0f, 1.0f } },
 		{ { 0.5f,-0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } }
+	};
+
+	// sample vertex shader CB
+	struct SampleCBData
+	{
+		ur_float4x4 Transform;
 	};
 
 	// initialize gfx system
@@ -159,15 +133,11 @@ int VulkanSandboxApp::Run()
 		if (Failed(grafRes)) return;
 
 		// vertex shader sample
-		grafRes = grafSystem->CreateShader(grafShaderSampleVS);
-		if (Failed(grafRes)) return;
-		grafRes = grafShaderSampleVS->Initialize(grafDevice.get(), { GrafShaderType::Vertex, sampleVSBuffer.get(), sampleVSBufferSize, GrafShader::DefaultEntryPoint });
+		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice.get(), "sample_vs.spv", GrafShaderType::Vertex, grafShaderSampleVS);
 		if (Failed(grafRes)) return;
 
 		// pixel shader sample
-		grafRes = grafSystem->CreateShader(grafShaderSamplePS);
-		if (Failed(grafRes)) return;
-		grafRes = grafShaderSamplePS->Initialize(grafDevice.get(), { GrafShaderType::Pixel, samplePSBuffer.get(), samplePSBufferSize, GrafShader::DefaultEntryPoint });
+		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice.get(), "sample_ps.spv", GrafShaderType::Pixel, grafShaderSamplePS);
 		if (Failed(grafRes)) return;
 
 		// shader bindings layout sample

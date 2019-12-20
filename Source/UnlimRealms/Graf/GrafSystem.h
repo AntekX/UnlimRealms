@@ -803,6 +803,8 @@ namespace UnlimRealms
 		};
 
 		static Result LoadImageFromFile(GrafDevice& grafDevice, const std::string& resName, ImageData& outputImageData);
+
+		static Result CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

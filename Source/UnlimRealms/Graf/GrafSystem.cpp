@@ -7,6 +7,7 @@
 
 #include "GrafSystem.h"
 #include "Sys/Log.h"
+#include "Sys/Storage.h"
 #include "3rdParty/ResIL/include/IL/il.h"
 
 namespace UnlimRealms
@@ -662,6 +663,49 @@ namespace UnlimRealms
 			return LogResult(Failure, realm.GetLog(), Log::Error, "LoadImageFromFile: failed to load image " + resName);
 		}
 		return res;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	Result GrafUtils::CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader)
+	{
+		Realm& realm = grafDevice.GetRealm();
+		GrafSystem& grafSystem = grafDevice.GetGrafSystem();
+
+		// load
+
+		std::unique_ptr<ur_byte[]> shaderBuffer;
+		ur_size shaderBufferSize = 0;
+		{
+			std::unique_ptr<File> file;
+			Result res = realm.GetStorage().Open(file, resName, ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
+			if (Succeeded(res))
+			{
+				shaderBufferSize = file->GetSize();
+				shaderBuffer.reset(new ur_byte[shaderBufferSize]);
+				res &= file->Read(shaderBufferSize, shaderBuffer.get());
+			}
+			if (Failed(res))
+			{
+				return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to load shader " + resName);
+			}
+		}
+
+		// initialize graf shader object
+
+		Result grafRes = grafSystem.CreateShader(grafShader);
+		if (Failed(grafRes))
+		{
+			return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to create shader " + resName);
+		}
+		
+		grafRes = grafShader->Initialize(&grafDevice, { shaderType, shaderBuffer.get(), shaderBufferSize, GrafShader::DefaultEntryPoint });
+		if (Failed(grafRes))
+		{
+			return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to create shader " + resName);
+		}
+
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
