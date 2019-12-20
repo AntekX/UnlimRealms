@@ -302,7 +302,10 @@ int D3D12SandboxApp::Run()
 				ImGui::SetNextWindowSize(imguiDemoWndSize, ImGuiSetCond_Once);
 				ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
 				ImGui::Begin("Control Panel");
-				ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().Description.c_str());
+				ImGui::Text("Graphics Device:");
+				ImGui::Text("	Description: %s", gfxContext->GetGfxSystem().GetActiveAdapterDesc().Description.c_str());
+				ImGui::Text("	Dedicated Memory (Mb): %u", gfxContext->GetGfxSystem().GetActiveAdapterDesc().DedicatedVideoMemory / (1 << 20));
+				ImGui::Text("	Shared Memory (Mb): %u", gfxContext->GetGfxSystem().GetActiveAdapterDesc().SharedSystemMemory / (1 << 20));
 				ImGui::End();
 
 				// Imgui metrics
