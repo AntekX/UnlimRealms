@@ -30,7 +30,7 @@ namespace UnlimRealms
 		return deviceId;
 	}
 
-	inline const GrafPhysicalDeviceDesc* GrafDevice::GetPhysicalDeviceDesc(ur_uint deviceId)
+	inline const GrafPhysicalDeviceDesc* GrafDevice::GetPhysicalDeviceDesc()
 	{
 		return this->GetGrafSystem().GetPhysicalDeviceDesc(this->deviceId);
 	}

@@ -38,6 +38,23 @@ namespace UnlimRealms
 
 	void ImguiRender::ReleaseGfxObjects()
 	{
+		#if defined(UR_GRAF)
+		
+		this->grafUploadCmdList.reset();
+		this->grafBindingTables.clear();
+		this->grafCBs.clear();
+		this->grafVS.reset();
+		this->grafPS.reset();
+		this->grafVB.reset();
+		this->grafIB.reset();
+		this->grafSampler.reset();
+		this->grafFontImage.reset();
+		this->grafUploadBuffer.reset();
+		this->grafBindingLayout.reset();
+		this->grafPipeline.reset();
+
+		#else
+		
 		gfxVS.reset(ur_null);
 		gfxPS.reset(ur_null);
 		gfxInputLayout.reset(ur_null);
@@ -45,10 +62,37 @@ namespace UnlimRealms
 		gfxFontsTexture.reset(ur_null);
 		gfxCB.reset(ur_null);
 		gfxVB.reset(ur_null);
+		
+		#endif
+	}
+
+	void ImguiRender::InitKeyMapping()
+	{
+		ImGuiIO &io = ImGui::GetIO();
+		Input::Keyboard *kb = this->GetRealm().GetInput()->GetKeyboard();
+		if (kb != ur_null)
+		{
+			io.KeyMap[ImGuiKey_Tab] = (int)kb->GetKeyCode(Input::VKey::Tab);
+			io.KeyMap[ImGuiKey_LeftArrow] = (int)kb->GetKeyCode(Input::VKey::Left);
+			io.KeyMap[ImGuiKey_RightArrow] = (int)kb->GetKeyCode(Input::VKey::Right);
+			io.KeyMap[ImGuiKey_UpArrow] = (int)kb->GetKeyCode(Input::VKey::Up);
+			io.KeyMap[ImGuiKey_DownArrow] = (int)kb->GetKeyCode(Input::VKey::Down);
+			io.KeyMap[ImGuiKey_PageUp] = (int)kb->GetKeyCode(Input::VKey::Prior);
+			io.KeyMap[ImGuiKey_PageDown] = (int)kb->GetKeyCode(Input::VKey::Next);
+			io.KeyMap[ImGuiKey_Home] = (int)kb->GetKeyCode(Input::VKey::Home);
+			io.KeyMap[ImGuiKey_End] = (int)kb->GetKeyCode(Input::VKey::End);
+			io.KeyMap[ImGuiKey_Delete] = (int)kb->GetKeyCode(Input::VKey::Delete);
+			io.KeyMap[ImGuiKey_Backspace] = (int)kb->GetKeyCode(Input::VKey::Back);
+			io.KeyMap[ImGuiKey_Enter] = (int)kb->GetKeyCode(Input::VKey::Return);
+			io.KeyMap[ImGuiKey_Escape] = (int)kb->GetKeyCode(Input::VKey::Escape);
+		}
 	}
 
 	Result ImguiRender::Init()
 	{
+	#if defined(UR_GRAF)
+		return Result(NotImplemented);
+	#else
 		Result res = Result(Success);
 
 		// release previous objects
@@ -150,7 +194,7 @@ namespace UnlimRealms
 			this->gfxPipelineState->PixelShader = this->gfxPS.get();
 
 			GfxRenderState gfxState = GfxRenderState::Default;
-			
+
 			gfxState.BlendState[0].BlendEnable = true;
 			gfxState.BlendState[0].SrcBlend = GfxBlendFactor::SrcAlpha;
 			gfxState.BlendState[0].DstBlend = GfxBlendFactor::InvSrcAlpha;
@@ -183,26 +227,10 @@ namespace UnlimRealms
 			return ResultError(Failure, "ImguiRender::Init: failed to initialize pipeline state");
 
 		// Keyboard mapping
-		ImGuiIO &io = ImGui::GetIO();
-		Input::Keyboard *kb = this->GetRealm().GetInput()->GetKeyboard();
-		if (kb != ur_null)
-		{
-			io.KeyMap[ImGuiKey_Tab] = (int)kb->GetKeyCode(Input::VKey::Tab);
-			io.KeyMap[ImGuiKey_LeftArrow] = (int)kb->GetKeyCode(Input::VKey::Left);
-			io.KeyMap[ImGuiKey_RightArrow] = (int)kb->GetKeyCode(Input::VKey::Right);
-			io.KeyMap[ImGuiKey_UpArrow] = (int)kb->GetKeyCode(Input::VKey::Up);
-			io.KeyMap[ImGuiKey_DownArrow] = (int)kb->GetKeyCode(Input::VKey::Down);
-			io.KeyMap[ImGuiKey_PageUp] = (int)kb->GetKeyCode(Input::VKey::Prior);
-			io.KeyMap[ImGuiKey_PageDown] = (int)kb->GetKeyCode(Input::VKey::Next);
-			io.KeyMap[ImGuiKey_Home] = (int)kb->GetKeyCode(Input::VKey::Home);
-			io.KeyMap[ImGuiKey_End] = (int)kb->GetKeyCode(Input::VKey::End);
-			io.KeyMap[ImGuiKey_Delete] = (int)kb->GetKeyCode(Input::VKey::Delete);
-			io.KeyMap[ImGuiKey_Backspace] = (int)kb->GetKeyCode(Input::VKey::Back);
-			io.KeyMap[ImGuiKey_Enter] = (int)kb->GetKeyCode(Input::VKey::Return);
-			io.KeyMap[ImGuiKey_Escape] = (int)kb->GetKeyCode(Input::VKey::Escape);
-		}
+		this->InitKeyMapping();
 
 		return res;
+	#endif
 	}
 
 	Result ImguiRender::NewFrame()
@@ -262,8 +290,11 @@ namespace UnlimRealms
 
 	Result ImguiRender::Render(GfxContext &gfxContext)
 	{
+	#if defined(UR_GRAF)
+		return Result(NotImplemented);
+	#else
 		ImGui::Render();
-		
+
 		ImDrawData *drawData = ImGui::GetDrawData();
 
 		if (ur_null == this->gfxVB || ur_null == this->gfxIB)
@@ -376,6 +407,317 @@ namespace UnlimRealms
 		}
 
 		return Result(Success);
+	#endif
+	}
+
+	Result ImguiRender::Init(GrafDevice& grafDevice, GrafRenderPass& grafRenderPass, ur_uint frameCount)
+	{
+	#if !defined(UR_GRAF)
+		return Result(NotImplemented);
+	#else
+		Result res = Result(Success);
+		GrafSystem& grafSystem = grafDevice.GetGrafSystem();
+
+		// release previous objects
+
+		ReleaseGfxObjects();
+
+		// VS
+		res = GrafUtils::CreateShaderFromFile(grafDevice, "Imgui_vs.spv", GrafShaderType::Vertex, this->grafVS);
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to initialize VS");
+
+		// PS
+		res = GrafUtils::CreateShaderFromFile(grafDevice, "Imgui_ps.spv", GrafShaderType::Pixel, this->grafPS);
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to initialize PS");
+
+		// shader bindings layout
+		res = grafSystem.CreateDescriptorTableLayout(this->grafBindingLayout);
+		if (Succeeded(res))
+		{
+			GrafDescriptorRangeDesc grafBindingLayoutRanges[] = {
+				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+				{ GrafDescriptorType::Sampler, 0, 1 },
+				{ GrafDescriptorType::Texture, 0, 1 },
+			};
+			GrafDescriptorTableLayoutDesc grafBindingLayoutDesc = {
+				GrafShaderStageFlags((ur_uint)GrafShaderStageFlag::Vertex | (ur_uint)GrafShaderStageFlag::Pixel),
+				grafBindingLayoutRanges, ur_array_size(grafBindingLayoutRanges)
+			};
+			res = this->grafBindingLayout->Initialize(&grafDevice, { grafBindingLayoutDesc });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to create descriptor table layout");
+
+		// per frame binding tables
+		this->grafBindingTables.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			res = grafSystem.CreateDescriptorTable(this->grafBindingTables[iframe]);
+			if (Failed(res)) break;
+			res = this->grafBindingTables[iframe]->Initialize(&grafDevice, { this->grafBindingLayout.get() });
+			if (Failed(res)) break;
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to create descriptor table(s)");
+
+		// per frame constant buffers
+		this->grafCBs.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			res = grafSystem.CreateBuffer(this->grafCBs[iframe]);
+			if (Failed(res)) break;
+			GrafBufferDesc bufferDesc;
+			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::ConstantBuffer;
+			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			bufferDesc.SizeInBytes = sizeof(VertexTransformCB);
+			res = this->grafCBs[iframe]->Initialize(&grafDevice, { bufferDesc });
+			if (Failed(res)) break;
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to create CB(s)");
+
+		// graphics pipeline configuration
+		res = grafSystem.CreatePipeline(this->grafPipeline);
+		if (Succeeded(res))
+		{
+			GrafShader* shaderStages[] = {
+				this->grafVS.get(),
+				this->grafPS.get()
+			};
+			GrafDescriptorTableLayout* bindingLayouts[] = {
+				this->grafBindingLayout.get(),
+			};
+			GrafVertexElementDesc sampleVertexElements[] = {
+				{ GrafFormat::R32G32_SFLOAT, 0 },
+				{ GrafFormat::R32G32_SFLOAT, 8 },
+				{ GrafFormat::R8G8B8A8_UNORM, 16 }
+			};
+			GrafVertexInputDesc vertexInputs[] = { {
+				GrafVertexInputType::PerVertex, 0, sizeof(ImDrawVert),
+				sampleVertexElements, ur_array_size(sampleVertexElements)
+			} };
+			GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
+			pipelineParams.RenderPass = &grafRenderPass;
+			pipelineParams.ShaderStages = shaderStages;
+			pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+			pipelineParams.DescriptorTableLayouts = bindingLayouts;
+			pipelineParams.DescriptorTableLayoutCount = ur_array_size(bindingLayouts);
+			pipelineParams.VertexInputDesc = vertexInputs;
+			pipelineParams.VertexInputCount = ur_array_size(vertexInputs);
+			res = this->grafPipeline->Initialize(&grafDevice, pipelineParams);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to create pipeline object");
+
+		// reserve dynamic VB
+		res = grafSystem.CreateBuffer(this->grafVB);
+		if (Succeeded(res))
+		{
+			GrafBufferDesc bufferDesc;
+			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer;
+			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			bufferDesc.SizeInBytes = 2 * (1 << 20);
+			res = this->grafVB->Initialize(&grafDevice, { bufferDesc });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to create VB");
+
+		// reserve dynamic IB
+		res = grafSystem.CreateBuffer(this->grafIB);
+		if (Succeeded(res))
+		{
+			GrafBufferDesc bufferDesc;
+			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::IndexBuffer;
+			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			bufferDesc.SizeInBytes = 2 * (1 << 20);
+			res = this->grafIB->Initialize(&grafDevice, { bufferDesc });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to create IB");
+
+		// default sampler
+		res = grafSystem.CreateSampler(this->grafSampler);
+		if (Succeeded(res))
+		{
+			res = this->grafSampler->Initialize(&grafDevice, { GrafSamplerDesc::Default });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to create sampler");
+
+		// get font image data
+		unsigned char* pixels;
+		int width, height;
+		ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+		GrafImageDesc fontImageDesc = {};
+		fontImageDesc.Type = GrafImageType::Tex2D;
+		fontImageDesc.Format = GrafFormat::R8G8B8A8_UNORM;
+		fontImageDesc.Size.x = (ur_uint)width;
+		fontImageDesc.Size.y = (ur_uint)height;
+		fontImageDesc.Size.z = 1;
+		fontImageDesc.MipLevels = 1;
+		fontImageDesc.Usage = (ur_uint)GrafImageUsageFlag::TransferDst | (ur_uint)GrafImageUsageFlag::ShaderInput;
+		fontImageDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
+
+		// font image upload buffer
+		res = grafSystem.CreateBuffer(this->grafUploadBuffer);
+		if (Succeeded(res))
+		{
+			GrafBufferDesc uploadBufferDesc;
+			uploadBufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::TransferSrc;
+			uploadBufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			uploadBufferDesc.SizeInBytes = width * height * 4;
+			res = this->grafUploadBuffer->Initialize(&grafDevice, { uploadBufferDesc });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to create upload buffer");
+		
+		// copy Imgui font texture pixels to upload buffer
+		res = this->grafUploadBuffer->Write(pixels);
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to write to upload buffer");
+
+		// font image in gpu local memory
+		res = grafSystem.CreateImage(this->grafFontImage);
+		if (Succeeded(res))
+		{
+			res = this->grafFontImage->Initialize(&grafDevice, { fontImageDesc });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to create font image");
+		ImGui::GetIO().Fonts->TexID = (void*)this->grafFontImage.get();
+
+		// create texture upload command list
+		res = grafSystem.CreateCommandList(this->grafUploadCmdList);
+		if (Succeeded(res))
+		{
+			res = this->grafUploadCmdList->Initialize(&grafDevice);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to create upload command list");
+
+		// upload font texture to gpu memory
+		this->grafUploadCmdList->Begin();
+		this->grafUploadCmdList->ImageMemoryBarrier(this->grafFontImage.get(), GrafImageState::Current, GrafImageState::TransferDst);
+		this->grafUploadCmdList->Copy(this->grafUploadBuffer.get(), this->grafFontImage.get());
+		this->grafUploadCmdList->ImageMemoryBarrier(this->grafFontImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
+		this->grafUploadCmdList->End();
+		grafDevice.Submit(grafUploadCmdList.get());
+
+		// Keyboard mapping
+		this->InitKeyMapping();
+
+		return Result(Success);
+	#endif
+	}
+
+	Result ImguiRender::Render(GrafCommandList& grafCmdList, ur_uint frameIdx)
+	{
+	#if !defined(UR_GRAF)
+		return Result(NotImplemented);
+	#else
+		ImGui::Render();
+
+		ImDrawData *drawData = ImGui::GetDrawData();
+
+		// prepare VB
+		ur_uint vbSizeRequired = (ur_uint)drawData->TotalVtxCount * sizeof(ImDrawVert);
+		if (this->grafVB->GetDesc().SizeInBytes < vbSizeRequired)
+			return Result(OutOfMemory);
+
+		// prepare IB
+		ur_uint ibSizeRequired = (ur_uint)drawData->TotalIdxCount * sizeof(ImDrawIdx);
+		if (this->grafIB->GetDesc().SizeInBytes < ibSizeRequired)
+			return Result(OutOfMemory);
+
+		// fill VB
+		GrafWriteCallback updateVB = [&drawData](ur_byte* mappedDataPtr) -> Result
+		{
+			ImDrawVert *imVertDst = (ImDrawVert*)mappedDataPtr;
+			for (ur_int i = 0; i < (ur_int)drawData->CmdListsCount; i++)
+			{
+				const ImDrawList* cmdList = drawData->CmdLists[i];
+				memcpy(imVertDst, &cmdList->VtxBuffer[0], cmdList->VtxBuffer.size() * sizeof(ImDrawVert));
+				imVertDst += cmdList->VtxBuffer.size();
+			}
+			return Result(Success);
+		};
+		this->grafVB->Write(updateVB);
+
+		// fill IB
+		GrafWriteCallback updateIB = [&drawData](ur_byte* mappedDataPtr) -> Result
+		{
+			ImDrawIdx *imIdxDst = (ImDrawIdx*)mappedDataPtr;
+			for (ur_int i = 0; i < (ur_int)drawData->CmdListsCount; i++)
+			{
+				const ImDrawList* cmdList = drawData->CmdLists[i];
+				memcpy(imIdxDst, &cmdList->IdxBuffer[0], cmdList->IdxBuffer.size() * sizeof(ImDrawIdx));
+				imIdxDst += cmdList->IdxBuffer.size();
+			}
+			return Result(Success);
+		};
+		this->grafIB->Write(updateIB);
+
+		// fill CB
+		VertexTransformCB cb;
+		float L = 0.0f;
+		float R = ImGui::GetIO().DisplaySize.x;
+		float B = ImGui::GetIO().DisplaySize.y;
+		float T = 0.0f;
+		cb.viewProj =
+		{
+			{ 2.0f / (R - L),		0.0f,				0.0f,		0.0f },
+			{ 0.0f,					2.0f / (T - B),		0.0f,		0.0f },
+			{ 0.0f,					0.0f,				0.5f,		0.0f },
+			{ (R + L) / (L - R),	(T + B) / (B - T),	0.5f,		1.0f },
+		};
+		this->grafCBs[frameIdx]->Write((ur_byte*)&cb);
+		
+		// fill shader inputs
+		this->grafBindingTables[frameIdx]->SetConstantBuffer(0, this->grafCBs[frameIdx].get());
+		this->grafBindingTables[frameIdx]->SetSampledImage(0, this->grafFontImage.get(), this->grafSampler.get());
+
+		// setup pipeline
+		grafCmdList.BindPipeline(this->grafPipeline.get());
+		grafCmdList.BindDescriptorTable(this->grafBindingTables[frameIdx].get(), this->grafPipeline.get());
+		grafCmdList.BindVertexBuffer(this->grafVB.get(), 0);
+		grafCmdList.BindIndexBuffer(this->grafIB.get(), GrafIndexType::UINT16);
+
+		// draw command lists
+		ur_uint vbOfs = 0;
+		ur_uint ibOfs = 0;
+		for (ur_uint icl = 0; icl < (ur_uint)drawData->CmdListsCount; icl++)
+		{
+			const ImDrawList *cmdList = drawData->CmdLists[icl];
+			for (ur_uint icb = 0; icb < (ur_uint)cmdList->CmdBuffer.size(); icb++)
+			{
+				const ImDrawCmd* pCmd = &cmdList->CmdBuffer[icb];
+				if (pCmd->UserCallback)
+				{
+					pCmd->UserCallback(cmdList, pCmd);
+				}
+				else
+				{
+					const RectI r = {
+						std::max((ur_int)0, (ur_int)pCmd->ClipRect.x),
+						std::max((ur_int)0, (ur_int)pCmd->ClipRect.y),
+						(ur_int)pCmd->ClipRect.z,
+						(ur_int)pCmd->ClipRect.w
+					};
+					if (r.Area() > 0)
+					{
+						grafCmdList.SetScissorsRect(r);
+						grafCmdList.DrawIndexed(pCmd->ElemCount, 1, ibOfs, vbOfs, 0);
+					}
+				}
+				ibOfs += (ur_uint)pCmd->ElemCount;
+			}
+			vbOfs += (ur_uint)cmdList->VtxBuffer.size();
+		}
+
+		return Result(Success);
+	#endif
 	}
 
 } // end namespace UnlimRealms

@@ -252,7 +252,17 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandList::BindIndexBuffer(GrafBuffer* grafIndexBuffer, GrafIndexType indexType)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandList::Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandList::DrawIndexed(ur_uint indexCount, ur_uint instanceCount, ur_uint firstIndex, ur_uint firstVertex, ur_uint firstInstance)
 	{
 		return Result(NotImplemented);
 	}
@@ -366,6 +376,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafImage::Write(GrafWriteCallback writeCallback, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafImage::Read(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 	{
 		return Result(NotImplemented);
@@ -388,6 +403,11 @@ namespace UnlimRealms
 	}
 
 	Result GrafBuffer::Write(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafBuffer::Write(GrafWriteCallback writeCallback, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 	{
 		return Result(NotImplemented);
 	}

@@ -799,9 +799,27 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafCommandListVulkan::BindIndexBuffer(GrafBuffer* grafIndexBuffer, GrafIndexType indexType)
+	{
+		if (ur_null == grafIndexBuffer)
+			return Result(InvalidArgs);
+
+		vkCmdBindIndexBuffer(this->vkCommandBuffer, static_cast<GrafBufferVulkan*>(grafIndexBuffer)->GetVkBuffer(),
+			0, GrafUtilsVulkan::GrafToVkIndexType(indexType));
+
+		return Result(Success);
+	}
+
 	Result GrafCommandListVulkan::Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance)
 	{
 		vkCmdDraw(this->vkCommandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+
+		return Result(Success);
+	}
+
+	Result GrafCommandListVulkan::DrawIndexed(ur_uint indexCount, ur_uint instanceCount, ur_uint firstIndex, ur_uint firstVertex, ur_uint firstInstance)
+	{
+		vkCmdDrawIndexed(this->vkCommandBuffer, indexCount, instanceCount, firstIndex, firstVertex, firstInstance);
 
 		return Result(Success);
 	}
@@ -1669,7 +1687,21 @@ namespace UnlimRealms
 		if (0 == dataSize)
 			dataSize = this->vkDeviceMemorySize; // entire allocation range
 
-		if (ur_null == dataPtr || dstOffset + dataSize > this->vkDeviceMemorySize)
+		GrafWriteCallback copyWriteCallback = [&dataPtr, &dataSize, &srcOffset](ur_byte *mappedDataPtr) -> Result
+		{
+			memcpy(mappedDataPtr, dataPtr + srcOffset, dataSize);
+			return Result(Success);
+		};
+
+		return this->Write(copyWriteCallback, dataSize, srcOffset, dstOffset);
+	}
+
+	Result GrafImageVulkan::Write(GrafWriteCallback writeCallback, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+	{
+		if (0 == dataSize)
+			dataSize = this->vkDeviceMemorySize; // entire allocation range
+
+		if (ur_null == writeCallback || dstOffset + dataSize > this->vkDeviceMemorySize)
 			return Result(InvalidArgs);
 
 		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
@@ -1682,7 +1714,7 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafImageVulkan: vkMapMemory failed with VkResult = ") + VkResultToString(vkRes));
 		}
 
-		memcpy(mappedMemoryPtr, dataPtr + srcOffset, dataSize);
+		writeCallback((ur_byte*)mappedMemoryPtr);
 
 		vkUnmapMemory(vkDevice, this->vkDeviceMemory);
 
@@ -1924,7 +1956,21 @@ namespace UnlimRealms
 		if (0 == dataSize)
 			dataSize = this->GetDesc().SizeInBytes; // entire allocation range
 
-		if (ur_null == dataPtr || dstOffset + dataSize > this->vkDeviceMemorySize)
+		GrafWriteCallback copyWriteCallback = [&dataPtr, &dataSize, &srcOffset](ur_byte *mappedDataPtr) -> Result
+		{
+			memcpy(mappedDataPtr, dataPtr + srcOffset, dataSize);
+			return Result(Success);
+		};
+
+		return this->Write(copyWriteCallback, dataSize, srcOffset, dstOffset);
+	}
+
+	Result GrafBufferVulkan::Write(GrafWriteCallback writeCallback, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+	{
+		if (0 == dataSize)
+			dataSize = this->GetDesc().SizeInBytes; // entire allocation range
+
+		if (ur_null == writeCallback || dstOffset + dataSize > this->vkDeviceMemorySize)
 			return Result(InvalidArgs);
 
 		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
@@ -1937,7 +1983,7 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafBufferVulkan: vkMapMemory failed with VkResult = ") + VkResultToString(vkRes));
 		}
 
-		memcpy(mappedMemoryPtr, dataPtr + srcOffset, dataSize);
+		writeCallback((ur_byte*)mappedMemoryPtr);
 
 		vkUnmapMemory(vkDevice, this->vkDeviceMemory);
 
@@ -2779,7 +2825,7 @@ namespace UnlimRealms
 		// color blend state
 
 		VkPipelineColorBlendAttachmentState vkAttachmentBlendState = {};
-		vkAttachmentBlendState.blendEnable = VK_FALSE;
+		vkAttachmentBlendState.blendEnable = VK_TRUE;
 		vkAttachmentBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 		vkAttachmentBlendState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 		vkAttachmentBlendState.colorBlendOp = VK_BLEND_OP_ADD;
@@ -3074,6 +3120,17 @@ namespace UnlimRealms
 		case GrafAddressMode::MirrorOnce: vkAddressMode = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE; break;
 		};
 		return vkAddressMode;
+	}
+	
+	VkIndexType GrafUtilsVulkan::GrafToVkIndexType(GrafIndexType indexType)
+	{
+		VkIndexType vkIndexType = VK_INDEX_TYPE_MAX_ENUM;
+		switch (indexType)
+		{
+		case GrafIndexType::UINT16: vkIndexType = VK_INDEX_TYPE_UINT16; break;
+		case GrafIndexType::UINT32: vkIndexType = VK_INDEX_TYPE_UINT32; break;
+		};
+		return vkIndexType;
 	}
 
 	static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {

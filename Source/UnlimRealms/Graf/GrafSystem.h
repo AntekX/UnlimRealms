@@ -14,8 +14,6 @@
 
 #include "UnlimRealms.h"
 
-#define GRAF_ENABLED
-
 namespace UnlimRealms
 {
 
@@ -187,6 +185,13 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafIndexType
+	{
+		UINT16,
+		UINT32
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class UR_DECL GrafFilterType
 	{
 		Nearest,
@@ -337,6 +342,9 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	typedef std::function<Result(ur_byte *mappedDataPtr)> GrafWriteCallback;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafSystem : public RealmEntity
 	{
 	public:
@@ -417,7 +425,7 @@ namespace UnlimRealms
 
 		inline ur_uint GetDeviceId();
 
-		inline const GrafPhysicalDeviceDesc* GetPhysicalDeviceDesc(ur_uint deviceId);
+		inline const GrafPhysicalDeviceDesc* GetPhysicalDeviceDesc();
 
 	private:
 
@@ -477,7 +485,11 @@ namespace UnlimRealms
 
 		virtual Result BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx);
 
+		virtual Result BindIndexBuffer(GrafBuffer* grafIndexBuffer, GrafIndexType indexType);
+
 		virtual Result Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance);
+
+		virtual Result DrawIndexed(ur_uint indexCount, ur_uint instanceCount, ur_uint firstIndex, ur_uint firstVertex, ur_uint firstInstance);
 
 		virtual Result Copy(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
@@ -559,6 +571,8 @@ namespace UnlimRealms
 
 		virtual Result Write(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
+		virtual Result Write(GrafWriteCallback writeCallback, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
 		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
 		inline const GrafImageDesc& GetDesc() const;
@@ -588,6 +602,8 @@ namespace UnlimRealms
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
 		virtual Result Write(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		virtual Result Write(GrafWriteCallback writeCallback, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
 		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 

@@ -1,6 +1,8 @@
 
 #if (0)
 
+// DX12 sandbox sample
+
 static const uint InstanceCount = 24;
 cbuffer Common : register(b0)
 {
@@ -50,7 +52,7 @@ PS_INPUT main(VS_INPUT input, uint instanceID : SV_InstanceID, uint vertexID : S
 
 #else
 
-// super simple triangle test
+// Vulkan sandbox sample
 
 //#pragma pack_matrix(row_major)
 

@@ -283,7 +283,6 @@ int VulkanSandboxApp::Run()
 	}
 
 	// prepare sample image
-	
 	if (grafSystem != ur_null)
 	{
 		do
@@ -323,14 +322,12 @@ int VulkanSandboxApp::Run()
 		}
 	}
 
-	// initialize sample primitive renering
-
 	// initialize ImguiRender
-	ImguiRender* imguiRender = realm.AddComponent<ImguiRender>(realm);
-	if (imguiRender != ur_null)
+	ImguiRender* imguiRender = ur_null;
+	if (grafSystem != ur_null)
 	{
-		imguiRender = realm.GetComponent<ImguiRender>();
-		Result res = imguiRender->Init();
+		imguiRender = realm.AddComponent<ImguiRender>(realm);
+		Result res = imguiRender->Init(*grafDevice.get(), *grafRenderPassSample.get(), frameCount);
 		if (Failed(res))
 		{
 			realm.RemoveComponent<ImguiRender>();
@@ -396,6 +393,8 @@ int VulkanSandboxApp::Run()
 				initializeGfxCanvasObjects();
 			}
 		}
+		if (!canvasValid)
+			Sleep(60);
 
 		// update sub systems
 		realm.GetInput()->Update();
@@ -452,8 +451,11 @@ int VulkanSandboxApp::Run()
 				GrafCommandList* grafCmdListCrnt = grafMainCmdList[frameIdx].get();
 				grafCmdListCrnt->Begin();
 
+				// prepare RT
+
 				updateFrameJob->WaitProgress(1); // make sure required data is ready
 				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
+				grafCmdListCrnt->BeginRenderPass(grafRenderPassSample.get(), grafRenderTarget[grafCanvas->GetCurrentImageId()].get());
 
 				GrafViewportDesc grafViewport = {};
 				grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
@@ -461,6 +463,9 @@ int VulkanSandboxApp::Run()
 				grafViewport.Near = 0.0f;
 				grafViewport.Far = 1.0f;
 				grafCmdListCrnt->SetViewport(grafViewport, true);
+				grafCmdListCrnt->SetScissorsRect({ 0, 0, (ur_int)grafViewport.Width, (ur_int)grafViewport.Height });
+
+				// draw sample primitives
 
 				updateFrameJob->WaitProgress(2); // wait till animation params are up to date
 				GrafPipelineVulkan* grafPipelineVulkan = static_cast<GrafPipelineVulkan*>(grafPipelineSample.get());
@@ -476,13 +481,33 @@ int VulkanSandboxApp::Run()
 				grafBindingSample[frameIdx]->SetConstantBuffer(0, grafCBSample[frameIdx].get());
 				grafBindingSample[frameIdx]->SetSampledImage(0, grafImageSample.get(), grafDefaultSampler.get());
 
-				grafCmdListCrnt->BeginRenderPass(grafRenderPassSample.get(), grafRenderTarget[grafCanvas->GetCurrentImageId()].get());
 				grafCmdListCrnt->BindPipeline(grafPipelineSample.get());
 				grafCmdListCrnt->BindDescriptorTable(grafBindingSample[frameIdx].get(), grafPipelineSample.get());
 				grafCmdListCrnt->BindVertexBuffer(grafVBSample.get(), 0);
 				grafCmdListCrnt->Draw(6, 4, 0, 0);
-				grafCmdListCrnt->EndRenderPass();
 
+				// draw GUI
+
+				static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
+				static bool showGUI = true;
+				showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
+				if (showGUI)
+				{
+					ImGui::SetNextWindowSize(imguiDemoWndSize, ImGuiSetCond_Once);
+					ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
+					ImGui::Begin("Control Panel");
+					ImGui::Text("Graphics Device: %S", grafDevice->GetPhysicalDeviceDesc()->Description.c_str());
+					ImGui::End();
+					ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
+					ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+					ImGui::ShowMetricsWindow();
+					
+					imguiRender->Render(*grafCmdListCrnt, frameIdx);
+				}
+
+				// finalize & submit
+
+				grafCmdListCrnt->EndRenderPass();
 				grafCmdListCrnt->End();
 				grafDevice->Submit(grafCmdListCrnt);
 			});
@@ -495,6 +520,17 @@ int VulkanSandboxApp::Run()
 			// start recording next frame
 			frameIdx = (frameIdx + 1) % frameCount;
 		}
+	}
+
+	if (grafSystem != ur_null)
+	{
+		// make sure there are no resources still used on gpu before destroying
+		grafDevice->WaitIdle();
+	}
+
+	if (imguiRender != ur_null)
+	{
+		realm.RemoveComponent<ImguiRender>();
 	}
 
 	deinitializeGfxSystem();

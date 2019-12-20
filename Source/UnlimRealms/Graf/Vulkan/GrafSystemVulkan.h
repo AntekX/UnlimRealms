@@ -146,7 +146,11 @@ namespace UnlimRealms
 
 		virtual Result BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx);
 
+		virtual Result BindIndexBuffer(GrafBuffer* grafIndexBuffer, GrafIndexType indexType);
+
 		virtual Result Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance);
+
+		virtual Result DrawIndexed(ur_uint indexCount, ur_uint instanceCount, ur_uint firstIndex, ur_uint firstVertex, ur_uint firstInstance);
 
 		virtual Result Copy(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
@@ -244,6 +248,8 @@ namespace UnlimRealms
 
 		virtual Result Write(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
+		virtual Result Write(GrafWriteCallback writeCallback, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
 		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
 		Result InitializeFromVkImage(GrafDevice *grafDevice, const InitParams& initParams, VkImage vkImage);
@@ -282,6 +288,8 @@ namespace UnlimRealms
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
 		virtual Result Write(ur_byte* dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
+		virtual Result Write(GrafWriteCallback writeCallback, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
 		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
@@ -478,6 +486,7 @@ namespace UnlimRealms
 		static inline VkPrimitiveTopology GrafToVkPrimitiveTopology(GrafPrimitiveTopology topology);
 		static inline VkFilter GrafToVkFilter(GrafFilterType filter);
 		static inline VkSamplerAddressMode GrafToVkAddressMode(GrafAddressMode address);
+		static inline VkIndexType GrafToVkIndexType(GrafIndexType indexType);
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
 	};
