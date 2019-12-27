@@ -768,3 +768,123 @@ namespace UnlimRealms
 	}
 
 } // end namespace UnlimRealms
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+namespace UnlimRealms
+{
+
+	const GrafRenderer::InitParams GrafRenderer::InitParams::Default = {
+		GrafRenderer::InitParams::RecommendedDeviceId,
+		GrafCanvas::InitParams::Default
+	};
+	
+	const ur_uint GrafRenderer::InitParams::RecommendedDeviceId = ur_uint(-1);
+
+	GrafRenderer::GrafRenderer(Realm &realm) :
+		RealmEntity(realm)
+	{
+	}
+
+	GrafRenderer::~GrafRenderer()
+	{
+		this->Deinitialize();
+	}
+
+	Result GrafRenderer::Initialize(std::unique_ptr<GrafSystem>& grafSystem, const InitParams& initParams)
+	{
+		this->grafSystem.reset(grafSystem.release());
+		if (ur_null == this->grafSystem.get())
+			return ResultError(InvalidArgs, "GrafRenderer: failed to initialize, invalid GrafSystem");
+
+		Result res(Success);
+		const char* crntStageLogName = "";
+		do
+		{
+			// graphics device
+			crntStageLogName = "GrafDevice";
+			res = this->grafSystem->CreateDevice(this->grafDevice);
+			if (Failed(res)) break;
+			res = this->grafDevice->Initialize(this->grafSystem->GetRecommendedDeviceId());
+			if (Failed(res)) break;
+
+			// presentation canvas (swapchain)
+			crntStageLogName = "GrafCanvas";
+			res = this->grafSystem->CreateCanvas(this->grafCanvas);
+			if (Failed(res)) break;
+			res = this->grafCanvas->Initialize(this->grafDevice.get(), initParams.CanvasParams);
+			if (Failed(res)) break;
+
+			// number of recorded (in flight) frames
+			// can differ from swap chain size
+			this->frameCount = std::max(ur_uint(2), this->grafCanvas->GetSwapChainImageCount() - 1);
+			this->frameIdx = 0;
+
+			// swap chain render pass
+			// used to render into swap chain render target(s)
+			crntStageLogName = "swap chain render pass";
+			res = this->grafSystem->CreateRenderPass(this->grafCanvasRenderPass);
+			if (Failed(res)) break;
+			res = this->grafCanvasRenderPass->Initialize(this->grafDevice.get());
+			if (Failed(res)) break;
+
+			// swap chain image(s) render target(s)
+			// RT count must be equal to swap chain size (one RT wraps on swap chain image)
+			crntStageLogName = "swap chain render target(s)";
+			this->grafCanvasRenderTarget.resize(this->grafCanvas->GetSwapChainImageCount());
+			for (ur_uint imageIdx = 0; imageIdx < this->grafCanvas->GetSwapChainImageCount(); ++imageIdx)
+			{
+				res = this->grafSystem->CreateRenderTarget(this->grafCanvasRenderTarget[imageIdx]);
+				if (Failed(res)) break;
+				GrafImage* renderTargetImages[] = {
+					this->grafCanvas->GetSwapChainImage(imageIdx)
+				};
+				GrafRenderTarget::InitParams renderTargetParams = {};
+				renderTargetParams.RenderPass = ur_null;// todo: grafRenderPassSample.get();
+				renderTargetParams.Images = renderTargetImages;
+				renderTargetParams.ImageCount = ur_array_size(renderTargetImages);
+				res = this->grafCanvasRenderTarget[imageIdx]->Initialize(this->grafDevice.get(), renderTargetParams);
+				if (Failed(res)) break;
+			}
+			if (Failed(res)) break;
+
+		} while (false);
+		
+		if (Failed(res))
+		{
+			this->Deinitialize();
+			LogError(std::string("GrafRenderer: failed to initialize ") + crntStageLogName);
+		}
+		
+		return res;
+	}
+
+	Result GrafRenderer::Deinitialize()
+	{
+		// order matters!
+
+		// make sure there are no resources still used on gpu before destroying
+		if (this->grafDevice != ur_null)
+		{
+			this->grafDevice->WaitIdle();
+		}
+
+		this->grafCanvasRenderTarget.clear();
+		this->grafCanvasRenderPass.reset();
+		this->grafCanvas.reset();
+		this->grafDevice.reset();
+		this->grafSystem.reset();
+
+		return Result(Success);
+	}
+
+	Result GrafRenderer::BeginFrame()
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafRenderer::EndFrameAndPresent()
+	{
+		return Result(NotImplemented);
+	}
+
+} // end namespace UnlimRealms

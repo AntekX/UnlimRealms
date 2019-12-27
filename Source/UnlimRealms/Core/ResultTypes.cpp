@@ -59,4 +59,14 @@ namespace UnlimRealms
 		return CombinedResult(*this, r);
 	}
 
+	Result Result::operator && (const Result &r) const
+	{
+		return CombinedResult(*this, r);
+	}
+
+	Result::operator bool() const
+	{
+		return Succeeded(*this);
+	}
+
 } // end namespace UnlimRealms

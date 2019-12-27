@@ -858,3 +858,87 @@ namespace UnlimRealms
 } // end namespace UnlimRealms
 
 #include "GrafSystem.inline.h"
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// GRAF Based Renderer
+// Provides higher level of control over rendering pipeline
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+namespace UnlimRealms
+{
+
+	class UR_DECL GrafRenderer : public RealmEntity
+	{
+	public:
+
+		struct InitParams
+		{
+			ur_uint DeviceId;
+			GrafCanvas::InitParams CanvasParams;
+			
+			static const InitParams Default;
+			static const ur_uint RecommendedDeviceId;
+		};
+
+		GrafRenderer(Realm &realm);
+
+		virtual ~GrafRenderer();
+
+		virtual Result Initialize(std::unique_ptr<GrafSystem>& grafSystem, const InitParams& initParams);
+
+		virtual Result Deinitialize();
+
+		virtual Result BeginFrame();
+
+		virtual Result EndFrameAndPresent();
+
+		inline GrafSystem* GetGrafSystem() const;
+
+		inline GrafCanvas* GetGrafCanvas() const;
+
+		inline GrafDevice* GetGrafDevice() const;
+
+		inline GrafRenderPass* GetCanvasRenderPass() const;
+
+		inline GrafRenderTarget* GetCanvasRenderTarget() const;
+
+	protected:
+
+		std::unique_ptr<GrafSystem> grafSystem;
+		std::unique_ptr<GrafDevice> grafDevice;
+		std::unique_ptr<GrafCanvas> grafCanvas;
+		std::unique_ptr<GrafRenderPass> grafCanvasRenderPass;
+		std::vector<std::unique_ptr<GrafRenderTarget>> grafCanvasRenderTarget;
+		std::unique_ptr<GrafBuffer> grafUploadRingBuffer;
+		std::unique_ptr<GrafBuffer> grafConstantRingBuffer;
+		std::unique_ptr<GrafCommandList> grafUploadCmdList;
+		ur_uint frameCount;
+		ur_uint frameIdx;
+	};
+
+	inline GrafSystem* GrafRenderer::GetGrafSystem() const
+	{
+		return this->grafSystem.get();
+	}
+
+	inline GrafCanvas* GrafRenderer::GetGrafCanvas() const
+	{
+		return this->grafCanvas.get();
+	}
+
+	inline GrafDevice* GrafRenderer::GetGrafDevice() const
+	{
+		return this->grafDevice.get();
+	}
+
+	inline GrafRenderPass* GrafRenderer::GetCanvasRenderPass() const
+	{
+		return this->grafCanvasRenderPass.get();
+	}
+
+	inline GrafRenderTarget* GrafRenderer::GetCanvasRenderTarget() const
+	{
+		return this->grafCanvasRenderTarget[this->grafCanvas->GetCurrentImageId()].get();
+	}
+
+} // end namespace UnlimRealms

@@ -37,6 +37,10 @@ namespace UnlimRealms
 
 		Result operator &= (const Result &r) const;
 
+		Result operator && (const Result &r) const;
+
+		operator bool() const;
+
 	private:
 
 		static UID lastUID;
@@ -70,6 +74,6 @@ namespace UnlimRealms
 	// helper shortcuts
 	#define Succeeded(result) (Success == (result).Code)
 	#define Failed(result) (Success != (result).Code)
-	#define CombinedResult(res0, res1) (Failed(res0) || Failed(res1) ? Result(Failure) : Result(Success))
+	#define CombinedResult(res0, res1) (Failed(res0) ? Result(res0) : (Failed(res1) ? Result(res1) : Result(Success)))
 
 } // end namespace UnlimRealms

@@ -16,6 +16,7 @@ using namespace UnlimRealms;
 
 int VulkanSandboxApp::Run()
 {
+
 	// create realm
 	Realm realm;
 	realm.Initialize();
