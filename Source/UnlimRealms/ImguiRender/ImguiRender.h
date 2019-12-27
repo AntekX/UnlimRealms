@@ -32,11 +32,7 @@ namespace UnlimRealms
 
 		Result Render(GfxContext &gfxContext);
 
-		Result Init(GrafDevice& grafDevice, GrafRenderPass& grafRenderPass, ur_uint frameCount);
-
-		Result Render(GrafCommandList& grafCmdList, ur_uint frameIdx);
-
-		inline GrafImage* GetFontImage() const { return this->grafFontImage.get(); }
+		Result Render(GrafCommandList& grafCmdList);
 
 	private:
 
@@ -45,6 +41,7 @@ namespace UnlimRealms
 		void ReleaseGfxObjects();
 
 		#if defined(UR_GRAF)
+		GrafRenderer* grafRenderer;
 		std::unique_ptr<GrafShader> grafVS;
 		std::unique_ptr<GrafShader> grafPS;
 		std::unique_ptr<GrafBuffer> grafVB;

@@ -29,6 +29,9 @@ namespace UnlimRealms
 	ImguiRender::ImguiRender(Realm &realm) :
 		RealmEntity(realm)
 	{
+		#if defined(UR_GRAF)
+		this->grafRenderer = ur_null;
+		#endif
 	}
 
 	ImguiRender::~ImguiRender()
@@ -52,6 +55,7 @@ namespace UnlimRealms
 		this->grafUploadBuffer.reset();
 		this->grafBindingLayout.reset();
 		this->grafPipeline.reset();
+		this->grafRenderer = ur_null;
 
 		#else
 		
@@ -88,11 +92,9 @@ namespace UnlimRealms
 		}
 	}
 
+	#if !defined(UR_GRAF)
 	Result ImguiRender::Init()
 	{
-	#if defined(UR_GRAF)
-		return Result(NotImplemented);
-	#else
 		Result res = Result(Success);
 
 		// release previous objects
@@ -230,8 +232,8 @@ namespace UnlimRealms
 		this->InitKeyMapping();
 
 		return res;
-	#endif
 	}
+	#endif
 
 	Result ImguiRender::NewFrame()
 	{
@@ -410,30 +412,35 @@ namespace UnlimRealms
 	#endif
 	}
 
-	Result ImguiRender::Init(GrafDevice& grafDevice, GrafRenderPass& grafRenderPass, ur_uint frameCount)
+	#if defined(UR_GRAF)
+	Result ImguiRender::Init()
 	{
-	#if !defined(UR_GRAF)
-		return Result(NotImplemented);
-	#else
-		Result res = Result(Success);
-		GrafSystem& grafSystem = grafDevice.GetGrafSystem();
-
 		// release previous objects
 
 		ReleaseGfxObjects();
 
+		// validate GRAF objects
+		Result res = Result(Success);
+		this->grafRenderer = this->GetRealm().GetComponent<GrafRenderer>();
+		if (ur_null == this->grafRenderer)
+			return ResultError(Failure, "ImguiRender::Init: failed to initialize, invalid GrafRenderer");
+		GrafSystem* grafSystem = this->grafRenderer->GetGrafSystem();
+		GrafDevice* grafDevice = this->grafRenderer->GetGrafDevice();
+		GrafRenderPass* grafRenderPass = this->grafRenderer->GetCanvasRenderPass();
+		ur_uint frameCount = this->grafRenderer->GetRecordedFrameCount();
+
 		// VS
-		res = GrafUtils::CreateShaderFromFile(grafDevice, "Imgui_vs.spv", GrafShaderType::Vertex, this->grafVS);
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Imgui_vs.spv", GrafShaderType::Vertex, this->grafVS);
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to initialize VS");
 
 		// PS
-		res = GrafUtils::CreateShaderFromFile(grafDevice, "Imgui_ps.spv", GrafShaderType::Pixel, this->grafPS);
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Imgui_ps.spv", GrafShaderType::Pixel, this->grafPS);
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to initialize PS");
 
 		// shader bindings layout
-		res = grafSystem.CreateDescriptorTableLayout(this->grafBindingLayout);
+		res = grafSystem->CreateDescriptorTableLayout(this->grafBindingLayout);
 		if (Succeeded(res))
 		{
 			GrafDescriptorRangeDesc grafBindingLayoutRanges[] = {
@@ -445,7 +452,7 @@ namespace UnlimRealms
 				GrafShaderStageFlags((ur_uint)GrafShaderStageFlag::Vertex | (ur_uint)GrafShaderStageFlag::Pixel),
 				grafBindingLayoutRanges, ur_array_size(grafBindingLayoutRanges)
 			};
-			res = this->grafBindingLayout->Initialize(&grafDevice, { grafBindingLayoutDesc });
+			res = this->grafBindingLayout->Initialize(grafDevice, { grafBindingLayoutDesc });
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to create descriptor table layout");
@@ -454,9 +461,9 @@ namespace UnlimRealms
 		this->grafBindingTables.resize(frameCount);
 		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
 		{
-			res = grafSystem.CreateDescriptorTable(this->grafBindingTables[iframe]);
+			res = grafSystem->CreateDescriptorTable(this->grafBindingTables[iframe]);
 			if (Failed(res)) break;
-			res = this->grafBindingTables[iframe]->Initialize(&grafDevice, { this->grafBindingLayout.get() });
+			res = this->grafBindingTables[iframe]->Initialize(grafDevice, { this->grafBindingLayout.get() });
 			if (Failed(res)) break;
 		}
 		if (Failed(res))
@@ -466,20 +473,20 @@ namespace UnlimRealms
 		this->grafCBs.resize(frameCount);
 		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
 		{
-			res = grafSystem.CreateBuffer(this->grafCBs[iframe]);
+			res = grafSystem->CreateBuffer(this->grafCBs[iframe]);
 			if (Failed(res)) break;
 			GrafBufferDesc bufferDesc;
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::ConstantBuffer;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			bufferDesc.SizeInBytes = sizeof(VertexTransformCB);
-			res = this->grafCBs[iframe]->Initialize(&grafDevice, { bufferDesc });
+			res = this->grafCBs[iframe]->Initialize(grafDevice, { bufferDesc });
 			if (Failed(res)) break;
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to create CB(s)");
 
 		// graphics pipeline configuration
-		res = grafSystem.CreatePipeline(this->grafPipeline);
+		res = grafSystem->CreatePipeline(this->grafPipeline);
 		if (Succeeded(res))
 		{
 			GrafShader* shaderStages[] = {
@@ -499,49 +506,49 @@ namespace UnlimRealms
 				sampleVertexElements, ur_array_size(sampleVertexElements)
 			} };
 			GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
-			pipelineParams.RenderPass = &grafRenderPass;
+			pipelineParams.RenderPass = grafRenderPass;
 			pipelineParams.ShaderStages = shaderStages;
 			pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
 			pipelineParams.DescriptorTableLayouts = bindingLayouts;
 			pipelineParams.DescriptorTableLayoutCount = ur_array_size(bindingLayouts);
 			pipelineParams.VertexInputDesc = vertexInputs;
 			pipelineParams.VertexInputCount = ur_array_size(vertexInputs);
-			res = this->grafPipeline->Initialize(&grafDevice, pipelineParams);
+			res = this->grafPipeline->Initialize(grafDevice, pipelineParams);
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to create pipeline object");
 
 		// reserve dynamic VB
-		res = grafSystem.CreateBuffer(this->grafVB);
+		res = grafSystem->CreateBuffer(this->grafVB);
 		if (Succeeded(res))
 		{
 			GrafBufferDesc bufferDesc;
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			bufferDesc.SizeInBytes = 2 * (1 << 20);
-			res = this->grafVB->Initialize(&grafDevice, { bufferDesc });
+			res = this->grafVB->Initialize(grafDevice, { bufferDesc });
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to create VB");
 
 		// reserve dynamic IB
-		res = grafSystem.CreateBuffer(this->grafIB);
+		res = grafSystem->CreateBuffer(this->grafIB);
 		if (Succeeded(res))
 		{
 			GrafBufferDesc bufferDesc;
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::IndexBuffer;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			bufferDesc.SizeInBytes = 2 * (1 << 20);
-			res = this->grafIB->Initialize(&grafDevice, { bufferDesc });
+			res = this->grafIB->Initialize(grafDevice, { bufferDesc });
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to create IB");
 
 		// default sampler
-		res = grafSystem.CreateSampler(this->grafSampler);
+		res = grafSystem->CreateSampler(this->grafSampler);
 		if (Succeeded(res))
 		{
-			res = this->grafSampler->Initialize(&grafDevice, { GrafSamplerDesc::Default });
+			res = this->grafSampler->Initialize(grafDevice, { GrafSamplerDesc::Default });
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to create sampler");
@@ -561,14 +568,14 @@ namespace UnlimRealms
 		fontImageDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 
 		// font image upload buffer
-		res = grafSystem.CreateBuffer(this->grafUploadBuffer);
+		res = grafSystem->CreateBuffer(this->grafUploadBuffer);
 		if (Succeeded(res))
 		{
 			GrafBufferDesc uploadBufferDesc;
 			uploadBufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::TransferSrc;
 			uploadBufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			uploadBufferDesc.SizeInBytes = width * height * 4;
-			res = this->grafUploadBuffer->Initialize(&grafDevice, { uploadBufferDesc });
+			res = this->grafUploadBuffer->Initialize(grafDevice, { uploadBufferDesc });
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to create upload buffer");
@@ -579,20 +586,20 @@ namespace UnlimRealms
 			return ResultError(Failure, "ImguiRender::Init: failed to write to upload buffer");
 
 		// font image in gpu local memory
-		res = grafSystem.CreateImage(this->grafFontImage);
+		res = grafSystem->CreateImage(this->grafFontImage);
 		if (Succeeded(res))
 		{
-			res = this->grafFontImage->Initialize(&grafDevice, { fontImageDesc });
+			res = this->grafFontImage->Initialize(grafDevice, { fontImageDesc });
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to create font image");
 		ImGui::GetIO().Fonts->TexID = (void*)this->grafFontImage.get();
 
 		// create texture upload command list
-		res = grafSystem.CreateCommandList(this->grafUploadCmdList);
+		res = grafSystem->CreateCommandList(this->grafUploadCmdList);
 		if (Succeeded(res))
 		{
-			res = this->grafUploadCmdList->Initialize(&grafDevice);
+			res = this->grafUploadCmdList->Initialize(grafDevice);
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to create upload command list");
@@ -603,23 +610,26 @@ namespace UnlimRealms
 		this->grafUploadCmdList->Copy(this->grafUploadBuffer.get(), this->grafFontImage.get());
 		this->grafUploadCmdList->ImageMemoryBarrier(this->grafFontImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
 		this->grafUploadCmdList->End();
-		grafDevice.Submit(grafUploadCmdList.get());
+		grafDevice->Submit(grafUploadCmdList.get());
 
 		// Keyboard mapping
 		this->InitKeyMapping();
 
 		return Result(Success);
-	#endif
 	}
+	#endif
 
-	Result ImguiRender::Render(GrafCommandList& grafCmdList, ur_uint frameIdx)
+	Result ImguiRender::Render(GrafCommandList& grafCmdList)
 	{
 	#if !defined(UR_GRAF)
 		return Result(NotImplemented);
 	#else
+		
 		ImGui::Render();
 
 		ImDrawData *drawData = ImGui::GetDrawData();
+
+		ur_uint frameIdx = this->grafRenderer->GetCurrentFrameId();
 
 		// prepare VB
 		ur_uint vbSizeRequired = (ur_uint)drawData->TotalVtxCount * sizeof(ImDrawVert);

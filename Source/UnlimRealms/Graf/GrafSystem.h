@@ -871,7 +871,7 @@ namespace UnlimRealms
 	{
 	public:
 
-		struct InitParams
+		struct UR_DECL InitParams
 		{
 			ur_uint DeviceId;
 			GrafCanvas::InitParams CanvasParams;
@@ -902,7 +902,13 @@ namespace UnlimRealms
 
 		inline GrafRenderTarget* GetCanvasRenderTarget() const;
 
+		inline ur_uint GetRecordedFrameCount() const;
+
+		inline ur_uint GetCurrentFrameId() const;
+
 	protected:
+
+		Result InitializeCanvasRenderTargets();
 
 		std::unique_ptr<GrafSystem> grafSystem;
 		std::unique_ptr<GrafDevice> grafDevice;
@@ -914,6 +920,7 @@ namespace UnlimRealms
 		std::unique_ptr<GrafCommandList> grafUploadCmdList;
 		ur_uint frameCount;
 		ur_uint frameIdx;
+		GrafCanvas::InitParams grafCanvasParams;
 	};
 
 	inline GrafSystem* GrafRenderer::GetGrafSystem() const
@@ -939,6 +946,16 @@ namespace UnlimRealms
 	inline GrafRenderTarget* GrafRenderer::GetCanvasRenderTarget() const
 	{
 		return this->grafCanvasRenderTarget[this->grafCanvas->GetCurrentImageId()].get();
+	}
+
+	inline ur_uint GrafRenderer::GetRecordedFrameCount() const
+	{
+		return this->frameCount;
+	}
+
+	inline ur_uint GrafRenderer::GetCurrentFrameId() const
+	{
+		return this->frameIdx;
 	}
 
 } // end namespace UnlimRealms

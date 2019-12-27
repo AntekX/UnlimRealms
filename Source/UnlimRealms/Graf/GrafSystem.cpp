@@ -770,6 +770,7 @@ namespace UnlimRealms
 } // end namespace UnlimRealms
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#include "Sys/Canvas.h"
 namespace UnlimRealms
 {
 
@@ -804,13 +805,15 @@ namespace UnlimRealms
 			crntStageLogName = "GrafDevice";
 			res = this->grafSystem->CreateDevice(this->grafDevice);
 			if (Failed(res)) break;
-			res = this->grafDevice->Initialize(this->grafSystem->GetRecommendedDeviceId());
+			ur_uint deviceId = (InitParams::RecommendedDeviceId == initParams.DeviceId ? this->grafSystem->GetRecommendedDeviceId() : initParams.DeviceId);
+			res = this->grafDevice->Initialize(deviceId);
 			if (Failed(res)) break;
 
 			// presentation canvas (swapchain)
 			crntStageLogName = "GrafCanvas";
 			res = this->grafSystem->CreateCanvas(this->grafCanvas);
 			if (Failed(res)) break;
+			this->grafCanvasParams = initParams.CanvasParams;
 			res = this->grafCanvas->Initialize(this->grafDevice.get(), initParams.CanvasParams);
 			if (Failed(res)) break;
 
@@ -828,23 +831,8 @@ namespace UnlimRealms
 			if (Failed(res)) break;
 
 			// swap chain image(s) render target(s)
-			// RT count must be equal to swap chain size (one RT wraps on swap chain image)
 			crntStageLogName = "swap chain render target(s)";
-			this->grafCanvasRenderTarget.resize(this->grafCanvas->GetSwapChainImageCount());
-			for (ur_uint imageIdx = 0; imageIdx < this->grafCanvas->GetSwapChainImageCount(); ++imageIdx)
-			{
-				res = this->grafSystem->CreateRenderTarget(this->grafCanvasRenderTarget[imageIdx]);
-				if (Failed(res)) break;
-				GrafImage* renderTargetImages[] = {
-					this->grafCanvas->GetSwapChainImage(imageIdx)
-				};
-				GrafRenderTarget::InitParams renderTargetParams = {};
-				renderTargetParams.RenderPass = ur_null;// todo: grafRenderPassSample.get();
-				renderTargetParams.Images = renderTargetImages;
-				renderTargetParams.ImageCount = ur_array_size(renderTargetImages);
-				res = this->grafCanvasRenderTarget[imageIdx]->Initialize(this->grafDevice.get(), renderTargetParams);
-				if (Failed(res)) break;
-			}
+			res = this->InitializeCanvasRenderTargets();
 			if (Failed(res)) break;
 
 		} while (false);
@@ -853,6 +841,31 @@ namespace UnlimRealms
 		{
 			this->Deinitialize();
 			LogError(std::string("GrafRenderer: failed to initialize ") + crntStageLogName);
+		}
+		
+		return res;
+	}
+
+	Result GrafRenderer::InitializeCanvasRenderTargets()
+	{
+		Result res = NotInitialized;
+
+		// RT count must be equal to swap chain size (one RT wraps on swap chain image)
+		this->grafCanvasRenderTarget.clear();
+		this->grafCanvasRenderTarget.resize(this->grafCanvas->GetSwapChainImageCount());
+		for (ur_uint imageIdx = 0; imageIdx < this->grafCanvas->GetSwapChainImageCount(); ++imageIdx)
+		{
+			res = this->grafSystem->CreateRenderTarget(this->grafCanvasRenderTarget[imageIdx]);
+			if (Failed(res)) break;
+			GrafImage* renderTargetImages[] = {
+				this->grafCanvas->GetSwapChainImage(imageIdx)
+			};
+			GrafRenderTarget::InitParams renderTargetParams = {};
+			renderTargetParams.RenderPass = this->grafCanvasRenderPass.get();
+			renderTargetParams.Images = renderTargetImages;
+			renderTargetParams.ImageCount = ur_array_size(renderTargetImages);
+			res = this->grafCanvasRenderTarget[imageIdx]->Initialize(this->grafDevice.get(), renderTargetParams);
+			if (Failed(res)) break;
 		}
 		
 		return res;
@@ -879,12 +892,44 @@ namespace UnlimRealms
 
 	Result GrafRenderer::BeginFrame()
 	{
-		return Result(NotImplemented);
+		if (ur_null == this->grafCanvas)
+			return Result(NotInitialized);
+
+		// update swapchain resolution
+		ur_uint swapchainWidth = 0;
+		ur_uint swapchainHeight = 0;
+		if (this->grafCanvas->GetCurrentImage() != ur_null)
+		{
+			swapchainWidth = this->grafCanvas->GetCurrentImage()->GetDesc().Size.x;
+			swapchainHeight = this->grafCanvas->GetCurrentImage()->GetDesc().Size.y;
+		}
+		if (swapchainWidth != this->GetRealm().GetCanvas()->GetClientBound().Width() ||
+			swapchainHeight != this->GetRealm().GetCanvas()->GetClientBound().Height())
+		{
+			if (this->GetRealm().GetCanvas()->GetClientBound().Area() > 0)
+			{
+				Result res = this->grafCanvas->Initialize(this->grafDevice.get(), this->grafCanvasParams);
+				if (Succeeded(res))
+				{
+					res = this->InitializeCanvasRenderTargets();
+				}
+				if (Failed(res))
+				{
+					return ResultError(res.Code, "GrafRenderer: failed to resize swap chain");
+				}
+			}
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafRenderer::EndFrameAndPresent()
 	{
-		return Result(NotImplemented);
+		Result res = this->grafCanvas->Present();
+
+		this->frameIdx = (this->frameIdx + 1) % this->frameCount;
+
+		return res;
 	}
 
 } // end namespace UnlimRealms

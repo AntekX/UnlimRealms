@@ -34,6 +34,31 @@ int VulkanSandboxApp::Run()
 	input->Initialize();
 	realm.SetInput(std::move(input));
 
+	// create GRAF renderer
+	GrafRenderer *grafRenderer = realm.AddComponent<GrafRenderer>(realm);
+	Result res = Success;
+	do
+	{
+		// create GRAF system
+		std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
+		res = grafSystem->Initialize(realm.GetCanvas());
+		if (Failed(res)) break;
+
+		// initialize renderer
+		GrafRenderer::InitParams grafRendererParams = GrafRenderer::InitParams::Default;
+		grafRendererParams.DeviceId = grafSystem->GetRecommendedDeviceId();
+		grafRendererParams.CanvasParams = GrafCanvas::InitParams::Default;
+		res = grafRenderer->Initialize(std::move(grafSystem), grafRendererParams);
+		if (Failed(res)) break;
+
+	} while (false);
+	if (Failed(res))
+	{
+		realm.RemoveComponent<GrafRenderer>();
+		grafRenderer = ur_null;
+		realm.GetLog().WriteLine("VulkanSandboxApp: failed to initialize GrafRenderer", Log::Error);
+	}
+
 	// sample mesh data
 	struct VertexSample
 	{
@@ -54,11 +79,8 @@ int VulkanSandboxApp::Run()
 	{
 		ur_float4x4 Transform;
 	};
-
-	// initialize gfx system
-	std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
-	std::unique_ptr<GrafDevice> grafDevice;
-	std::unique_ptr<GrafCanvas> grafCanvas;
+	
+	// initialize sample GRAF objects
 	std::unique_ptr<GrafSampler> grafDefaultSampler;
 	std::unique_ptr<GrafShader> grafShaderSampleVS;
 	std::unique_ptr<GrafShader> grafShaderSamplePS;
@@ -66,31 +88,21 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafImage> grafImageSample;
 	std::unique_ptr<GrafCommandList> grafUploadCmdList;
 	std::unique_ptr<GrafUtils::ImageData> sampleImageData;
-	std::unique_ptr<GrafRenderPass> grafRenderPassSample;
 	std::unique_ptr<GrafDescriptorTableLayout> grafBindingLayoutSample;
 	std::unique_ptr<GrafPipeline> grafPipelineSample;
-	std::vector<std::unique_ptr<GrafRenderTarget>> grafRenderTarget;
 	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
 	std::vector<std::unique_ptr<GrafBuffer>> grafCBSample;
 	std::vector<std::unique_ptr<GrafDescriptorTable>> grafBindingSample;
-	ur_uint frameCount = 0;
-	ur_uint frameIdx = 0;
-	auto& deinitializeGfxCanvasObjects = [&]() -> void {
-		if (grafDevice.get()) grafDevice->WaitIdle();
-		grafRenderTarget.clear();
-	};
-	auto& deinitializeGfxFrameObjects = [&]() -> void {
+	auto& deinitializeGrafFrameObjects = [&]() -> void {
 		grafBindingSample.clear();
 		grafMainCmdList.clear();
 		grafCBSample.clear();
 	};
-	auto& deinitializeGfxSystem = [&]() -> void {
+	auto& deinitializeGrafObjects = [&]() -> void {
 		// order matters!
-		deinitializeGfxCanvasObjects();
-		deinitializeGfxFrameObjects();
+		deinitializeGrafFrameObjects();
 		grafUploadCmdList.reset();
 		grafPipelineSample.reset();
-		grafRenderPassSample.reset();
 		grafVBSample.reset();
 		grafImageSample.reset();
 		sampleImageData.reset();
@@ -98,47 +110,26 @@ int VulkanSandboxApp::Run()
 		grafShaderSampleVS.reset();
 		grafShaderSamplePS.reset();
 		grafDefaultSampler.reset();
-		grafCanvas.reset();
-		grafDevice.reset();
-		grafSystem.reset();
 	};
 	Result grafRes = NotInitialized;
-	auto& initializeGfxSystem = [&]() -> void
+	auto& initializeGrafObjects = [&]() -> void
 	{
-		// system
-		grafRes = grafSystem->Initialize(realm.GetCanvas());
-		if (Failed(grafRes) || 0 == grafSystem->GetPhysicalDeviceCount()) return;
-		
-		// device
-		grafRes = grafSystem->CreateDevice(grafDevice);
-		if (Failed(grafRes)) return;
-		grafRes = grafDevice->Initialize(grafSystem->GetRecommendedDeviceId());
-		if (Failed(grafRes)) return;
-
-		// presentation canvas (swapchain)
-		grafRes = grafSystem->CreateCanvas(grafCanvas);
-		if (Failed(grafRes)) return;
-		grafRes = grafCanvas->Initialize(grafDevice.get(), GrafCanvas::InitParams::Default);
-		if (Failed(grafRes)) return;
-
-		// color render target pass
-		grafRes = grafSystem->CreateRenderPass(grafRenderPassSample);
-		if (Failed(grafRes)) return;
-		grafRes = grafRenderPassSample->Initialize(grafDevice.get());
-		if (Failed(grafRes)) return;
+		if (ur_null == grafRenderer) return;
+		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
+		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 
 		// default sampler
-		grafRes = grafSystem->CreateSampler(grafDefaultSampler);
+		grafRes = grafRenderer->GetGrafSystem()->CreateSampler(grafDefaultSampler);
 		if (Failed(grafRes)) return;
-		grafRes = grafDefaultSampler->Initialize(grafDevice.get(), { GrafSamplerDesc::Default });
+		grafRes = grafDefaultSampler->Initialize(grafDevice, { GrafSamplerDesc::Default });
 		if (Failed(grafRes)) return;
 
 		// vertex shader sample
-		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice.get(), "sample_vs.spv", GrafShaderType::Vertex, grafShaderSampleVS);
+		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_vs.spv", GrafShaderType::Vertex, grafShaderSampleVS);
 		if (Failed(grafRes)) return;
 
 		// pixel shader sample
-		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice.get(), "sample_ps.spv", GrafShaderType::Pixel, grafShaderSamplePS);
+		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_ps.spv", GrafShaderType::Pixel, grafShaderSamplePS);
 		if (Failed(grafRes)) return;
 
 		// shader bindings layout sample
@@ -153,7 +144,7 @@ int VulkanSandboxApp::Run()
 			GrafShaderStageFlags((ur_uint)GrafShaderStageFlag::Vertex | (ur_uint)GrafShaderStageFlag::Pixel),
 			grafBindingLayoutSampleRanges, ur_array_size(grafBindingLayoutSampleRanges)
 		};
-		grafRes = grafBindingLayoutSample->Initialize(grafDevice.get(), { grafBindingLayoutSampleDesc });
+		grafRes = grafBindingLayoutSample->Initialize(grafDevice, { grafBindingLayoutSampleDesc });
 		if (Failed(grafRes)) return;
 
 		// vertex buffer sample
@@ -163,12 +154,13 @@ int VulkanSandboxApp::Run()
 		grafVBSampleParams.BufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer;
 		grafVBSampleParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 		grafVBSampleParams.BufferDesc.SizeInBytes = sizeof(verticesSample);
-		grafRes = grafVBSample->Initialize(grafDevice.get(), grafVBSampleParams);
+		grafRes = grafVBSample->Initialize(grafDevice, grafVBSampleParams);
 		if (Failed(grafRes)) return;
 		grafRes = grafVBSample->Write((ur_byte*)verticesSample);
 		if (Failed(grafRes)) return;
 
 		// graphics pipeline for sample rendering
+		// note: initialized with GrafRenderer's canvas render pass to directly render into swap chain render target(s)
 		grafRes = grafSystem->CreatePipeline(grafPipelineSample);
 		if (Failed(grafRes)) return;
 		GrafShader* sampleShaderStages[] = {
@@ -187,24 +179,24 @@ int VulkanSandboxApp::Run()
 			sampleVertexElements, ur_array_size(sampleVertexElements)
 		}};
 		GrafPipeline::InitParams samplePipelineParams = GrafPipeline::InitParams::Default;
-		samplePipelineParams.RenderPass = grafRenderPassSample.get();
+		samplePipelineParams.RenderPass = grafRenderer->GetCanvasRenderPass();
 		samplePipelineParams.ShaderStages = sampleShaderStages;
 		samplePipelineParams.ShaderStageCount = ur_array_size(sampleShaderStages);
 		samplePipelineParams.DescriptorTableLayouts = sampleBindingLayouts;
 		samplePipelineParams.DescriptorTableLayoutCount = ur_array_size(sampleBindingLayouts);
 		samplePipelineParams.VertexInputDesc = sampleVertexInputs;
 		samplePipelineParams.VertexInputCount = ur_array_size(sampleVertexInputs);
-		grafRes = grafPipelineSample->Initialize(grafDevice.get(), samplePipelineParams);
+		grafRes = grafPipelineSample->Initialize(grafDevice, samplePipelineParams);
 		if (Failed(grafRes)) return;
 	};
-	auto& initializeGfxFrameObjects = [&]() -> void
+	auto& initializeGrafFrameObjects = [&]() -> void
 	{
 		if (Failed(grafRes)) return;
+		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
+		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 
-		// number of recorded (in flight) frames
-		// can differ from swap chain size
-		frameCount = std::max(ur_uint(1), grafCanvas->GetSwapChainImageCount() - 1);
-		frameIdx = 0;
+		// match number of recorded (in flight) frames to the GrafRenderer
+		ur_uint frameCount = grafRenderer->GetRecordedFrameCount();
 
 		// command lists (per frame)
 		grafMainCmdList.resize(frameCount);
@@ -212,7 +204,7 @@ int VulkanSandboxApp::Run()
 		{
 			grafRes = grafSystem->CreateCommandList(grafMainCmdList[iframe]);
 			if (Failed(grafRes)) break;
-			grafRes = grafMainCmdList[iframe]->Initialize(grafDevice.get());
+			grafRes = grafMainCmdList[iframe]->Initialize(grafDevice);
 			if (Failed(grafRes)) break;
 		}
 		if (Failed(grafRes)) return;
@@ -224,7 +216,7 @@ int VulkanSandboxApp::Run()
 		{
 			grafRes = grafSystem->CreateDescriptorTable(grafBindingSample[iframe]);
 			if (Failed(grafRes)) break;
-			grafRes = grafBindingSample[iframe]->Initialize(grafDevice.get(), { grafBindingLayoutSample.get() });
+			grafRes = grafBindingSample[iframe]->Initialize(grafDevice, { grafBindingLayoutSample.get() });
 			if (Failed(grafRes)) break;
 		}
 		if (Failed(grafRes)) return;
@@ -239,58 +231,30 @@ int VulkanSandboxApp::Run()
 		{
 			grafRes = grafSystem->CreateBuffer(grafCBSample[iframe]);
 			if (Failed(grafRes)) break;
-			grafRes = grafCBSample[iframe]->Initialize(grafDevice.get(), grafCBSampleParams);
+			grafRes = grafCBSample[iframe]->Initialize(grafDevice, grafCBSampleParams);
 			if (Failed(grafRes)) break;
 		}
 		if (Failed(grafRes)) return;
 	};
-	auto& initializeGfxCanvasObjects = [&]() -> void
-	{
-		if (Failed(grafRes)) return;
-
-		// render targets
-		// RT count must be equal to swap chain size (one RT wraps on swap chain image)
-		grafRenderTarget.resize(grafCanvas->GetSwapChainImageCount());
-		for (ur_uint imageIdx = 0; imageIdx < grafCanvas->GetSwapChainImageCount(); ++imageIdx)
-		{
-			grafRes = grafSystem->CreateRenderTarget(grafRenderTarget[imageIdx]);
-			if (Failed(grafRes)) break;
-			GrafImage* renderTargetImages[] = {
-				grafCanvas->GetSwapChainImage(imageIdx)
-			};
-			GrafRenderTarget::InitParams renderTargetParams = {};
-			renderTargetParams.RenderPass = grafRenderPassSample.get();
-			renderTargetParams.Images = renderTargetImages;
-			renderTargetParams.ImageCount = ur_array_size(renderTargetImages);
-			grafRes = grafRenderTarget[imageIdx]->Initialize(grafDevice.get(), renderTargetParams);
-			if (Failed(grafRes)) break;
-		}
-		if (Failed(grafRes)) return;
-	};
-	initializeGfxSystem();
-	initializeGfxFrameObjects();
-	initializeGfxCanvasObjects();
+	initializeGrafObjects();
+	initializeGrafFrameObjects();
 	if (Failed(grafRes))
 	{
-		deinitializeGfxSystem();
-		realm.GetLog().WriteLine("VulkanSandboxApp: failed to initialize graphics system", Log::Error);
-	}
-	else
-	{
-		// TODO: GRAF system should be accessible from everywhere as a realm component;
-		// requires keeping pointers to GrafDevice(s) and GrafCanvas(es) in GrafSystem...
-		//realm.AddComponent(Component::GetUID<GrafSystem>(), std::unique_ptr<Component>(static_cast<Component*>(std::move(grafSystem))));
-		//GrafSystem* grafSystem = realm.GetComponent<GrafSystem>();
+		deinitializeGrafObjects();
+		realm.GetLog().WriteLine("VulkanSandboxApp: failed to initialize one or more graphics objects", Log::Error);
 	}
 
 	// prepare sample image
-	if (grafSystem != ur_null)
+	if (grafRenderer != ur_null)
 	{
 		do
 		{
+			GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
+			GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
+
 			// load from file to cpu visible buffer(s)
 			sampleImageData.reset(new GrafUtils::ImageData());
-			grafRes = GrafUtils::LoadImageFromFile(*grafDevice.get(), "../Res/testimage.dds", *sampleImageData.get());
+			grafRes = GrafUtils::LoadImageFromFile(*grafDevice, "../Res/testimage.dds", *sampleImageData.get());
 			if (Failed(grafRes)) break;
 			
 			// create image in gpu local memory
@@ -298,13 +262,13 @@ int VulkanSandboxApp::Run()
 			if (Failed(grafRes)) break;
 			GrafImageDesc grafImageDesc = sampleImageData->Desc;
 			grafImageDesc.MipLevels = 1; // TODO: fill all mips
-			grafRes = grafImageSample->Initialize(grafDevice.get(), { grafImageDesc });
+			grafRes = grafImageSample->Initialize(grafDevice, { grafImageDesc });
 			if (Failed(grafRes)) break;
 
 			// init upload command list
 			grafRes = grafSystem->CreateCommandList(grafUploadCmdList);
 			if (Failed(grafRes)) break;
-			grafRes = grafUploadCmdList->Initialize(grafDevice.get());
+			grafRes = grafUploadCmdList->Initialize(grafDevice);
 			if (Failed(grafRes)) break;
 
 			// submit commands performing required image memory transitions and cpu->gpu memory copies
@@ -325,10 +289,10 @@ int VulkanSandboxApp::Run()
 
 	// initialize ImguiRender
 	ImguiRender* imguiRender = ur_null;
-	if (grafSystem != ur_null)
+	if (grafRenderer != ur_null)
 	{
 		imguiRender = realm.AddComponent<ImguiRender>(realm);
-		Result res = imguiRender->Init(*grafDevice.get(), *grafRenderPassSample.get(), frameCount);
+		Result res = imguiRender->Init();
 		if (Failed(res))
 		{
 			realm.RemoveComponent<ImguiRender>();
@@ -381,21 +345,9 @@ int VulkanSandboxApp::Run()
 		auto inputDelay = Clock::now() - timeBefore;
 		timer += inputDelay;  // skip input delay
 
-		// update resolution
-		if (canvasWidth != realm.GetCanvas()->GetClientBound().Width() || canvasHeight != realm.GetCanvas()->GetClientBound().Height())
-		{
-			canvasWidth = realm.GetCanvas()->GetClientBound().Width();
-			canvasHeight = realm.GetCanvas()->GetClientBound().Height();
-			canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
-			if (grafSystem != ur_null && canvasValid)
-			{
-				grafCanvas->Initialize(grafDevice.get(), GrafCanvas::InitParams::Default);
-				deinitializeGfxCanvasObjects();
-				initializeGfxCanvasObjects();
-			}
-		}
+		canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
 		if (!canvasValid)
-			Sleep(60);
+			Sleep(60); // lower update frequency while minimized
 
 		// update sub systems
 		realm.GetInput()->Update();
@@ -416,8 +368,6 @@ int VulkanSandboxApp::Run()
 			timer = timeNow;
 			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f;  // to seconds
 
-			// TODO: animate things here
-
 			// clear color animation
 			crntColorWeight += elapsedTime / clearColorDelay;
 			if (crntColorWeight >= 1.0f)
@@ -431,7 +381,6 @@ int VulkanSandboxApp::Run()
 			ctx.progress = 1;
 
 			// sample aniamtion
-
 			sampleAnimElapsedTime += elapsedTime;
 			for (ur_uint instId = 0; instId < 4; ++instId)
 			{
@@ -443,12 +392,21 @@ int VulkanSandboxApp::Run()
 		});
 
 		// draw frame
-		if (grafSystem != ur_null && canvasValid)
+		if (grafRenderer != ur_null && canvasValid)
 		{
+			// begin frame rendering
+			grafRenderer->BeginFrame();
+
 			auto drawFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void {
 
 				// updateFrameJob->Wait(); // wait till update job is fully finished; WaitProgress can be used instead to wait for specific update stage to avoid stalling draw thread
 
+				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
+				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
+				GrafRenderPass *grafRenderPass = grafRenderer->GetCanvasRenderPass();
+				GrafRenderTarget *grafRenderTarget = grafRenderer->GetCanvasRenderTarget();
+				ur_uint frameIdx = grafRenderer->GetCurrentFrameId();
+				
 				GrafCommandList* grafCmdListCrnt = grafMainCmdList[frameIdx].get();
 				grafCmdListCrnt->Begin();
 
@@ -456,7 +414,7 @@ int VulkanSandboxApp::Run()
 
 				updateFrameJob->WaitProgress(1); // make sure required data is ready
 				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
-				grafCmdListCrnt->BeginRenderPass(grafRenderPassSample.get(), grafRenderTarget[grafCanvas->GetCurrentImageId()].get());
+				grafCmdListCrnt->BeginRenderPass(grafRenderPass, grafRenderTarget);
 
 				GrafViewportDesc grafViewport = {};
 				grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
@@ -506,7 +464,7 @@ int VulkanSandboxApp::Run()
 					ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
 					ImGui::ShowMetricsWindow();
 					
-					imguiRender->Render(*grafCmdListCrnt, frameIdx);
+					imguiRender->Render(*grafCmdListCrnt);
 				}
 
 				// finalize & submit
@@ -519,25 +477,24 @@ int VulkanSandboxApp::Run()
 			drawFrameJob->Wait();
 
 			// present & move to next frame
-			grafCanvas->Present();
-
-			// start recording next frame
-			frameIdx = (frameIdx + 1) % frameCount;
+			grafRenderer->EndFrameAndPresent();
 		}
 	}
 
-	if (grafSystem != ur_null)
+	if (grafRenderer != ur_null)
 	{
 		// make sure there are no resources still used on gpu before destroying
-		grafDevice->WaitIdle();
+		grafRenderer->GetGrafDevice()->WaitIdle();
 	}
 
-	if (imguiRender != ur_null)
-	{
-		realm.RemoveComponent<ImguiRender>();
-	}
+	// destroy sample GRAF objects
+	deinitializeGrafObjects();
 
-	deinitializeGfxSystem();
+	// destroy Imgui renderer
+	realm.RemoveComponent<ImguiRender>();
+
+	// destroy GRAF renderer
+	realm.RemoveComponent<GrafRenderer>();
 
 	return 0;
 }
