@@ -419,7 +419,7 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
-		virtual Result SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_uint bufferOfs = 0, ur_uint bufferRange = 0);
+		virtual Result SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_size bufferOfs = 0, ur_size bufferRange = 0);
 
 		virtual Result SetSampledImage(ur_uint bindingIdx, GrafImage* image, GrafSampler* sampler);
 

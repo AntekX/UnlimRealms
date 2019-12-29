@@ -42,6 +42,7 @@ namespace UnlimRealms
 		ur_size DedicatedVideoMemory;
 		ur_size DedicatedSystemMemory;
 		ur_size SharedSystemMemory;
+		ur_size ConstantBufferOffsetAlignment;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -766,7 +767,7 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
-		virtual Result SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_uint bufferOfs = 0, ur_uint bufferRange = 0);
+		virtual Result SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_size bufferOfs = 0, ur_size bufferRange = 0);
 
 		virtual Result SetSampledImage(ur_uint bindingIdx, GrafImage* image, GrafSampler* sampler);
 
@@ -866,6 +867,8 @@ namespace UnlimRealms
 // Provides higher level of control over rendering pipeline
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#include "Core/Memory.h"
+
 namespace UnlimRealms
 {
 
@@ -930,6 +933,8 @@ namespace UnlimRealms
 
 		inline GrafBuffer* GetDynamicConstantBuffer() const;
 
+		inline Allocation GetDynamicConstantBufferAllocation(ur_size size);
+
 	protected:
 
 		struct UR_DECL PendingCommandListCallbackData
@@ -949,7 +954,9 @@ namespace UnlimRealms
 		std::unique_ptr<GrafRenderPass> grafCanvasRenderPass;
 		std::vector<std::unique_ptr<GrafRenderTarget>> grafCanvasRenderTarget;
 		std::unique_ptr<GrafBuffer> grafDynamicUploadBuffer;
+		LinearAllocator uploadBufferAllocator;
 		std::unique_ptr<GrafBuffer> grafDynamicConstantBuffer;
+		LinearAllocator constantBufferAllocator;
 		ur_uint frameCount;
 		ur_uint frameIdx;
 		GrafCanvas::InitParams grafCanvasParams;
@@ -999,6 +1006,11 @@ namespace UnlimRealms
 	inline GrafBuffer* GrafRenderer::GetDynamicConstantBuffer() const
 	{
 		return this->grafDynamicConstantBuffer.get();
+	}
+
+	inline Allocation GrafRenderer::GetDynamicConstantBufferAllocation(ur_size size)
+	{
+		return this->constantBufferAllocator.Allocate(size);
 	}
 
 } // end namespace UnlimRealms

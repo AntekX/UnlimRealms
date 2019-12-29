@@ -516,7 +516,7 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafDescriptorTable::SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_uint bufferOfs, ur_uint bufferRange)
+	Result GrafDescriptorTable::SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_size bufferOfs, ur_size bufferRange)
 	{
 		return Result(NotImplemented);
 	}
@@ -852,6 +852,7 @@ namespace UnlimRealms
 			uploadBufferDesc.SizeInBytes = initParams.DynamicUploadBufferSize;
 			res = this->grafDynamicUploadBuffer->Initialize(this->grafDevice.get(), { uploadBufferDesc });
 			if (Failed(res)) break;
+			this->uploadBufferAllocator.Init(uploadBufferDesc.SizeInBytes);
 
 			// dynamic constant buffer
 			crntStageLogName = "dynamic constant buffer";
@@ -863,6 +864,7 @@ namespace UnlimRealms
 			constantBufferDesc.SizeInBytes = initParams.DynamicConstantBufferSize;
 			res = this->grafDynamicConstantBuffer->Initialize(this->grafDevice.get(), { constantBufferDesc });
 			if (Failed(res)) break;
+			this->constantBufferAllocator.Init(constantBufferDesc.SizeInBytes, this->grafDevice->GetPhysicalDeviceDesc()->ConstantBufferOffsetAlignment);
 
 		} while (false);
 		
@@ -1020,14 +1022,17 @@ namespace UnlimRealms
 		if (ur_null == dataPtr || 0 == dataSize || ur_null == dstImage)
 			return Result(InvalidArgs);
 
+		// allocate
+		Allocation uploadBufferAlloc = this->uploadBufferAllocator.Allocate(dataSize);
+		if (0 == uploadBufferAlloc.Size)
+			return Result(OutOfMemory);
+
 		// write data to cpu visible dynamic upload buffer
-		// TODO: use proper dynamic upload buffer allocation offset when available
-		ur_size uploadBufferOffset = 0;
-		Result res = this->grafDynamicUploadBuffer->Write(dataPtr, dataSize, 0, uploadBufferOffset);
+		Result res = this->grafDynamicUploadBuffer->Write(dataPtr, dataSize, 0, uploadBufferAlloc.Offset);
 		if (Failed(res))
 			return ResultError(Failure, "GrafRenderer: failed to write to upload buffer");
 
-		return this->Upload(this->grafDynamicUploadBuffer.get(), uploadBufferOffset, dstImage, dstImageState);
+		return this->Upload(this->grafDynamicUploadBuffer.get(), uploadBufferAlloc.Offset, dstImage, dstImageState);
 	}
 
 	Result GrafRenderer::Upload(GrafBuffer *srcBuffer, ur_size srcOffset, GrafImage* dstImage, GrafImageState dstImageState)

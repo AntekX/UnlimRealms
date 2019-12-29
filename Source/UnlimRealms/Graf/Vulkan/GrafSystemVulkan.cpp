@@ -221,6 +221,7 @@ namespace UnlimRealms
 			grafDeviceDesc.Description = vkDeviceProperties.deviceName;
 			grafDeviceDesc.VendorId = (ur_uint)vkDeviceProperties.vendorID;
 			grafDeviceDesc.DeviceId = (ur_uint)vkDeviceProperties.deviceID;
+			grafDeviceDesc.ConstantBufferOffsetAlignment = (ur_size)vkDeviceProperties.limits.minUniformBufferOffsetAlignment;
 			std::vector<VkMemoryPropertyFlags> perHeapFlags(vkDeviceMemoryProperties.memoryHeapCount);
 			for (ur_uint32 memTypeIdx = 0; memTypeIdx < vkDeviceMemoryProperties.memoryTypeCount; ++memTypeIdx)
 			{
@@ -2496,7 +2497,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafDescriptorTableVulkan::SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_uint bufferOfs, ur_uint bufferRange)
+	Result GrafDescriptorTableVulkan::SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_size bufferOfs, ur_size bufferRange)
 	{
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
 

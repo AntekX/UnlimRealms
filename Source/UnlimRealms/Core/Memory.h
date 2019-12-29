@@ -13,79 +13,11 @@ namespace UnlimRealms
 {
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Buddy Allocator
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	class UR_DECL BuddyAllocator
+	struct UR_DECL Allocation
 	{
-	public:
-		
-		static const ur_size DefaultBlockSize = 4096;
-
-		//BuddyAllocator(ur_size heapSize = 256 * DefaultBlockSize, ur_size blockSize = DefaultBlockSize, ur_bool autoResize = true);
-		//
-		//~BuddyAllocator();
-
-	private:
-
-		struct Block
-		{
-			ur_size offset;
-		};
-
-		struct Heap
-		{
-			std::vector<ur_byte> buffer;
-			std::vector<Block> blocks;
-			ur_size highestOrder;
-		};
-
-		ur_size blockSize;
-		ur_bool autoResize;
-		std::list<Heap> heapList;
+		ur_size Offset;
+		ur_size Size;
 	};
-
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Memory Pool Allo
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	class UR_DECL PoolAllocator
-	{
-	private:
-
-		struct Handle
-		{
-			ur_size blockIdx;
-		};
-
-	public:
-		
-		struct Block : Handle
-		{
-			void* ptr;
-		};
-		
-		/*PoolAllocator(ur_size blockSize, ur_size reservedBlocks, ur_bool autoResize = true);
-		
-		~PoolAllocator();
-
-		Result GetBlock(Block& block);
-
-		void ReleaseBlock(Block& block);*/
-
-	private:
-
-		struct Heap
-		{
-			std::vector<ur_byte> buffer;
-			std::vector<Block> blocks;
-			ur_size firstFreeBlock;
-		};
-
-		ur_size blockSize;
-		ur_bool autoResize;
-		std::list<Heap> heapList;
-	};
-
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Linear Allocator
@@ -93,7 +25,22 @@ namespace UnlimRealms
 	class UR_DECL LinearAllocator
 	{
 	public:
-		// todo
+
+		LinearAllocator();
+
+		~LinearAllocator();
+
+		void Init(ur_size size, ur_size alignment = 1);
+
+		void Resize(ur_size size);
+
+		Allocation Allocate(ur_size allocSize);
+
+	private:
+
+		ur_size size;
+		ur_size alignment;
+		ur_size offset;
 	};
 
 } // end namespace UnlimRealms

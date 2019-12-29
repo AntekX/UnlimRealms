@@ -42,13 +42,14 @@ namespace UnlimRealms
 
 		#if defined(UR_GRAF)
 		GrafRenderer* grafRenderer;
+		ur_float2 crntImguiDisplaySize;
 		std::unique_ptr<GrafShader> grafVS;
 		std::unique_ptr<GrafShader> grafPS;
 		std::unique_ptr<GrafBuffer> grafVB;
 		std::unique_ptr<GrafBuffer> grafIB;
+		std::unique_ptr<GrafBuffer> grafCB;
 		std::unique_ptr<GrafDescriptorTableLayout> grafBindingLayout;
 		std::unique_ptr<GrafPipeline> grafPipeline;
-		std::vector<std::unique_ptr<GrafBuffer>> grafCBs;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> grafBindingTables;
 		std::unique_ptr<GrafSampler> grafSampler;
 		std::unique_ptr<GrafImage> grafFontImage;

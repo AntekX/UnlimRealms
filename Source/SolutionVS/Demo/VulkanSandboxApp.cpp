@@ -89,12 +89,10 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafDescriptorTableLayout> grafBindingLayoutSample;
 	std::unique_ptr<GrafPipeline> grafPipelineSample;
 	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
-	std::vector<std::unique_ptr<GrafBuffer>> grafCBSample;
 	std::vector<std::unique_ptr<GrafDescriptorTable>> grafBindingSample;
 	auto& deinitializeGrafFrameObjects = [&]() -> void {
 		grafBindingSample.clear();
 		grafMainCmdList.clear();
-		grafCBSample.clear();
 	};
 	auto& deinitializeGrafObjects = [&]() -> void {
 		// order matters!
@@ -213,21 +211,6 @@ int VulkanSandboxApp::Run()
 			grafRes = grafSystem->CreateDescriptorTable(grafBindingSample[iframe]);
 			if (Failed(grafRes)) break;
 			grafRes = grafBindingSample[iframe]->Initialize(grafDevice, { grafBindingLayoutSample.get() });
-			if (Failed(grafRes)) break;
-		}
-		if (Failed(grafRes)) return;
-
-		// sample shader constant buffer (per frame & per draw call)
-		GrafBuffer::InitParams grafCBSampleParams;
-		grafCBSampleParams.BufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::ConstantBuffer;
-		grafCBSampleParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-		grafCBSampleParams.BufferDesc.SizeInBytes = sizeof(SampleCBData);
-		grafCBSample.resize(frameCount);
-		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
-		{
-			grafRes = grafSystem->CreateBuffer(grafCBSample[iframe]);
-			if (Failed(grafRes)) break;
-			grafRes = grafCBSample[iframe]->Initialize(grafDevice, grafCBSampleParams);
 			if (Failed(grafRes)) break;
 		}
 		if (Failed(grafRes)) return;
@@ -436,7 +419,6 @@ int VulkanSandboxApp::Run()
 				// draw sample primitives
 
 				updateFrameJob->WaitProgress(2); // wait till animation params are up to date
-				GrafPipelineVulkan* grafPipelineVulkan = static_cast<GrafPipelineVulkan*>(grafPipelineSample.get());
 				SampleCBData sampleCBData;
 				sampleCBData.Transform = ur_float4x4::Identity;
 				for (ur_uint instId = 0; instId < 4; ++instId)
@@ -445,8 +427,10 @@ int VulkanSandboxApp::Run()
 					sampleCBData.Transform.r[instId].y = sampleAnimPos[instId].y;
 				}
 				sampleCBData.Transform.Transpose();
-				grafCBSample[frameIdx]->Write((ur_byte*)&sampleCBData);
-				grafBindingSample[frameIdx]->SetConstantBuffer(0, grafCBSample[frameIdx].get());
+				GrafBuffer* dynamicCB = grafRenderer->GetDynamicConstantBuffer(); // sample CB data changes every frame, GrafRenderer's dynamic CB
+				Allocation dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SampleCBData));
+				dynamicCB->Write((ur_byte*)&sampleCBData, sizeof(sampleCBData), 0, dynamicCBAlloc.Offset);
+				grafBindingSample[frameIdx]->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
 				grafBindingSample[frameIdx]->SetSampledImage(0, grafImageSample.get(), grafDefaultSampler.get());
 
 				grafCmdListCrnt->BindPipeline(grafPipelineSample.get());

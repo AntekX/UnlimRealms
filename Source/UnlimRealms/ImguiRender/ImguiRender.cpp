@@ -31,6 +31,7 @@ namespace UnlimRealms
 	{
 		#if defined(UR_GRAF)
 		this->grafRenderer = ur_null;
+		this->crntImguiDisplaySize = 0;
 		#endif
 	}
 
@@ -44,7 +45,7 @@ namespace UnlimRealms
 		#if defined(UR_GRAF)
 		
 		this->grafBindingTables.clear();
-		this->grafCBs.clear();
+		this->grafCB.reset();
 		this->grafVS.reset();
 		this->grafPS.reset();
 		this->grafVB.reset();
@@ -467,22 +468,6 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to create descriptor table(s)");
 
-		// per frame constant buffers
-		this->grafCBs.resize(frameCount);
-		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
-		{
-			res = grafSystem->CreateBuffer(this->grafCBs[iframe]);
-			if (Failed(res)) break;
-			GrafBufferDesc bufferDesc;
-			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::ConstantBuffer;
-			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-			bufferDesc.SizeInBytes = sizeof(VertexTransformCB);
-			res = this->grafCBs[iframe]->Initialize(grafDevice, { bufferDesc });
-			if (Failed(res)) break;
-		}
-		if (Failed(res))
-			return ResultError(Failure, "ImguiRender::Init: failed to create CB(s)");
-
 		// graphics pipeline configuration
 		res = grafSystem->CreatePipeline(this->grafPipeline);
 		if (Succeeded(res))
@@ -591,6 +576,9 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	#else
 		
+		if (ur_null == this->grafRenderer)
+			return Result(NotInitialized);
+
 		ImGui::Render();
 
 		ImDrawData *drawData = ImGui::GetDrawData();
@@ -600,12 +588,60 @@ namespace UnlimRealms
 		// prepare VB
 		ur_uint vbSizeRequired = (ur_uint)drawData->TotalVtxCount * sizeof(ImDrawVert);
 		if (this->grafVB->GetDesc().SizeInBytes < vbSizeRequired)
-			return Result(OutOfMemory);
+			return ResultWarning(OutOfMemory, "ImguiRender::Render: insufficient VB size");
 
 		// prepare IB
 		ur_uint ibSizeRequired = (ur_uint)drawData->TotalIdxCount * sizeof(ImDrawIdx);
 		if (this->grafIB->GetDesc().SizeInBytes < ibSizeRequired)
-			return Result(OutOfMemory);
+			return ResultWarning(OutOfMemory, "ImguiRender::Render: insufficient IB size");
+
+		// prepare CB
+		if (this->crntImguiDisplaySize.x != ImGui::GetIO().DisplaySize.x ||
+			this->crntImguiDisplaySize.y != ImGui::GetIO().DisplaySize.y)
+		{
+			this->crntImguiDisplaySize.x = ImGui::GetIO().DisplaySize.x;
+			this->crntImguiDisplaySize.y = ImGui::GetIO().DisplaySize.y;
+
+			// destroy current CB
+			if (this->grafCB.get())
+			{
+				GrafBuffer* prevCB = this->grafCB.release();
+				this->grafRenderer->AddCommandListCallback(&grafCmdList, { prevCB },
+					[](GrafCallbackContext& ctx) -> Result
+				{
+					GrafBuffer* prevCB = reinterpret_cast<GrafBuffer*>(ctx.DataPtr);
+					delete prevCB;
+					return Result(Success);
+				});
+			}
+
+			// create and fill new CB
+			Result res = this->grafRenderer->GetGrafSystem()->CreateBuffer(this->grafCB);
+			if (Succeeded(res))
+			{
+				GrafBufferDesc bufferDesc;
+				bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::ConstantBuffer;
+				bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+				bufferDesc.SizeInBytes = sizeof(VertexTransformCB);
+				res = this->grafCB->Initialize(this->grafRenderer->GetGrafDevice(), { bufferDesc });
+			}
+			if (Failed(res))
+				return ResultError(Failure, "ImguiRender::Render: failed to create CB");
+
+			VertexTransformCB cb;
+			float L = 0.0f;
+			float R = ImGui::GetIO().DisplaySize.x;
+			float B = ImGui::GetIO().DisplaySize.y;
+			float T = 0.0f;
+			cb.viewProj =
+			{
+				{ 2.0f / (R - L),		0.0f,				0.0f,		0.0f },
+				{ 0.0f,					2.0f / (T - B),		0.0f,		0.0f },
+				{ 0.0f,					0.0f,				0.5f,		0.0f },
+				{ (R + L) / (L - R),	(T + B) / (B - T),	0.5f,		1.0f },
+			};
+			this->grafCB->Write((ur_byte*)&cb);
+		}
 
 		// fill VB
 		GrafWriteCallback updateVB = [&drawData](ur_byte* mappedDataPtr) -> Result
@@ -635,23 +671,8 @@ namespace UnlimRealms
 		};
 		this->grafIB->Write(updateIB);
 
-		// fill CB
-		VertexTransformCB cb;
-		float L = 0.0f;
-		float R = ImGui::GetIO().DisplaySize.x;
-		float B = ImGui::GetIO().DisplaySize.y;
-		float T = 0.0f;
-		cb.viewProj =
-		{
-			{ 2.0f / (R - L),		0.0f,				0.0f,		0.0f },
-			{ 0.0f,					2.0f / (T - B),		0.0f,		0.0f },
-			{ 0.0f,					0.0f,				0.5f,		0.0f },
-			{ (R + L) / (L - R),	(T + B) / (B - T),	0.5f,		1.0f },
-		};
-		this->grafCBs[frameIdx]->Write((ur_byte*)&cb);
-		
 		// fill shader inputs
-		this->grafBindingTables[frameIdx]->SetConstantBuffer(0, this->grafCBs[frameIdx].get());
+		this->grafBindingTables[frameIdx]->SetConstantBuffer(0, this->grafCB.get());
 		this->grafBindingTables[frameIdx]->SetSampledImage(0, this->grafFontImage.get(), this->grafSampler.get());
 
 		// setup pipeline
