@@ -455,7 +455,7 @@ namespace UnlimRealms
 
 		VkCommandPoolCreateInfo vkCommandPoolInfo = {};
 		vkCommandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		vkCommandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // command buffers will be resseted implicitly at vkBeginCommandBuffer
+		vkCommandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // command buffers will be resetted implicitly at vkBeginCommandBuffer
 		vkCommandPoolInfo.queueFamilyIndex = this->deviceGraphicsQueueId;
 
 		res = vkCreateCommandPool(this->vkDevice, &vkCommandPoolInfo, ur_null, &this->vkGraphicsCommandPool);
@@ -617,6 +617,17 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafCommandListVulkan: vkEndCommandBuffer failed with VkResult = ") + VkResultToString(vkRes));
 
 		return Result(Success);
+	}
+
+	Result GrafCommandListVulkan::Wait(ur_uint64 timeout)
+	{
+		if (VK_NULL_HANDLE == this->vkCommandBuffer)
+			return Result(NotInitialized);
+
+		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
+		VkResult vkRes = vkWaitForFences(vkDevice, 1, &this->vkSubmitFence, true, timeout);
+
+		return Result(vkRes == VK_SUCCESS ? Success : TimeOut);
 	}
 
 	Result GrafCommandListVulkan::ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState)

@@ -43,7 +43,6 @@ namespace UnlimRealms
 	{
 		#if defined(UR_GRAF)
 		
-		this->grafUploadCmdList.reset();
 		this->grafBindingTables.clear();
 		this->grafCBs.clear();
 		this->grafVS.reset();
@@ -52,7 +51,6 @@ namespace UnlimRealms
 		this->grafIB.reset();
 		this->grafSampler.reset();
 		this->grafFontImage.reset();
-		this->grafUploadBuffer.reset();
 		this->grafBindingLayout.reset();
 		this->grafPipeline.reset();
 		this->grafRenderer = ur_null;
@@ -567,25 +565,7 @@ namespace UnlimRealms
 		fontImageDesc.Usage = (ur_uint)GrafImageUsageFlag::TransferDst | (ur_uint)GrafImageUsageFlag::ShaderInput;
 		fontImageDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 
-		// font image upload buffer
-		res = grafSystem->CreateBuffer(this->grafUploadBuffer);
-		if (Succeeded(res))
-		{
-			GrafBufferDesc uploadBufferDesc;
-			uploadBufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::TransferSrc;
-			uploadBufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-			uploadBufferDesc.SizeInBytes = width * height * 4;
-			res = this->grafUploadBuffer->Initialize(grafDevice, { uploadBufferDesc });
-		}
-		if (Failed(res))
-			return ResultError(Failure, "ImguiRender::Init: failed to create upload buffer");
-		
-		// copy Imgui font texture pixels to upload buffer
-		res = this->grafUploadBuffer->Write(pixels);
-		if (Failed(res))
-			return ResultError(Failure, "ImguiRender::Init: failed to write to upload buffer");
-
-		// font image in gpu local memory
+		// create font image in gpu local memory
 		res = grafSystem->CreateImage(this->grafFontImage);
 		if (Succeeded(res))
 		{
@@ -595,22 +575,8 @@ namespace UnlimRealms
 			return ResultError(Failure, "ImguiRender::Init: failed to create font image");
 		ImGui::GetIO().Fonts->TexID = (void*)this->grafFontImage.get();
 
-		// create texture upload command list
-		res = grafSystem->CreateCommandList(this->grafUploadCmdList);
-		if (Succeeded(res))
-		{
-			res = this->grafUploadCmdList->Initialize(grafDevice);
-		}
-		if (Failed(res))
-			return ResultError(Failure, "ImguiRender::Init: failed to create upload command list");
-
-		// upload font texture to gpu memory
-		this->grafUploadCmdList->Begin();
-		this->grafUploadCmdList->ImageMemoryBarrier(this->grafFontImage.get(), GrafImageState::Current, GrafImageState::TransferDst);
-		this->grafUploadCmdList->Copy(this->grafUploadBuffer.get(), this->grafFontImage.get());
-		this->grafUploadCmdList->ImageMemoryBarrier(this->grafFontImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
-		this->grafUploadCmdList->End();
-		grafDevice->Submit(grafUploadCmdList.get());
+		// upload font data to gpu texture
+		this->grafRenderer->Upload(pixels, width * height * 4, this->grafFontImage.get(), GrafImageState::ShaderRead);
 
 		// Keyboard mapping
 		this->InitKeyMapping();

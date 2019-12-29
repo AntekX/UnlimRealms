@@ -202,6 +202,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandList::Wait(ur_uint64 timeout)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandList::ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState)
 	{
 		return Result(NotImplemented);
@@ -776,7 +781,9 @@ namespace UnlimRealms
 
 	const GrafRenderer::InitParams GrafRenderer::InitParams::Default = {
 		GrafRenderer::InitParams::RecommendedDeviceId,
-		GrafCanvas::InitParams::Default
+		GrafCanvas::InitParams::Default,
+		20 * (1 << 20), // DynamicUploadBufferSize
+		20 * (1 << 20), // DynamicConstantBufferSize
 	};
 	
 	const ur_uint GrafRenderer::InitParams::RecommendedDeviceId = ur_uint(-1);
@@ -835,6 +842,28 @@ namespace UnlimRealms
 			res = this->InitializeCanvasRenderTargets();
 			if (Failed(res)) break;
 
+			// dynamic upload buffer
+			crntStageLogName = "dynamic upload buffer";
+			res = this->grafSystem->CreateBuffer(this->grafDynamicUploadBuffer);
+			if (Failed(res)) break;
+			GrafBufferDesc uploadBufferDesc;
+			uploadBufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::TransferSrc;
+			uploadBufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			uploadBufferDesc.SizeInBytes = initParams.DynamicUploadBufferSize;
+			res = this->grafDynamicUploadBuffer->Initialize(this->grafDevice.get(), { uploadBufferDesc });
+			if (Failed(res)) break;
+
+			// dynamic constant buffer
+			crntStageLogName = "dynamic constant buffer";
+			res = this->grafSystem->CreateBuffer(this->grafDynamicConstantBuffer);
+			if (Failed(res)) break;
+			GrafBufferDesc constantBufferDesc;
+			constantBufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::ConstantBuffer;
+			constantBufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			constantBufferDesc.SizeInBytes = initParams.DynamicConstantBufferSize;
+			res = this->grafDynamicConstantBuffer->Initialize(this->grafDevice.get(), { constantBufferDesc });
+			if (Failed(res)) break;
+
 		} while (false);
 		
 		if (Failed(res))
@@ -881,6 +910,8 @@ namespace UnlimRealms
 			this->grafDevice->WaitIdle();
 		}
 
+		this->grafDynamicConstantBuffer.reset();
+		this->grafDynamicUploadBuffer.reset();
 		this->grafCanvasRenderTarget.clear();
 		this->grafCanvasRenderPass.reset();
 		this->grafCanvas.reset();
@@ -925,11 +956,110 @@ namespace UnlimRealms
 
 	Result GrafRenderer::EndFrameAndPresent()
 	{
+		// process pending callbacks
+		this->ProcessPendingCommandListCallbacks();
+
+		// present current swap chain image
 		Result res = this->grafCanvas->Present();
 
+		// move to next frame
 		this->frameIdx = (this->frameIdx + 1) % this->frameCount;
 
 		return res;
+	}
+
+	Result GrafRenderer::AddCommandListCallback(GrafCommandList *executionCmdList, GrafCallbackContext ctx, GrafCommandListCallback callback)
+	{
+		if (ur_null == executionCmdList)
+			return Result(InvalidArgs);
+
+		if (executionCmdList->Wait(0) == Success)
+		{
+			// command list is not in pending state, call back right now
+			callback(ctx);
+		}
+		else
+		{
+			// command list fence is not signaled, add to pending list
+			std::unique_ptr<PendingCommandListCallbackData> pendingCallback(new PendingCommandListCallbackData());
+			pendingCallback->cmdList = executionCmdList;
+			pendingCallback->callback = callback;
+			pendingCallback->context = ctx;
+			this->pendingCommandListCallbacks.push_back(std::move(pendingCallback));
+		}
+
+		return Result(Success);
+	}
+
+	Result GrafRenderer::ProcessPendingCommandListCallbacks()
+	{
+		Result res(Success);
+
+		ur_size idx = 0;
+		while (idx < this->pendingCommandListCallbacks.size())
+		{
+			auto& pendingCallback = this->pendingCommandListCallbacks[idx];
+			if (pendingCallback->cmdList->Wait(0) == Success)
+			{
+				// command list is finished
+				res &= pendingCallback->callback(pendingCallback->context);
+				this->pendingCommandListCallbacks.erase(this->pendingCommandListCallbacks.begin() + idx);
+			}
+			else
+			{
+				// still pending
+				++idx;
+			}
+		}
+
+		return res;
+	}
+
+	Result GrafRenderer::Upload(ur_byte *dataPtr, ur_size dataSize, GrafImage* dstImage, GrafImageState dstImageState)
+	{
+		if (ur_null == dataPtr || 0 == dataSize || ur_null == dstImage)
+			return Result(InvalidArgs);
+
+		// write data to cpu visible dynamic upload buffer
+		// TODO: use proper dynamic upload buffer allocation offset when available
+		ur_size uploadBufferOffset = 0;
+		Result res = this->grafDynamicUploadBuffer->Write(dataPtr, dataSize, 0, uploadBufferOffset);
+		if (Failed(res))
+			return ResultError(Failure, "GrafRenderer: failed to write to upload buffer");
+
+		return this->Upload(this->grafDynamicUploadBuffer.get(), uploadBufferOffset, dstImage, dstImageState);
+	}
+
+	Result GrafRenderer::Upload(GrafBuffer *srcBuffer, ur_size srcOffset, GrafImage* dstImage, GrafImageState dstImageState)
+	{
+		// create upload command list
+		std::unique_ptr<GrafCommandList> grafUploadCmdList;
+		Result res = this->grafSystem->CreateCommandList(grafUploadCmdList);
+		if (Succeeded(res))
+		{
+			res = grafUploadCmdList->Initialize(this->grafDevice.get());
+		}
+		if (Failed(res))
+			return ResultError(Failure, "ImguiRender::Init: failed to create upload command list");
+
+		// copy dynamic buffer region to destination image
+		grafUploadCmdList->Begin();
+		grafUploadCmdList->ImageMemoryBarrier(dstImage, GrafImageState::Current, GrafImageState::TransferDst);
+		grafUploadCmdList->Copy(srcBuffer, dstImage, srcOffset);
+		grafUploadCmdList->ImageMemoryBarrier(dstImage, GrafImageState::Current, dstImageState);
+		grafUploadCmdList->End();
+		this->grafDevice->Submit(grafUploadCmdList.get());
+
+		// destroy upload command list when finished
+		GrafCommandList* uploadCmdListPtr = grafUploadCmdList.release();
+		this->AddCommandListCallback(uploadCmdListPtr, { uploadCmdListPtr }, [](GrafCallbackContext& ctx) -> Result
+		{
+			GrafCommandList* finishedUploadCmdList = reinterpret_cast<GrafCommandList*>(ctx.DataPtr);
+			delete finishedUploadCmdList;
+			return Result(Success);
+		});
+
+		return Result(Success);
 	}
 
 } // end namespace UnlimRealms

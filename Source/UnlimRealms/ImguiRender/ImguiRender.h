@@ -52,8 +52,6 @@ namespace UnlimRealms
 		std::vector<std::unique_ptr<GrafDescriptorTable>> grafBindingTables;
 		std::unique_ptr<GrafSampler> grafSampler;
 		std::unique_ptr<GrafImage> grafFontImage;
-		std::unique_ptr<GrafBuffer> grafUploadBuffer;
-		std::unique_ptr<GrafCommandList> grafUploadCmdList;
 		#else
 		std::unique_ptr<GfxVertexShader> gfxVS;
 		std::unique_ptr<GfxPixelShader> gfxPS;

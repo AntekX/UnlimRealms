@@ -86,8 +86,6 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafShader> grafShaderSamplePS;
 	std::unique_ptr<GrafBuffer> grafVBSample;
 	std::unique_ptr<GrafImage> grafImageSample;
-	std::unique_ptr<GrafCommandList> grafUploadCmdList;
-	std::unique_ptr<GrafUtils::ImageData> sampleImageData;
 	std::unique_ptr<GrafDescriptorTableLayout> grafBindingLayoutSample;
 	std::unique_ptr<GrafPipeline> grafPipelineSample;
 	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
@@ -101,11 +99,9 @@ int VulkanSandboxApp::Run()
 	auto& deinitializeGrafObjects = [&]() -> void {
 		// order matters!
 		deinitializeGrafFrameObjects();
-		grafUploadCmdList.reset();
 		grafPipelineSample.reset();
 		grafVBSample.reset();
 		grafImageSample.reset();
-		sampleImageData.reset();
 		grafBindingLayoutSample.reset();
 		grafShaderSampleVS.reset();
 		grafShaderSamplePS.reset();
@@ -253,36 +249,49 @@ int VulkanSandboxApp::Run()
 			GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 
 			// load from file to cpu visible buffer(s)
-			sampleImageData.reset(new GrafUtils::ImageData());
-			grafRes = GrafUtils::LoadImageFromFile(*grafDevice, "../Res/testimage.dds", *sampleImageData.get());
+			struct ImageInitData
+			{
+				GrafUtils::ImageData imageData;
+				std::unique_ptr<GrafCommandList> uploadCmdList;
+			};
+			std::unique_ptr<ImageInitData> imageInitData(new ImageInitData());
+			grafRes = GrafUtils::LoadImageFromFile(*grafDevice, "../Res/testimage.dds", imageInitData->imageData);
 			if (Failed(grafRes)) break;
 			
 			// create image in gpu local memory
 			grafRes = grafSystem->CreateImage(grafImageSample);
 			if (Failed(grafRes)) break;
-			GrafImageDesc grafImageDesc = sampleImageData->Desc;
+			GrafImageDesc grafImageDesc = imageInitData->imageData.Desc;
 			grafImageDesc.MipLevels = 1; // TODO: fill all mips
 			grafRes = grafImageSample->Initialize(grafDevice, { grafImageDesc });
 			if (Failed(grafRes)) break;
 
-			// init upload command list
-			grafRes = grafSystem->CreateCommandList(grafUploadCmdList);
+			// upload to gpu image
+			grafRes = grafSystem->CreateCommandList(imageInitData->uploadCmdList);
 			if (Failed(grafRes)) break;
-			grafRes = grafUploadCmdList->Initialize(grafDevice);
+			grafRes = imageInitData->uploadCmdList->Initialize(grafDevice);
 			if (Failed(grafRes)) break;
 
 			// submit commands performing required image memory transitions and cpu->gpu memory copies
-			grafUploadCmdList->Begin();
-			grafUploadCmdList->ImageMemoryBarrier(grafImageSample.get(), GrafImageState::Current, GrafImageState::TransferDst);
-			grafUploadCmdList->Copy(sampleImageData->MipBuffers[0].get(), grafImageSample.get());
-			grafUploadCmdList->ImageMemoryBarrier(grafImageSample.get(), GrafImageState::Current, GrafImageState::ShaderRead);
-			grafUploadCmdList->End();
-			grafDevice->Submit(grafUploadCmdList.get());
+			imageInitData->uploadCmdList->Begin();
+			imageInitData->uploadCmdList->ImageMemoryBarrier(grafImageSample.get(), GrafImageState::Current, GrafImageState::TransferDst);
+			imageInitData->uploadCmdList->Copy(imageInitData->imageData.MipBuffers[0].get(), grafImageSample.get());
+			imageInitData->uploadCmdList->ImageMemoryBarrier(grafImageSample.get(), GrafImageState::Current, GrafImageState::ShaderRead);
+			imageInitData->uploadCmdList->End();
+			grafDevice->Submit(imageInitData->uploadCmdList.get());
+
+			// destroy temporary data & upload command list when finished
+			GrafCommandList* uploadCmdListPtr = imageInitData->uploadCmdList.get();
+			grafRenderer->AddCommandListCallback(uploadCmdListPtr, { imageInitData.release() }, [](GrafCallbackContext& ctx) -> Result
+			{
+				ImageInitData* imageInitData = reinterpret_cast<ImageInitData*>(ctx.DataPtr);
+				delete imageInitData;
+				return Result(Success);
+			});
 		}
 		while (false);
 		if (Failed(grafRes))
 		{
-			sampleImageData.reset();
 			grafImageSample.reset();
 		}
 	}

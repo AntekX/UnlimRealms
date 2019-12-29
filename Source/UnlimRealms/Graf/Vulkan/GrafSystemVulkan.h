@@ -126,6 +126,8 @@ namespace UnlimRealms
 
 		virtual Result End();
 
+		virtual Result Wait(ur_uint64 timeout = ur_uint64(-1));
+
 		virtual Result ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState);
 
 		virtual Result SetFenceState(GrafFence* grafFence, GrafFenceState state);

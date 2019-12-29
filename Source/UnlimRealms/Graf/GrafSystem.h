@@ -465,6 +465,8 @@ namespace UnlimRealms
 
 		virtual Result End();
 
+		virtual Result Wait(ur_uint64 timeout = ur_uint64(-1));
+
 		virtual Result ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState);
 
 		virtual Result SetFenceState(GrafFence* grafFence, GrafFenceState state);
@@ -867,6 +869,16 @@ namespace UnlimRealms
 namespace UnlimRealms
 {
 
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafCallbackContext
+	{
+		void *DataPtr;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	typedef std::function<Result(GrafCallbackContext& ctx)> GrafCommandListCallback;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafRenderer : public RealmEntity
 	{
 	public:
@@ -875,6 +887,8 @@ namespace UnlimRealms
 		{
 			ur_uint DeviceId;
 			GrafCanvas::InitParams CanvasParams;
+			ur_uint DynamicUploadBufferSize;
+			ur_uint DynamicConstantBufferSize;
 			
 			static const InitParams Default;
 			static const ur_uint RecommendedDeviceId;
@@ -892,6 +906,12 @@ namespace UnlimRealms
 
 		virtual Result EndFrameAndPresent();
 
+		virtual Result AddCommandListCallback(GrafCommandList *executionCmdList, GrafCallbackContext ctx, GrafCommandListCallback callback);
+
+		virtual Result Upload(ur_byte *dataPtr, ur_size dataSize, GrafImage* dstImage, GrafImageState dstImageState);
+
+		virtual Result Upload(GrafBuffer *srcBuffer, ur_size srcOffset, GrafImage* dstImage, GrafImageState dstImageState);
+
 		inline GrafSystem* GetGrafSystem() const;
 
 		inline GrafCanvas* GetGrafCanvas() const;
@@ -906,21 +926,34 @@ namespace UnlimRealms
 
 		inline ur_uint GetCurrentFrameId() const;
 
+		inline GrafBuffer* GetDynamicUploadBuffer() const;
+
+		inline GrafBuffer* GetDynamicConstantBuffer() const;
+
 	protected:
 
+		struct UR_DECL PendingCommandListCallbackData
+		{
+			GrafCommandList *cmdList;
+			GrafCommandListCallback callback;
+			GrafCallbackContext context;
+		};
+
 		Result InitializeCanvasRenderTargets();
+
+		Result ProcessPendingCommandListCallbacks();
 
 		std::unique_ptr<GrafSystem> grafSystem;
 		std::unique_ptr<GrafDevice> grafDevice;
 		std::unique_ptr<GrafCanvas> grafCanvas;
 		std::unique_ptr<GrafRenderPass> grafCanvasRenderPass;
 		std::vector<std::unique_ptr<GrafRenderTarget>> grafCanvasRenderTarget;
-		std::unique_ptr<GrafBuffer> grafUploadRingBuffer;
-		std::unique_ptr<GrafBuffer> grafConstantRingBuffer;
-		std::unique_ptr<GrafCommandList> grafUploadCmdList;
+		std::unique_ptr<GrafBuffer> grafDynamicUploadBuffer;
+		std::unique_ptr<GrafBuffer> grafDynamicConstantBuffer;
 		ur_uint frameCount;
 		ur_uint frameIdx;
 		GrafCanvas::InitParams grafCanvasParams;
+		std::vector<std::unique_ptr<PendingCommandListCallbackData>> pendingCommandListCallbacks;
 	};
 
 	inline GrafSystem* GrafRenderer::GetGrafSystem() const
@@ -956,6 +989,16 @@ namespace UnlimRealms
 	inline ur_uint GrafRenderer::GetCurrentFrameId() const
 	{
 		return this->frameIdx;
+	}
+
+	inline GrafBuffer* GrafRenderer::GetDynamicUploadBuffer() const
+	{
+		return this->grafDynamicUploadBuffer.get();
+	}
+
+	inline GrafBuffer* GrafRenderer::GetDynamicConstantBuffer() const
+	{
+		return this->grafDynamicConstantBuffer.get();
 	}
 
 } // end namespace UnlimRealms

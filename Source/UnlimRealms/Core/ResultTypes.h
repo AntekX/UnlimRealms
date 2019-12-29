@@ -70,6 +70,8 @@ namespace UnlimRealms
 
 	DECLARE_RESULT_CODE(OutOfMemory);
 
+	DECLARE_RESULT_CODE(TimeOut);
+
 
 	// helper shortcuts
 	#define Succeeded(result) (Success == (result).Code)
