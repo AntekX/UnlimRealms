@@ -261,6 +261,8 @@
     <ClInclude Include="..\..\UnlimRealms\Gfx\GfxSystem.h" />
     <ClInclude Include="..\..\UnlimRealms\Gfx\GfxSystem.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Gfx\GfxTypes.h" />
+    <ClInclude Include="..\..\UnlimRealms\Graf\GrafRenderer.h" />
+    <ClInclude Include="..\..\UnlimRealms\Graf\GrafRenderer.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Graf\GrafSystem.h" />
     <ClInclude Include="..\..\UnlimRealms\Graf\GrafSystem.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Graf\Vulkan\GrafSystemVulkan.h" />
@@ -387,6 +389,7 @@
     <ClCompile Include="..\..\UnlimRealms\Gfx\DXGIUtils\DXGIUtils.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Gfx\GfxSystem.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Gfx\GfxTypes.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Graf\GrafRenderer.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Graf\GrafSystem.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Graf\Vulkan\GrafSystemVulkan.cpp" />
     <ClCompile Include="..\..\UnlimRealms\HDRRender\HDRRender.cpp" />

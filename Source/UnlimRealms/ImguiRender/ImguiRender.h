@@ -9,7 +9,7 @@
 
 #include "Realm/Realm.h"
 #include "Gfx/GfxSystem.h"
-#include "Graf/GrafSystem.h"
+#include "Graf/GrafRenderer.h"
 #include "3rdParty/imgui/imgui.h"
 
 namespace UnlimRealms

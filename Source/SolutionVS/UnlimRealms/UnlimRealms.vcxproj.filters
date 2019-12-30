@@ -315,6 +315,12 @@
     <ClInclude Include="..\..\UnlimRealms\Graf\Vulkan\GrafSystemVulkan.inline.h">
       <Filter>Graf\Vulkan</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Graf\GrafRenderer.h">
+      <Filter>Graf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Graf\GrafRenderer.inline.h">
+      <Filter>Graf</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -661,6 +667,9 @@
     </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\Graf\Vulkan\GrafSystemVulkan.cpp">
       <Filter>Graf\Vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Graf\GrafRenderer.cpp">
+      <Filter>Graf</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
