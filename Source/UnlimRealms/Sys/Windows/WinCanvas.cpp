@@ -75,6 +75,10 @@ namespace UnlimRealms
 		ShowWindow(this->hwnd, showMode);
 		UpdateWindow(this->hwnd);
 
+		RECT wndRect;
+		GetClientRect(this->hwnd, &wndRect);
+		this->clientBound = RectI(ur_int(wndRect.left), ur_int(wndRect.top), ur_int(wndRect.right), ur_int(wndRect.bottom));
+
 		return ResultNote(Success, "WinCanvas: initialized");
 	}
 

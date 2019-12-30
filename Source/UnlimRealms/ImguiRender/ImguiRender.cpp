@@ -238,7 +238,7 @@ namespace UnlimRealms
 	{
 		ImGuiIO &imguiIO = ImGui::GetIO();
 
-		imguiIO.MouseDrawCursor = true;
+		imguiIO.MouseDrawCursor = false;
 
 		Input::Mouse *mouse = this->GetRealm().GetInput()->GetMouse();
 		if (mouse != ur_null)
