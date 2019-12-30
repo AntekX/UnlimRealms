@@ -427,7 +427,7 @@ int VulkanSandboxApp::Run()
 					sampleCBData.Transform.r[instId].y = sampleAnimPos[instId].y;
 				}
 				sampleCBData.Transform.Transpose();
-				GrafBuffer* dynamicCB = grafRenderer->GetDynamicConstantBuffer(); // sample CB data changes every frame, GrafRenderer's dynamic CB
+				GrafBuffer* dynamicCB = grafRenderer->GetDynamicConstantBuffer(); // sample CB data changes every frame, use GrafRenderer's dynamic CB
 				Allocation dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SampleCBData));
 				dynamicCB->Write((ur_byte*)&sampleCBData, sizeof(sampleCBData), 0, dynamicCBAlloc.Offset);
 				grafBindingSample[frameIdx]->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
