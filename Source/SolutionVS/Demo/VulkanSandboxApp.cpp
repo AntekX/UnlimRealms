@@ -445,18 +445,12 @@ int VulkanSandboxApp::Run()
 				showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
 				if (showGUI)
 				{
-					ImGui::SetNextWindowSize(imguiDemoWndSize, ImGuiSetCond_Once);
-					ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
-					ImGui::Begin("Control Panel");
-					ImGui::Text("Graphics Device:");
-					ImGui::Text("	Description: %s", grafDevice->GetPhysicalDeviceDesc()->Description.c_str());
-					ImGui::Text("	Dedicated Memory (Mb): %u", grafDevice->GetPhysicalDeviceDesc()->DedicatedVideoMemory / (1 << 20));
-					ImGui::Text("	Shared Memory (Mb): %u", grafDevice->GetPhysicalDeviceDesc()->SharedSystemMemory / (1 << 20));
-					ImGui::End();
 					ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
 					ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
 					ImGui::ShowMetricsWindow();
 					
+					grafRenderer->ShowImgui();
+
 					imguiRender->Render(*grafCmdListCrnt);
 				}
 
