@@ -775,7 +775,10 @@ namespace UnlimRealms
 } // end namespace UnlimRealms
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #include "Sys/Canvas.h"
+#include "ImguiRender/ImguiRender.h"
+
 namespace UnlimRealms
 {
 
@@ -1063,6 +1066,98 @@ namespace UnlimRealms
 			delete finishedUploadCmdList;
 			return Result(Success);
 		});
+
+		return Result(Success);
+	}
+
+	Result GrafRenderer::ShowImgui()
+	{
+		if (ur_null == this->grafSystem)
+			return Result(NotInitialized);
+
+		const RectI& canvasRect = this->GetRealm().GetCanvas()->GetClientBound();
+		const ImVec2 windowSize(400.0f, (float)canvasRect.Height());
+		ImGui::SetNextWindowSize(windowSize, ImGuiSetCond_Once);
+		ImGui::SetNextWindowPos({ canvasRect.Width() - windowSize.x, 0.0f }, ImGuiSetCond_Once);
+		ImGui::Begin("GrafRenderer");
+		ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+		if (ImGui::TreeNode("GrafSystem"))
+		{
+			ImGui::Text("Implementation: %s", typeid(*this->grafSystem.get()).name());
+			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+			if (ImGui::TreeNode("Devices Available:"))
+			{
+				for (ur_uint idevice = 0; idevice < this->grafSystem->GetPhysicalDeviceCount(); ++idevice)
+				{
+					const GrafPhysicalDeviceDesc* deviceDesc = this->grafSystem->GetPhysicalDeviceDesc(idevice);
+					ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+					if (ImGui::TreeNode("PhysicalDeviceNode", "%s", deviceDesc->Description.c_str()))
+					{
+						ImGui::Text("Dedicated Memory (Mb): %u", deviceDesc->DedicatedVideoMemory / (1 << 20));
+						ImGui::Text("Shared Memory (Mb): %u", deviceDesc->SharedSystemMemory / (1 << 20));
+						ImGui::TreePop();
+					}
+				}
+				ImGui::TreePop();
+			}
+			if (this->grafDevice != ur_null)
+			{
+				ImGui::Text("Device used: %s", this->grafDevice->GetPhysicalDeviceDesc()->Description.c_str());
+			}
+			if (this->grafCanvas != ur_null)
+			{
+				ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+				if (ImGui::TreeNode("Swap Chain:"))
+				{
+					ImGui::Text("Image count: %i", this->grafCanvas->GetSwapChainImageCount());
+					if (this->grafCanvas->GetSwapChainImageCount() > 0)
+					{
+						const GrafImageDesc& imageDesc = this->grafCanvas->GetCurrentImage()->GetDesc();
+						ImGui::Text("Image Size: %i x %i", imageDesc.Size.x, imageDesc.Size.y);
+					}
+					ImGui::TreePop();
+				}
+			}
+			ImGui::TreePop();
+		}
+		if (this->grafDynamicUploadBuffer)
+		{
+			static ur_size prevAllocatorOffset = 0;
+			static ur_size allocatorOffsetDeltaMax = 0;
+			ur_size crntAllocatorOffset = this->uploadBufferAllocator.GetOffset();
+			ur_size allocatorOffsetDelta = crntAllocatorOffset + (crntAllocatorOffset < prevAllocatorOffset ? this->uploadBufferAllocator.GetSize() : 0) - prevAllocatorOffset;
+			allocatorOffsetDeltaMax = std::max(allocatorOffsetDelta, allocatorOffsetDeltaMax);
+			prevAllocatorOffset = crntAllocatorOffset;
+			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+			if (ImGui::TreeNode("Dynamic Upload Buffer"))
+			{
+				ImGui::Text("Size: %i", this->grafDynamicUploadBuffer->GetDesc().SizeInBytes);
+				ImGui::Text("Maximal usage per frame: %i", allocatorOffsetDeltaMax);
+				ImGui::Text("Current frame usage: %i", allocatorOffsetDelta);
+				ImGui::Text("Current ofs: %i", this->uploadBufferAllocator.GetOffset());
+				ImGui::TreePop();
+			}
+		}
+		if (this->grafDynamicConstantBuffer)
+		{
+			static ur_size prevAllocatorOffset = 0;
+			static ur_size allocatorOffsetDeltaMax = 0;
+			ur_size crntAllocatorOffset = this->constantBufferAllocator.GetOffset();
+			ur_size allocatorOffsetDelta = crntAllocatorOffset + (crntAllocatorOffset < prevAllocatorOffset ? this->constantBufferAllocator.GetSize() : 0) - prevAllocatorOffset;
+			allocatorOffsetDeltaMax = std::max(allocatorOffsetDelta, allocatorOffsetDeltaMax);
+			prevAllocatorOffset = crntAllocatorOffset;
+			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+			if (ImGui::TreeNode("Dynamic Constant Buffer"))
+			{
+				ImGui::Text("Size: %i", this->grafDynamicConstantBuffer->GetDesc().SizeInBytes);
+				ImGui::Text("Maximal usage per frame: %i", allocatorOffsetDeltaMax);
+				ImGui::Text("Current frame usage: %i", allocatorOffsetDelta);
+				ImGui::Text("Current ofs (bytes): %i", this->constantBufferAllocator.GetOffset());
+				ImGui::TreePop();
+			}
+		}
+		ImGui::Text("Recorded frame count: %i", this->frameCount);
+		ImGui::End();
 
 		return Result(Success);
 	}

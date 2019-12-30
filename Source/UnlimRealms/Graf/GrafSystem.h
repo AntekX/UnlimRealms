@@ -915,6 +915,8 @@ namespace UnlimRealms
 
 		virtual Result Upload(GrafBuffer *srcBuffer, ur_size srcOffset, GrafImage* dstImage, GrafImageState dstImageState);
 
+		virtual Result ShowImgui();
+
 		inline GrafSystem* GetGrafSystem() const;
 
 		inline GrafCanvas* GetGrafCanvas() const;
