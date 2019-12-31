@@ -108,6 +108,13 @@ namespace UnlimRealms
 		R32G32_SFLOAT,
 		R32G32B32_SFLOAT,
 		R32G32B32A32_SFLOAT,
+		D16_UNORM,
+		X8_D24_UNORM_PACK32,
+		D32_SFLOAT,
+		S8_UINT,
+		D16_UNORM_S8_UINT,
+		D24_UNORM_S8_UINT,
+		D32_SFLOAT_S8_UINT,
 		BC1_RGB_UNORM_BLOCK,
 		BC1_RGB_SRGB_BLOCK,
 		BC1_RGBA_UNORM_BLOCK,
@@ -267,6 +274,34 @@ namespace UnlimRealms
 		ur_float Height;
 		ur_float Near;
 		ur_float Far;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafRenderPassDataOp
+	{
+		DontCare = 0,
+		Clear,
+		Load,
+		Store
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafRenderPassImageDesc
+	{
+		GrafFormat Format;
+		GrafImageState InitialState;
+		GrafImageState FinalState;
+		GrafRenderPassDataOp LoadOp;
+		GrafRenderPassDataOp StoreOp;
+		GrafRenderPassDataOp StencilLoadOp;
+		GrafRenderPassDataOp StencilStoreOp;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafRenderPassDesc
+	{
+		GrafRenderPassImageDesc* Images;
+		ur_uint ImageCount;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -675,11 +710,16 @@ namespace UnlimRealms
 	{
 	public:
 
+		struct UR_DECL InitParams
+		{
+			GrafRenderPassDesc PassDesc;
+		};
+
 		GrafRenderPass(GrafSystem& grafSystem);
 
 		~GrafRenderPass();
 
-		virtual Result Initialize(GrafDevice* grafDevice);
+		virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -813,6 +853,8 @@ namespace UnlimRealms
 	class UR_DECL GrafUtils
 	{
 	public:
+
+		static inline ur_bool IsDepthStencilFormat(GrafFormat grafFormat);
 
 		struct ImageData
 		{

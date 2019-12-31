@@ -572,7 +572,7 @@ namespace UnlimRealms
 	{
 	}
 
-	Result GrafRenderPass::Initialize(GrafDevice* grafDevice)
+	Result GrafRenderPass::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
 	{
 		GrafDeviceEntity::Initialize(grafDevice);
 		return Result(NotImplemented);

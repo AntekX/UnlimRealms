@@ -68,7 +68,21 @@ namespace UnlimRealms
 			crntStageLogName = "swap chain render pass";
 			res = this->grafSystem->CreateRenderPass(this->grafCanvasRenderPass);
 			if (Failed(res)) break;
-			res = this->grafCanvasRenderPass->Initialize(this->grafDevice.get());
+			GrafRenderPassImageDesc grafCanvasRenderPassImages[] = {
+				{
+					initParams.CanvasParams.Format,
+					GrafImageState::Common,
+					GrafImageState::Common,
+					GrafRenderPassDataOp::Load,
+					GrafRenderPassDataOp::Store,
+					GrafRenderPassDataOp::DontCare,
+					GrafRenderPassDataOp::DontCare
+				}
+			};
+			GrafRenderPassDesc grafCanvasRenderPassDesc = {
+				grafCanvasRenderPassImages, ur_array_size(grafCanvasRenderPassImages)
+			};
+			res = this->grafCanvasRenderPass->Initialize(this->grafDevice.get(), { grafCanvasRenderPassDesc });
 			if (Failed(res)) break;
 
 			// swap chain image(s) render target(s)

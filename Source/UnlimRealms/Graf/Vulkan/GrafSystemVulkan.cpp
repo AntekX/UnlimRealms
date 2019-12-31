@@ -2176,11 +2176,11 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafRenderPassVulkan::Initialize(GrafDevice* grafDevice)
+	Result GrafRenderPassVulkan::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
 	{
 		this->Deinitialize();
 
-		GrafRenderPass::Initialize(grafDevice);
+		GrafRenderPass::Initialize(grafDevice, initParams);
 
 		// validate logical device 
 
@@ -2191,40 +2191,71 @@ namespace UnlimRealms
 		}
 		VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
 
-		// TEMP: hardcoded test pass configuration
+		// describe all used attachments
 
-		VkAttachmentDescription vkAttachmentDesc = {};
-		vkAttachmentDesc.flags = 0;
-		vkAttachmentDesc.format = VK_FORMAT_B8G8R8A8_UNORM;
-		vkAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-		vkAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-		vkAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		vkAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		vkAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		vkAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_GENERAL;// GrafUtilsVulkan::GrafToVkImageLayout(image->GetState());
-		vkAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_GENERAL;// (VK_IMAGE_LAYOUT_UNDEFINED == vkAttachmentDesc.initialLayout ? VK_IMAGE_LAYOUT_GENERAL : vkAttachmentDesc.initialLayout);
+		std::vector<VkAttachmentDescription> vkAttachments(initParams.PassDesc.ImageCount);
+		ur_uint colorAttachmentCount = 0;
+		ur_uint depthStencilAttachmentCount = 0;
+		for (ur_uint iimage = 0; iimage < initParams.PassDesc.ImageCount; ++iimage)
+		{
+			GrafRenderPassImageDesc &grafPassImage = initParams.PassDesc.Images[iimage];
+			VkAttachmentDescription &vkAttachmentDesc = vkAttachments[iimage];
+			vkAttachmentDesc.flags = 0;
+			vkAttachmentDesc.format = GrafUtilsVulkan::GrafToVkFormat(grafPassImage.Format);
+			vkAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+			vkAttachmentDesc.loadOp = GrafUtilsVulkan::GrafToVkLoadOp(grafPassImage.LoadOp);
+			vkAttachmentDesc.storeOp = GrafUtilsVulkan::GrafToVkStoreOp(grafPassImage.StoreOp);
+			vkAttachmentDesc.stencilLoadOp = GrafUtilsVulkan::GrafToVkLoadOp(grafPassImage.StencilLoadOp);;
+			vkAttachmentDesc.stencilStoreOp = GrafUtilsVulkan::GrafToVkStoreOp(grafPassImage.StencilStoreOp);
+			vkAttachmentDesc.initialLayout = GrafUtilsVulkan::GrafToVkImageLayout(grafPassImage.InitialState);
+			vkAttachmentDesc.finalLayout = GrafUtilsVulkan::GrafToVkImageLayout(grafPassImage.FinalState);
+			if (GrafUtils::IsDepthStencilFormat(grafPassImage.Format))
+				++depthStencilAttachmentCount;
+			else
+				++colorAttachmentCount;
+		}
 
-		VkAttachmentReference vkColorAttachmentRef = {};
-		vkColorAttachmentRef.attachment = 0;
-		vkColorAttachmentRef.layout = VK_IMAGE_LAYOUT_GENERAL;
+		// default subpass
+		// TODO: should be configurable thriyght GRAF desc structure(s)
 
+		std::vector<VkAttachmentReference> vkColorAttachmentRefs(colorAttachmentCount);
+		VkAttachmentReference vkDepthStencilAttachment;
+		ur_uint colorAttachmentIdx = 0;
+		for (ur_uint iimage = 0; iimage < initParams.PassDesc.ImageCount; ++iimage)
+		{
+			GrafRenderPassImageDesc &grafPassImage = initParams.PassDesc.Images[iimage];
+			if (GrafUtils::IsDepthStencilFormat(grafPassImage.Format))
+			{
+				vkDepthStencilAttachment.attachment = (ur_uint32)iimage;
+				vkDepthStencilAttachment.layout = vkAttachments[iimage].finalLayout;
+			}
+			else
+			{
+				VkAttachmentReference &vkColorAttachmentRef = vkColorAttachmentRefs[colorAttachmentIdx++];
+				vkColorAttachmentRef.attachment = (ur_uint32)iimage;
+				vkColorAttachmentRef.layout = vkAttachments[iimage].finalLayout;
+			}
+		}
+		std::vector<VkAttachmentReference> vkDepthStencilAttachmentRefs;
 		VkSubpassDescription vkSubpassDesc = {};
 		vkSubpassDesc.flags = 0;
 		vkSubpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 		vkSubpassDesc.inputAttachmentCount = 0;
 		vkSubpassDesc.pInputAttachments = ur_null;
-		vkSubpassDesc.colorAttachmentCount = 1;
-		vkSubpassDesc.pColorAttachments = &vkColorAttachmentRef;
+		vkSubpassDesc.colorAttachmentCount = (ur_uint32)vkColorAttachmentRefs.size();
+		vkSubpassDesc.pColorAttachments = vkColorAttachmentRefs.data();
 		vkSubpassDesc.pResolveAttachments = ur_null;
-		vkSubpassDesc.pDepthStencilAttachment = ur_null;
+		vkSubpassDesc.pDepthStencilAttachment = (depthStencilAttachmentCount > 0 ? &vkDepthStencilAttachment : ur_null);
 		vkSubpassDesc.preserveAttachmentCount = 0;
 		vkSubpassDesc.pPreserveAttachments = ur_null;
+
+		// create render pass
 
 		VkRenderPassCreateInfo vkRenderPassInfo = {};
 		vkRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 		vkRenderPassInfo.flags = 0;
-		vkRenderPassInfo.attachmentCount = 1;
-		vkRenderPassInfo.pAttachments = &vkAttachmentDesc;
+		vkRenderPassInfo.attachmentCount = (ur_uint32)vkAttachments.size();
+		vkRenderPassInfo.pAttachments = vkAttachments.data();
 		vkRenderPassInfo.subpassCount = 1;
 		vkRenderPassInfo.pSubpasses = &vkSubpassDesc;
 		vkRenderPassInfo.dependencyCount = 0;
@@ -3145,6 +3176,29 @@ namespace UnlimRealms
 		return vkIndexType;
 	}
 
+	VkAttachmentLoadOp GrafUtilsVulkan::GrafToVkLoadOp(GrafRenderPassDataOp dataOp)
+	{
+		VkAttachmentLoadOp vkOp = VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
+		switch (dataOp)
+		{
+		case GrafRenderPassDataOp::DontCare: vkOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; break;
+		case GrafRenderPassDataOp::Clear: vkOp = VK_ATTACHMENT_LOAD_OP_CLEAR; break;
+		case GrafRenderPassDataOp::Load: vkOp = VK_ATTACHMENT_LOAD_OP_LOAD; break;
+		};
+		return vkOp;
+	}
+
+	VkAttachmentStoreOp GrafUtilsVulkan::GrafToVkStoreOp(GrafRenderPassDataOp dataOp)
+	{
+		VkAttachmentStoreOp vkOp = VK_ATTACHMENT_STORE_OP_MAX_ENUM;
+		switch (dataOp)
+		{
+		case GrafRenderPassDataOp::DontCare: vkOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; break;
+		case GrafRenderPassDataOp::Store: vkOp = VK_ATTACHMENT_STORE_OP_STORE; break;
+		};
+		return vkOp;
+	}
+
 	static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {
 		VK_FORMAT_UNDEFINED,
 		VK_FORMAT_R8G8B8_UNORM,
@@ -3171,12 +3225,18 @@ namespace UnlimRealms
 		VK_FORMAT_R32G32_SFLOAT,
 		VK_FORMAT_R32G32B32_SFLOAT,
 		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_FORMAT_X8_D24_UNORM_PACK32,
+		VK_FORMAT_D32_SFLOAT,
+		VK_FORMAT_S8_UINT,
+		VK_FORMAT_D16_UNORM_S8_UINT,
+		VK_FORMAT_D24_UNORM_S8_UINT,
+		VK_FORMAT_D32_SFLOAT_S8_UINT,
 		VK_FORMAT_BC1_RGB_UNORM_BLOCK,
 		VK_FORMAT_BC1_RGB_SRGB_BLOCK,
 		VK_FORMAT_BC1_RGBA_UNORM_BLOCK,
 		VK_FORMAT_BC1_RGBA_SRGB_BLOCK,
 		VK_FORMAT_BC3_UNORM_BLOCK,
-		VK_FORMAT_BC3_SRGB_BLOCK,
+		VK_FORMAT_BC3_SRGB_BLOCK
 	};
 	VkFormat GrafUtilsVulkan::GrafToVkFormat(GrafFormat grafFormat)
 	{
@@ -3308,13 +3368,13 @@ namespace UnlimRealms
 		GrafFormat::Unsupported,			// VK_FORMAT_R64G64B64A64_SFLOAT = 121,
 		GrafFormat::Unsupported,			// VK_FORMAT_B10G11R11_UFLOAT_PACK32 = 122,
 		GrafFormat::Unsupported,			// VK_FORMAT_E5B9G9R9_UFLOAT_PACK32 = 123,
-		GrafFormat::Unsupported,			// VK_FORMAT_D16_UNORM = 124,
-		GrafFormat::Unsupported,			// VK_FORMAT_X8_D24_UNORM_PACK32 = 125,
-		GrafFormat::Unsupported,			// VK_FORMAT_D32_SFLOAT = 126,
-		GrafFormat::Unsupported,			// VK_FORMAT_S8_UINT = 127,
-		GrafFormat::Unsupported,			// VK_FORMAT_D16_UNORM_S8_UINT = 128,
-		GrafFormat::Unsupported,			// VK_FORMAT_D24_UNORM_S8_UINT = 129,
-		GrafFormat::Unsupported,			// VK_FORMAT_D32_SFLOAT_S8_UINT = 130,
+		GrafFormat::D16_UNORM,				// VK_FORMAT_D16_UNORM = 124,
+		GrafFormat::X8_D24_UNORM_PACK32,	// VK_FORMAT_X8_D24_UNORM_PACK32 = 125,
+		GrafFormat::D32_SFLOAT,				// VK_FORMAT_D32_SFLOAT = 126,
+		GrafFormat::S8_UINT,				// VK_FORMAT_S8_UINT = 127,
+		GrafFormat::D16_UNORM_S8_UINT,		// VK_FORMAT_D16_UNORM_S8_UINT = 128,
+		GrafFormat::D24_UNORM_S8_UINT,		// VK_FORMAT_D24_UNORM_S8_UINT = 129,
+		GrafFormat::D32_SFLOAT_S8_UINT,		// VK_FORMAT_D32_SFLOAT_S8_UINT = 130,
 		GrafFormat::BC1_RGB_UNORM_BLOCK,	// VK_FORMAT_BC1_RGB_UNORM_BLOCK = 131,
 		GrafFormat::BC1_RGB_SRGB_BLOCK,		// VK_FORMAT_BC1_RGB_SRGB_BLOCK = 132,
 		GrafFormat::BC1_RGBA_UNORM_BLOCK,	// VK_FORMAT_BC1_RGBA_UNORM_BLOCK = 133,

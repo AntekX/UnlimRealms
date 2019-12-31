@@ -357,7 +357,7 @@ namespace UnlimRealms
 
 		~GrafRenderPassVulkan();
 
-		virtual Result Initialize(GrafDevice* grafDevice);
+		virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams);
 
 		inline VkRenderPass GetVkRenderPass() const;
 
@@ -489,6 +489,8 @@ namespace UnlimRealms
 		static inline VkFilter GrafToVkFilter(GrafFilterType filter);
 		static inline VkSamplerAddressMode GrafToVkAddressMode(GrafAddressMode address);
 		static inline VkIndexType GrafToVkIndexType(GrafIndexType indexType);
+		static inline VkAttachmentLoadOp GrafToVkLoadOp(GrafRenderPassDataOp dataOp);
+		static inline VkAttachmentStoreOp GrafToVkStoreOp(GrafRenderPassDataOp dataOp);
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
 	};
