@@ -138,7 +138,7 @@ namespace UnlimRealms
 
 		virtual Result SetScissorsRect(const RectI& scissorsRect);
 
-		virtual Result BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget);
+		virtual Result BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget, GrafClearValue* rtClearValues = ur_null);
 
 		virtual Result EndRenderPass();
 

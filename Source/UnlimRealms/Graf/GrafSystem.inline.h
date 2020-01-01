@@ -80,6 +80,31 @@ namespace UnlimRealms
 		return this->entryPoint;
 	}
 
+	inline ur_size GrafRenderPass::GetImageCount() const
+	{
+		return (ur_size)this->renderPassImageDescs.size();
+	}
+
+	inline const GrafRenderPassImageDesc& GrafRenderPass::GetImageDesc(ur_size idx) const
+	{
+		return this->renderPassImageDescs[idx];
+	}
+
+	GrafRenderPass* GrafRenderTarget::GetRenderPass() const
+	{
+		return this->renderPass;
+	}
+
+	GrafImage* GrafRenderTarget::GetImage(ur_uint imageId) const
+	{
+		return (imageId < this->images.size() ? this->images[imageId] : ur_null);
+	}
+
+	ur_uint GrafRenderTarget::GetImageCount() const
+	{
+		return (ur_uint)this->images.size();
+	}
+
 	inline const GrafDescriptorTableLayoutDesc& GrafDescriptorTableLayout::GetLayoutDesc() const
 	{
 		return this->layoutDesc;

@@ -44,6 +44,11 @@ namespace UnlimRealms
 	{
 		return this->frameIdx;
 	}
+	
+	inline ur_uint GrafRenderer::GetPrevFrameId() const
+	{
+		return (this->frameIdx > 0 ? this->frameIdx - 1 : this->frameCount - 1);
+	}
 
 	inline GrafBuffer* GrafRenderer::GetDynamicUploadBuffer() const
 	{

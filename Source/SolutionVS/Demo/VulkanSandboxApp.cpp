@@ -82,6 +82,10 @@ int VulkanSandboxApp::Run()
 	};
 	
 	// initialize sample GRAF objects
+	std::unique_ptr<GrafRenderPass> grafColorDepthPass;
+	std::unique_ptr<GrafRenderTarget> grafColorDepthTarget;
+	std::unique_ptr<GrafImage> grafRTImageColor;
+	std::unique_ptr<GrafImage> grafRTImageDepth;
 	std::unique_ptr<GrafSampler> grafDefaultSampler;
 	std::unique_ptr<GrafShader> grafShaderSampleVS;
 	std::unique_ptr<GrafShader> grafShaderSamplePS;
@@ -91,13 +95,34 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafPipeline> grafPipelineSample;
 	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
 	std::vector<std::unique_ptr<GrafDescriptorTable>> grafBindingSample;
+	auto& deinitializeGrafRenderTargetObjects = [&](GrafCommandList* deferredDestroyCmdList = ur_null) -> void {
+		if (deferredDestroyCmdList != ur_null)
+		{
+			GrafRenderTarget *grafPrevRT = grafColorDepthTarget.release();
+			GrafImage *grafPrevRTImageColor = grafRTImageColor.release();
+			GrafImage *grafPrevRTImageDepth = grafRTImageDepth.release();
+			grafRenderer->AddCommandListCallback(deferredDestroyCmdList, {},
+				[grafPrevRT, grafPrevRTImageColor, grafPrevRTImageDepth](GrafCallbackContext& ctx) -> Result
+			{
+				delete grafPrevRT;
+				delete grafPrevRTImageColor;
+				delete grafPrevRTImageDepth;
+				return Result(Success);
+			});
+		}
+		grafColorDepthTarget.reset();
+		grafRTImageColor.reset();
+		grafRTImageDepth.reset();
+	};
 	auto& deinitializeGrafFrameObjects = [&]() -> void {
 		grafBindingSample.clear();
 		grafMainCmdList.clear();
 	};
 	auto& deinitializeGrafObjects = [&]() -> void {
 		// order matters!
+		deinitializeGrafRenderTargetObjects();
 		deinitializeGrafFrameObjects();
+		grafColorDepthPass.reset();
 		grafPipelineSample.reset();
 		grafVBSample.reset();
 		grafImageSample.reset();
@@ -152,6 +177,26 @@ int VulkanSandboxApp::Run()
 		grafRes = grafVBSample->Initialize(grafDevice, grafVBSampleParams);
 		if (Failed(grafRes)) return;
 		grafRes = grafVBSample->Write((ur_byte*)verticesSample);
+		if (Failed(grafRes)) return;
+
+		// color & depth render pass
+		grafRes = grafSystem->CreateRenderPass(grafColorDepthPass);
+		if (Failed(grafRes)) return;
+		GrafRenderPassImageDesc grafColorDepthPassImages[] = {
+			{ // color
+				GrafFormat::B8G8R8A8_UNORM,
+				GrafImageState::Undefined, GrafImageState::ColorWrite,
+				GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
+				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+			},
+			{ // depth
+				GrafFormat::D24_UNORM_S8_UINT,
+				GrafImageState::Undefined, GrafImageState::DepthStencilWrite,
+				GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
+				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+			}
+		};
+		grafRes = grafColorDepthPass->Initialize(grafDevice, { grafColorDepthPassImages, ur_array_size(grafColorDepthPassImages) });
 		if (Failed(grafRes)) return;
 
 		// graphics pipeline for sample rendering
@@ -216,8 +261,56 @@ int VulkanSandboxApp::Run()
 		}
 		if (Failed(grafRes)) return;
 	};
+	auto& initializeGrafRenderTargetObjects = [&]() -> void
+	{
+		if (Failed(grafRes)) return;
+		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
+		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
+
+		// color target image
+		grafRes = grafSystem->CreateImage(grafRTImageColor);
+		if (Failed(grafRes)) return;
+		GrafImageDesc grafRTImageColorDesc = {
+			GrafImageType::Tex2D,
+			GrafFormat::B8G8R8A8_UNORM,
+			ur_uint3(canvasWidth, canvasHeight, 1), 1,
+			ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::TransferSrc),
+			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+		};
+		grafRes = grafRTImageColor->Initialize(grafDevice, { grafRTImageColorDesc });
+		if (Failed(grafRes)) return;
+
+		// depth target image
+		grafRes = grafSystem->CreateImage(grafRTImageDepth);
+		if (Failed(grafRes)) return;
+		GrafImageDesc grafRTImageDepthDesc = {
+			GrafImageType::Tex2D,
+			GrafFormat::D24_UNORM_S8_UINT,
+			ur_uint3(canvasWidth, canvasHeight, 1), 1,
+			ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget),
+			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+		};
+		grafRes = grafRTImageDepth->Initialize(grafDevice, { grafRTImageDepthDesc });
+		if (Failed(grafRes)) return;
+
+		// initialize render target
+		grafRes = grafSystem->CreateRenderTarget(grafColorDepthTarget);
+		if (Failed(grafRes)) return;
+		GrafImage* grafColorDepthTargetImages[] = {
+			grafRTImageColor.get(),
+			grafRTImageDepth.get()
+		};
+		GrafRenderTarget::InitParams grafColorDepthTargetParams = {
+			grafColorDepthPass.get(),
+			grafColorDepthTargetImages,
+			ur_array_size(grafColorDepthTargetImages)
+		};
+		grafRes = grafColorDepthTarget->Initialize(grafDevice, grafColorDepthTargetParams);
+		if (Failed(grafRes)) return;
+	};
 	initializeGrafObjects();
 	initializeGrafFrameObjects();
+	initializeGrafRenderTargetObjects();
 	if (Failed(grafRes))
 	{
 		deinitializeGrafObjects();
@@ -387,6 +480,19 @@ int VulkanSandboxApp::Run()
 		// draw frame
 		if (grafRenderer != ur_null && canvasValid)
 		{
+			// update render target size
+			if (canvasWidth != realm.GetCanvas()->GetClientBound().Width() ||
+				canvasHeight != realm.GetCanvas()->GetClientBound().Height())
+			{
+				// make sure prev RT objects are no longer used before destroying
+				GrafCommandList* grafCmdListPrev = grafMainCmdList[grafRenderer->GetPrevFrameId()].get();
+				deinitializeGrafRenderTargetObjects(grafCmdListPrev);
+				// recreate RT objects for new canvas dimensions
+				canvasWidth = realm.GetCanvas()->GetClientBound().Width();
+				canvasHeight = realm.GetCanvas()->GetClientBound().Height();
+				initializeGrafRenderTargetObjects();
+			}
+
 			// begin frame rendering
 			grafRenderer->BeginFrame();
 
@@ -396,18 +502,10 @@ int VulkanSandboxApp::Run()
 
 				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
-				GrafRenderPass *grafRenderPass = grafRenderer->GetCanvasRenderPass();
-				GrafRenderTarget *grafRenderTarget = grafRenderer->GetCanvasRenderTarget();
 				ur_uint frameIdx = grafRenderer->GetCurrentFrameId();
 				
 				GrafCommandList* grafCmdListCrnt = grafMainCmdList[frameIdx].get();
 				grafCmdListCrnt->Begin();
-
-				// prepare RT
-
-				updateFrameJob->WaitProgress(1); // make sure required data is ready
-				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), reinterpret_cast<GrafClearValue&>(crntClearColor));
-				grafCmdListCrnt->BeginRenderPass(grafRenderPass, grafRenderTarget);
 
 				GrafViewportDesc grafViewport = {};
 				grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
@@ -416,48 +514,73 @@ int VulkanSandboxApp::Run()
 				grafViewport.Far = 1.0f;
 				grafCmdListCrnt->SetViewport(grafViewport, true);
 				grafCmdListCrnt->SetScissorsRect({ 0, 0, (ur_int)grafViewport.Width, (ur_int)grafViewport.Height });
+				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), { 1.0f, 0.0f, 0.0f, 1.0f }); // clear swap chain image directly
 
-				// draw sample primitives
+				{ // color & depth render pass
 
-				updateFrameJob->WaitProgress(2); // wait till animation params are up to date
-				SampleCBData sampleCBData;
-				sampleCBData.Transform = ur_float4x4::Identity;
-				for (ur_uint instId = 0; instId < 4; ++instId)
-				{
-					sampleCBData.Transform.r[instId].x = sampleAnimPos[instId].x;
-					sampleCBData.Transform.r[instId].y = sampleAnimPos[instId].y;
+					updateFrameJob->WaitProgress(1); // make sure update job is done to this point
+					GrafClearValue rtClearValues[] = {
+						reinterpret_cast<GrafClearValue&>(crntClearColor),
+						{ 1.0f, 0.0f, 0.0f, 0.0f }
+					};
+					grafCmdListCrnt->ImageMemoryBarrier(grafRTImageColor.get(), GrafImageState::Current, GrafImageState::ColorWrite);
+					grafCmdListCrnt->BeginRenderPass(grafColorDepthPass.get(), grafColorDepthTarget.get(), rtClearValues);
+
+					// todo: draw 3d meshes here and copy color image data to swap chain image
+
+					grafCmdListCrnt->EndRenderPass();
+					grafCmdListCrnt->ImageMemoryBarrier(grafRTImageColor.get(), GrafImageState::Current, GrafImageState::TransferSrc);
+					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
+					grafCmdListCrnt->Copy(grafRTImageColor.get(), grafCanvas->GetCurrentImage());
+					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
 				}
-				sampleCBData.Transform.Transpose();
-				GrafBuffer* dynamicCB = grafRenderer->GetDynamicConstantBuffer(); // sample CB data changes every frame, use GrafRenderer's dynamic CB
-				Allocation dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SampleCBData));
-				dynamicCB->Write((ur_byte*)&sampleCBData, sizeof(sampleCBData), 0, dynamicCBAlloc.Offset);
-				grafBindingSample[frameIdx]->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
-				grafBindingSample[frameIdx]->SetSampledImage(0, grafImageSample.get(), grafDefaultSampler.get());
 
-				grafCmdListCrnt->BindPipeline(grafPipelineSample.get());
-				grafCmdListCrnt->BindDescriptorTable(grafBindingSample[frameIdx].get(), grafPipelineSample.get());
-				grafCmdListCrnt->BindVertexBuffer(grafVBSample.get(), 0);
-				grafCmdListCrnt->Draw(6, 4, 0, 0);
+				{ // sample color render pass (drawing directly into swap chain image)
 
-				// draw GUI
-
-				static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
-				static bool showGUI = true;
-				showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
-				if (showGUI)
-				{
-					ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
-					ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
-					ImGui::ShowMetricsWindow();
+					grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
 					
-					grafRenderer->ShowImgui();
+					// draw sample primitives
 
-					imguiRender->Render(*grafCmdListCrnt);
+					updateFrameJob->WaitProgress(2); // wait till animation params are up to date
+					SampleCBData sampleCBData;
+					sampleCBData.Transform = ur_float4x4::Identity;
+					for (ur_uint instId = 0; instId < 4; ++instId)
+					{
+						sampleCBData.Transform.r[instId].x = sampleAnimPos[instId].x;
+						sampleCBData.Transform.r[instId].y = sampleAnimPos[instId].y;
+					}
+					sampleCBData.Transform.Transpose();
+					GrafBuffer* dynamicCB = grafRenderer->GetDynamicConstantBuffer(); // sample CB data changes every frame, use GrafRenderer's dynamic CB
+					Allocation dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SampleCBData));
+					dynamicCB->Write((ur_byte*)&sampleCBData, sizeof(sampleCBData), 0, dynamicCBAlloc.Offset);
+					grafBindingSample[frameIdx]->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
+					grafBindingSample[frameIdx]->SetSampledImage(0, grafImageSample.get(), grafDefaultSampler.get());
+
+					grafCmdListCrnt->BindPipeline(grafPipelineSample.get());
+					grafCmdListCrnt->BindDescriptorTable(grafBindingSample[frameIdx].get(), grafPipelineSample.get());
+					grafCmdListCrnt->BindVertexBuffer(grafVBSample.get(), 0);
+					grafCmdListCrnt->Draw(6, 4, 0, 0);
+
+					// draw GUI
+
+					static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
+					static bool showGUI = true;
+					showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
+					if (showGUI)
+					{
+						ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
+						ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+						ImGui::ShowMetricsWindow();
+
+						grafRenderer->ShowImgui();
+
+						imguiRender->Render(*grafCmdListCrnt);
+					}
+
+					grafCmdListCrnt->EndRenderPass();
 				}
 
 				// finalize & submit
-
-				grafCmdListCrnt->EndRenderPass();
 				grafCmdListCrnt->End();
 				grafDevice->Submit(grafCmdListCrnt);
 			});

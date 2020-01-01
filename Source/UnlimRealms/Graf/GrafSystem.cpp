@@ -232,7 +232,7 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafCommandList::BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget)
+	Result GrafCommandList::BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget, GrafClearValue* rtClearValues)
 	{
 		return Result(NotImplemented);
 	}
@@ -575,6 +575,8 @@ namespace UnlimRealms
 	Result GrafRenderPass::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
 	{
 		GrafDeviceEntity::Initialize(grafDevice);
+		this->renderPassImageDescs.resize(initParams.PassDesc.ImageCount);
+		memcpy(this->renderPassImageDescs.data(), initParams.PassDesc.Images, sizeof(GrafRenderPassImageDesc) * initParams.PassDesc.ImageCount);
 		return Result(NotImplemented);
 	}
 
@@ -637,7 +639,7 @@ namespace UnlimRealms
 			break;
 		}
 
-		// copy mip levels inot cpu visible buffers
+		// copy mip levels into cpu visible buffers
 
 		Result res = Result(Success);
 		ur_uint mipRowPitch = outputImageData.RowPitch;

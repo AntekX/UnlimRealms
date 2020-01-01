@@ -653,10 +653,36 @@ namespace UnlimRealms
 		vkImageBarrier.subresourceRange.levelCount = (ur_uint32)grafImage->GetDesc().MipLevels;
 		vkImageBarrier.subresourceRange.baseArrayLayer = 0;
 		vkImageBarrier.subresourceRange.layerCount = 1;
+		VkPipelineStageFlags vkStageSrc = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		VkPipelineStageFlags vkStageDst = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		
+		switch (srcState)
+		{
+		case GrafImageState::TransferSrc:
+			vkImageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
+		case GrafImageState::TransferDst:
+			vkImageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
+		};
 
-		// deduce stage mask values from source and destination layouts
-		VkPipelineStageFlags vkStageSrc = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-		VkPipelineStageFlags vkStageDst = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+		switch (dstState)
+		{
+		case GrafImageState::TransferSrc:
+			vkImageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
+		case GrafImageState::TransferDst:
+			vkImageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
+		case GrafImageState::DepthStencilWrite:
+			vkImageBarrier.dstAccessMask = (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+			vkStageDst = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+			break;
+		};
 
 		vkCmdPipelineBarrier(this->vkCommandBuffer, vkStageSrc, vkStageDst, VkDependencyFlags(0), 0, ur_null, 0, ur_null, 1, &vkImageBarrier);
 
@@ -748,10 +774,28 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafCommandListVulkan::BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget)
+	Result GrafCommandListVulkan::BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget, GrafClearValue* rtClearValues)
 	{
 		if (ur_null == grafRenderPass || ur_null == grafRenderTarget || 0 == grafRenderTarget->GetImageCount())
 			return Result(InvalidArgs);
+
+		std::vector<VkClearValue> vkClearValues;
+		if (rtClearValues != ur_null)
+		{
+			vkClearValues.resize(grafRenderTarget->GetImageCount());
+			for (ur_uint iimage = 0; iimage < grafRenderTarget->GetImageCount(); ++iimage)
+			{
+				if (ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget) & grafRenderTarget->GetImage(iimage)->GetDesc().Usage)
+				{
+					vkClearValues[iimage].depthStencil.depth = rtClearValues[iimage].f32[0];
+					vkClearValues[iimage].depthStencil.stencil = (ur_uint32)rtClearValues[iimage].f32[1];
+				}
+				else
+				{
+					vkClearValues[iimage].color = reinterpret_cast<VkClearColorValue&>(rtClearValues[iimage]);
+				}
+			}
+		}
 
 		VkRenderPassBeginInfo vkPassBeginInfo = {};
 		vkPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -760,8 +804,8 @@ namespace UnlimRealms
 		vkPassBeginInfo.renderArea.offset = { 0, 0 };
 		vkPassBeginInfo.renderArea.extent.width = (ur_uint32)grafRenderTarget->GetImage(0)->GetDesc().Size.x;
 		vkPassBeginInfo.renderArea.extent.height = (ur_uint32)grafRenderTarget->GetImage(0)->GetDesc().Size.y;
-		vkPassBeginInfo.clearValueCount = 0;
-		vkPassBeginInfo.pClearValues = ur_null;
+		vkPassBeginInfo.clearValueCount = (ur_uint32)vkClearValues.size();
+		vkPassBeginInfo.pClearValues = vkClearValues.data();
 
 		vkCmdBeginRenderPass(this->vkCommandBuffer, &vkPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -2167,6 +2211,8 @@ namespace UnlimRealms
 
 	Result GrafRenderPassVulkan::Deinitialize()
 	{
+		this->renderPassImageDescs.clear();
+
 		if (this->vkRenderPass != VK_NULL_HANDLE)
 		{
 			vkDestroyRenderPass(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkRenderPass, ur_null);

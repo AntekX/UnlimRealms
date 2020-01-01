@@ -513,7 +513,7 @@ namespace UnlimRealms
 
 		virtual Result SetScissorsRect(const RectI& scissorsRect);
 
-		virtual Result BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget);
+		virtual Result BeginRenderPass(GrafRenderPass* grafRenderPass, GrafRenderTarget* grafRenderTarget, GrafClearValue* rtClearValues = ur_null);
 
 		virtual Result EndRenderPass();
 
@@ -720,6 +720,14 @@ namespace UnlimRealms
 		~GrafRenderPass();
 
 		virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams);
+
+		inline ur_size GetImageCount() const;
+
+		inline const GrafRenderPassImageDesc& GetImageDesc(ur_size idx) const;
+
+	protected:
+
+		std::vector<GrafRenderPassImageDesc> renderPassImageDescs;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -751,21 +759,6 @@ namespace UnlimRealms
 		GrafRenderPass* renderPass;
 		std::vector<GrafImage*> images;
 	};
-
-	GrafRenderPass* GrafRenderTarget::GetRenderPass() const
-	{
-		return this->renderPass;
-	}
-
-	GrafImage* GrafRenderTarget::GetImage(ur_uint imageId) const
-	{
-		return (imageId < this->images.size() ? this->images[imageId] : ur_null);
-	}
-
-	ur_uint GrafRenderTarget::GetImageCount() const
-	{
-		return (ur_uint)this->images.size();
-	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafDescriptorTableLayout : public GrafDeviceEntity

@@ -77,6 +77,8 @@ namespace UnlimRealms
 
 		inline ur_uint GetCurrentFrameId() const;
 
+		inline ur_uint GetPrevFrameId() const;
+
 		inline GrafBuffer* GetDynamicUploadBuffer() const;
 
 		inline GrafBuffer* GetDynamicConstantBuffer() const;
