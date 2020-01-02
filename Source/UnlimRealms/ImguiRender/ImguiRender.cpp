@@ -479,14 +479,14 @@ namespace UnlimRealms
 			GrafDescriptorTableLayout* bindingLayouts[] = {
 				this->grafBindingLayout.get(),
 			};
-			GrafVertexElementDesc sampleVertexElements[] = {
+			GrafVertexElementDesc vertexElements[] = {
 				{ GrafFormat::R32G32_SFLOAT, 0 },
 				{ GrafFormat::R32G32_SFLOAT, 8 },
 				{ GrafFormat::R8G8B8A8_UNORM, 16 }
 			};
 			GrafVertexInputDesc vertexInputs[] = { {
 				GrafVertexInputType::PerVertex, 0, sizeof(ImDrawVert),
-				sampleVertexElements, ur_array_size(sampleVertexElements)
+				vertexElements, ur_array_size(vertexElements)
 			} };
 			GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
 			pipelineParams.RenderPass = grafRenderPass;
@@ -496,6 +496,7 @@ namespace UnlimRealms
 			pipelineParams.DescriptorTableLayoutCount = ur_array_size(bindingLayouts);
 			pipelineParams.VertexInputDesc = vertexInputs;
 			pipelineParams.VertexInputCount = ur_array_size(vertexInputs);
+			pipelineParams.BlendEnable = true;
 			res = this->grafPipeline->Initialize(grafDevice, pipelineParams);
 		}
 		if (Failed(res))

@@ -2696,8 +2696,6 @@ namespace UnlimRealms
 	{
 		this->vkPipeline = VK_NULL_HANDLE;
 		this->vkPipelineLayout = VK_NULL_HANDLE;
-		this->vkDescriptorSetLayout = VK_NULL_HANDLE;
-		this->vkDescriptorPool = VK_NULL_HANDLE;
 	}
 
 	GrafPipelineVulkan::~GrafPipelineVulkan()
@@ -2707,25 +2705,10 @@ namespace UnlimRealms
 
 	Result GrafPipelineVulkan::Deinitialize()
 	{
-		if (!this->vkDescriptorSets.empty())
-		{
-			vkFreeDescriptorSets(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDescriptorPool, 1, this->vkDescriptorSets.data());
-			this->vkDescriptorSets.clear();
-		}
 		if (this->vkPipelineLayout != VK_NULL_HANDLE)
 		{
 			vkDestroyPipelineLayout(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipelineLayout, ur_null);
 			this->vkPipelineLayout = VK_NULL_HANDLE;
-		}
-		if (this->vkDescriptorSetLayout != VK_NULL_HANDLE)
-		{
-			vkDestroyDescriptorSetLayout(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDescriptorSetLayout, ur_null);
-			this->vkDescriptorSetLayout = VK_NULL_HANDLE;
-		}
-		if (this->vkDescriptorPool != VK_NULL_HANDLE)
-		{
-			vkDestroyDescriptorPool(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDescriptorPool, ur_null);
-			this->vkDescriptorPool = VK_NULL_HANDLE;
 		}
 		if (this->vkPipeline != VK_NULL_HANDLE)
 		{
@@ -2901,11 +2884,11 @@ namespace UnlimRealms
 		VkPipelineDepthStencilStateCreateInfo vkDepthStencilStateInfo = {};
 		vkDepthStencilStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 		vkDepthStencilStateInfo.flags = 0;
-		vkDepthStencilStateInfo.depthTestEnable = VK_FALSE;
-		vkDepthStencilStateInfo.depthWriteEnable = VK_FALSE;
-		vkDepthStencilStateInfo.depthCompareOp = VK_COMPARE_OP_NEVER;
+		vkDepthStencilStateInfo.depthTestEnable = initParams.DepthTestEnable;
+		vkDepthStencilStateInfo.depthWriteEnable = initParams.DepthWriteEnable;
+		vkDepthStencilStateInfo.depthCompareOp = GrafUtilsVulkan::GrafToVkCompareOp(initParams.DepthCompareOp);
 		vkDepthStencilStateInfo.depthBoundsTestEnable = VK_FALSE;
-		vkDepthStencilStateInfo.stencilTestEnable = VK_FALSE;
+		vkDepthStencilStateInfo.stencilTestEnable = initParams.StencilTestEnable;
 		vkDepthStencilStateInfo.front = {};
 		vkDepthStencilStateInfo.back = {};
 		vkDepthStencilStateInfo.minDepthBounds = 0.0f;
@@ -2914,7 +2897,7 @@ namespace UnlimRealms
 		// color blend state
 
 		VkPipelineColorBlendAttachmentState vkAttachmentBlendState = {};
-		vkAttachmentBlendState.blendEnable = VK_TRUE;
+		vkAttachmentBlendState.blendEnable = initParams.BlendEnable;
 		vkAttachmentBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 		vkAttachmentBlendState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 		vkAttachmentBlendState.colorBlendOp = VK_BLEND_OP_ADD;
@@ -2940,7 +2923,7 @@ namespace UnlimRealms
 		VkDynamicState vkDynamicStates[] = {
 			VK_DYNAMIC_STATE_VIEWPORT,
 			VK_DYNAMIC_STATE_SCISSOR,
-			VK_DYNAMIC_STATE_LINE_WIDTH,
+			//VK_DYNAMIC_STATE_LINE_WIDTH, // disabled for abstraction compatibility with DirectX, line width is always 1.0
 			VK_DYNAMIC_STATE_DEPTH_BIAS,
 			VK_DYNAMIC_STATE_BLEND_CONSTANTS,
 			VK_DYNAMIC_STATE_DEPTH_BOUNDS,
@@ -2983,42 +2966,6 @@ namespace UnlimRealms
 			this->Deinitialize();
 			return ResultError(Failure, std::string("GrafPipelineVulkan: vkCreateGraphicsPipelines failed with VkResult = ") + VkResultToString(vkRes));
 		}
-
-		return Result(Success);
-	}
-
-	Result GrafPipelineVulkan::UpdateConstantBuffer(ur_uint setIdx, GrafBuffer* buffer)
-	{
-		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
-		setIdx = (setIdx % this->vkDescriptorSets.size());
-
-		VkDescriptorBufferInfo vkDescriptorBufferInfo = {};
-		vkDescriptorBufferInfo.buffer = static_cast<GrafBufferVulkan*>(buffer)->GetVkBuffer();
-		vkDescriptorBufferInfo.offset = 0;
-		vkDescriptorBufferInfo.range = (VkDeviceSize)buffer->GetDesc().SizeInBytes;
-
-		VkWriteDescriptorSet vkWriteDescriptorSet = {};
-		vkWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		vkWriteDescriptorSet.dstSet = this->vkDescriptorSets[setIdx];
-		vkWriteDescriptorSet.dstBinding = 0;
-		vkWriteDescriptorSet.dstArrayElement = 0;
-		vkWriteDescriptorSet.descriptorCount = 1;
-		vkWriteDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		vkWriteDescriptorSet.pImageInfo = ur_null;
-		vkWriteDescriptorSet.pBufferInfo = &vkDescriptorBufferInfo;
-		vkWriteDescriptorSet.pTexelBufferView = ur_null;
-
-		vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, ur_null);
-
-		return Result(Success);
-	}
-
-	Result GrafPipelineVulkan::BindDescriptorSet(ur_uint setIdx, GrafCommandList* commandList)
-	{
-		setIdx = (setIdx % this->vkDescriptorSets.size());
-
-		VkCommandBuffer vkCommandBuffer = static_cast<GrafCommandListVulkan*>(commandList)->GetVkCommandBuffer();
-		vkCmdBindDescriptorSets(vkCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->vkPipelineLayout, 0, 1, &this->vkDescriptorSets[setIdx], 0, ur_null);
 
 		return Result(Success);
 	}
@@ -3184,6 +3131,23 @@ namespace UnlimRealms
 		case GrafPrimitiveTopology::TriangleFan: vkTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN; break;
 		};
 		return vkTopology;
+	}
+
+	VkCompareOp GrafUtilsVulkan::GrafToVkCompareOp(GrafCompareOp compareOp)
+	{
+		VkCompareOp vkCompareOp = VK_COMPARE_OP_MAX_ENUM;
+		switch (compareOp)
+		{
+		case GrafCompareOp::Never: vkCompareOp = VK_COMPARE_OP_NEVER; break;
+		case GrafCompareOp::Less: vkCompareOp = VK_COMPARE_OP_LESS; break;
+		case GrafCompareOp::Equal: vkCompareOp = VK_COMPARE_OP_EQUAL; break;
+		case GrafCompareOp::LessOrEqual: vkCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL; break;
+		case GrafCompareOp::Greater: vkCompareOp = VK_COMPARE_OP_GREATER; break;
+		case GrafCompareOp::NotEqual: vkCompareOp = VK_COMPARE_OP_NOT_EQUAL; break;
+		case GrafCompareOp::GreaterOrEqual: vkCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL; break;
+		case GrafCompareOp::Always: vkCompareOp = VK_COMPARE_OP_ALWAYS; break;
+		};
+		return vkCompareOp;
 	}
 
 	VkFilter GrafUtilsVulkan::GrafToVkFilter(GrafFilterType filter)

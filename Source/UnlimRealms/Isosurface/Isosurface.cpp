@@ -1767,7 +1767,7 @@ namespace UnlimRealms
 			return Result(Success);
 
 		static const ur_float4 boxColor(0.0f, 0.0f, 1.0f, 1.0f);
-		genericRender->DrawBox(node->GetBBox().Min, node->GetBBox().Max, boxColor);
+		genericRender->DrawWireBox(node->GetBBox().Min, node->GetBBox().Max, boxColor);
 
 		if (node->HasSubNodes())
 		{

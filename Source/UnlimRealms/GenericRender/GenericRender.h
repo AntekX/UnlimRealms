@@ -9,6 +9,7 @@
 
 #include "Realm/Realm.h"
 #include "Gfx/GfxSystem.h"
+#include "Graf/GrafRenderer.h"
 
 namespace UnlimRealms
 {
@@ -22,7 +23,6 @@ namespace UnlimRealms
 
 		enum class UR_DECL PrimitiveType
 		{
-			Point,
 			Line,
 			Triangle,
 			Count
@@ -45,7 +45,9 @@ namespace UnlimRealms
 
 		void DrawConvexPolygon(const ur_uint pointsCount, const ur_float3 *points, const ur_float4 &color);
 
-		void DrawBox(const ur_float3 &bmin, const ur_float3 &bmax, const ur_float4 &color);
+		void DrawWireBox(const ur_float3 &bmin, const ur_float3 &bmax, const ur_float4 &color);
+
+		// Gfx API rendering functions
 
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
@@ -60,8 +62,28 @@ namespace UnlimRealms
 
 		const GfxRenderState& GetDefaultQuadRenderState() const { return DefaultQuadRenderState; }
 
+		// GRAF rendering functions
+
+		Result Init(GrafRenderPass* grafRenderPass);
+
+		Result Render(GrafCommandList& grafCmdList, const ur_float4x4 &viewProj);
+
 	protected:
 
+		#if defined(UR_GRAF)
+		struct GrafObjects
+		{
+			std::unique_ptr<GrafShader> VS;
+			std::unique_ptr<GrafShader> PS;
+			std::unique_ptr<GrafPipeline> pipeline[(ur_size)PrimitiveType::Count];
+			std::unique_ptr<GrafDescriptorTableLayout> shaderDescriptorLayout;
+			std::vector<std::unique_ptr<GrafDescriptorTable>> shaderDescriptorTable;
+			std::unique_ptr<GrafBuffer> VB;
+			std::unique_ptr<GrafBuffer> IB;
+			std::unique_ptr<GrafSampler> sampler;
+			std::unique_ptr<GrafImage> texture;
+		};
+		#else
 		struct GfxObjects
 		{
 			std::unique_ptr<GfxVertexShader> VS;
@@ -75,6 +97,7 @@ namespace UnlimRealms
 			std::unique_ptr<GfxPipelineState> pipelineState[(ur_size)PrimitiveType::Count];
 			std::unique_ptr<GfxPipelineState> quadState;
 		};
+		#endif
 
 		struct CommonCB
 		{
@@ -86,6 +109,7 @@ namespace UnlimRealms
 			ur_float3 pos;
 			ur_uint32 col;
 			ur_float2 tex;
+			ur_float  psize;
 		};
 
 		typedef ur_uint32 Index;
@@ -113,14 +137,22 @@ namespace UnlimRealms
 
 	protected:
 
-		static GfxRenderState DefaultQuadRenderState;
-
+		#if defined(UR_GRAF)
+		Result CreateGrafObjects(GrafRenderPass* grafRenderPass);
+		#else
 		Result CreateGfxObjects();
+		#endif
+		static GfxRenderState DefaultQuadRenderState;
 
 		Batch* FindBatch(PrimitiveType primType);
 
-		std::unique_ptr<GfxObjects> gfxObjects;
 		Batch batches[(ur_size)PrimitiveType::Count];
+		#if defined(UR_GRAF)
+		GrafRenderer* grafRenderer;
+		std::unique_ptr<GrafObjects> grafObjects;
+		#else
+		std::unique_ptr<GfxObjects> gfxObjects;
+		#endif
 	};
 
 } // end namespace UnlimRealms

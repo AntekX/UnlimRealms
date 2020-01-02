@@ -12,6 +12,8 @@
 #include "Graf/Vulkan/GrafSystemVulkan.h"
 #include "Graf/GrafRenderer.h"
 #include "ImguiRender/ImguiRender.h"
+#include "GenericRender/GenericRender.h"
+#include "Camera/CameraControl.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
@@ -226,6 +228,7 @@ int VulkanSandboxApp::Run()
 		samplePipelineParams.DescriptorTableLayoutCount = ur_array_size(sampleBindingLayouts);
 		samplePipelineParams.VertexInputDesc = sampleVertexInputs;
 		samplePipelineParams.VertexInputCount = ur_array_size(sampleVertexInputs);
+		samplePipelineParams.BlendEnable = false;
 		grafRes = grafPipelineSample->Initialize(grafDevice, samplePipelineParams);
 		if (Failed(grafRes)) return;
 	};
@@ -387,6 +390,26 @@ int VulkanSandboxApp::Run()
 		}
 	}
 
+	// initialize generic primitives renderer
+	GenericRender* genericRender = ur_null;
+	if (grafRenderer != ur_null)
+	{
+		genericRender = realm.AddComponent<GenericRender>(realm);
+		Result res = genericRender->Init(grafColorDepthPass.get());
+		if (Failed(res))
+		{
+			realm.RemoveComponent<GenericRender>();
+			genericRender = ur_null;
+			realm.GetLog().WriteLine("VulkanSandbox: failed to initialize GenericRender", Log::Error);
+		}
+	}
+
+	// demo camera
+	Camera camera(realm);
+	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
+	camera.SetPosition(ur_float3(0.0f, 0.0f,-10.0f));
+	cameraControl.SetTargetPoint(ur_float3(0.0f));
+
 	// animated clear color test
 	static const ur_float clearColorDelay = 2.0f;
 	static const ur_float4 clearColors[] = {
@@ -441,6 +464,8 @@ int VulkanSandboxApp::Run()
 		{
 			imguiRender->NewFrame();
 		}
+		cameraControl.Update();
+		camera.SetAspectRatio((float)realm.GetCanvas()->GetClientBound().Width() / realm.GetCanvas()->GetClientBound().Height());
 
 		// update frame
 		auto updateFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void {
@@ -521,25 +546,35 @@ int VulkanSandboxApp::Run()
 
 					updateFrameJob->WaitProgress(1); // make sure update job is done to this point
 					GrafClearValue rtClearValues[] = {
-						reinterpret_cast<GrafClearValue&>(crntClearColor),
-						{ 1.0f, 0.0f, 0.0f, 0.0f }
+						reinterpret_cast<GrafClearValue&>(crntClearColor), // color
+						{ 1.0f, 0.0f, 0.0f, 0.0f }, // depth & stencil
 					};
 					grafCmdListCrnt->ImageMemoryBarrier(grafRTImageColor.get(), GrafImageState::Current, GrafImageState::ColorWrite);
 					grafCmdListCrnt->BeginRenderPass(grafColorDepthPass.get(), grafColorDepthTarget.get(), rtClearValues);
 
-					// todo: draw 3d meshes here and copy color image data to swap chain image
+					// immediate mode generic primitives rendering
+
+					const ur_float bbR = 1.0f;
+					const ur_float4 testColor = ur_float4(ur_float3(1.0f) - ur_float3(crntClearColor), 1.0f);
+					const ur_float3 testPtimitiveVertices[] = { {-bbR,-bbR, 0.0f }, { bbR,-bbR, 0.0f }, { bbR, bbR, 0.0f }, {-bbR, bbR, 0.0f } };
+					genericRender->DrawWireBox({ -bbR,-bbR,-bbR }, { bbR, bbR, bbR }, ur_float4(testColor.z, testColor.y, testColor.x, 1.0f));
+					genericRender->DrawConvexPolygon(4, testPtimitiveVertices, testColor);
+					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());
 
 					grafCmdListCrnt->EndRenderPass();
+					
+					// copy RT color result to swap chain image
+
 					grafCmdListCrnt->ImageMemoryBarrier(grafRTImageColor.get(), GrafImageState::Current, GrafImageState::TransferSrc);
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
 					grafCmdListCrnt->Copy(grafRTImageColor.get(), grafCanvas->GetCurrentImage());
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
 				}
 
-				{ // sample color render pass (drawing directly into swap chain image)
+				{ // foreground color render pass (drawing directly into swap chain image)
 
 					grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
-					
+
 					// draw sample primitives
 
 					updateFrameJob->WaitProgress(2); // wait till animation params are up to date
@@ -604,6 +639,9 @@ int VulkanSandboxApp::Run()
 
 	// destroy Imgui renderer
 	realm.RemoveComponent<ImguiRender>();
+
+	// destroy generic primitives renderer
+	realm.RemoveComponent<GenericRender>();
 
 	// destroy GRAF renderer
 	realm.RemoveComponent<GrafRenderer>();

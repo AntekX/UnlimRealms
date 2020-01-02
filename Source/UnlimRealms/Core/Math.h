@@ -582,7 +582,7 @@ namespace UnlimRealms
 
 		TVector4<T> operator- (const TVector4<T> &v) const
 		{
-			TVector r;
+			TVector4 r;
 			r.x = x - v.x;
 			r.y = y - v.y;
 			r.z = z - v.z;

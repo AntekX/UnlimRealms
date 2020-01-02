@@ -546,6 +546,11 @@ namespace UnlimRealms
 		0, // VertexInputCount
 		GrafPrimitiveTopology::TriangleList, // GrafPrimitiveTopology
 		{ 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f }, //GrafViewportDesc
+		false, // DepthTestEnable
+		false, // DepthWriteEnable
+		GrafCompareOp::LessOrEqual, // DepthCompareOp
+		false, // StencilTestEnable
+		false, // BlendEnable
 	};
 
 	GrafPipeline::GrafPipeline(GrafSystem &grafSystem) :

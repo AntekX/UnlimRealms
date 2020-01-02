@@ -452,21 +452,12 @@ namespace UnlimRealms
 
 		inline VkPipelineLayout GetVkPipelineLayout() const;
 
-		// TEMP: updated descriptor sets directly
-		Result UpdateConstantBuffer(ur_uint setIdx, GrafBuffer* buffer);
-		Result BindDescriptorSet(ur_uint setIdx, GrafCommandList* commandList);
-
 	protected:
 
 		Result Deinitialize();
 
 		VkPipeline vkPipeline;
 		VkPipelineLayout vkPipelineLayout;
-
-		// TEMP: descriptors sample
-		VkDescriptorSetLayout vkDescriptorSetLayout;
-		VkDescriptorPool vkDescriptorPool; // TODO: should be part of GrafDevice, consider to grow/shrink allocated pool automatically
-		std::vector<VkDescriptorSet> vkDescriptorSets;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -486,6 +477,7 @@ namespace UnlimRealms
 		static inline VkDescriptorType GrafToVkDescriptorType(GrafDescriptorType descriptorType);
 		static inline ur_uint32 GrafToVkDescriptorBindingOffset(GrafDescriptorType descriptorType);
 		static inline VkPrimitiveTopology GrafToVkPrimitiveTopology(GrafPrimitiveTopology topology);
+		static inline VkCompareOp GrafToVkCompareOp(GrafCompareOp compareOp);
 		static inline VkFilter GrafToVkFilter(GrafFilterType filter);
 		static inline VkSamplerAddressMode GrafToVkAddressMode(GrafAddressMode address);
 		static inline VkIndexType GrafToVkIndexType(GrafIndexType indexType);

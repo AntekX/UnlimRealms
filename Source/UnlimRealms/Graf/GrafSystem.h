@@ -378,6 +378,20 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafCompareOp
+	{
+		Undefined = -1,
+		Never = 0,
+		Less,
+		Equal,
+		LessOrEqual,
+		Greater,
+		NotEqual,
+		GreaterOrEqual,
+		Always,
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	typedef std::function<Result(ur_byte *mappedDataPtr)> GrafWriteCallback;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -832,6 +846,11 @@ namespace UnlimRealms
 			ur_uint VertexInputCount;
 			GrafPrimitiveTopology PrimitiveTopology;
 			GrafViewportDesc ViewportDesc;
+			ur_bool DepthTestEnable;
+			ur_bool DepthWriteEnable;
+			GrafCompareOp DepthCompareOp;
+			ur_bool StencilTestEnable;
+			ur_bool BlendEnable;
 			static const InitParams Default;
 		};
 
