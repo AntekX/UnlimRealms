@@ -203,8 +203,32 @@ int VoxelPlanetApp::Run()
 	// demo isosurface
 	ur_float surfaceRadiusMin = 1000.0f;
 	ur_float surfaceRadiusMax = 1100.0f;
-	//std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
-	// TODO
+	std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
+	{
+		ur_float r = surfaceRadiusMax;
+		BoundingBox volumeBound(ur_float3(-r, -r, -r), ur_float3(r, r, r));
+
+		Isosurface::ProceduralGenerator::SimplexNoiseParams generateParams;
+		generateParams.bound = volumeBound;
+		generateParams.radiusMin = surfaceRadiusMin;
+		generateParams.radiusMax = surfaceRadiusMax;
+		generateParams.octaves.assign({
+			{ 0.875f, 7.5f, -1.0f, 0.5f },
+			{ 0.345f, 30.0f, -0.5f, 0.1f },
+			{ 0.035f, 120.0f, -1.0f, 0.2f },
+		});
+
+		std::unique_ptr<Isosurface::ProceduralGenerator> dataVolume(new Isosurface::ProceduralGenerator(*isosurface.get(),
+			Isosurface::ProceduralGenerator::Algorithm::SimplexNoise, generateParams));
+
+		Isosurface::HybridCubes::Desc desc;
+		desc.CellSize = 2.0f;
+		desc.LatticeResolution = 10;
+		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x * 1.0f;
+		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
+
+		isosurface->Init(std::move(dataVolume), std::move(presentation));
+	}
 
 	// main application camera
 	Camera camera(realm);
@@ -266,15 +290,13 @@ int VoxelPlanetApp::Run()
 			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f; // to seconds
 
 			// update isosurface
-			//isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
-			//isosurface->Update();
+			isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
+			isosurface->Update();
 			ctx.progress = UpdateStage_IsosurfaceReady;
 
 			// update camera control speed depending on the distance to isosurface
-			/*ur_float surfDist = std::min(
-				(camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length() - surfaceRadiusMin,
-				(camera.GetPosition() - moon->GetData()->GetBound().Center()).Length() - moonRadiusMin);
-			cameraControl.SetSpeed(std::max(5.0f, surfDist * 0.5f));*/
+			ur_float surfDist = (camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length() - surfaceRadiusMin;
+			cameraControl.SetSpeed(std::max(5.0f, surfDist * 0.5f));
 
 			ctx.progress = UpdateStage_Finished;
 		});
@@ -332,6 +354,10 @@ int VoxelPlanetApp::Run()
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 					grafCmdListCrnt->BeginRenderPass(grafPassColorDepth.get(), grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get(), rtClearValues);
 
+					// draw isosurface
+					// TODO: must be rendered in HDR pass
+					//isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), ur_null);
+
 					// render immediate mode generic primitives
 					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());
 
@@ -355,7 +381,7 @@ int VoxelPlanetApp::Run()
 						
 						grafRenderer->ShowImgui();
 						cameraControl.ShowImgui();
-						//isosurface->ShowImgui();
+						isosurface->ShowImgui();
 						
 						imguiRender->Render(*grafCmdListCrnt);
 					}
@@ -378,7 +404,7 @@ int VoxelPlanetApp::Run()
 	}
 
 	// destroy application objects
-	//isosurface.reset(ur_null);
+	isosurface.reset();
 
 	// destroy GRAF objects
 	deinitializeGrafObjects();

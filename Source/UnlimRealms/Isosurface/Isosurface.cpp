@@ -510,6 +510,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result Isosurface::Presentation::Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj)
+	{
+		return Result(NotImplemented);
+	}
+
 	void Isosurface::Presentation::ShowImgui()
 	{
 
@@ -1087,8 +1092,13 @@ namespace UnlimRealms
 			{
 				for (const auto &h : node->tetrahedron->hexahedra)
 				{
+					#if defined(UR_GRAF)
+					if (h.grafMesh.VB) stats->meshVideoMemory += (ur_uint)h.grafMesh.VB->GetDesc().SizeInBytes;
+					if (h.grafMesh.IB) stats->meshVideoMemory += (ur_uint)h.grafMesh.IB->GetDesc().SizeInBytes;
+					#else
 					if (h.gfxMesh.VB) stats->meshVideoMemory += h.gfxMesh.VB->GetDesc().Size;
 					if (h.gfxMesh.IB) stats->meshVideoMemory += h.gfxMesh.IB->GetDesc().Size;
+					#endif
 				}
 			}
 		}
@@ -1151,8 +1161,13 @@ namespace UnlimRealms
 		{
 			for (const auto &h : tetrahedron->hexahedra)
 			{
+				#if defined(UR_GRAF)
+				if (h.grafMesh.VB) stats->meshVideoMemory += (ur_uint)h.grafMesh.VB->GetDesc().SizeInBytes;
+				if (h.grafMesh.IB) stats->meshVideoMemory += (ur_uint)h.grafMesh.IB->GetDesc().SizeInBytes;
+				#else
 				if (h.gfxMesh.VB) stats->meshVideoMemory += h.gfxMesh.VB->GetDesc().Size;
 				if (h.gfxMesh.IB) stats->meshVideoMemory += h.gfxMesh.IB->GetDesc().Size;
+				#endif
 			}
 		}
 
@@ -1627,6 +1642,11 @@ namespace UnlimRealms
 		if (ur_null == gfxSystem)
 			return Result(Failure);
 
+		#if defined(UR_GRAF)
+		
+		// TODO
+
+		#else
 		// create vertex Buffer
 		auto &gfxVB = hexahedron.gfxMesh.VB;
 		Result res = gfxSystem->CreateBuffer(gfxVB);
@@ -1648,12 +1668,14 @@ namespace UnlimRealms
 		}
 		if (Failed(res))
 			return Result(Failure);
+		#endif
 
 		return Result(Success);
 	}
 
 	Result Isosurface::HybridCubes::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj)
 	{
+	#if !defined(UR_GRAF)
 		GenericRender *genericRender = this->isosurface.GetRealm().GetComponent<GenericRender>();
 		ur_float4 frustumPlanes[6];
 		viewProj.FrustumPlanes(frustumPlanes, true);
@@ -1666,14 +1688,42 @@ namespace UnlimRealms
 
 		if (this->drawRefinementTree)
 		{
-			this->RenderOctree(gfxContext, genericRender, this->refinementTree.GetRoot());
+			this->RenderOctree(genericRender, this->refinementTree.GetRoot());
 		}
 
 		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
+	Result Isosurface::HybridCubes::Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj)
+	{
+	#if defined(UR_GRAF)
+		GenericRender *genericRender = this->isosurface.GetRealm().GetComponent<GenericRender>();
+		ur_float4 frustumPlanes[6];
+		viewProj.FrustumPlanes(frustumPlanes, true);
+		this->stats.primitivesRendered = 0;
+
+		for (auto &node : this->root)
+		{
+			this->Render(grafCmdList, genericRender, frustumPlanes, node.get());
+		}
+
+		if (this->drawRefinementTree)
+		{
+			this->RenderOctree(genericRender, this->refinementTree.GetRoot());
+		}
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
 	}
 
 	Result Isosurface::HybridCubes::Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4(&frustumPlanes)[6], Node *node)
 	{
+	#if !defined(UR_GRAF)
 		if (ur_null == node ||
 			ur_null == node->tetrahedron.get() ||
 			!node->tetrahedron->bbox.Intersects(frustumPlanes))
@@ -1712,15 +1762,71 @@ namespace UnlimRealms
 					node->tetrahedron->hexahedra[2].gfxMesh.VB != ur_null ||
 					node->tetrahedron->hexahedra[3].gfxMesh.VB != ur_null))
 				{
-					RenderDebug(gfxContext, genericRender, node);
+					RenderDebug(genericRender, node);
 				}
 			}
 		}
 
 		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
 	}
 
-	Result Isosurface::HybridCubes::RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Node *node)
+	Result Isosurface::HybridCubes::Render(GrafCommandList &grafCmdList, GenericRender *genericRender, const ur_float4(&frustumPlanes)[6], Node *node)
+	{
+	#if defined(UR_GRAF)
+		if (ur_null == node ||
+			ur_null == node->tetrahedron.get() ||
+			!node->tetrahedron->bbox.Intersects(frustumPlanes))
+			return Result(Success);
+
+		if (node->HasChildren() &&
+			node->children[0]->tetrahedron->initialized && node->children[0]->tetrahedron->visible &&
+			node->children[1]->tetrahedron->initialized && node->children[1]->tetrahedron->visible)
+		{
+			for (auto &child : node->children)
+			{
+				this->Render(grafCmdList, genericRender, frustumPlanes, child.get());
+			}
+		}
+		else
+		{
+			for (auto &hexahedron : node->tetrahedron->hexahedra)
+			{
+				// TODO
+				/*const auto &gfxVB = hexahedron.gfxMesh.VB;
+				const auto &gfxIB = hexahedron.gfxMesh.IB;
+				if (gfxVB != ur_null && gfxIB != ur_null)
+				{
+					const ur_uint indexCount = (gfxIB.get() ? gfxIB->GetDesc().Size / sizeof(Isosurface::Index) : 0);
+					this->stats.primitivesRendered += indexCount / 3;
+					gfxContext.SetVertexBuffer(gfxVB.get(), 0);
+					gfxContext.SetIndexBuffer(gfxIB.get());
+					gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
+				}*/
+			}
+
+			if (this->drawTetrahedra)
+			{
+				if (!this->hideEmptyTetrahedra || node->tetrahedron->initialized && (
+					node->tetrahedron->hexahedra[0].grafMesh.VB != ur_null ||
+					node->tetrahedron->hexahedra[1].grafMesh.VB != ur_null ||
+					node->tetrahedron->hexahedra[2].grafMesh.VB != ur_null ||
+					node->tetrahedron->hexahedra[3].grafMesh.VB != ur_null))
+				{
+					RenderDebug(genericRender, node);
+				}
+			}
+		}
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
+	Result Isosurface::HybridCubes::RenderDebug(GenericRender *genericRender, Node *node)
 	{
 		if (ur_null == genericRender ||
 			ur_null == node ||
@@ -1760,7 +1866,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result Isosurface::HybridCubes::RenderOctree(GfxContext &gfxContext, GenericRender *genericRender, EmptyOctree::Node *node)
+	Result Isosurface::HybridCubes::RenderOctree(GenericRender *genericRender, EmptyOctree::Node *node)
 	{
 		if (ur_null == genericRender ||
 			ur_null == node)
@@ -1773,7 +1879,7 @@ namespace UnlimRealms
 		{
 			for (ur_uint i = 0; i < EmptyOctree::Node::SubNodesCount; ++i)
 			{
-				this->RenderOctree(gfxContext, genericRender, node->GetSubNode(i));
+				this->RenderOctree(genericRender, node->GetSubNode(i));
 			}
 		}
 
@@ -1928,6 +2034,7 @@ namespace UnlimRealms
 
 	Result Isosurface::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere)
 	{
+	#if !defined(UR_GRAF)
 		Result res(Success);
 
 		// render isosurface
@@ -1972,6 +2079,42 @@ namespace UnlimRealms
 		}
 
 		return res;
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
+	Result Isosurface::Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere)
+	{
+	#if defined(UR_GRAF)
+		Result res(Success);
+
+		// render isosurface
+
+		if (this->presentation.get() != ur_null)
+		{
+			CommonCB cb;
+			cb.ViewProj = viewProj;
+			cb.CameraPos = cameraPos;
+			cb.AtmoParams = (atmosphere != ur_null ? atmosphere->GetDesc() : Atmosphere::Desc::Invisible);
+			GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
+			/*gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
+			gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);
+			gfxContext.SetPipelineState(this->gfxObjects.pipelineState.get());*/
+
+			res = this->presentation->Render(grafCmdList, viewProj);
+
+			/*if (this->drawWireframe)
+			{
+				gfxContext.SetPipelineState(this->gfxObjects.wireframeState.get());
+				this->presentation->Render(gfxContext, viewProj);
+			}*/
+		}
+
+		return res;
+	#else
+		return Result(NotImplemented);
+	#endif
 	}
 
 	void Isosurface::ShowImgui()

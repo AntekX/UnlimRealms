@@ -173,6 +173,8 @@ namespace UnlimRealms
 
 			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
+			virtual Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj);
+
 			virtual void ShowImgui();
 		};
 
@@ -202,6 +204,8 @@ namespace UnlimRealms
 
 			virtual Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj);
 
+			virtual Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj);
+
 			virtual void ShowImgui();
 
 		private:
@@ -219,17 +223,30 @@ namespace UnlimRealms
 				ur_byte eid[3];
 			};
 
+			#if defined(UR_GRAF)
+			struct UR_DECL GrafMesh
+			{
+				std::unique_ptr<GrafBuffer> VB;
+				std::unique_ptr<GrafBuffer> IB;
+
+			};
+			#else
 			struct UR_DECL GfxMesh
 			{
 				std::unique_ptr<GfxBuffer> VB;
 				std::unique_ptr<GfxBuffer> IB;
 			};
+			#endif
 
 			struct UR_DECL Hexahedron
 			{
 				static const ur_uint VerticesCount = 8;
 				Vertex vertices[VerticesCount];
+				#if defined(UR_GRAF)
+				GrafMesh grafMesh;
+				#else
 				GfxMesh gfxMesh;
+				#endif
 			};
 
 			struct UR_DECL Tetrahedron
@@ -307,11 +324,12 @@ namespace UnlimRealms
 			Result MarchCubes(Hexahedron &hexahedron);
 
 			Result Render(GfxContext &gfxContext, GenericRender *genericRender, const ur_float4(&frustumPlanes)[6], Node *node);
+
+			Result Render(GrafCommandList &grafCmdList, GenericRender *genericRender, const ur_float4(&frustumPlanes)[6], Node *node);
 			
-			Result RenderDebug(GfxContext &gfxContext, GenericRender *genericRender, Node *node);
+			Result RenderDebug(GenericRender *genericRender, Node *node);
 
-			Result RenderOctree(GfxContext &gfxContext, GenericRender *genericRender, EmptyOctree::Node *node);
-
+			Result RenderOctree(GenericRender *genericRender, EmptyOctree::Node *node);
 
 			// common data
 			ur_float3 updatePoint;
@@ -370,6 +388,8 @@ namespace UnlimRealms
 		Result Update();
 
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere);
+
+		Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere);
 
 		void ShowImgui();
 
