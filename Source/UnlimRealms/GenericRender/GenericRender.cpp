@@ -703,6 +703,9 @@ namespace UnlimRealms
 
 	Result GenericRender::Render(GrafCommandList& grafCmdList, const ur_float4x4 &viewProj)
 	{
+	#if !defined(UR_GRAF)
+		return Result(NotImplemented);
+	#else
 		if (ur_null == this->grafRenderer || ur_null == this->grafObjects)
 			return Result(NotInitialized);
 
@@ -713,6 +716,8 @@ namespace UnlimRealms
 			totalVertices += this->batches[i].verticesCount;
 			totalIndices += this->batches[i].indicesCount;
 		}
+		if (0 == totalVertices)
+			return Result(Success); // nothing to render
 
 		// prepare VB
 		ur_uint vbSizeRequired = totalVertices * sizeof(Vertex);
@@ -835,6 +840,7 @@ namespace UnlimRealms
 		}
 
 		return Result(Success);
+	#endif
 	}
 
 } // end namespace UnlimRealms

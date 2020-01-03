@@ -73,6 +73,10 @@ namespace UnlimRealms
 
 		inline GrafRenderTarget* GetCanvasRenderTarget() const;
 
+		inline GrafCommandList* GetCurrentCommandList() const;
+
+		inline GrafCommandList* GetFrameCommandList(ur_uint frameIdx) const;
+
 		inline ur_uint GetRecordedFrameCount() const;
 
 		inline ur_uint GetCurrentFrameId() const;
@@ -98,6 +102,7 @@ namespace UnlimRealms
 
 		Result ProcessPendingCommandListCallbacks();
 
+		GrafCanvas::InitParams grafCanvasParams;
 		std::unique_ptr<GrafSystem> grafSystem;
 		std::unique_ptr<GrafDevice> grafDevice;
 		std::unique_ptr<GrafCanvas> grafCanvas;
@@ -109,7 +114,7 @@ namespace UnlimRealms
 		LinearAllocator constantBufferAllocator;
 		ur_uint frameCount;
 		ur_uint frameIdx;
-		GrafCanvas::InitParams grafCanvasParams;
+		std::vector<std::unique_ptr<GrafCommandList>> grafPrimaryCommandList;
 		std::vector<std::unique_ptr<PendingCommandListCallbackData>> pendingCommandListCallbacks;
 	};
 

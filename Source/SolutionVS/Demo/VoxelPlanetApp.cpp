@@ -9,6 +9,8 @@
 #include "Sys/Windows/WinInput.h"
 #include "Gfx/D3D11/GfxSystemD3D11.h"
 #include "Gfx/D3D12/GfxSystemD3D12.h"
+#include "Graf/Vulkan/GrafSystemVulkan.h"
+#include "Graf/GrafRenderer.h"
 #include "ImguiRender/ImguiRender.h"
 #include "GenericRender/GenericRender.h"
 #include "Resources/Resources.h"
@@ -19,6 +21,377 @@
 #include "Multiverse/Multiverse.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
+
+#if defined(UR_GRAF)
+
+int VoxelPlanetApp::Run()
+{
+	// create realm
+	Realm realm;
+	realm.Initialize();
+
+	// create system canvas
+	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindowMaximized, L"Voxel Planet Demo"));
+	canvas->Initialize(RectI(0, 0, (ur_uint)GetSystemMetrics(SM_CXSCREEN), (ur_uint)GetSystemMetrics(SM_CYSCREEN)));
+	realm.SetCanvas(std::move(canvas));
+	ur_uint canvasWidth = realm.GetCanvas()->GetClientBound().Width();
+	ur_uint canvasHeight = realm.GetCanvas()->GetClientBound().Height();
+	ur_bool canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
+
+	// create input system
+	std::unique_ptr<WinInput> input(new WinInput(realm));
+	input->Initialize();
+	realm.SetInput(std::move(input));
+
+	// create GRAF renderer
+	GrafRenderer *grafRenderer = realm.AddComponent<GrafRenderer>(realm);
+	Result res = Success;
+	do
+	{
+		// create GRAF system
+		std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
+		res = grafSystem->Initialize(realm.GetCanvas());
+		if (Failed(res)) break;
+
+		// initialize renderer
+		GrafRenderer::InitParams grafRendererParams = GrafRenderer::InitParams::Default;
+		grafRendererParams.DeviceId = grafSystem->GetRecommendedDeviceId();
+		grafRendererParams.CanvasParams = GrafCanvas::InitParams::Default;
+		res = grafRenderer->Initialize(std::move(grafSystem), grafRendererParams);
+		if (Failed(res)) break;
+
+	} while (false);
+	if (Failed(res))
+	{
+		realm.RemoveComponent<GrafRenderer>();
+		grafRenderer = ur_null;
+		realm.GetLog().WriteLine("VoxelPlanetApp: failed to initialize GrafRenderer", Log::Error);
+	}
+
+	// initialize GRAF objects
+	std::unique_ptr<GrafRenderPass> grafPassColorDepth;
+	std::unique_ptr<GrafImage> grafImageRTDepth;
+	std::vector<std::unique_ptr<GrafRenderTarget>> grafTargetColorDepth;
+	auto& initializeGrafRenderTargetObjects = [&]() -> Result
+	{
+		Result res(Success);
+		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
+		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
+
+		// depth target image
+		res = grafSystem->CreateImage(grafImageRTDepth);
+		if (Failed(res)) return res;
+		GrafImageDesc grafRTImageDepthDesc = {
+			GrafImageType::Tex2D,
+			GrafFormat::D24_UNORM_S8_UINT,
+			ur_uint3(canvasWidth, canvasHeight, 1), 1,
+			ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget),
+			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+		};
+		res = grafImageRTDepth->Initialize(grafDevice, { grafRTImageDepthDesc });
+		if (Failed(res)) return res;
+
+		// initialize render target(s)
+		grafTargetColorDepth.resize(grafRenderer->GetGrafCanvas()->GetSwapChainImageCount());
+		for (ur_uint iimg = 0; iimg < grafRenderer->GetGrafCanvas()->GetSwapChainImageCount(); ++iimg)
+		{
+			res = grafSystem->CreateRenderTarget(grafTargetColorDepth[iimg]);
+			if (Failed(res)) return res;
+			GrafImage* grafColorDepthTargetImages[] = {
+				grafRenderer->GetGrafCanvas()->GetSwapChainImage(iimg),
+				grafImageRTDepth.get()
+			};
+			GrafRenderTarget::InitParams grafColorDepthTargetParams = {
+				grafPassColorDepth.get(),
+				grafColorDepthTargetImages,
+				ur_array_size(grafColorDepthTargetImages)
+			};
+			res = grafTargetColorDepth[iimg]->Initialize(grafDevice, grafColorDepthTargetParams);
+			if (Failed(res)) return res;
+		}
+
+		return res;
+	};
+	auto& deinitializeGrafRenderTargetObjects = [&](GrafCommandList* deferredDestroyCmdList = ur_null) -> Result
+	{
+		if (deferredDestroyCmdList != ur_null)
+		{
+			GrafImage *grafPrevRTImageDepth = grafImageRTDepth.release();
+			grafRenderer->AddCommandListCallback(deferredDestroyCmdList, {},
+				[grafPrevRTImageDepth](GrafCallbackContext& ctx) -> Result
+			{
+				delete grafPrevRTImageDepth;
+				return Result(Success);
+			});
+		}
+		grafTargetColorDepth.clear();
+		grafImageRTDepth.reset();
+		return Result(Success);
+	};
+	auto& initializeGrafObjects = [&]() -> Result
+	{
+		Result res(Success);
+		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
+		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
+
+		// color & depth render pass
+		res = grafSystem->CreateRenderPass(grafPassColorDepth);
+		if (Failed(res)) return res;
+		GrafRenderPassImageDesc grafPassColorDepthImages[] = {
+			{ // color
+				GrafFormat::B8G8R8A8_UNORM,
+				GrafImageState::Undefined, GrafImageState::ColorWrite,
+				GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
+				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+			},
+			{ // depth
+				GrafFormat::D24_UNORM_S8_UINT,
+				GrafImageState::Undefined, GrafImageState::DepthStencilWrite,
+				GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
+				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+			}
+		};
+		res = grafPassColorDepth->Initialize(grafDevice, { grafPassColorDepthImages, ur_array_size(grafPassColorDepthImages) });
+		if (Failed(res)) return res;
+
+		// initialize render target(s)
+		res = initializeGrafRenderTargetObjects();
+
+		return res;
+	};
+	auto& deinitializeGrafObjects = [&]() -> Result
+	{
+		deinitializeGrafRenderTargetObjects();
+		grafPassColorDepth.reset();
+		return Result(Success);
+	};
+	res = initializeGrafObjects();
+	if (Failed(res))
+	{
+		deinitializeGrafObjects();
+		realm.GetLog().WriteLine("VoxelPlanetApp: failed to initialize one or more graphics objects", Log::Error);
+	}
+
+	// initialize ImguiRender
+	ImguiRender* imguiRender = ur_null;
+	if (grafRenderer != ur_null)
+	{
+		imguiRender = realm.AddComponent<ImguiRender>(realm);
+		Result res = imguiRender->Init();
+		if (Failed(res))
+		{
+			realm.RemoveComponent<ImguiRender>();
+			imguiRender = ur_null;
+			realm.GetLog().WriteLine("VoxelPlanetApp: failed to initialize ImguiRender", Log::Error);
+		}
+	}
+
+	// initialize generic primitives renderer
+	GenericRender* genericRender = ur_null;
+	if (grafRenderer != ur_null)
+	{
+		genericRender = realm.AddComponent<GenericRender>(realm);
+		Result res = genericRender->Init(grafPassColorDepth.get());
+		if (Failed(res))
+		{
+			realm.RemoveComponent<GenericRender>();
+			genericRender = ur_null;
+			realm.GetLog().WriteLine("VulkanSandbox: failed to initialize GenericRender", Log::Error);
+		}
+	}
+
+	// demo isosurface
+	ur_float surfaceRadiusMin = 1000.0f;
+	ur_float surfaceRadiusMax = 1100.0f;
+	//std::unique_ptr<Isosurface> isosurface(new Isosurface(realm));
+	// TODO
+
+	// main application camera
+	Camera camera(realm);
+	CameraControl cameraControl(realm, &camera, CameraControl::Mode::Free);
+	camera.SetPosition(ur_float3(0.0f, 0.0f, -surfaceRadiusMax * 3.0f));
+	cameraControl.SetTargetPoint(ur_float3(0.0f));
+	cameraControl.SetMode(CameraControl::Mode::AroundPoint);
+
+	// Main message loop:
+	ClockTime timer = Clock::now();
+	MSG msg;
+	ZeroMemory(&msg, sizeof(msg));
+	while (msg.message != WM_QUIT && !realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::Escape))
+	{
+		// process messages first
+		ClockTime timeBefore = Clock::now();
+		while (PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE) && msg.message != WM_QUIT)
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+			// forward msg to WinInput system
+			WinInput* winInput = static_cast<WinInput*>(realm.GetInput());
+			winInput->ProcessMsg(msg);
+		}
+		if (msg.message == WM_QUIT)
+			break;
+		auto inputDelay = Clock::now() - timeBefore;
+		timer += inputDelay;  // skip input delay
+
+		canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
+		if (!canvasValid)
+			Sleep(60); // lower update frequency while minimized
+
+		// update sub systems
+		realm.GetInput()->Update();
+		if (imguiRender != ur_null)
+		{
+			imguiRender->NewFrame();
+		}
+		cameraControl.Update();
+		camera.SetAspectRatio((float)realm.GetCanvas()->GetClientBound().Width() / realm.GetCanvas()->GetClientBound().Height());
+
+		// update frame
+		enum UpdateStageFence : ur_uint
+		{
+			UpdateStage_Beginning = 0,
+			UpdateStage_IsosurfaceReady,
+			UpdateStage_Finished
+		};
+		auto updateFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void
+		{
+			// reset update progress fence
+			ctx.progress = UpdateStage_Beginning;
+
+			// move timer
+			ClockTime timeNow = Clock::now();
+			auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(timeNow - timer);
+			timer = timeNow;
+			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f; // to seconds
+
+			// update isosurface
+			//isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
+			//isosurface->Update();
+			ctx.progress = UpdateStage_IsosurfaceReady;
+
+			// update camera control speed depending on the distance to isosurface
+			/*ur_float surfDist = std::min(
+				(camera.GetPosition() - isosurface->GetData()->GetBound().Center()).Length() - surfaceRadiusMin,
+				(camera.GetPosition() - moon->GetData()->GetBound().Center()).Length() - moonRadiusMin);
+			cameraControl.SetSpeed(std::max(5.0f, surfDist * 0.5f));*/
+
+			ctx.progress = UpdateStage_Finished;
+		});
+		
+		// draw frame
+		if (grafRenderer != ur_null && canvasValid)
+		{
+			// begin frame rendering
+			grafRenderer->BeginFrame();
+
+			// resize render target(s)
+			if (canvasWidth != realm.GetCanvas()->GetClientBound().Width() ||
+				canvasHeight != realm.GetCanvas()->GetClientBound().Height())
+			{
+				canvasWidth = realm.GetCanvas()->GetClientBound().Width();
+				canvasHeight = realm.GetCanvas()->GetClientBound().Height();
+				// use prev frame command list to make sure RT objects are no longer used before destroying
+				deinitializeGrafRenderTargetObjects(grafRenderer->GetFrameCommandList(grafRenderer->GetPrevFrameId()));
+				// recreate RT objects for new canvas dimensions
+				initializeGrafRenderTargetObjects();
+			}
+
+			auto drawFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void
+			{
+				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
+				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
+				GrafCommandList* grafCmdListCrnt = grafRenderer->GetCurrentCommandList();
+
+				GrafViewportDesc grafViewport = {};
+				grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
+				grafViewport.Height = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.y;
+				grafViewport.Near = 0.0f;
+				grafViewport.Far = 1.0f;
+				grafCmdListCrnt->SetViewport(grafViewport, true);
+				grafCmdListCrnt->SetScissorsRect({ 0, 0, (ur_int)grafViewport.Width, (ur_int)grafViewport.Height });
+
+				{ // HDR & depth render pass
+					
+					updateFrameJob->WaitProgress(UpdateStage_IsosurfaceReady);
+					// TODO: render demo isosurface here
+					// TEMP: draw some test primitives
+					const ur_float bbR = surfaceRadiusMin;
+					const ur_float3 testPtimitiveVertices[] = { {-bbR,-bbR, 0.0f }, { bbR,-bbR, 0.0f }, { bbR, bbR, 0.0f }, {-bbR, bbR, 0.0f } };
+					genericRender->DrawWireBox({ -bbR,-bbR,-bbR }, { bbR, bbR, bbR }, ur_float4(1.0f, 1.0f, 0.0f, 1.0f));
+					genericRender->DrawConvexPolygon(4, testPtimitiveVertices, ur_float4(0.5f, 0.5f, 0.5f, 1.0f));
+				}
+
+				{ // color & depth render pass
+
+					// temp: clearing while HDR pass is not ready, otherwise it is not required
+					GrafClearValue rtClearValues[] = {
+						{ 0.1f, 0.1f, 0.2f, 1.0f }, // color
+						{ 1.0f, 0.0f, 0.0f, 0.0f }, // depth & stencil
+					};
+					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
+					grafCmdListCrnt->BeginRenderPass(grafPassColorDepth.get(), grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get(), rtClearValues);
+
+					// render immediate mode generic primitives
+					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());
+
+					grafCmdListCrnt->EndRenderPass();
+				}
+
+				{ // foreground color render pass (drawing directly into swap chain image)
+
+					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
+					grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
+
+					// draw GUI
+					static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
+					static bool showGUI = true;
+					showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
+					if (showGUI)
+					{
+						ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
+						ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+						ImGui::ShowMetricsWindow();
+						
+						grafRenderer->ShowImgui();
+						cameraControl.ShowImgui();
+						//isosurface->ShowImgui();
+						
+						imguiRender->Render(*grafCmdListCrnt);
+					}
+
+					grafCmdListCrnt->EndRenderPass();
+				}
+			});
+
+			drawFrameJob->Wait();
+
+			// finalize & move to next frame
+			grafRenderer->EndFrameAndPresent();
+		}
+	}
+
+	if (grafRenderer != ur_null)
+	{
+		// make sure there are no resources still used on gpu before destroying
+		grafRenderer->GetGrafDevice()->WaitIdle();
+	}
+
+	// destroy application objects
+	//isosurface.reset(ur_null);
+
+	// destroy GRAF objects
+	deinitializeGrafObjects();
+
+	// destroy realm objects
+	realm.RemoveComponent<ImguiRender>();
+	realm.RemoveComponent<GenericRender>();
+	realm.RemoveComponent<GrafRenderer>();
+
+	return 0;
+}
+
+#else
 
 int VoxelPlanetApp::Run()
 {
@@ -296,3 +669,5 @@ int VoxelPlanetApp::Run()
 
 	return 0;
 }
+
+#endif
