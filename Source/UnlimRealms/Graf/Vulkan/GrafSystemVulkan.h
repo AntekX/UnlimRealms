@@ -80,7 +80,9 @@ namespace UnlimRealms
 
 		virtual Result Initialize(ur_uint deviceId);
 
-		virtual Result Submit(GrafCommandList* grafCommandList);
+		virtual Result Record(GrafCommandList* grafCommandList);
+
+		virtual Result Submit();
 
 		virtual Result WaitIdle();
 
@@ -112,6 +114,8 @@ namespace UnlimRealms
 		std::mutex graphicsCommandPoolsMutex;
 		std::mutex computeCommandPoolsMutex;
 		std::mutex transferCommandPoolsMutex;
+		std::vector<GrafCommandList*> graphicsCommandLists;
+		std::mutex graphicsCommandListsMutex;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

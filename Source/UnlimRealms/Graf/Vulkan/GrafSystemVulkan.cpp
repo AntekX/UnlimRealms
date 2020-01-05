@@ -517,16 +517,20 @@ namespace UnlimRealms
 		return VK_NULL_HANDLE;
 	}
 
-	Result GrafDeviceVulkan::Submit(GrafCommandList* grafCommandList)
+	Result GrafDeviceVulkan::Record(GrafCommandList* grafCommandList)
 	{
-		if (ur_null == grafCommandList)
-			return Result(InvalidArgs);
+		std::lock_guard<std::mutex> lock(this->graphicsCommandListsMutex);
 
-		GrafCommandListVulkan* grafCommandListVulkan = static_cast<GrafCommandListVulkan*>(grafCommandList);
-		VkCommandBuffer vkCommandBuffer = grafCommandListVulkan->GetVkCommandBuffer();
+		this->graphicsCommandLists.push_back(grafCommandList);
 
+		return Result(Success);
+	}
+
+	Result GrafDeviceVulkan::Submit()
+	{
 		// NOTE: support submission to different queue families
 		// currently everything's done on the graphics queue
+		
 		VkQueue vkSubmissionQueue;
 		vkGetDeviceQueue(this->vkDevice, this->deviceGraphicsQueueId, 0, &vkSubmissionQueue);
 
@@ -535,14 +539,25 @@ namespace UnlimRealms
 		vkSubmitInfo.waitSemaphoreCount = 0;
 		vkSubmitInfo.pWaitSemaphores = ur_null;
 		vkSubmitInfo.pWaitDstStageMask = ur_null;
-		vkSubmitInfo.commandBufferCount = 1;
-		vkSubmitInfo.pCommandBuffers = &vkCommandBuffer;
+		vkSubmitInfo.commandBufferCount = 0;
+		vkSubmitInfo.pCommandBuffers = ur_null;
 		vkSubmitInfo.signalSemaphoreCount = 0;
 		vkSubmitInfo.pSignalSemaphores = ur_null;
 
-		VkResult vkRes = vkQueueSubmit(vkSubmissionQueue, 1, &vkSubmitInfo, grafCommandListVulkan->GetVkSubmitFence());
-		if (vkRes != VK_SUCCESS)
-			return ResultError(Failure, std::string("GrafDeviceVulkan: vkQueueSubmit failed with VkResult = ") + VkResultToString(vkRes));
+		std::lock_guard<std::mutex> lock(this->graphicsCommandListsMutex);
+		for (auto& grafCommandList : this->graphicsCommandLists)
+		{
+			GrafCommandListVulkan* grafCommandListVulkan = static_cast<GrafCommandListVulkan*>(grafCommandList);
+			VkCommandBuffer vkCommandBuffer = grafCommandListVulkan->GetVkCommandBuffer();
+
+			vkSubmitInfo.commandBufferCount = 1;
+			vkSubmitInfo.pCommandBuffers = &vkCommandBuffer;
+
+			VkResult vkRes = vkQueueSubmit(vkSubmissionQueue, 1, &vkSubmitInfo, grafCommandListVulkan->GetVkSubmitFence());
+			if (vkRes != VK_SUCCESS)
+				return ResultError(Failure, std::string("GrafDeviceVulkan: vkQueueSubmit failed with VkResult = ") + VkResultToString(vkRes));
+		}
+		this->graphicsCommandLists.clear();
 
 		return Result(Success);
 	}

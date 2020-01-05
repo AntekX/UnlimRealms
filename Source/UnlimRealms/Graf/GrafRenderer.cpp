@@ -169,9 +169,12 @@ namespace UnlimRealms
 		// make sure there are no resources still used on gpu before destroying
 		if (this->grafDevice != ur_null)
 		{
+			this->grafDevice->Submit();
 			this->grafDevice->WaitIdle();
+			this->ProcessPendingCommandListCallbacks();
 		}
 
+		// destroy objects
 		this->grafPrimaryCommandList.clear();
 		this->grafDynamicConstantBuffer.reset();
 		this->grafDynamicUploadBuffer.reset();
@@ -222,9 +225,12 @@ namespace UnlimRealms
 
 	Result GrafRenderer::EndFrameAndPresent()
 	{
-		// finalize & submit current frame's primary command list
+		// finalize & current frame's primary command list
 		this->GetCurrentCommandList()->End();
-		this->grafDevice->Submit(this->GetCurrentCommandList());
+		this->grafDevice->Record(this->GetCurrentCommandList());
+		
+		// submit command list(s) to device execution queue
+		this->grafDevice->Submit();
 
 		// process pending callbacks
 		this->ProcessPendingCommandListCallbacks();
@@ -258,6 +264,38 @@ namespace UnlimRealms
 			std::lock_guard<std::mutex> lock(this->pendingCommandListMutex);
 			this->pendingCommandListCallbacks.push_back(std::move(pendingCallback));
 		}
+
+		return Result(Success);
+	}
+
+	Result GrafRenderer::SafeDelete(GrafDeviceEntity* grafDeviceEntity)
+	{
+		if (ur_null == grafDeviceEntity)
+			return Result(InvalidArgs);
+
+		// create synchronization command list
+		std::unique_ptr<GrafCommandList> grafSyncCmdList;
+		Result res = this->grafSystem->CreateCommandList(grafSyncCmdList);
+		if (Succeeded(res))
+		{
+			res = grafSyncCmdList->Initialize(this->grafDevice.get());
+		}
+		if (Failed(res))
+			return ResultError(Failure, "GrafRenderer: failed to create upload command list");
+
+		// record empty list (we are interesed in submission fence only)
+		grafSyncCmdList->Begin();
+		grafSyncCmdList->End();
+		this->grafDevice->Record(grafSyncCmdList.get());
+
+		// destroy object when fence is signaled
+		GrafCommandList* grafSyncCmdListPtr = grafSyncCmdList.release();
+		this->AddCommandListCallback(grafSyncCmdListPtr, {}, [grafSyncCmdListPtr, grafDeviceEntity](GrafCallbackContext& ctx) -> Result
+		{
+			delete grafDeviceEntity;
+			delete grafSyncCmdListPtr;
+			return Result(Success);
+		});
 
 		return Result(Success);
 	}
@@ -300,8 +338,11 @@ namespace UnlimRealms
 		}
 		else
 		{
+			// TODO: reconsider the usage of dynamic buffers in multithreaded scenarios
+			std::lock_guard<std::mutex> lock(this->uploadBufferMutex);
+
 			// allocate
-			Allocation uploadBufferAlloc = this->GetDynamicUploadBufferAllocation(dataSize);
+			Allocation uploadBufferAlloc = this->uploadBufferAllocator.Allocate(dataSize);
 			if (0 == uploadBufferAlloc.Size)
 				return Result(OutOfMemory);
 
@@ -332,7 +373,7 @@ namespace UnlimRealms
 		grafUploadCmdList->Begin();
 		grafUploadCmdList->Copy(srcBuffer, dstBuffer, dataSize, srcOffset, dstOffset);
 		grafUploadCmdList->End();
-		this->grafDevice->Submit(grafUploadCmdList.get());
+		this->grafDevice->Record(grafUploadCmdList.get());
 
 		// destroy upload command list when finished
 		GrafCommandList* uploadCmdListPtr = grafUploadCmdList.release();
@@ -351,8 +392,10 @@ namespace UnlimRealms
 		if (ur_null == dataPtr || 0 == dataSize || ur_null == dstImage)
 			return Result(InvalidArgs);
 
+		std::lock_guard<std::mutex> lock(this->uploadBufferMutex);
+
 		// allocate
-		Allocation uploadBufferAlloc = this->GetDynamicUploadBufferAllocation(dataSize);
+		Allocation uploadBufferAlloc = this->uploadBufferAllocator.Allocate(dataSize);
 		if (0 == uploadBufferAlloc.Size)
 			return Result(OutOfMemory);
 
@@ -382,7 +425,7 @@ namespace UnlimRealms
 		grafUploadCmdList->Copy(srcBuffer, dstImage, srcOffset);
 		grafUploadCmdList->ImageMemoryBarrier(dstImage, GrafImageState::Current, dstImageState);
 		grafUploadCmdList->End();
-		this->grafDevice->Submit(grafUploadCmdList.get());
+		this->grafDevice->Record(grafUploadCmdList.get());
 
 		// destroy upload command list when finished
 		GrafCommandList* uploadCmdListPtr = grafUploadCmdList.release();

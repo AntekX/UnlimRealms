@@ -151,7 +151,12 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafDevice::Submit(GrafCommandList* grafCommandList)
+	Result GrafDevice::Record(GrafCommandList* grafCommandList)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafDevice::Submit()
 	{
 		return Result(NotImplemented);
 	}

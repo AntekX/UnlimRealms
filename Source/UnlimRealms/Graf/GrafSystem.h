@@ -469,7 +469,9 @@ namespace UnlimRealms
 
 		virtual Result Initialize(ur_uint deviceId);
 
-		virtual Result Submit(GrafCommandList* grafCommandList);
+		virtual Result Record(GrafCommandList* grafCommandList);
+
+		virtual Result Submit();
 
 		virtual Result WaitIdle();
 

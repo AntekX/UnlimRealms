@@ -352,13 +352,13 @@ int VulkanSandboxApp::Run()
 			grafRes = imageInitData->uploadCmdList->Initialize(grafDevice);
 			if (Failed(grafRes)) break;
 
-			// submit commands performing required image memory transitions and cpu->gpu memory copies
+			// record commands performing required image memory transitions and cpu->gpu memory copies
 			imageInitData->uploadCmdList->Begin();
 			imageInitData->uploadCmdList->ImageMemoryBarrier(grafImageSample.get(), GrafImageState::Current, GrafImageState::TransferDst);
 			imageInitData->uploadCmdList->Copy(imageInitData->imageData.MipBuffers[0].get(), grafImageSample.get());
 			imageInitData->uploadCmdList->ImageMemoryBarrier(grafImageSample.get(), GrafImageState::Current, GrafImageState::ShaderRead);
 			imageInitData->uploadCmdList->End();
-			grafDevice->Submit(imageInitData->uploadCmdList.get());
+			grafDevice->Record(imageInitData->uploadCmdList.get());
 
 			// destroy temporary data & upload command list when finished
 			GrafCommandList* uploadCmdListPtr = imageInitData->uploadCmdList.get();
@@ -519,15 +519,15 @@ int VulkanSandboxApp::Run()
 			}
 
 			// begin frame rendering
+			GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
+			GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
+			ur_uint frameIdx = grafRenderer->GetCurrentFrameId();
 			grafRenderer->BeginFrame();
 
 			auto drawFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void {
 
 				// updateFrameJob->Wait(); // wait till update job is fully finished; WaitProgress can be used instead to wait for specific update stage to avoid stalling draw thread
-
-				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
-				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
-				ur_uint frameIdx = grafRenderer->GetCurrentFrameId();
+				
 				
 				GrafCommandList* grafCmdListCrnt = grafMainCmdList[frameIdx].get();
 				grafCmdListCrnt->Begin();
@@ -616,12 +616,15 @@ int VulkanSandboxApp::Run()
 					grafCmdListCrnt->EndRenderPass();
 				}
 
-				// finalize & submit
+				// finalize current command list
 				grafCmdListCrnt->End();
-				grafDevice->Submit(grafCmdListCrnt);
+				grafDevice->Record(grafCmdListCrnt);
 			});
 			
 			drawFrameJob->Wait();
+
+			// submit command list(s) to device execution queue
+			grafDevice->Submit();
 
 			// present & move to next frame
 			grafRenderer->EndFrameAndPresent();

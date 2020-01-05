@@ -228,7 +228,9 @@ namespace UnlimRealms
 			{
 				std::unique_ptr<GrafBuffer> VB;
 				std::unique_ptr<GrafBuffer> IB;
-
+				
+				GrafMesh();
+				~GrafMesh();
 			};
 			#else
 			struct UR_DECL GfxMesh
