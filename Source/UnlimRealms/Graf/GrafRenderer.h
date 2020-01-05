@@ -124,6 +124,7 @@ namespace UnlimRealms
 		ur_uint frameIdx;
 		std::vector<std::unique_ptr<GrafCommandList>> grafPrimaryCommandList;
 		std::vector<std::unique_ptr<PendingCommandListCallbackData>> pendingCommandListCallbacks;
+		std::mutex pendingCommandListMutex;
 	};
 
 } // end namespace UnlimRealms

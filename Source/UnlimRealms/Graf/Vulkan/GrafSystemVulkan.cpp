@@ -331,9 +331,6 @@ namespace UnlimRealms
 		this->deviceGraphicsQueueId = ur_uint(-1);
 		this->deviceComputeQueueId = ur_uint(-1);
 		this->deviceTransferQueueId = ur_uint(-1);
-		this->vkGraphicsCommandPool = VK_NULL_HANDLE;
-		this->vkComputeCommandPool = VK_NULL_HANDLE;
-		this->vkTransferCommandPool = VK_NULL_HANDLE;
 	}
 
 	GrafDeviceVulkan::~GrafDeviceVulkan()
@@ -347,22 +344,31 @@ namespace UnlimRealms
 		this->deviceComputeQueueId = ur_uint(-1);
 		this->deviceTransferQueueId = ur_uint(-1);
 
-		if (this->vkGraphicsCommandPool != VK_NULL_HANDLE)
+		if (!this->vkGraphicsCommandPools.empty())
 		{
-			vkDestroyCommandPool(this->vkDevice, this->vkGraphicsCommandPool, ur_null);
-			this->vkGraphicsCommandPool = VK_NULL_HANDLE;
+			for (auto& poolEntry : this->vkGraphicsCommandPools)
+			{
+				vkDestroyCommandPool(this->vkDevice, poolEntry.second, ur_null);
+			}
+			this->vkGraphicsCommandPools.clear();
 		}
 
-		if (this->vkComputeCommandPool != VK_NULL_HANDLE)
+		if (!this->vkComputeCommandPools.empty())
 		{
-			vkDestroyCommandPool(this->vkDevice, this->vkComputeCommandPool, ur_null);
-			this->vkComputeCommandPool = VK_NULL_HANDLE;
+			for (auto& poolEntry : this->vkComputeCommandPools)
+			{
+				vkDestroyCommandPool(this->vkDevice, poolEntry.second, ur_null);
+			}
+			this->vkComputeCommandPools.clear();
 		}
 
-		if (this->vkTransferCommandPool != VK_NULL_HANDLE)
+		if (!this->vkTransferCommandPools.empty())
 		{
-			vkDestroyCommandPool(this->vkDevice, this->vkTransferCommandPool, ur_null);
-			this->vkTransferCommandPool = VK_NULL_HANDLE;
+			for (auto& poolEntry : this->vkTransferCommandPools)
+			{
+				vkDestroyCommandPool(this->vkDevice, poolEntry.second, ur_null);
+			}
+			this->vkTransferCommandPools.clear();
 		}
 
 		if (this->vkDevice != VK_NULL_HANDLE)
@@ -452,6 +458,30 @@ namespace UnlimRealms
 		}
 		LogNoteGrafDbg(std::string("GrafDeviceVulkan: VkDevice created for ") + grafSystemVulkan.GetPhysicalDeviceDesc(deviceId)->Description);
 
+		// pre-initialize default command pool for current thread
+		VkCommandPool vkGraphicsCommandPool = GetVkGraphicsCommandPool();
+		if (VK_NULL_HANDLE == vkGraphicsCommandPool)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafDeviceVulkan: vkCreateCommandPool failed with VkResult = ") + VkResultToString(res));
+		}
+
+		return Result(Success);
+	}
+
+	VkCommandPool GrafDeviceVulkan::GetVkGraphicsCommandPool()
+	{
+		std::lock_guard<std::mutex> lock(this->graphicsCommandPoolsMutex);
+
+		// try to find exisitng command pool for current thread
+
+		std::thread::id thisThreadId = std::this_thread::get_id();
+		auto& poolIter = this->vkGraphicsCommandPools.find(thisThreadId);
+		if (poolIter != this->vkGraphicsCommandPools.end())
+		{
+			return poolIter->second;
+		}
+
 		// create graphics queue command pool
 
 		VkCommandPoolCreateInfo vkCommandPoolInfo = {};
@@ -459,17 +489,32 @@ namespace UnlimRealms
 		vkCommandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // command buffers will be resetted implicitly at vkBeginCommandBuffer
 		vkCommandPoolInfo.queueFamilyIndex = this->deviceGraphicsQueueId;
 
-		res = vkCreateCommandPool(this->vkDevice, &vkCommandPoolInfo, ur_null, &this->vkGraphicsCommandPool);
-		if (res != VK_SUCCESS)
+		VkCommandPool vkGraphicsCommandPool;
+		VkResult res = vkCreateCommandPool(this->vkDevice, &vkCommandPoolInfo, ur_null, &vkGraphicsCommandPool);
+		if (vkGraphicsCommandPool != VK_NULL_HANDLE)
 		{
-			this->Deinitialize();
-			return ResultError(Failure, std::string("GrafDeviceVulkan: vkCreateCommandPool failed with VkResult = ") + VkResultToString(res));
+			this->vkGraphicsCommandPools[thisThreadId] = vkGraphicsCommandPool;
 		}
-		LogNoteGrafDbg(std::string("GrafDeviceVulkan: VkCommandPool created for queue family Id = ") + std::to_string(this->deviceGraphicsQueueId));
 
-		// NOTE: consider initializing command pools for other queue types when required
+		return vkGraphicsCommandPool;
+	}
 
-		return Result(Success);
+	VkCommandPool GrafDeviceVulkan::GetVkComputeCommandPool()
+	{
+		std::lock_guard<std::mutex> lock(this->computeCommandPoolsMutex);
+
+		// not supported
+
+		return VK_NULL_HANDLE;
+	}
+
+	VkCommandPool GrafDeviceVulkan::GetVkTransferCommandPool()
+	{
+		std::lock_guard<std::mutex> lock(this->transferCommandPoolsMutex);
+
+		// not supported
+
+		return VK_NULL_HANDLE;
 	}
 
 	Result GrafDeviceVulkan::Submit(GrafCommandList* grafCommandList)
@@ -515,6 +560,7 @@ namespace UnlimRealms
 	GrafCommandListVulkan::GrafCommandListVulkan(GrafSystem &grafSystem) :
 		GrafCommandList(grafSystem)
 	{
+		this->vkCommandPool = VK_NULL_HANDLE;
 		this->vkCommandBuffer = VK_NULL_HANDLE;
 		this->vkSubmitFence = VK_NULL_HANDLE;
 	}
@@ -538,9 +584,11 @@ namespace UnlimRealms
 		if (this->vkCommandBuffer != VK_NULL_HANDLE)
 		{
 			GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
-			vkFreeCommandBuffers(grafDeviceVulkan->GetVkDevice(), grafDeviceVulkan->GetVkGraphicsCommandPool(), 1, &this->vkCommandBuffer);
+			vkFreeCommandBuffers(grafDeviceVulkan->GetVkDevice(), this->vkCommandPool, 1, &this->vkCommandBuffer);
 			this->vkCommandBuffer = VK_NULL_HANDLE;
 		}
+
+		this->vkCommandPool = VK_NULL_HANDLE;
 
 		return Result(Success);
 	}
@@ -562,9 +610,11 @@ namespace UnlimRealms
 
 		// allocate command bufer
 
+		this->vkCommandPool = grafDeviceVulkan->GetVkGraphicsCommandPool();
+
 		VkCommandBufferAllocateInfo vkCommandBufferInfo = {};
 		vkCommandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		vkCommandBufferInfo.commandPool = grafDeviceVulkan->GetVkGraphicsCommandPool();
+		vkCommandBufferInfo.commandPool = this->vkCommandPool;
 		vkCommandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		vkCommandBufferInfo.commandBufferCount = 1;
 

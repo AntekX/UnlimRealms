@@ -40,21 +40,6 @@ namespace UnlimRealms
 		return this->deviceTransferQueueId;
 	}
 
-	inline VkCommandPool GrafDeviceVulkan::GetVkGraphicsCommandPool() const
-	{
-		return this->vkGraphicsCommandPool;
-	}
-
-	inline VkCommandPool GrafDeviceVulkan::GetVkComputeCommandPool() const
-	{
-		return this->vkComputeCommandPool;
-	}
-
-	inline VkCommandPool GrafDeviceVulkan::GetVkTransferCommandPool() const
-	{
-		return this->vkTransferCommandPool;
-	}
-
 	inline VkCommandBuffer GrafCommandListVulkan::GetVkCommandBuffer() const
 	{
 		return this->vkCommandBuffer;

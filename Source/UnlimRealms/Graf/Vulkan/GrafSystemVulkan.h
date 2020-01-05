@@ -92,11 +92,11 @@ namespace UnlimRealms
 
 		inline ur_uint GetVkDeviceTransferQueueId() const;
 
-		inline VkCommandPool GetVkGraphicsCommandPool() const;
+		VkCommandPool GetVkGraphicsCommandPool();
 
-		inline VkCommandPool GetVkComputeCommandPool() const;
+		VkCommandPool GetVkComputeCommandPool();
 
-		inline VkCommandPool GetVkTransferCommandPool() const;
+		VkCommandPool GetVkTransferCommandPool();
 
 	private:
 
@@ -106,9 +106,12 @@ namespace UnlimRealms
 		ur_uint deviceGraphicsQueueId;
 		ur_uint deviceComputeQueueId;
 		ur_uint deviceTransferQueueId;
-		VkCommandPool vkGraphicsCommandPool;
-		VkCommandPool vkComputeCommandPool;
-		VkCommandPool vkTransferCommandPool;
+		std::unordered_map<std::thread::id, VkCommandPool> vkGraphicsCommandPools;
+		std::unordered_map<std::thread::id, VkCommandPool> vkComputeCommandPools;
+		std::unordered_map<std::thread::id, VkCommandPool> vkTransferCommandPools;
+		std::mutex graphicsCommandPoolsMutex;
+		std::mutex computeCommandPoolsMutex;
+		std::mutex transferCommandPoolsMutex;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -170,6 +173,7 @@ namespace UnlimRealms
 
 		Result Deinitialize();
 
+		VkCommandPool vkCommandPool;
 		VkCommandBuffer vkCommandBuffer;
 		VkFence vkSubmitFence;
 	};

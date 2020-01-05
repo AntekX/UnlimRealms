@@ -255,6 +255,7 @@ namespace UnlimRealms
 			pendingCallback->cmdList = executionCmdList;
 			pendingCallback->callback = callback;
 			pendingCallback->context = ctx;
+			std::lock_guard<std::mutex> lock(this->pendingCommandListMutex);
 			this->pendingCommandListCallbacks.push_back(std::move(pendingCallback));
 		}
 
@@ -265,6 +266,7 @@ namespace UnlimRealms
 	{
 		Result res(Success);
 
+		std::lock_guard<std::mutex> lock(this->pendingCommandListMutex);
 		ur_size idx = 0;
 		while (idx < this->pendingCommandListCallbacks.size())
 		{
