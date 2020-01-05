@@ -383,7 +383,7 @@ namespace UnlimRealms
 
 		Result Init(std::unique_ptr<DataVolume> data, std::unique_ptr<Presentation> presentation);
 
-		Result CreateInstance();
+		Result Init(std::unique_ptr<DataVolume> data, std::unique_ptr<Presentation> presentation, GrafRenderPass* grafRenderPass);
 
 		Result Update();
 
@@ -399,6 +399,25 @@ namespace UnlimRealms
 	
 	protected:
 
+		#if defined(UR_GRAF)
+
+		Result CreateGrafObjects(GrafRenderPass* grafRenderPass);
+
+		struct GrafObjects
+		{
+			std::unique_ptr<GrafShader> VS;
+			std::unique_ptr<GrafShader> PS;
+			std::unique_ptr<GrafShader> PSDbg;
+			std::unique_ptr<GrafDescriptorTableLayout> shaderDescriptorLayout;
+			std::vector<std::unique_ptr<GrafDescriptorTable>> shaderDescriptorTable;
+			std::unique_ptr<GrafPipeline> pipelineSolid;
+			std::unique_ptr<GrafPipeline> pipelineDebug;
+			//std::unique_ptr<GrafCommandList> upload;
+		} grafObjects;
+		GrafRenderer *grafRenderer;
+
+		#else
+
 		Result CreateGfxObjects();
 
 		struct GfxObjects
@@ -413,6 +432,8 @@ namespace UnlimRealms
 			std::unique_ptr<GfxTexture> albedoMaps[3];
 			std::unique_ptr<GfxTexture> normalMaps[3];
 		} gfxObjects;
+
+		#endif
 
 		struct alignas(16) CommonCB
 		{

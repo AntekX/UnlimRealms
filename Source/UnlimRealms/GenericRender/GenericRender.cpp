@@ -69,6 +69,8 @@ namespace UnlimRealms
 	{
 		Result res = Result(Success);
 
+		this->grafObjects.reset(new GrafObjects());
+
 		if (ur_null == this->grafRenderer)
 			return ResultError(InvalidArgs, "GenericRender::Init: invalid GrafRenderer");
 		if (ur_null == grafRenderPass)
@@ -77,8 +79,6 @@ namespace UnlimRealms
 		GrafSystem* grafSystem = this->grafRenderer->GetGrafSystem();
 		GrafDevice* grafDevice = this->grafRenderer->GetGrafDevice();
 		ur_uint frameCount = this->grafRenderer->GetRecordedFrameCount();
-
-		this->grafObjects.reset(new GrafObjects());
 
 		// VS
 		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Generic_vs.spv", GrafShaderType::Vertex, this->grafObjects->VS);

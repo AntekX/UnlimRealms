@@ -227,7 +227,7 @@ int VoxelPlanetApp::Run()
 		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x * 1.0f;
 		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
 
-		isosurface->Init(std::move(dataVolume), std::move(presentation));
+		isosurface->Init(std::move(dataVolume), std::move(presentation), grafPassColorDepth.get());
 	}
 
 	// main application camera
@@ -291,7 +291,6 @@ int VoxelPlanetApp::Run()
 
 			// update isosurface
 			isosurface->GetPresentation()->Update(camera.GetPosition(), camera.GetViewProj());
-			isosurface->Update();
 			ctx.progress = UpdateStage_IsosurfaceReady;
 
 			// update camera control speed depending on the distance to isosurface
@@ -356,7 +355,7 @@ int VoxelPlanetApp::Run()
 
 					// draw isosurface
 					// TODO: must be rendered in HDR pass
-					//isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), ur_null);
+					isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), ur_null);
 
 					// render immediate mode generic primitives
 					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());

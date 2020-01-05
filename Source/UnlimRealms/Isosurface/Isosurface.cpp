@@ -1633,20 +1633,65 @@ namespace UnlimRealms
 			p_sample_slice += sliceOfs;
 		}
 
-		// prepare gfx resources
+		// prepare graphics resources
 
 		if (indexBuffer.size() < 3)
-			return Result(Success); // do not create empty gfx resources
+			return Result(Success); // no data
+
+		#if defined(UR_GRAF)
+
+		GrafRenderer *grafRenderer = this->isosurface.grafRenderer;
+		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
+		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
+
+		// create vertex Buffer
+		auto &grafVB = hexahedron.grafMesh.VB;
+		Result res = grafSystem->CreateBuffer(grafVB);
+		if (Succeeded(res))
+		{
+			// TODO: upload to gpu local buffer, when async upload is supported
+			GrafBufferDesc bufferDesc;
+			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer | (ur_uint)GrafBufferUsageFlag::TransferDst;
+			//bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
+			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			bufferDesc.SizeInBytes = (ur_size)vertexBuffer.size() * sizeof(Isosurface::Vertex);
+			res = grafVB->Initialize(grafDevice, { bufferDesc });
+			/*if (Succeeded(res))
+			{
+				grafRenderer->Upload((ur_byte*)vertexBuffer.data(), grafVB.get(), bufferDesc.SizeInBytes);
+			}*/
+			grafVB->Write((ur_byte*)vertexBuffer.data(), bufferDesc.SizeInBytes);
+		}
+		if (Failed(res))
+			return Result(Failure);
+
+		// create index buffer
+		auto &grafIB = hexahedron.grafMesh.IB;
+		res = grafSystem->CreateBuffer(grafIB);
+		if (Succeeded(res))
+		{
+			// TODO: upload to gpu local buffer, when async upload is supported
+			GrafBufferDesc bufferDesc;
+			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::IndexBuffer | (ur_uint)GrafBufferUsageFlag::TransferDst;
+			//bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
+			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			bufferDesc.SizeInBytes = (ur_size)indexBuffer.size() * sizeof(Isosurface::Index);
+			res = grafIB->Initialize(grafDevice, { bufferDesc });
+			/*if (Succeeded(res))
+			{
+				grafRenderer->Upload((ur_byte*)indexBuffer.data(), grafIB.get(), bufferDesc.SizeInBytes);
+			}*/
+			grafIB->Write((ur_byte*)indexBuffer.data(), bufferDesc.SizeInBytes);
+		}
+		if (Failed(res))
+			return Result(Failure);
+
+		#else
 
 		GfxSystem *gfxSystem = this->isosurface.GetRealm().GetGfxSystem();
 		if (ur_null == gfxSystem)
 			return Result(Failure);
 
-		#if defined(UR_GRAF)
-		
-		// TODO
-
-		#else
 		// create vertex Buffer
 		auto &gfxVB = hexahedron.gfxMesh.VB;
 		Result res = gfxSystem->CreateBuffer(gfxVB);
@@ -1794,17 +1839,16 @@ namespace UnlimRealms
 		{
 			for (auto &hexahedron : node->tetrahedron->hexahedra)
 			{
-				// TODO
-				/*const auto &gfxVB = hexahedron.gfxMesh.VB;
-				const auto &gfxIB = hexahedron.gfxMesh.IB;
-				if (gfxVB != ur_null && gfxIB != ur_null)
+				const auto &grafVB = hexahedron.grafMesh.VB;
+				const auto &grafIB = hexahedron.grafMesh.IB;
+				if (grafVB != ur_null && grafIB != ur_null)
 				{
-					const ur_uint indexCount = (gfxIB.get() ? gfxIB->GetDesc().Size / sizeof(Isosurface::Index) : 0);
+					const ur_uint indexCount = ur_uint(grafIB.get() ? grafIB->GetDesc().SizeInBytes / sizeof(Isosurface::Index) : 0);
 					this->stats.primitivesRendered += indexCount / 3;
-					gfxContext.SetVertexBuffer(gfxVB.get(), 0);
-					gfxContext.SetIndexBuffer(gfxIB.get());
-					gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
-				}*/
+					grafCmdList.BindVertexBuffer(grafVB.get(), 0);
+					grafCmdList.BindIndexBuffer(grafIB.get(), (sizeof(Isosurface::Index) == 16 ? GrafIndexType::UINT16 : GrafIndexType::UINT32));
+					grafCmdList.DrawIndexed(indexCount, 1, 0, 0, 0);
+				}
 			}
 
 			if (this->drawTetrahedra)
@@ -1888,7 +1932,7 @@ namespace UnlimRealms
 
 	void Isosurface::HybridCubes::ShowImgui()
 	{
-		ImGui::SetNextTreeNodeOpen(true);
+		ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
 		if (ImGui::TreeNode("HybridCubes"))
 		{
 			ImGui::Checkbox("Freeze update", &this->freezeUpdate);
@@ -1897,7 +1941,7 @@ namespace UnlimRealms
 			ImGui::Checkbox("Draw hexahedra", &this->drawHexahedra);
 			ImGui::Checkbox("Draw refinement tree", &this->drawRefinementTree);
 			
-			ImGui::SetNextTreeNodeOpen(true);
+			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
 			if (ImGui::TreeNode("Stats"))
 			{
 				ImGui::Text("tetrahedraCount:		%i", (int)this->stats.tetrahedraCount);
@@ -1921,6 +1965,9 @@ namespace UnlimRealms
 		RealmEntity(realm)
 	{
 		this->drawWireframe = false;
+		#if defined(UR_GRAF)
+		this->grafRenderer = ur_null;
+		#endif
 	}
 
 	Isosurface::~Isosurface()
@@ -1929,6 +1976,7 @@ namespace UnlimRealms
 
 	Result Isosurface::Init(std::unique_ptr<DataVolume> data, std::unique_ptr<Presentation> presentation)
 	{
+	#if !defined(UR_GRAF)
 		Result res(Success);
 
 		this->data = std::move(data);
@@ -1937,6 +1985,26 @@ namespace UnlimRealms
 		res = this->CreateGfxObjects();
 
 		return res;
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
+	Result Isosurface::Init(std::unique_ptr<DataVolume> data, std::unique_ptr<Presentation> presentation, GrafRenderPass* grafRenderPass)
+	{
+	#if defined(UR_GRAF)
+		Result res(Success);
+
+		this->data = std::move(data);
+		this->presentation = std::move(presentation);
+		this->grafRenderer = this->GetRealm().GetComponent<GrafRenderer>();
+
+		res = this->CreateGrafObjects(grafRenderPass);
+
+		return res;
+	#else
+		return Result(NotImplemented);
+	#endif
 	}
 
 	Result Isosurface::Update()
@@ -1952,6 +2020,110 @@ namespace UnlimRealms
 
 		return Result(Success);
 	}
+
+	#if defined(UR_GRAF)
+
+	Result Isosurface::CreateGrafObjects(GrafRenderPass* grafRenderPass)
+	{
+		Result res = Result(Success);
+
+		this->grafObjects = {}; // reset resources
+
+		if (ur_null == this->grafRenderer)
+			return ResultError(InvalidArgs, "Isosurface::CreateGrafObjects: invalid GrafRenderer");
+		if (ur_null == grafRenderPass)
+			return ResultError(InvalidArgs, "Isosurface::CreateGrafObjects: invalid GrafRenderPass");
+
+		GrafSystem* grafSystem = this->grafRenderer->GetGrafSystem();
+		GrafDevice* grafDevice = this->grafRenderer->GetGrafDevice();
+		ur_uint frameCount = this->grafRenderer->GetRecordedFrameCount();
+
+		// VS
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Isosurface_vs.spv", GrafShaderType::Vertex, this->grafObjects.VS);
+		if (Failed(res))
+			return ResultError(Failure, "Isosurface::CreateGrafObjects: failed to initialize VS");
+
+		// PS
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Isosurface_ps.spv", GrafShaderType::Pixel, this->grafObjects.PS);
+		if (Failed(res))
+			return ResultError(Failure, "Isosurface::CreateGrafObjects: failed to initialize PS");
+
+		// PS
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Isosurface_ps.spv", GrafShaderType::Pixel, this->grafObjects.PSDbg);
+		if (Failed(res))
+			return ResultError(Failure, "Isosurface::CreateGrafObjects: failed to initialize PSDbg");
+
+		// shader descriptors layout
+		res = grafSystem->CreateDescriptorTableLayout(this->grafObjects.shaderDescriptorLayout);
+		if (Succeeded(res))
+		{
+			GrafDescriptorRangeDesc grafDescriptorRanges[] = {
+				{ GrafDescriptorType::ConstantBuffer, 0, 2 },
+				//{ GrafDescriptorType::Sampler, 0, 1 },
+				//{ GrafDescriptorType::Texture, 0, 6 },
+			};
+			GrafDescriptorTableLayoutDesc grafDescriptorLayoutDesc = {
+				GrafShaderStageFlags((ur_uint)GrafShaderStageFlag::Vertex | (ur_uint)GrafShaderStageFlag::Pixel),
+				grafDescriptorRanges, ur_array_size(grafDescriptorRanges)
+			};
+			res = this->grafObjects.shaderDescriptorLayout->Initialize(grafDevice, { grafDescriptorLayoutDesc });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Isosurface::CreateGrafObjects: failed to initialize descriptor table layout");
+
+		// per frame descriptor tables
+		this->grafObjects.shaderDescriptorTable.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			res = grafSystem->CreateDescriptorTable(this->grafObjects.shaderDescriptorTable[iframe]);
+			if (Failed(res)) break;
+			res = this->grafObjects.shaderDescriptorTable[iframe]->Initialize(grafDevice, { this->grafObjects.shaderDescriptorLayout.get() });
+			if (Failed(res)) break;
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Isosurface::CreateGrafObjects: failed to initialize descriptor table(s)");
+
+		// graphics pipeline configuration(s)
+		res = grafSystem->CreatePipeline(this->grafObjects.pipelineSolid);
+		if (Succeeded(res))
+		{
+			GrafShader* shaderStages[] = {
+				this->grafObjects.VS.get(),
+				this->grafObjects.PS.get()
+			};
+			GrafDescriptorTableLayout* descriptorLayouts[] = {
+				this->grafObjects.shaderDescriptorLayout.get(),
+			};
+			GrafVertexElementDesc vertexElements[] = {
+				{ GrafFormat::R32G32B32_SFLOAT, 0 },
+				{ GrafFormat::R32G32B32_SFLOAT, 12 },
+				{ GrafFormat::R8G8B8A8_UNORM, 24 },
+			};
+			GrafVertexInputDesc vertexInputs[] = { {
+				GrafVertexInputType::PerVertex, 0, sizeof(Vertex),
+				vertexElements, ur_array_size(vertexElements)
+			} };
+			GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
+			pipelineParams.RenderPass = grafRenderPass;
+			pipelineParams.ShaderStages = shaderStages;
+			pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+			pipelineParams.DescriptorTableLayouts = descriptorLayouts;
+			pipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+			pipelineParams.VertexInputDesc = vertexInputs;
+			pipelineParams.VertexInputCount = ur_array_size(vertexInputs);
+			pipelineParams.DepthTestEnable = true;
+			pipelineParams.DepthWriteEnable = true;
+			pipelineParams.DepthCompareOp = GrafCompareOp::LessOrEqual;
+			pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleList;
+			res = this->grafObjects.pipelineSolid->Initialize(grafDevice, pipelineParams);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Isosurface::CreateGrafObjects: failed to initialize pipeline object");
+
+		return res;
+	}
+
+	#else
 
 	Result Isosurface::CreateGfxObjects()
 	{
@@ -2032,6 +2204,8 @@ namespace UnlimRealms
 		return res;
 	}
 
+	#endif
+
 	Result Isosurface::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere)
 	{
 	#if !defined(UR_GRAF)
@@ -2087,26 +2261,38 @@ namespace UnlimRealms
 	Result Isosurface::Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere)
 	{
 	#if defined(UR_GRAF)
+		if (ur_null == this->grafRenderer || ur_null == this->grafObjects.pipelineSolid)
+			return Result(NotInitialized);
+
 		Result res(Success);
 
 		// render isosurface
 
 		if (this->presentation.get() != ur_null)
 		{
-			CommonCB cb;
-			cb.ViewProj = viewProj;
-			cb.CameraPos = cameraPos;
-			cb.AtmoParams = (atmosphere != ur_null ? atmosphere->GetDesc() : Atmosphere::Desc::Invisible);
-			GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
-			/*gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
-			gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);
-			gfxContext.SetPipelineState(this->gfxObjects.pipelineState.get());*/
+			// fill CB
+			CommonCB cbData;
+			cbData.ViewProj = viewProj;
+			cbData.CameraPos = cameraPos;
+			cbData.AtmoParams = (atmosphere != ur_null ? atmosphere->GetDesc() : Atmosphere::Desc::Invisible);
+			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
+			Allocation dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(CommonCB));
+			dynamicCB->Write((ur_byte*)&cbData, sizeof(cbData), 0, dynamicCBAlloc.Offset);
+
+			// fill shader descriptors
+			ur_uint frameIdx = this->grafRenderer->GetCurrentFrameId();
+			GrafDescriptorTable *shaderDescriptorTable = this->grafObjects.shaderDescriptorTable[frameIdx].get();
+			shaderDescriptorTable->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
+
+			// bind pipeline
+			grafCmdList.BindPipeline(this->grafObjects.pipelineSolid.get());
+			grafCmdList.BindDescriptorTable(shaderDescriptorTable, this->grafObjects.pipelineSolid.get());
 
 			res = this->presentation->Render(grafCmdList, viewProj);
 
 			/*if (this->drawWireframe)
 			{
-				gfxContext.SetPipelineState(this->gfxObjects.wireframeState.get());
+				grafCmdList.BindPipeline(this->grafObjects.pipelineDebug.get());
 				this->presentation->Render(gfxContext, viewProj);
 			}*/
 		}

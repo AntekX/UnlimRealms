@@ -65,6 +65,12 @@ namespace UnlimRealms
 		return this->grafDynamicUploadBuffer.get();
 	}
 
+	inline Allocation GrafRenderer::GetDynamicUploadBufferAllocation(ur_size size)
+	{
+		std::lock_guard<std::mutex> lock(this->uploadBufferMutex);
+		return this->uploadBufferAllocator.Allocate(size);
+	}
+
 	inline GrafBuffer* GrafRenderer::GetDynamicConstantBuffer() const
 	{
 		return this->grafDynamicConstantBuffer.get();
@@ -72,6 +78,7 @@ namespace UnlimRealms
 
 	inline Allocation GrafRenderer::GetDynamicConstantBufferAllocation(ur_size size)
 	{
+		std::lock_guard<std::mutex> lock(this->constantBufferMutex);
 		return this->constantBufferAllocator.Allocate(size);
 	}
 

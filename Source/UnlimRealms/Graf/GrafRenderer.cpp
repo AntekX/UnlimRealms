@@ -285,13 +285,72 @@ namespace UnlimRealms
 		return res;
 	}
 
+	Result GrafRenderer::Upload(ur_byte *dataPtr, GrafBuffer* dstBuffer, ur_size dataSize, ur_size dstOffset)
+	{
+		if (ur_null == dataPtr || 0 == dataSize || ur_null == dstBuffer)
+			return Result(InvalidArgs);
+		
+		Result res(Success);
+		if (ur_uint(GrafDeviceMemoryFlag::CpuVisible) & dstBuffer->GetDesc().MemoryType)
+		{
+			// write data directly to destination buffer
+			res = dstBuffer->Write(dataPtr, dataSize, 0, dstOffset);
+		}
+		else
+		{
+			// allocate
+			Allocation uploadBufferAlloc = this->GetDynamicUploadBufferAllocation(dataSize);
+			if (0 == uploadBufferAlloc.Size)
+				return Result(OutOfMemory);
+
+			// write data to cpu visible dynamic upload buffer
+			res = this->grafDynamicUploadBuffer->Write(dataPtr, dataSize, 0, uploadBufferAlloc.Offset);
+			if (Failed(res))
+				return ResultError(Failure, "GrafRenderer: failed to write to upload buffer");
+
+			res = this->Upload(this->grafDynamicUploadBuffer.get(), dstBuffer, dataSize, uploadBufferAlloc.Offset, dstOffset);
+		}
+
+		return res;
+	}
+
+	Result GrafRenderer::Upload(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+	{
+		// create upload command list
+		std::unique_ptr<GrafCommandList> grafUploadCmdList;
+		Result res = this->grafSystem->CreateCommandList(grafUploadCmdList);
+		if (Succeeded(res))
+		{
+			res = grafUploadCmdList->Initialize(this->grafDevice.get());
+		}
+		if (Failed(res))
+			return ResultError(Failure, "GrafRenderer: failed to create upload command list");
+
+		// copy dynamic buffer region to destination buffer
+		grafUploadCmdList->Begin();
+		grafUploadCmdList->Copy(srcBuffer, dstBuffer, dataSize, srcOffset, dstOffset);
+		grafUploadCmdList->End();
+		this->grafDevice->Submit(grafUploadCmdList.get());
+
+		// destroy upload command list when finished
+		GrafCommandList* uploadCmdListPtr = grafUploadCmdList.release();
+		this->AddCommandListCallback(uploadCmdListPtr, { uploadCmdListPtr }, [](GrafCallbackContext& ctx) -> Result
+		{
+			GrafCommandList* finishedUploadCmdList = reinterpret_cast<GrafCommandList*>(ctx.DataPtr);
+			delete finishedUploadCmdList;
+			return Result(Success);
+		});
+
+		return Result(Success);
+	}
+
 	Result GrafRenderer::Upload(ur_byte *dataPtr, ur_size dataSize, GrafImage* dstImage, GrafImageState dstImageState)
 	{
 		if (ur_null == dataPtr || 0 == dataSize || ur_null == dstImage)
 			return Result(InvalidArgs);
 
 		// allocate
-		Allocation uploadBufferAlloc = this->uploadBufferAllocator.Allocate(dataSize);
+		Allocation uploadBufferAlloc = this->GetDynamicUploadBufferAllocation(dataSize);
 		if (0 == uploadBufferAlloc.Size)
 			return Result(OutOfMemory);
 
@@ -313,7 +372,7 @@ namespace UnlimRealms
 			res = grafUploadCmdList->Initialize(this->grafDevice.get());
 		}
 		if (Failed(res))
-			return ResultError(Failure, "ImguiRender::Init: failed to create upload command list");
+			return ResultError(Failure, "GrafRenderer: failed to create upload command list");
 
 		// copy dynamic buffer region to destination image
 		grafUploadCmdList->Begin();
@@ -389,9 +448,15 @@ namespace UnlimRealms
 		}
 		if (this->grafDynamicUploadBuffer)
 		{
+			ur_size crntAllocatorOffset = 0;
+			ur_size allocatorSize = 0;
+			{
+				std::lock_guard<std::mutex> lock(this->uploadBufferMutex);
+				crntAllocatorOffset = this->uploadBufferAllocator.GetOffset();
+				allocatorSize = this->uploadBufferAllocator.GetSize();
+			}
 			static ur_size prevAllocatorOffset = 0;
 			static ur_size allocatorOffsetDeltaMax = 0;
-			ur_size crntAllocatorOffset = this->uploadBufferAllocator.GetOffset();
 			ur_size allocatorOffsetDelta = crntAllocatorOffset + (crntAllocatorOffset < prevAllocatorOffset ? this->uploadBufferAllocator.GetSize() : 0) - prevAllocatorOffset;
 			allocatorOffsetDeltaMax = std::max(allocatorOffsetDelta, allocatorOffsetDeltaMax);
 			prevAllocatorOffset = crntAllocatorOffset;
@@ -407,10 +472,16 @@ namespace UnlimRealms
 		}
 		if (this->grafDynamicConstantBuffer)
 		{
+			ur_size crntAllocatorOffset = 0;
+			ur_size allocatorSize = 0;
+			{
+				std::lock_guard<std::mutex> lock(this->constantBufferMutex);
+				crntAllocatorOffset = this->constantBufferAllocator.GetOffset();
+				allocatorSize = this->constantBufferAllocator.GetSize();
+			}
 			static ur_size prevAllocatorOffset = 0;
 			static ur_size allocatorOffsetDeltaMax = 0;
-			ur_size crntAllocatorOffset = this->constantBufferAllocator.GetOffset();
-			ur_size allocatorOffsetDelta = crntAllocatorOffset + (crntAllocatorOffset < prevAllocatorOffset ? this->constantBufferAllocator.GetSize() : 0) - prevAllocatorOffset;
+			ur_size allocatorOffsetDelta = crntAllocatorOffset + (crntAllocatorOffset < prevAllocatorOffset ? allocatorSize : 0) - prevAllocatorOffset;
 			allocatorOffsetDeltaMax = std::max(allocatorOffsetDelta, allocatorOffsetDeltaMax);
 			prevAllocatorOffset = crntAllocatorOffset;
 			ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
@@ -419,7 +490,7 @@ namespace UnlimRealms
 				ImGui::Text("Size: %i", this->grafDynamicConstantBuffer->GetDesc().SizeInBytes);
 				ImGui::Text("Maximal usage per frame: %i", allocatorOffsetDeltaMax);
 				ImGui::Text("Current frame usage: %i", allocatorOffsetDelta);
-				ImGui::Text("Current ofs (bytes): %i", this->constantBufferAllocator.GetOffset());
+				ImGui::Text("Current ofs (bytes): %i", crntAllocatorOffset);
 				ImGui::TreePop();
 			}
 		}

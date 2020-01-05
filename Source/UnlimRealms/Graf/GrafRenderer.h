@@ -57,6 +57,10 @@ namespace UnlimRealms
 
 		virtual Result AddCommandListCallback(GrafCommandList *executionCmdList, GrafCallbackContext ctx, GrafCommandListCallback callback);
 
+		virtual Result Upload(ur_byte *dataPtr, GrafBuffer* dstBuffer, ur_size dataSize, ur_size dstOffset = 0);
+
+		virtual Result Upload(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
+
 		virtual Result Upload(ur_byte *dataPtr, ur_size dataSize, GrafImage* dstImage, GrafImageState dstImageState);
 
 		virtual Result Upload(GrafBuffer *srcBuffer, ur_size srcOffset, GrafImage* dstImage, GrafImageState dstImageState);
@@ -85,6 +89,8 @@ namespace UnlimRealms
 
 		inline GrafBuffer* GetDynamicUploadBuffer() const;
 
+		inline Allocation GetDynamicUploadBufferAllocation(ur_size size);
+
 		inline GrafBuffer* GetDynamicConstantBuffer() const;
 
 		inline Allocation GetDynamicConstantBufferAllocation(ur_size size);
@@ -110,8 +116,10 @@ namespace UnlimRealms
 		std::vector<std::unique_ptr<GrafRenderTarget>> grafCanvasRenderTarget;
 		std::unique_ptr<GrafBuffer> grafDynamicUploadBuffer;
 		LinearAllocator uploadBufferAllocator;
+		std::mutex uploadBufferMutex;
 		std::unique_ptr<GrafBuffer> grafDynamicConstantBuffer;
 		LinearAllocator constantBufferAllocator;
+		std::mutex constantBufferMutex;
 		ur_uint frameCount;
 		ur_uint frameIdx;
 		std::vector<std::unique_ptr<GrafCommandList>> grafPrimaryCommandList;

@@ -386,7 +386,7 @@ namespace UnlimRealms
 
 		GrafDevice::Initialize(deviceId);
 
-		// get corresponding physical device 
+		// get corresponding physical device
 
 		GrafSystemVulkan& grafSystemVulkan = static_cast<GrafSystemVulkan&>(this->GetGrafSystem());
 		VkPhysicalDevice vkPhysicalDevice = grafSystemVulkan.GetVkPhysicalDevice(this->GetDeviceId());
