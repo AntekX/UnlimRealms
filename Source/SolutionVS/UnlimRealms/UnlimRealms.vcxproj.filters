@@ -321,6 +321,9 @@
     <ClInclude Include="..\..\UnlimRealms\Graf\GrafRenderer.inline.h">
       <Filter>Graf</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\3rdParty\VulkanMemoryAllocator\vk_mem_alloc.h">
+      <Filter>3rdParty\VulkanMemoryAllocator</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -756,6 +759,9 @@
     </Filter>
     <Filter Include="Graf\Vulkan">
       <UniqueIdentifier>{b997b7e5-03d4-486e-976b-cd917e550a6f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3rdParty\VulkanMemoryAllocator">
+      <UniqueIdentifier>{39c5ecb3-0375-4fe3-84cc-b10897eb37c5}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

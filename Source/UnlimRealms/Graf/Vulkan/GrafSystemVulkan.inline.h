@@ -25,6 +25,11 @@ namespace UnlimRealms
 		return this->vkDevice;
 	}
 
+	inline VmaAllocator GrafDeviceVulkan::GetVmaAllocator() const
+	{
+		return this->vmaAllocator;
+	}
+
 	inline ur_uint GrafDeviceVulkan::GetVkDeviceGraphicsQueueId() const
 	{
 		return this->deviceGraphicsQueueId;

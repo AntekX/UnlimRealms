@@ -11,6 +11,8 @@
 #include "Sys/Windows/WinCanvas.h"
 #endif
 #pragma comment(lib, "vulkan-1.lib")
+#define VMA_IMPLEMENTATION
+#include "3rdParty/VulkanMemoryAllocator/vk_mem_alloc.h"
 
 namespace UnlimRealms
 {
@@ -20,6 +22,8 @@ namespace UnlimRealms
 	#define UR_GRAF_VULKAN_DEBUG_LAYER
 	#endif
 
+	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_1
+	#define UR_GRAF_VULKAN_VMA_ENABLED 0
 	#define UR_GRAF_VULKAN_IMPLICIT_WAIT_DEVICE 1
 
 	// vulkan objects destruction safety policy
@@ -178,7 +182,7 @@ namespace UnlimRealms
 		vkAppInfo.pEngineName = "UnlimRealms";
 		vkAppInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 		vkAppInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		vkAppInfo.apiVersion = VK_API_VERSION_1_1;
+		vkAppInfo.apiVersion = UR_GRAF_VULKAN_VERSION;
 
 		VkInstanceCreateInfo vkCreateInfo = {};
 		vkCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -328,6 +332,7 @@ namespace UnlimRealms
 		GrafDevice(grafSystem)
 	{
 		this->vkDevice = VK_NULL_HANDLE;
+		this->vmaAllocator = VK_NULL_HANDLE;
 		this->deviceGraphicsQueueId = ur_uint(-1);
 		this->deviceComputeQueueId = ur_uint(-1);
 		this->deviceTransferQueueId = ur_uint(-1);
@@ -369,6 +374,12 @@ namespace UnlimRealms
 				vkDestroyCommandPool(this->vkDevice, poolEntry.second, ur_null);
 			}
 			this->vkTransferCommandPools.clear();
+		}
+
+		if (this->vmaAllocator != VK_NULL_HANDLE)
+		{
+			vmaDestroyAllocator(this->vmaAllocator);
+			this->vmaAllocator = VK_NULL_HANDLE;
 		}
 
 		if (this->vkDevice != VK_NULL_HANDLE)
@@ -458,7 +469,29 @@ namespace UnlimRealms
 		}
 		LogNoteGrafDbg(std::string("GrafDeviceVulkan: VkDevice created for ") + grafSystemVulkan.GetPhysicalDeviceDesc(deviceId)->Description);
 
+		// create vulkan memory allocator
+		#if (UR_GRAF_VULKAN_VMA_ENABLED)
+
+		VmaAllocatorCreateInfo vmaAllocatorInfo = {};
+		vmaAllocatorInfo.flags = 0;
+		vmaAllocatorInfo.physicalDevice = vkPhysicalDevice;
+		vmaAllocatorInfo.device = this->vkDevice;
+		vmaAllocatorInfo.preferredLargeHeapBlockSize = 0;
+		vmaAllocatorInfo.frameInUseCount = 0;
+		vmaAllocatorInfo.pHeapSizeLimit = ur_null;
+		vmaAllocatorInfo.instance = grafSystemVulkan.GetVkInstance();
+		vmaAllocatorInfo.vulkanApiVersion = UR_GRAF_VULKAN_VERSION;
+
+		res = vmaCreateAllocator(&vmaAllocatorInfo, &this->vmaAllocator);
+		if (res != VK_SUCCESS)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafDeviceVulkan: vmaCreateAllocator failed with VkResult = ") + VkResultToString(res));
+		}
+		#endif
+
 		// pre-initialize default command pool for current thread
+
 		VkCommandPool vkGraphicsCommandPool = GetVkGraphicsCommandPool();
 		if (VK_NULL_HANDLE == vkGraphicsCommandPool)
 		{
@@ -1955,6 +1988,7 @@ namespace UnlimRealms
 		this->vkDeviceMemoryOffset = 0;
 		this->vkDeviceMemorySize = 0;
 		this->vkDeviceMemoryAlignment = 0;
+		this->vmaAllocation = VK_NULL_HANDLE;
 	}
 
 	GrafBufferVulkan::~GrafBufferVulkan()
@@ -1967,6 +2001,12 @@ namespace UnlimRealms
 		this->vkDeviceMemoryOffset = 0;
 		this->vkDeviceMemorySize = 0;
 		this->vkDeviceMemoryAlignment = 0;
+		if (this->vmaAllocation != VK_NULL_HANDLE)
+		{
+			vmaFreeMemory(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVmaAllocator(), this->vmaAllocation);
+			this->vmaAllocation = VK_NULL_HANDLE;
+			this->vkDeviceMemory = VK_NULL_HANDLE; // handle to VMA allocation info
+		}
 		if (this->vkDeviceMemory != VK_NULL_HANDLE)
 		{
 			vkFreeMemory(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDeviceMemory, ur_null);
@@ -2017,16 +2057,49 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafBufferVulkan: vkCreateBuffer failed with VkResult = ") + VkResultToString(vkRes));
 		}
 
-		// TODO: move allocation to GrafDevice (allocate big chunks of memory and return offsets, consider integrating VulkanAllocator)
 		// request buffer memory requirements and find corresponding physical device memory type for allocation
 
 		VkMemoryPropertyFlags vkMemoryPropertiesExpected = GrafUtilsVulkan::GrafToVkMemoryProperties(initParams.BufferDesc.MemoryType);
-
+		
 		VkMemoryRequirements vkMemoryRequirements = {};
 		vkGetBufferMemoryRequirements(vkDevice, this->vkBuffer, &vkMemoryRequirements);
 
 		VkPhysicalDeviceMemoryProperties vkDeviceMemoryProperties;
 		vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &vkDeviceMemoryProperties);
+
+		// allocate memory
+		#if (UR_GRAF_VULKAN_VMA_ENABLED)
+
+		VmaAllocationCreateInfo vmaAllocationCreateInfo = {};
+		for (ur_uint32 itype = 0; itype < vkDeviceMemoryProperties.memoryTypeCount; ++itype)
+		{
+			if ((vkDeviceMemoryProperties.memoryTypes[itype].propertyFlags & vkMemoryPropertiesExpected) &&
+				(vkMemoryRequirements.memoryTypeBits & (1 << itype)))
+			{
+				vmaAllocationCreateInfo.memoryTypeBits |= (1 << itype);
+				break;
+			}
+		}
+		if (ur_uint32(0) == vmaAllocationCreateInfo.memoryTypeBits)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, "GrafBufferVulkan: failed to find required memory type");
+		}
+
+		VmaAllocationInfo vmaAllocationInfo = {};
+		vkRes = vmaAllocateMemoryForBuffer(grafDeviceVulkan->GetVmaAllocator(), this->vkBuffer, &vmaAllocationCreateInfo, &this->vmaAllocation, &vmaAllocationInfo);
+		if (vkRes != VK_SUCCESS)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafBufferVulkan: vmaAllocateMemoryForBuffer failed with VkResult = ") + VkResultToString(vkRes));
+		}
+
+		this->vkDeviceMemory = vmaAllocationInfo.deviceMemory;
+		this->vkDeviceMemoryOffset = vmaAllocationInfo.offset;
+		this->vkDeviceMemorySize = vmaAllocationInfo.size;
+		this->vkDeviceMemoryAlignment = vkMemoryRequirements.alignment;
+
+		#else
 
 		VkMemoryAllocateInfo vkAllocateInfo = {};
 		vkAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -2056,6 +2129,12 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafBufferVulkan: vkAllocateMemory failed with VkResult = ") + VkResultToString(vkRes));
 		}
 
+		this->vkDeviceMemoryOffset = 0;
+		this->vkDeviceMemorySize = vkMemoryRequirements.size;
+		this->vkDeviceMemoryAlignment = vkMemoryRequirements.alignment;
+
+		#endif
+
 		// bind device memory allocation to buffer
 
 		vkRes = vkBindBufferMemory(vkDevice, this->vkBuffer, this->vkDeviceMemory, 0);
@@ -2064,10 +2143,6 @@ namespace UnlimRealms
 			this->Deinitialize();
 			return ResultError(Failure, std::string("GrafBufferVulkan: vkBindBufferMemory failed with VkResult = ") + VkResultToString(vkRes));
 		}
-
-		this->vkDeviceMemoryOffset = 0;
-		this->vkDeviceMemorySize = vkMemoryRequirements.size;
-		this->vkDeviceMemoryAlignment = vkMemoryRequirements.alignment;
 
 		return Result(Success);
 	}

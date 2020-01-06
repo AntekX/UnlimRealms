@@ -16,6 +16,7 @@
 #if defined(_WINDOWS)
 #include "vulkan/vulkan_win32.h"
 #endif
+#include "3rdParty/VulkanMemoryAllocator/vk_mem_alloc.h"
 
 namespace UnlimRealms
 {
@@ -88,6 +89,8 @@ namespace UnlimRealms
 
 		inline VkDevice GetVkDevice() const;
 
+		inline VmaAllocator GetVmaAllocator() const;
+
 		inline ur_uint GetVkDeviceGraphicsQueueId() const;
 
 		inline ur_uint GetVkDeviceComputeQueueId() const;
@@ -105,6 +108,7 @@ namespace UnlimRealms
 		Result Deinitialize();
 
 		VkDevice vkDevice;
+		VmaAllocator vmaAllocator;
 		ur_uint deviceGraphicsQueueId;
 		ur_uint deviceComputeQueueId;
 		ur_uint deviceTransferQueueId;
@@ -314,6 +318,7 @@ namespace UnlimRealms
 		VkDeviceSize vkDeviceMemoryOffset;
 		VkDeviceSize vkDeviceMemorySize;
 		VkDeviceSize vkDeviceMemoryAlignment;
+		VmaAllocation vmaAllocation;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
