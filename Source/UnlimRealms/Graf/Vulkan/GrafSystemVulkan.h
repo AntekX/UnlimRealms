@@ -319,6 +319,7 @@ namespace UnlimRealms
 		VkDeviceSize vkDeviceMemorySize;
 		VkDeviceSize vkDeviceMemoryAlignment;
 		VmaAllocation vmaAllocation;
+		void *mappedMemoryDataPtr;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

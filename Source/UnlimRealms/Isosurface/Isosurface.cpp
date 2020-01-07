@@ -549,13 +549,13 @@ namespace UnlimRealms
 		{ { { 0, 1, 2, 0xff }, { 0, 1, 0xff, 3 } } }
 	};
 
+	#if defined(UR_GRAF)
 	Isosurface::HybridCubes::GrafMesh::GrafMesh()
 	{
 	}
 
 	Isosurface::HybridCubes::GrafMesh::~GrafMesh()
-	{
-	#if defined(UR_GRAF)
+	{	
 		// safely delete GRAF objects
 		if (this->VB != ur_null)
 		{
@@ -566,9 +566,9 @@ namespace UnlimRealms
 		{
 			GrafRenderer* grafRenderer = this->IB->GetRealm().GetComponent<GrafRenderer>();
 			grafRenderer->SafeDelete(this->IB.release());
-		}
-	#endif
+		}	
 	}
+	#endif
 
 	Isosurface::HybridCubes::Tetrahedron::Tetrahedron()
 	{
@@ -928,7 +928,7 @@ namespace UnlimRealms
 				this->updatePoint = refinementPoint;
 
 				// start a new update
-				this->jobUpdate = jobSystem.Add(Job::DataPtr(this), [](Job::Context& ctx) -> void {
+				this->jobUpdate = jobSystem.Add(JobPriority::Low, Job::DataPtr(this), [](Job::Context& ctx) -> void {
 
 					Result result = Success;
 
@@ -1694,15 +1694,15 @@ namespace UnlimRealms
 			// TODO: upload to gpu local buffer, when async upload is supported
 			GrafBufferDesc bufferDesc;
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::IndexBuffer | (ur_uint)GrafBufferUsageFlag::TransferDst;
-			//bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
-			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
+			//bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			bufferDesc.SizeInBytes = (ur_size)indexBuffer.size() * sizeof(Isosurface::Index);
 			res = grafIB->Initialize(grafDevice, { bufferDesc });
-			/*if (Succeeded(res))
+			if (Succeeded(res))
 			{
 				grafRenderer->Upload((ur_byte*)indexBuffer.data(), grafIB.get(), bufferDesc.SizeInBytes);
-			}*/
-			grafIB->Write((ur_byte*)indexBuffer.data(), bufferDesc.SizeInBytes);
+			}
+			//grafIB->Write((ur_byte*)indexBuffer.data(), bufferDesc.SizeInBytes);
 		}
 		if (Failed(res))
 			return Result(Failure);

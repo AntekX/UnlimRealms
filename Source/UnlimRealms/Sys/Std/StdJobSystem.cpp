@@ -18,9 +18,12 @@ namespace UnlimRealms
 		this->shutdown = false;
 		this->jobCount = 0;
 		threads.resize(std::max(int(std::thread::hardware_concurrency()) - 1, 1));
-		for (auto &thread : this->threads)
+		// if there are enough threads, first two will be reserved to exclusively process only High & Normal priority jobs (to avoid stalling run time threads)
+		ur_size maxExclusivePriority = (ur_size)std::max(ur_int(0), ur_int(JobPriority::Count) - ur_int(threads.size()));
+		for (ur_size it = 0; it < threads.size(); ++it)
 		{
-			thread.reset( new std::thread(ThreadFunction, this) );
+			JobPriority threadJobPriorityMin = JobPriority(std::min(std::max(maxExclusivePriority, it), ur_size(JobPriority::Count)));
+			threads[it].reset( new std::thread(ThreadFunction, this, threadJobPriorityMin) );
 		}
 	}
 
@@ -53,7 +56,7 @@ namespace UnlimRealms
 		}
 	}
 
-	void StdJobSystem::ThreadFunction(StdJobSystem *jobSystem)
+	void StdJobSystem::ThreadFunction(StdJobSystem *jobSystem, JobPriority jobPriorityMin)
 	{
 		if (jobSystem != ur_null)
 		{
@@ -69,7 +72,7 @@ namespace UnlimRealms
 				}
 
 				// fetch a job and do it
-				std::shared_ptr<Job> job = jobSystem->FetchJob();
+				std::shared_ptr<Job> job = jobSystem->FetchJob(jobPriorityMin);
 				if (job != nullptr)
 				{
 					job->Execute();

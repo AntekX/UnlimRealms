@@ -29,7 +29,7 @@ namespace UnlimRealms
 
 		virtual void OnJobRemoved() override;
 
-		static void ThreadFunction(StdJobSystem *jobSystem);
+		static void ThreadFunction(StdJobSystem *jobSystem, JobPriority jobPriorityMin);
 
 		std::vector<std::unique_ptr<std::thread>> threads;
 		size_t jobCount;

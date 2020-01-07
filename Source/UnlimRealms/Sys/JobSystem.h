@@ -116,7 +116,7 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class JobPriority
 	{
-		High,
+		High = 0,
 		Normal,
 		Low,
 		Count
@@ -146,7 +146,7 @@ namespace UnlimRealms
 
 	protected:
 
-		std::shared_ptr<Job> FetchJob();
+		std::shared_ptr<Job> FetchJob(JobPriority priorityMin = JobPriority::Count);
 
 		virtual void OnJobAdded();
 

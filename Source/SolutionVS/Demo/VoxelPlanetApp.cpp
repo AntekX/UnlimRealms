@@ -235,7 +235,6 @@ int VoxelPlanetApp::Run()
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::Free);
 	camera.SetPosition(ur_float3(0.0f, 0.0f, -surfaceRadiusMax * 3.0f));
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
-	cameraControl.SetMode(CameraControl::Mode::AroundPoint);
 
 	// Main message loop:
 	ClockTime timer = Clock::now();
@@ -278,7 +277,7 @@ int VoxelPlanetApp::Run()
 			UpdateStage_IsosurfaceReady,
 			UpdateStage_Finished
 		};
-		auto updateFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void
+		auto updateFrameJob = realm.GetJobSystem().Add(JobPriority::High, ur_null, [&](Job::Context& ctx) -> void
 		{
 			// reset update progress fence
 			ctx.progress = UpdateStage_Beginning;
@@ -318,7 +317,7 @@ int VoxelPlanetApp::Run()
 				initializeGrafRenderTargetObjects();
 			}
 
-			auto drawFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void
+			auto drawFrameJob = realm.GetJobSystem().Add(JobPriority::High, ur_null, [&](Job::Context& ctx) -> void
 			{
 				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();

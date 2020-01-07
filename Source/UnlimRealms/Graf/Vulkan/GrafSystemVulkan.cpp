@@ -19,11 +19,11 @@ namespace UnlimRealms
 
 	#if defined(_DEBUG)
 	#define UR_GRAF_LOG_LEVEL_DEBUG
-	#define UR_GRAF_VULKAN_DEBUG_LAYER
 	#endif
+	#define UR_GRAF_VULKAN_DEBUG_LAYER
 
 	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_1
-	#define UR_GRAF_VULKAN_VMA_ENABLED 0
+	#define UR_GRAF_VULKAN_VMA_ENABLED 1
 	#define UR_GRAF_VULKAN_IMPLICIT_WAIT_DEVICE 1
 
 	// vulkan objects destruction safety policy
@@ -1812,17 +1812,18 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafImageVulkan: vkAllocateMemory failed with VkResult = ") + VkResultToString(vkRes));
 		}
 
-		// bind device memory allocation to buffer
-
-		vkRes = vkBindImageMemory(vkDevice, this->vkImage, this->vkDeviceMemory, 0);
-		if (vkRes != VK_SUCCESS)
-		{
-			this->Deinitialize();
-			return ResultError(Failure, std::string("GrafImageVulkan: vkBindBufferMemory failed with VkResult = ") + VkResultToString(vkRes));
-		}
 		this->vkDeviceMemoryOffset = 0;
 		this->vkDeviceMemorySize = vkMemoryRequirements.size;
 		this->vkDeviceMemoryAlignment = vkMemoryRequirements.alignment;
+
+		// bind device memory allocation to buffer
+
+		vkRes = vkBindImageMemory(vkDevice, this->vkImage, this->vkDeviceMemory, this->vkDeviceMemoryOffset);
+		if (vkRes != VK_SUCCESS)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafImageVulkan: vkBindImageMemory failed with VkResult = ") + VkResultToString(vkRes));
+		}
 
 		// create views
 
@@ -1989,6 +1990,7 @@ namespace UnlimRealms
 		this->vkDeviceMemorySize = 0;
 		this->vkDeviceMemoryAlignment = 0;
 		this->vmaAllocation = VK_NULL_HANDLE;
+		this->mappedMemoryDataPtr = ur_null;
 	}
 
 	GrafBufferVulkan::~GrafBufferVulkan()
@@ -2006,9 +2008,16 @@ namespace UnlimRealms
 			vmaFreeMemory(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVmaAllocator(), this->vmaAllocation);
 			this->vmaAllocation = VK_NULL_HANDLE;
 			this->vkDeviceMemory = VK_NULL_HANDLE; // handle to VMA allocation info
+			this->mappedMemoryDataPtr = ur_null; // managed by VMA if was created mapped
 		}
 		if (this->vkDeviceMemory != VK_NULL_HANDLE)
 		{
+			if (this->mappedMemoryDataPtr)
+			{
+				// unmap permanently mapped memory
+				vkUnmapMemory(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDeviceMemory);
+				this->mappedMemoryDataPtr = ur_null;
+			}
 			vkFreeMemory(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDeviceMemory, ur_null);
 			this->vkDeviceMemory = VK_NULL_HANDLE;
 		}
@@ -2067,6 +2076,8 @@ namespace UnlimRealms
 		VkPhysicalDeviceMemoryProperties vkDeviceMemoryProperties;
 		vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &vkDeviceMemoryProperties);
 
+		ur_bool alwaysMapped = (ur_uint(GrafDeviceMemoryFlag::CpuVisible) == initParams.BufferDesc.MemoryType); // keep mapped cpu read/write memory
+
 		// allocate memory
 		#if (UR_GRAF_VULKAN_VMA_ENABLED)
 
@@ -2086,6 +2097,11 @@ namespace UnlimRealms
 			return ResultError(Failure, "GrafBufferVulkan: failed to find required memory type");
 		}
 
+		if (alwaysMapped)
+		{
+			vmaAllocationCreateInfo.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
+		}
+
 		VmaAllocationInfo vmaAllocationInfo = {};
 		vkRes = vmaAllocateMemoryForBuffer(grafDeviceVulkan->GetVmaAllocator(), this->vkBuffer, &vmaAllocationCreateInfo, &this->vmaAllocation, &vmaAllocationInfo);
 		if (vkRes != VK_SUCCESS)
@@ -2098,6 +2114,7 @@ namespace UnlimRealms
 		this->vkDeviceMemoryOffset = vmaAllocationInfo.offset;
 		this->vkDeviceMemorySize = vmaAllocationInfo.size;
 		this->vkDeviceMemoryAlignment = vkMemoryRequirements.alignment;
+		this->mappedMemoryDataPtr = vmaAllocationInfo.pMappedData;
 
 		#else
 
@@ -2132,18 +2149,29 @@ namespace UnlimRealms
 		this->vkDeviceMemoryOffset = 0;
 		this->vkDeviceMemorySize = vkMemoryRequirements.size;
 		this->vkDeviceMemoryAlignment = vkMemoryRequirements.alignment;
+		this->mappedMemoryDataPtr = ur_null;
+
+		if (alwaysMapped)
+		{
+			vkRes = vkMapMemory(vkDevice, this->vkDeviceMemory, this->vkDeviceMemoryOffset, this->vkDeviceMemorySize, 0, &this->mappedMemoryDataPtr);
+			if (vkRes != VK_SUCCESS)
+			{
+				this->Deinitialize();
+				return ResultError(Failure, std::string("GrafBufferVulkan: vkMapMemory failed with VkResult = ") + VkResultToString(vkRes));
+			}
+		}
 
 		#endif
 
 		// bind device memory allocation to buffer
 
-		vkRes = vkBindBufferMemory(vkDevice, this->vkBuffer, this->vkDeviceMemory, 0);
+		vkRes = vkBindBufferMemory(vkDevice, this->vkBuffer, this->vkDeviceMemory, this->vkDeviceMemoryOffset);
 		if (vkRes != VK_SUCCESS)
 		{
 			this->Deinitialize();
 			return ResultError(Failure, std::string("GrafBufferVulkan: vkBindBufferMemory failed with VkResult = ") + VkResultToString(vkRes));
 		}
-
+		
 		return Result(Success);
 	}
 
@@ -2172,16 +2200,27 @@ namespace UnlimRealms
 		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
 		VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
 
-		void* mappedMemoryPtr = ur_null;
-		VkResult vkRes = vkMapMemory(vkDevice, this->vkDeviceMemory, this->vkDeviceMemoryOffset + dstOffset, dataSize, 0, &mappedMemoryPtr);
-		if (vkRes != VK_SUCCESS)
+		void* dstMappedPtr = ur_null;
+		ur_bool localyMapped = (ur_null == this->mappedMemoryDataPtr);
+		if (localyMapped)
 		{
-			return ResultError(Failure, std::string("GrafBufferVulkan: vkMapMemory failed with VkResult = ") + VkResultToString(vkRes));
+			VkResult vkRes = vkMapMemory(vkDevice, this->vkDeviceMemory, this->vkDeviceMemoryOffset + dstOffset, dataSize, 0, &dstMappedPtr);
+			if (vkRes != VK_SUCCESS)
+			{
+				return ResultError(Failure, std::string("GrafBufferVulkan: vkMapMemory failed with VkResult = ") + VkResultToString(vkRes));
+			}
+		}
+		else
+		{
+			dstMappedPtr = (ur_byte*)this->mappedMemoryDataPtr + dstOffset;
 		}
 
-		writeCallback((ur_byte*)mappedMemoryPtr);
+		writeCallback((ur_byte*)dstMappedPtr);
 
-		vkUnmapMemory(vkDevice, this->vkDeviceMemory);
+		if (localyMapped)
+		{
+			vkUnmapMemory(vkDevice, this->vkDeviceMemory);
+		}
 
 		return Result(Success);
 	}
@@ -2197,16 +2236,27 @@ namespace UnlimRealms
 		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
 		VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
 
-		void* mappedMemoryPtr = ur_null;
-		VkResult vkRes = vkMapMemory(vkDevice, this->vkDeviceMemory, this->vkDeviceMemoryOffset + srcOffset, dataSize, 0, &mappedMemoryPtr);
-		if (vkRes != VK_SUCCESS)
+		void* srcMappedPtr = ur_null;
+		ur_bool localyMapped = (ur_null == this->mappedMemoryDataPtr);
+		if (localyMapped)
 		{
-			return ResultError(Failure, std::string("GrafBufferVulkan: vkMapMemory failed with VkResult = ") + VkResultToString(vkRes));
+			VkResult vkRes = vkMapMemory(vkDevice, this->vkDeviceMemory, this->vkDeviceMemoryOffset + srcOffset, dataSize, 0, &srcMappedPtr);
+			if (vkRes != VK_SUCCESS)
+			{
+				return ResultError(Failure, std::string("GrafBufferVulkan: vkMapMemory failed with VkResult = ") + VkResultToString(vkRes));
+			}
+		}
+		else
+		{
+			srcMappedPtr = (ur_byte*)this->mappedMemoryDataPtr + srcOffset;
 		}
 
-		memcpy(dataPtr + dstOffset, mappedMemoryPtr, dataSize);
+		memcpy(dataPtr + dstOffset, srcMappedPtr, dataSize);
 
-		vkUnmapMemory(vkDevice, this->vkDeviceMemory);
+		if (localyMapped)
+		{
+			vkUnmapMemory(vkDevice, this->vkDeviceMemory);
+		}
 
 		return Result(Success);
 	}

@@ -144,14 +144,17 @@ namespace UnlimRealms
 		job.Interrupt();
 	}
 
-	std::shared_ptr<Job> JobSystem::FetchJob()
+	std::shared_ptr<Job> JobSystem::FetchJob(JobPriority priorityMin)
 	{
 		std::shared_ptr<Job> job(ur_null);
 		
 		{ // locked scope: find a job
 			std::lock_guard<std::mutex> lockQueue(this->queueMutex);
-			for (auto &queue : this->priorityQueue)
+			for (ur_uint priorityIdx = 0; priorityIdx < ur_uint(JobPriority::Count); ++priorityIdx)
 			{
+				if (priorityIdx > ur_uint(priorityMin))
+					break;
+				auto& queue = priorityQueue[priorityIdx];
 				if (!queue.jobs.empty())
 				{
 					job = queue.jobs.back();
