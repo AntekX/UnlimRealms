@@ -883,12 +883,12 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	#define PROFILER_ENABLED 0
+	#define PROFILER_ENABLED 1
 	class UR_DECL Profiler
 	{
 	public:
 
-		struct ScopedMarker
+		struct UR_DECL ScopedMarker
 		{
 		public:
 
@@ -901,14 +901,14 @@ namespace UnlimRealms
 			const char* message;
 		};
 
-		static inline const void Begin();
+		static const void Begin();
 
-		static inline const ur_uint64 End(Log* log = ur_null, const char* message = ur_null);
+		static const ur_uint64 End(Log* log = ur_null, const char* message = ur_null);
 	};
 
 	#if (PROFILER_ENABLED)
-	#define PROFILE_LINE(code_line, log) { Profiler ::ScopedMarker marker(log, #code_line); code_line; }
-	#define PROFILE(code_line, log, message) { Profiler ::ScopedMarker marker(log, message); code_line; }
+	#define PROFILE_LINE(code_line, log) Profiler::Begin(); code_line; Profiler::End(log, #code_line);
+	#define PROFILE(code_line, log, message) Profiler::Begin(); code_line; Profiler::End(log, message);
 	#else
 	#define PROFILE_LINE(code_line, log) code_line
 	#define PROFILE(code_line, log, message) code_line

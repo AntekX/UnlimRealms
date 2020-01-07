@@ -750,14 +750,14 @@ namespace UnlimRealms
 	static thread_local ClockTime ProfilerThreadTimerBegin;
 	static thread_local ClockTime ProfilerThreadTimerEnd;
 
-	inline const void Profiler::Begin()
+	const void Profiler::Begin()
 	{
 	#if (PROFILER_ENABLED)
 		ProfilerThreadTimerBegin = Clock::now();
 	#endif
 	}
 
-	inline const ur_uint64 Profiler::End(Log* log, const char* message)
+	const ur_uint64 Profiler::End(Log* log, const char* message)
 	{
 	#if (PROFILER_ENABLED)
 		ProfilerThreadTimerEnd = Clock::now();

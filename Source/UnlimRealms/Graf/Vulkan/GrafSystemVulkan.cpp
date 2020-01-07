@@ -19,8 +19,10 @@ namespace UnlimRealms
 
 	#if defined(_DEBUG)
 	#define UR_GRAF_LOG_LEVEL_DEBUG
-	#endif
 	#define UR_GRAF_VULKAN_DEBUG_LAYER
+	#else
+	//#define UR_GRAF_VULKAN_DEBUG_LAYER
+	#endif
 
 	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_1
 	#define UR_GRAF_VULKAN_VMA_ENABLED 1

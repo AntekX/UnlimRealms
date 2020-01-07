@@ -31,7 +31,7 @@ int VoxelPlanetApp::Run()
 	realm.Initialize();
 
 	// create system canvas
-	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindow, L"Voxel Planet Demo"));
+	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindowMaximized, L"Voxel Planet Demo"));
 	canvas->Initialize(RectI(0, 0, (ur_uint)GetSystemMetrics(SM_CXSCREEN), (ur_uint)GetSystemMetrics(SM_CYSCREEN)));
 	realm.SetCanvas(std::move(canvas));
 	ur_uint canvasWidth = realm.GetCanvas()->GetClientBound().Width();
@@ -335,11 +335,6 @@ int VoxelPlanetApp::Run()
 					
 					updateFrameJob->WaitProgress(UpdateStage_IsosurfaceReady);
 					// TODO: render demo isosurface here
-					// TEMP: draw some test primitives
-					const ur_float bbR = surfaceRadiusMin;
-					const ur_float3 testPtimitiveVertices[] = { {-bbR,-bbR, 0.0f }, { bbR,-bbR, 0.0f }, { bbR, bbR, 0.0f }, {-bbR, bbR, 0.0f } };
-					genericRender->DrawWireBox({ -bbR,-bbR,-bbR }, { bbR, bbR, bbR }, ur_float4(1.0f, 1.0f, 0.0f, 1.0f));
-					genericRender->DrawConvexPolygon(4, testPtimitiveVertices, ur_float4(0.5f, 0.5f, 0.5f, 1.0f));
 				}
 
 				{ // color & depth render pass
@@ -380,7 +375,7 @@ int VoxelPlanetApp::Run()
 						grafRenderer->ShowImgui();
 						cameraControl.ShowImgui();
 						isosurface->ShowImgui();
-						
+
 						imguiRender->Render(*grafCmdListCrnt);
 					}
 
