@@ -65,9 +65,16 @@ namespace UnlimRealms
 	private:
 
 		Result Deinitialize();
+		
+		static VKAPI_ATTR VkBool32 VKAPI_CALL DebugUtilsCallback(
+			VkDebugUtilsMessageSeverityFlagBitsEXT		messageSeverity,
+			VkDebugUtilsMessageTypeFlagsEXT				messageTypes,
+			const VkDebugUtilsMessengerCallbackDataEXT*	pCallbackData,
+			void*										pUserData);
 
 		VkInstance vkInstance;
 		std::vector<VkPhysicalDevice> vkPhysicalDevices;
+		VkDebugUtilsMessengerEXT vkDebugUtilsMessenger;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,11 +104,17 @@ namespace UnlimRealms
 
 		inline ur_uint GetVkDeviceTransferQueueId() const;
 
-		VkCommandPool GetVkGraphicsCommandPool();
+		struct UR_DECL ThreadCommandPool
+		{
+			VkCommandPool vkCommandPool;
+			std::mutex accessMutex;
+		};
 
-		VkCommandPool GetVkComputeCommandPool();
+		ThreadCommandPool* GetVkGraphicsCommandPool();
 
-		VkCommandPool GetVkTransferCommandPool();
+		ThreadCommandPool* GetVkComputeCommandPool();
+
+		ThreadCommandPool* GetVkTransferCommandPool();
 
 	private:
 
@@ -112,9 +125,9 @@ namespace UnlimRealms
 		ur_uint deviceGraphicsQueueId;
 		ur_uint deviceComputeQueueId;
 		ur_uint deviceTransferQueueId;
-		std::unordered_map<std::thread::id, VkCommandPool> vkGraphicsCommandPools;
-		std::unordered_map<std::thread::id, VkCommandPool> vkComputeCommandPools;
-		std::unordered_map<std::thread::id, VkCommandPool> vkTransferCommandPools;
+		std::unordered_map<std::thread::id, std::unique_ptr<ThreadCommandPool>> graphicsCommandPools;
+		std::unordered_map<std::thread::id, std::unique_ptr<ThreadCommandPool>> computeCommandPools;
+		std::unordered_map<std::thread::id, std::unique_ptr<ThreadCommandPool>> transferCommandPools;
 		std::mutex graphicsCommandPoolsMutex;
 		std::mutex computeCommandPoolsMutex;
 		std::mutex transferCommandPoolsMutex;
@@ -181,7 +194,7 @@ namespace UnlimRealms
 
 		Result Deinitialize();
 
-		VkCommandPool vkCommandPool;
+		GrafDeviceVulkan::ThreadCommandPool* commandPool;
 		VkCommandBuffer vkCommandBuffer;
 		VkFence vkSubmitFence;
 	};

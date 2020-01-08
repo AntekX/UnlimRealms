@@ -21,7 +21,7 @@ namespace UnlimRealms
 	#define UR_GRAF_LOG_LEVEL_DEBUG
 	#define UR_GRAF_VULKAN_DEBUG_LAYER
 	#else
-	//#define UR_GRAF_VULKAN_DEBUG_LAYER
+	#define UR_GRAF_VULKAN_DEBUG_LAYER
 	#endif
 
 	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_1
@@ -118,6 +118,7 @@ namespace UnlimRealms
 		GrafSystem(realm)
 	{
 		this->vkInstance = VK_NULL_HANDLE;
+		this->vkDebugUtilsMessenger = VK_NULL_HANDLE;
 	}
 
 	GrafSystemVulkan::~GrafSystemVulkan()
@@ -129,6 +130,15 @@ namespace UnlimRealms
 	{
 		this->grafPhysicalDeviceDesc.clear();
 		this->vkPhysicalDevices.clear();
+
+		if (this->vkDebugUtilsMessenger != VK_NULL_HANDLE)
+		{
+			PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(this->vkInstance, "vkDestroyDebugUtilsMessengerEXT");
+			if (vkDestroyDebugUtilsMessengerEXT != ur_null)
+			{
+				vkDestroyDebugUtilsMessengerEXT(this->vkInstance, this->vkDebugUtilsMessenger, ur_null);
+			}
+		}
 
 		if (this->vkInstance != VK_NULL_HANDLE)
 		{
@@ -247,7 +257,57 @@ namespace UnlimRealms
 			#endif
 		}
 
+		// setup debug utils
+		#if defined(UR_GRAF_VULKAN_DEBUG_LAYER)
+
+		VkDebugUtilsMessengerCreateInfoEXT vkDebugUtilsInfo = {};
+		vkDebugUtilsInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+		vkDebugUtilsInfo.flags = 0;
+		vkDebugUtilsInfo.messageSeverity = (
+			VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT);
+		vkDebugUtilsInfo.messageType = (
+			VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
+		vkDebugUtilsInfo.pfnUserCallback = GrafSystemVulkan::DebugUtilsCallback;
+		vkDebugUtilsInfo.pUserData = reinterpret_cast<void*>(&this->GetRealm().GetLog());
+
+		PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(this->vkInstance, "vkCreateDebugUtilsMessengerEXT");
+		if (vkCreateDebugUtilsMessengerEXT != ur_null)
+		{
+			res = vkCreateDebugUtilsMessengerEXT(this->vkInstance, &vkDebugUtilsInfo, ur_null, &this->vkDebugUtilsMessenger);
+			if (res != VK_SUCCESS)
+			{
+				return ResultError(Failure, std::string("GrafSystemVulkan: vkCreateDebugUtilsMessengerEXT failed with VkResult = ") + VkResultToString(res));
+			}
+		}
+		#endif
+		
 		return Result(Success);
+	}
+
+	VkBool32 GrafSystemVulkan::DebugUtilsCallback(
+		VkDebugUtilsMessageSeverityFlagBitsEXT		messageSeverity,
+		VkDebugUtilsMessageTypeFlagsEXT				messageTypes,
+		const VkDebugUtilsMessengerCallbackDataEXT*	pCallbackData,
+		void*										pUserData)
+	{
+		if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+		{
+			if (pCallbackData != ur_null)
+			{
+				Log* log = reinterpret_cast<Log*>(pUserData);
+				log->WriteLine(std::string("VulkanValidationLayer: ") + pCallbackData->pMessage);
+			}
+			if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+			{
+				assert(false);
+			}
+		}
+		return VK_FALSE;
 	}
 
 	Result GrafSystemVulkan::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
@@ -351,31 +411,31 @@ namespace UnlimRealms
 		this->deviceComputeQueueId = ur_uint(-1);
 		this->deviceTransferQueueId = ur_uint(-1);
 
-		if (!this->vkGraphicsCommandPools.empty())
+		if (!this->graphicsCommandPools.empty())
 		{
-			for (auto& poolEntry : this->vkGraphicsCommandPools)
+			for (auto& poolEntry : this->graphicsCommandPools)
 			{
-				vkDestroyCommandPool(this->vkDevice, poolEntry.second, ur_null);
+				vkDestroyCommandPool(this->vkDevice, poolEntry.second->vkCommandPool, ur_null);
 			}
-			this->vkGraphicsCommandPools.clear();
+			this->graphicsCommandPools.clear();
 		}
 
-		if (!this->vkComputeCommandPools.empty())
+		if (!this->computeCommandPools.empty())
 		{
-			for (auto& poolEntry : this->vkComputeCommandPools)
+			for (auto& poolEntry : this->computeCommandPools)
 			{
-				vkDestroyCommandPool(this->vkDevice, poolEntry.second, ur_null);
+				vkDestroyCommandPool(this->vkDevice, poolEntry.second->vkCommandPool, ur_null);
 			}
-			this->vkComputeCommandPools.clear();
+			this->computeCommandPools.clear();
 		}
 
-		if (!this->vkTransferCommandPools.empty())
+		if (!this->transferCommandPools.empty())
 		{
-			for (auto& poolEntry : this->vkTransferCommandPools)
+			for (auto& poolEntry : this->transferCommandPools)
 			{
-				vkDestroyCommandPool(this->vkDevice, poolEntry.second, ur_null);
+				vkDestroyCommandPool(this->vkDevice, poolEntry.second->vkCommandPool, ur_null);
 			}
-			this->vkTransferCommandPools.clear();
+			this->transferCommandPools.clear();
 		}
 
 		if (this->vmaAllocator != VK_NULL_HANDLE)
@@ -494,8 +554,8 @@ namespace UnlimRealms
 
 		// pre-initialize default command pool for current thread
 
-		VkCommandPool vkGraphicsCommandPool = GetVkGraphicsCommandPool();
-		if (VK_NULL_HANDLE == vkGraphicsCommandPool)
+		ThreadCommandPool* graphicsCommandPool = GetVkGraphicsCommandPool();
+		if (ur_null == graphicsCommandPool || VK_NULL_HANDLE == graphicsCommandPool->vkCommandPool)
 		{
 			this->Deinitialize();
 			return ResultError(Failure, std::string("GrafDeviceVulkan: vkCreateCommandPool failed with VkResult = ") + VkResultToString(res));
@@ -504,17 +564,17 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	VkCommandPool GrafDeviceVulkan::GetVkGraphicsCommandPool()
+	GrafDeviceVulkan::ThreadCommandPool* GrafDeviceVulkan::GetVkGraphicsCommandPool()
 	{
 		std::lock_guard<std::mutex> lock(this->graphicsCommandPoolsMutex);
 
 		// try to find exisitng command pool for current thread
 
 		std::thread::id thisThreadId = std::this_thread::get_id();
-		auto& poolIter = this->vkGraphicsCommandPools.find(thisThreadId);
-		if (poolIter != this->vkGraphicsCommandPools.end())
+		auto& poolIter = this->graphicsCommandPools.find(thisThreadId);
+		if (poolIter != this->graphicsCommandPools.end())
 		{
-			return poolIter->second;
+			return poolIter->second.get();
 		}
 
 		// create graphics queue command pool
@@ -528,28 +588,30 @@ namespace UnlimRealms
 		VkResult res = vkCreateCommandPool(this->vkDevice, &vkCommandPoolInfo, ur_null, &vkGraphicsCommandPool);
 		if (vkGraphicsCommandPool != VK_NULL_HANDLE)
 		{
-			this->vkGraphicsCommandPools[thisThreadId] = vkGraphicsCommandPool;
+			std::unique_ptr<ThreadCommandPool> threadCommandPool(new ThreadCommandPool());
+			threadCommandPool->vkCommandPool = vkGraphicsCommandPool;
+			this->graphicsCommandPools[thisThreadId] = std::move(threadCommandPool);
 		}
 
-		return vkGraphicsCommandPool;
+		return this->graphicsCommandPools[thisThreadId].get();
 	}
 
-	VkCommandPool GrafDeviceVulkan::GetVkComputeCommandPool()
+	GrafDeviceVulkan::ThreadCommandPool* GrafDeviceVulkan::GetVkComputeCommandPool()
 	{
 		std::lock_guard<std::mutex> lock(this->computeCommandPoolsMutex);
 
 		// not supported
 
-		return VK_NULL_HANDLE;
+		return ur_null;
 	}
 
-	VkCommandPool GrafDeviceVulkan::GetVkTransferCommandPool()
+	GrafDeviceVulkan::ThreadCommandPool* GrafDeviceVulkan::GetVkTransferCommandPool()
 	{
 		std::lock_guard<std::mutex> lock(this->transferCommandPoolsMutex);
 
 		// not supported
 
-		return VK_NULL_HANDLE;
+		return ur_null;
 	}
 
 	Result GrafDeviceVulkan::Record(GrafCommandList* grafCommandList)
@@ -610,7 +672,7 @@ namespace UnlimRealms
 	GrafCommandListVulkan::GrafCommandListVulkan(GrafSystem &grafSystem) :
 		GrafCommandList(grafSystem)
 	{
-		this->vkCommandPool = VK_NULL_HANDLE;
+		this->commandPool = ur_null;
 		this->vkCommandBuffer = VK_NULL_HANDLE;
 		this->vkSubmitFence = VK_NULL_HANDLE;
 	}
@@ -634,11 +696,12 @@ namespace UnlimRealms
 		if (this->vkCommandBuffer != VK_NULL_HANDLE)
 		{
 			GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
-			vkFreeCommandBuffers(grafDeviceVulkan->GetVkDevice(), this->vkCommandPool, 1, &this->vkCommandBuffer);
+			std::lock_guard<std::mutex> lockPool(this->commandPool->accessMutex);
+			vkFreeCommandBuffers(grafDeviceVulkan->GetVkDevice(), this->commandPool->vkCommandPool, 1, &this->vkCommandBuffer);
 			this->vkCommandBuffer = VK_NULL_HANDLE;
 		}
 
-		this->vkCommandPool = VK_NULL_HANDLE;
+		this->commandPool = ur_null;
 
 		return Result(Success);
 	}
@@ -660,15 +723,23 @@ namespace UnlimRealms
 
 		// allocate command bufer
 
-		this->vkCommandPool = grafDeviceVulkan->GetVkGraphicsCommandPool();
+		this->commandPool = grafDeviceVulkan->GetVkGraphicsCommandPool();
+		if (ur_null == this->commandPool)
+		{
+			return ResultError(InvalidArgs, std::string("GrafCommandListVulkan: failed to initialize, invalid command pool"));
+		}
 
 		VkCommandBufferAllocateInfo vkCommandBufferInfo = {};
 		vkCommandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		vkCommandBufferInfo.commandPool = this->vkCommandPool;
+		vkCommandBufferInfo.commandPool = this->commandPool->vkCommandPool;
 		vkCommandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		vkCommandBufferInfo.commandBufferCount = 1;
 
-		VkResult vkRes = vkAllocateCommandBuffers(vkDevice, &vkCommandBufferInfo, &this->vkCommandBuffer);
+		VkResult vkRes(VK_SUCCESS);
+		{
+			std::lock_guard<std::mutex> lockPool(this->commandPool->accessMutex);
+			vkRes = vkAllocateCommandBuffers(vkDevice, &vkCommandBufferInfo, &this->vkCommandBuffer);
+		}
 		if (vkRes != VK_SUCCESS)
 			return ResultError(Failure, std::string("GrafCommandListVulkan: vkAllocateCommandBuffers failed with VkResult = ") + VkResultToString(vkRes));
 
@@ -701,9 +772,13 @@ namespace UnlimRealms
 		vkBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		vkBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
+		this->commandPool->accessMutex.lock();
 		VkResult vkRes = vkBeginCommandBuffer(this->vkCommandBuffer, &vkBeginInfo);
 		if (vkRes != VK_SUCCESS)
+		{
+			this->commandPool->accessMutex.unlock();
 			return ResultError(Failure, std::string("GrafCommandListVulkan: vkBeginCommandBuffer failed with VkResult = ") + VkResultToString(vkRes));
+		}
 
 		return Result(Success);
 	}
@@ -712,8 +787,9 @@ namespace UnlimRealms
 	{
 		if (VK_NULL_HANDLE == this->vkCommandBuffer)
 			return Result(NotInitialized);
-
+		
 		VkResult vkRes = vkEndCommandBuffer(this->vkCommandBuffer);
+		this->commandPool->accessMutex.unlock();
 		if (vkRes != VK_SUCCESS)
 			return ResultError(Failure, std::string("GrafCommandListVulkan: vkEndCommandBuffer failed with VkResult = ") + VkResultToString(vkRes));
 
