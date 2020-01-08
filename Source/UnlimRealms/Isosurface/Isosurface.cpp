@@ -1670,18 +1670,15 @@ namespace UnlimRealms
 		Result res = grafSystem->CreateBuffer(grafVB);
 		if (Succeeded(res))
 		{
-			// TODO: upload to gpu local buffer, when async upload is supported
 			GrafBufferDesc bufferDesc;
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer | (ur_uint)GrafBufferUsageFlag::TransferDst;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
-			//bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			bufferDesc.SizeInBytes = (ur_size)vertexBuffer.size() * sizeof(Isosurface::Vertex);
 			res = grafVB->Initialize(grafDevice, { bufferDesc });
 			if (Succeeded(res))
 			{
 				grafRenderer->Upload((ur_byte*)vertexBuffer.data(), grafVB.get(), bufferDesc.SizeInBytes);
 			}
-			//grafVB->Write((ur_byte*)vertexBuffer.data(), bufferDesc.SizeInBytes);
 		}
 		if (Failed(res))
 			return Result(Failure);
@@ -1691,18 +1688,15 @@ namespace UnlimRealms
 		res = grafSystem->CreateBuffer(grafIB);
 		if (Succeeded(res))
 		{
-			// TODO: upload to gpu local buffer, when async upload is supported
 			GrafBufferDesc bufferDesc;
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::IndexBuffer | (ur_uint)GrafBufferUsageFlag::TransferDst;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
-			//bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			bufferDesc.SizeInBytes = (ur_size)indexBuffer.size() * sizeof(Isosurface::Index);
 			res = grafIB->Initialize(grafDevice, { bufferDesc });
 			if (Succeeded(res))
 			{
 				grafRenderer->Upload((ur_byte*)indexBuffer.data(), grafIB.get(), bufferDesc.SizeInBytes);
 			}
-			//grafIB->Write((ur_byte*)indexBuffer.data(), bufferDesc.SizeInBytes);
 		}
 		if (Failed(res))
 			return Result(Failure);

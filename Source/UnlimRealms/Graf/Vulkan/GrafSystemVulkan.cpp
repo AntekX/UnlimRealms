@@ -21,7 +21,7 @@ namespace UnlimRealms
 	#define UR_GRAF_LOG_LEVEL_DEBUG
 	#define UR_GRAF_VULKAN_DEBUG_LAYER
 	#else
-	#define UR_GRAF_VULKAN_DEBUG_LAYER
+	//#define UR_GRAF_VULKAN_DEBUG_LAYER
 	#endif
 
 	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_1

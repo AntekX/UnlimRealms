@@ -57,7 +57,7 @@ namespace UnlimRealms
 
 		virtual Result AddCommandListCallback(GrafCommandList *executionCmdList, GrafCallbackContext ctx, GrafCommandListCallback callback);
 
-		virtual Result SafeDelete(GrafDeviceEntity* grafDeviceEntity);
+		virtual Result SafeDelete(GrafDeviceEntity* grafDeviceEntity, GrafCommandList *grafSycnCmdList = ur_null);
 
 		virtual Result Upload(ur_byte *dataPtr, GrafBuffer* dstBuffer, ur_size dataSize, ur_size dstOffset = 0);
 

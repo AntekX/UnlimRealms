@@ -268,32 +268,36 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafRenderer::SafeDelete(GrafDeviceEntity* grafDeviceEntity)
+	Result GrafRenderer::SafeDelete(GrafDeviceEntity* grafDeviceEntity, GrafCommandList *grafSycnCmdList)
 	{
 		if (ur_null == grafDeviceEntity)
 			return Result(InvalidArgs);
 
-		// create synchronization command list
-		std::unique_ptr<GrafCommandList> grafSyncCmdList;
-		Result res = this->grafSystem->CreateCommandList(grafSyncCmdList);
-		if (Succeeded(res))
+		if (ur_null == grafSycnCmdList)
 		{
-			res = grafSyncCmdList->Initialize(this->grafDevice.get());
-		}
-		if (Failed(res))
-			return ResultError(Failure, "GrafRenderer: failed to create upload command list");
+			// create synchronization command list
+			std::unique_ptr<GrafCommandList> newSyncCmdList;
+			Result res = this->grafSystem->CreateCommandList(newSyncCmdList);
+			if (Succeeded(res))
+			{
+				res = newSyncCmdList->Initialize(this->grafDevice.get());
+			}
+			if (Failed(res))
+				return ResultError(Failure, "GrafRenderer: failed to create upload command list");
 
-		// record empty list (we are interesed in submission fence only)
-		grafSyncCmdList->Begin();
-		grafSyncCmdList->End();
-		this->grafDevice->Record(grafSyncCmdList.get());
+			// record empty list (we are interesed in submission fence only)
+			newSyncCmdList->Begin();
+			newSyncCmdList->End();
+			this->grafDevice->Record(newSyncCmdList.get());
+
+			grafSycnCmdList = newSyncCmdList.release();
+		}
 
 		// destroy object when fence is signaled
-		GrafCommandList* grafSyncCmdListPtr = grafSyncCmdList.release();
-		this->AddCommandListCallback(grafSyncCmdListPtr, {}, [grafSyncCmdListPtr, grafDeviceEntity](GrafCallbackContext& ctx) -> Result
+		this->AddCommandListCallback(grafSycnCmdList, {}, [grafSycnCmdList, grafDeviceEntity](GrafCallbackContext& ctx) -> Result
 		{
 			delete grafDeviceEntity;
-			delete grafSyncCmdListPtr;
+			delete grafSycnCmdList;
 			return Result(Success);
 		});
 
@@ -538,6 +542,10 @@ namespace UnlimRealms
 				ImGui::Text("Current ofs (bytes): %i", crntAllocatorOffset);
 				ImGui::TreePop();
 			}
+		}
+		{
+			std::lock_guard<std::mutex> lock(this->pendingCommandListMutex);
+			ImGui::Text("PendingCallbacks: %i", this->pendingCommandListCallbacks.size());
 		}
 		ImGui::End();
 
