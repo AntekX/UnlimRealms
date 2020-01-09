@@ -752,6 +752,7 @@ namespace UnlimRealms
 	{
 		this->desc = desc;
 		this->freezeUpdate = false;
+		this->hideSurface = false;
 		this->drawTetrahedra = false;
 		this->hideEmptyTetrahedra = false;
 		this->drawHexahedra = false;
@@ -1804,7 +1805,7 @@ namespace UnlimRealms
 			{
 				const auto &gfxVB = hexahedron.gfxMesh.VB;
 				const auto &gfxIB = hexahedron.gfxMesh.IB;
-				if (gfxVB != ur_null && gfxIB != ur_null)
+				if (gfxVB != ur_null && gfxIB != ur_null && !this->hideSurface)
 				{
 					const ur_uint indexCount = (gfxIB.get() ? gfxIB->GetDesc().Size / sizeof(Isosurface::Index) : 0);
 					this->stats.primitivesRendered += indexCount / 3;
@@ -1856,7 +1857,7 @@ namespace UnlimRealms
 			{
 				const auto &grafVB = hexahedron.grafMesh.VB;
 				const auto &grafIB = hexahedron.grafMesh.IB;
-				if (grafVB != ur_null && grafIB != ur_null)
+				if (grafVB != ur_null && grafIB != ur_null && !this->hideSurface)
 				{
 					const ur_uint indexCount = ur_uint(grafIB.get() ? grafIB->GetDesc().SizeInBytes / sizeof(Isosurface::Index) : 0);
 					this->stats.primitivesRendered += indexCount / 3;
@@ -1951,6 +1952,7 @@ namespace UnlimRealms
 		if (ImGui::TreeNode("HybridCubes"))
 		{
 			ImGui::Checkbox("Freeze update", &this->freezeUpdate);
+			ImGui::Checkbox("Hide surface", &this->hideSurface);
 			ImGui::Checkbox("Draw tetrahedra", &this->drawTetrahedra);
 			ImGui::Checkbox("Hide empty tetrahedra", &this->hideEmptyTetrahedra);
 			ImGui::Checkbox("Draw hexahedra", &this->drawHexahedra);

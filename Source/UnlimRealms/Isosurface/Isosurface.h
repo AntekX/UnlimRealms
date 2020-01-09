@@ -352,6 +352,7 @@ namespace UnlimRealms
 			
 			// debug info
 			bool freezeUpdate;
+			bool hideSurface;
 			bool drawTetrahedra;
 			bool hideEmptyTetrahedra;
 			bool drawHexahedra;
