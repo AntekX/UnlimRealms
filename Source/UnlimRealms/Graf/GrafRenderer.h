@@ -19,6 +19,9 @@ namespace UnlimRealms
 {
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class Job;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GrafCallbackContext
 	{
 		void *DataPtr;
@@ -108,7 +111,7 @@ namespace UnlimRealms
 
 		Result InitializeCanvasRenderTargets();
 
-		Result ProcessPendingCommandListCallbacks();
+		Result ProcessPendingCommandListCallbacks(ur_bool immediteMode);
 
 		GrafCanvas::InitParams grafCanvasParams;
 		std::unique_ptr<GrafSystem> grafSystem;
@@ -126,6 +129,8 @@ namespace UnlimRealms
 		ur_uint frameIdx;
 		std::vector<std::unique_ptr<GrafCommandList>> grafPrimaryCommandList;
 		std::vector<std::unique_ptr<PendingCommandListCallbackData>> pendingCommandListCallbacks;
+		std::vector<std::unique_ptr<PendingCommandListCallbackData>> finishedCommandListCallbacks;
+		std::shared_ptr<Job> finishedCommandListCallbacksJob;
 		std::mutex pendingCommandListMutex;
 	};
 
