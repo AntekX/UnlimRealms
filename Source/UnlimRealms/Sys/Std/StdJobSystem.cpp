@@ -17,12 +17,13 @@ namespace UnlimRealms
 	{
 		this->shutdown = false;
 		this->jobCount = 0;
-		threads.resize(std::max(int(std::thread::hardware_concurrency()) - 1, 1));
-		// if there are enough threads, first two will be reserved to exclusively process only High & Normal priority jobs (to avoid stalling run time threads)
-		ur_size maxExclusivePriority = (ur_size)std::max(ur_int(0), ur_int(JobPriority::Count) - ur_int(threads.size()));
+		ur_size priorityCount = ur_size(JobPriority::Count);
+		threads.resize(std::max(ur_int(std::thread::hardware_concurrency()) - 1, ur_int(priorityCount)));
+		// note: threads that accept all priority types (starting from the lowest) must be available in the first place,
+		// more exclusive high priority threads reserved in the end, if hardware concurrency is high enough
 		for (ur_size it = 0; it < threads.size(); ++it)
 		{
-			JobPriority threadJobPriorityMin = JobPriority(std::min(std::max(maxExclusivePriority, it), ur_size(JobPriority::Count)));
+			JobPriority threadJobPriorityMin = JobPriority((priorityCount - 1) - (it % priorityCount));
 			threads[it].reset( new std::thread(ThreadFunction, this, threadJobPriorityMin) );
 		}
 	}
