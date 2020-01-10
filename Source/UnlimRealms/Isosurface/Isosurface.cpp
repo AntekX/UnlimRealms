@@ -1678,7 +1678,43 @@ namespace UnlimRealms
 			res = grafVB->Initialize(grafDevice, { bufferDesc });
 			if (Succeeded(res))
 			{
-				grafRenderer->Upload((ur_byte*)vertexBuffer.data(), grafVB.get(), bufferDesc.SizeInBytes);
+				//grafRenderer->Upload((ur_byte*)vertexBuffer.data(), grafVB.get(), bufferDesc.SizeInBytes);
+				std::unique_ptr<GrafBuffer> grafUploadBuffer;
+				res = grafSystem->CreateBuffer(grafUploadBuffer);
+				if (Succeeded(res))
+				{
+					bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::TransferSrc;
+					bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+					res = grafUploadBuffer->Initialize(grafDevice, { bufferDesc });
+					if (Succeeded(res))
+					{
+						res = grafUploadBuffer->Write((ur_byte*)vertexBuffer.data(), bufferDesc.SizeInBytes);
+						if (Succeeded(res))
+						{
+							std::unique_ptr<GrafCommandList> grafUploadCmdList;
+							res = grafSystem->CreateCommandList(grafUploadCmdList);
+							if (Succeeded(res))
+							{
+								res = grafUploadCmdList->Initialize(grafDevice);
+								if (Succeeded(res))
+								{
+									grafUploadCmdList->Begin();
+									grafUploadCmdList->Copy(grafUploadBuffer.get(), grafVB.get());
+									grafUploadCmdList->End();
+									grafDevice->Record(grafUploadCmdList.get());
+									GrafCommandList *grafUploadCmdListPtr = grafUploadCmdList.release();
+									GrafBuffer *grafUploadBufferPtr = grafUploadBuffer.release();
+									grafRenderer->AddCommandListCallback(grafUploadCmdListPtr, {}, [grafUploadCmdListPtr, grafUploadBufferPtr](GrafCallbackContext& ctx) -> Result
+									{
+										delete grafUploadCmdListPtr;
+										delete grafUploadBufferPtr;
+										return Result(Success);
+									});
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 		if (Failed(res))
@@ -1696,7 +1732,43 @@ namespace UnlimRealms
 			res = grafIB->Initialize(grafDevice, { bufferDesc });
 			if (Succeeded(res))
 			{
-				grafRenderer->Upload((ur_byte*)indexBuffer.data(), grafIB.get(), bufferDesc.SizeInBytes);
+				//grafRenderer->Upload((ur_byte*)indexBuffer.data(), grafIB.get(), bufferDesc.SizeInBytes);
+				std::unique_ptr<GrafBuffer> grafUploadBuffer;
+				res = grafSystem->CreateBuffer(grafUploadBuffer);
+				if (Succeeded(res))
+				{
+					bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::TransferSrc;
+					bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+					res = grafUploadBuffer->Initialize(grafDevice, { bufferDesc });
+					if (Succeeded(res))
+					{
+						res = grafUploadBuffer->Write((ur_byte*)indexBuffer.data(), bufferDesc.SizeInBytes);
+						if (Succeeded(res))
+						{
+							std::unique_ptr<GrafCommandList> grafUploadCmdList;
+							res = grafSystem->CreateCommandList(grafUploadCmdList);
+							if (Succeeded(res))
+							{
+								res = grafUploadCmdList->Initialize(grafDevice);
+								if (Succeeded(res))
+								{
+									grafUploadCmdList->Begin();
+									grafUploadCmdList->Copy(grafUploadBuffer.get(), grafIB.get());
+									grafUploadCmdList->End();
+									grafDevice->Record(grafUploadCmdList.get());
+									GrafCommandList *grafUploadCmdListPtr = grafUploadCmdList.release();
+									GrafBuffer *grafUploadBufferPtr = grafUploadBuffer.release();
+									grafRenderer->AddCommandListCallback(grafUploadCmdListPtr, {}, [grafUploadCmdListPtr, grafUploadBufferPtr](GrafCallbackContext& ctx) -> Result
+									{
+										delete grafUploadCmdListPtr;
+										delete grafUploadBufferPtr;
+										return Result(Success);
+									});
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 		if (Failed(res))
