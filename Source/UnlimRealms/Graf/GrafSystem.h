@@ -316,6 +316,21 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafFrontFaceOrder
+	{
+		CounterClockwise,
+		Clockwise
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafCullMode
+	{
+		None,
+		Front,
+		Back
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class UR_DECL GrafVertexInputType
 	{
 		PerVertex,
@@ -847,6 +862,8 @@ namespace UnlimRealms
 			GrafVertexInputDesc* VertexInputDesc;
 			ur_uint VertexInputCount;
 			GrafPrimitiveTopology PrimitiveTopology;
+			GrafFrontFaceOrder FrontFaceOrder;
+			GrafCullMode CullMode;
 			GrafViewportDesc ViewportDesc;
 			ur_bool DepthTestEnable;
 			ur_bool DepthWriteEnable;

@@ -550,6 +550,8 @@ namespace UnlimRealms
 		ur_null, // GrafVertexInputDesc
 		0, // VertexInputCount
 		GrafPrimitiveTopology::TriangleList, // GrafPrimitiveTopology
+		GrafFrontFaceOrder::Clockwise, // GrafFrontFaceOrder
+		GrafCullMode::None, // GrafCullMode
 		{ 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f }, //GrafViewportDesc
 		false, // DepthTestEnable
 		false, // DepthWriteEnable

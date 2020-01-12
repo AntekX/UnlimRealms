@@ -504,6 +504,8 @@ namespace UnlimRealms
 		static inline VkDescriptorType GrafToVkDescriptorType(GrafDescriptorType descriptorType);
 		static inline ur_uint32 GrafToVkDescriptorBindingOffset(GrafDescriptorType descriptorType);
 		static inline VkPrimitiveTopology GrafToVkPrimitiveTopology(GrafPrimitiveTopology topology);
+		static inline VkFrontFace GrafToVkFrontFace(GrafFrontFaceOrder frontFaceOrder);
+		static inline VkCullModeFlags GrafToVkCullModeFlags(GrafCullMode cullMode);
 		static inline VkCompareOp GrafToVkCompareOp(GrafCompareOp compareOp);
 		static inline VkFilter GrafToVkFilter(GrafFilterType filter);
 		static inline VkSamplerAddressMode GrafToVkAddressMode(GrafAddressMode address);

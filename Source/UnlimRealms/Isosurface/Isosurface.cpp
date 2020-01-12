@@ -2016,11 +2016,11 @@ namespace UnlimRealms
 			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
 			if (ImGui::TreeNode("Stats"))
 			{
-				ImGui::Text("tetrahedraCount:		%i", (int)this->stats.tetrahedraCount);
-				ImGui::Text("treeMemory:			%i", (int)this->stats.treeMemory);
-				ImGui::Text("meshVideoMemory:		%i", (int)this->stats.meshVideoMemory);
-				ImGui::Text("primitivesRendered:	%i", (int)this->stats.primitivesRendered);
-				ImGui::Text("buildQueue:			%i", (int)this->stats.buildQueue);
+				ImGui::Text("tetrahedraCount:       %i", (int)this->stats.tetrahedraCount);
+				ImGui::Text("treeMemory:            %i", (int)this->stats.treeMemory);
+				ImGui::Text("meshVideoMemory:       %i", (int)this->stats.meshVideoMemory);
+				ImGui::Text("primitivesRendered:    %i", (int)this->stats.primitivesRendered);
+				ImGui::Text("buildQueue:            %i", (int)this->stats.buildQueue);
 				ImGui::TreePop();
 			}
 			
@@ -2187,6 +2187,8 @@ namespace UnlimRealms
 			pipelineParams.DepthWriteEnable = true;
 			pipelineParams.DepthCompareOp = GrafCompareOp::LessOrEqual;
 			pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleList;
+			pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
+			pipelineParams.CullMode = GrafCullMode::Back;
 			res = this->grafObjects.pipelineSolid->Initialize(grafDevice, pipelineParams);
 		}
 		if (Failed(res))

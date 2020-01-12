@@ -1449,7 +1449,7 @@ namespace UnlimRealms
 		for (ur_size i = 0; i < vkPresentModes.size(); ++i)
 		{
 			if (GrafPresentMode::Immediate == initParams.PresentMode &&
-				VK_PRESENT_MODE_IMMEDIATE_KHR == vkPresentModes[i])
+				(VK_PRESENT_MODE_IMMEDIATE_KHR == vkPresentModes[i] || VK_PRESENT_MODE_MAILBOX_KHR == vkPresentModes[i]))
 				presentModeFound = true;
 			else if (GrafPresentMode::VerticalSync == initParams.PresentMode &&
 				VK_PRESENT_MODE_FIFO_KHR == vkPresentModes[i])
@@ -2927,7 +2927,7 @@ namespace UnlimRealms
 
 		VkDescriptorImageInfo vkDescriptorImageInfo = {};
 		vkDescriptorImageInfo.sampler = static_cast<GrafSamplerVulkan*>(sampler)->GetVkSampler();
-		vkDescriptorImageInfo.imageView = ur_null;
+		vkDescriptorImageInfo.imageView = VK_NULL_HANDLE;
 		vkDescriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 		VkWriteDescriptorSet vkWriteDescriptorSet = {};
@@ -2951,7 +2951,7 @@ namespace UnlimRealms
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
 
 		VkDescriptorImageInfo vkDescriptorImageInfo = {};
-		vkDescriptorImageInfo.sampler = ur_null;
+		vkDescriptorImageInfo.sampler = VK_NULL_HANDLE;
 		vkDescriptorImageInfo.imageView = static_cast<GrafImageVulkan*>(image)->GetVkImageView();
 		vkDescriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
@@ -3141,8 +3141,8 @@ namespace UnlimRealms
 		vkRasterStateInfo.depthClampEnable = VK_FALSE;
 		vkRasterStateInfo.rasterizerDiscardEnable = VK_FALSE;
 		vkRasterStateInfo.polygonMode = VK_POLYGON_MODE_FILL;
-		vkRasterStateInfo.cullMode = VK_CULL_MODE_NONE;
-		vkRasterStateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+		vkRasterStateInfo.cullMode = GrafUtilsVulkan::GrafToVkCullModeFlags(initParams.CullMode);
+		vkRasterStateInfo.frontFace = GrafUtilsVulkan::GrafToVkFrontFace(initParams.FrontFaceOrder);
 		vkRasterStateInfo.depthBiasEnable = VK_FALSE;
 		vkRasterStateInfo.depthBiasConstantFactor = 0.0f;
 		vkRasterStateInfo.depthBiasClamp = 0.0f;
@@ -3413,6 +3413,29 @@ namespace UnlimRealms
 		case GrafPrimitiveTopology::TriangleFan: vkTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN; break;
 		};
 		return vkTopology;
+	}
+
+	VkFrontFace GrafUtilsVulkan::GrafToVkFrontFace(GrafFrontFaceOrder frontFaceOrder)
+	{
+		VkFrontFace vkFrontFace = VK_FRONT_FACE_MAX_ENUM;
+		switch (frontFaceOrder)
+		{
+		case GrafFrontFaceOrder::CounterClockwise: vkFrontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; break;
+		case GrafFrontFaceOrder::Clockwise: vkFrontFace = VK_FRONT_FACE_CLOCKWISE; break;
+		};
+		return vkFrontFace;
+	}
+
+	VkCullModeFlags GrafUtilsVulkan::GrafToVkCullModeFlags(GrafCullMode cullMode)
+	{
+		VkCullModeFlags vkCullModeFlags = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
+		switch (cullMode)
+		{
+		case GrafCullMode::None: vkCullModeFlags = VK_CULL_MODE_NONE; break;
+		case GrafCullMode::Front: vkCullModeFlags = VK_CULL_MODE_FRONT_BIT; break;
+		case GrafCullMode::Back: vkCullModeFlags = VK_CULL_MODE_BACK_BIT; break;
+		};
+		return vkCullModeFlags;
 	}
 
 	VkCompareOp GrafUtilsVulkan::GrafToVkCompareOp(GrafCompareOp compareOp)

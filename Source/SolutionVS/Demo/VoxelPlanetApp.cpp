@@ -57,6 +57,7 @@ int VoxelPlanetApp::Run()
 		GrafRenderer::InitParams grafRendererParams = GrafRenderer::InitParams::Default;
 		grafRendererParams.DeviceId = grafSystem->GetRecommendedDeviceId();
 		grafRendererParams.CanvasParams = GrafCanvas::InitParams::Default;
+		grafRendererParams.CanvasParams.PresentMode = GrafPresentMode::Immediate;
 		res = grafRenderer->Initialize(std::move(grafSystem), grafRendererParams);
 		if (Failed(res)) break;
 
