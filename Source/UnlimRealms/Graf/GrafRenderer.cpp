@@ -72,8 +72,8 @@ namespace UnlimRealms
 			GrafRenderPassImageDesc grafCanvasRenderPassImages[] = {
 				{
 					initParams.CanvasParams.Format,
-					GrafImageState::Common,
-					GrafImageState::Common,
+					GrafImageState::ColorWrite,
+					GrafImageState::ColorWrite,
 					GrafRenderPassDataOp::Load,
 					GrafRenderPassDataOp::Store,
 					GrafRenderPassDataOp::DontCare,

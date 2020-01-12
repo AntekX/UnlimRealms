@@ -644,7 +644,11 @@ namespace UnlimRealms
 		vkSubmitInfo.signalSemaphoreCount = 0;
 		vkSubmitInfo.pSignalSemaphores = ur_null;
 
-		std::lock_guard<std::mutex> lock(this->graphicsCommandListsMutex);
+		this->graphicsCommandListsMutex.lock();
+		this->graphicsCommandPoolsMutex.lock();
+		for (auto &threadCmdPool : this->graphicsCommandPools) threadCmdPool.second->accessMutex.lock();
+
+		VkResult vkRes(VK_SUCCESS);
 		for (auto& grafCommandList : this->graphicsCommandLists)
 		{
 			GrafCommandListVulkan* grafCommandListVulkan = static_cast<GrafCommandListVulkan*>(grafCommandList);
@@ -655,9 +659,16 @@ namespace UnlimRealms
 
 			VkResult vkRes = vkQueueSubmit(vkSubmissionQueue, 1, &vkSubmitInfo, grafCommandListVulkan->GetVkSubmitFence());
 			if (vkRes != VK_SUCCESS)
-				return ResultError(Failure, std::string("GrafDeviceVulkan: vkQueueSubmit failed with VkResult = ") + VkResultToString(vkRes));
+				break;
 		}
 		this->graphicsCommandLists.clear();
+
+		this->graphicsCommandListsMutex.unlock();
+		this->graphicsCommandPoolsMutex.unlock();
+		for (auto &threadCmdPool : this->graphicsCommandPools) threadCmdPool.second->accessMutex.unlock();
+
+		if (vkRes != VK_SUCCESS)
+			ResultError(Failure, std::string("GrafDeviceVulkan: vkQueueSubmit failed with VkResult = ") + VkResultToString(vkRes));
 
 		return Result(Success);
 	}
