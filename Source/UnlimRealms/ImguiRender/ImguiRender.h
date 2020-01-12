@@ -43,6 +43,8 @@ namespace UnlimRealms
 		#if defined(UR_GRAF)
 		GrafRenderer* grafRenderer;
 		ur_float2 crntImguiDisplaySize;
+		ur_size vbSizePerFrame;
+		ur_size ibSizePerFrame;
 		std::unique_ptr<GrafShader> grafVS;
 		std::unique_ptr<GrafShader> grafPS;
 		std::unique_ptr<GrafBuffer> grafVB;

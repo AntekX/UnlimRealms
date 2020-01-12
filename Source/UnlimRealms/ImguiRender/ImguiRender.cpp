@@ -32,6 +32,8 @@ namespace UnlimRealms
 		#if defined(UR_GRAF)
 		this->grafRenderer = ur_null;
 		this->crntImguiDisplaySize = 0;
+		this->vbSizePerFrame = 0;
+		this->ibSizePerFrame = 0;
 		#endif
 	}
 
@@ -503,26 +505,28 @@ namespace UnlimRealms
 			return ResultError(Failure, "ImguiRender::Init: failed to create pipeline object");
 
 		// reserve dynamic VB
+		this->vbSizePerFrame = 1 * (1 << 20);
 		res = grafSystem->CreateBuffer(this->grafVB);
 		if (Succeeded(res))
 		{
 			GrafBufferDesc bufferDesc;
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-			bufferDesc.SizeInBytes = 2 * (1 << 20);
+			bufferDesc.SizeInBytes = this->vbSizePerFrame * this->grafRenderer->GetRecordedFrameCount();
 			res = this->grafVB->Initialize(grafDevice, { bufferDesc });
 		}
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to create VB");
 
 		// reserve dynamic IB
+		this->ibSizePerFrame = 1 * (1 << 20);
 		res = grafSystem->CreateBuffer(this->grafIB);
 		if (Succeeded(res))
 		{
 			GrafBufferDesc bufferDesc;
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::IndexBuffer;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-			bufferDesc.SizeInBytes = 2 * (1 << 20);
+			bufferDesc.SizeInBytes = this->ibSizePerFrame * this->grafRenderer->GetRecordedFrameCount();
 			res = this->grafIB->Initialize(grafDevice, { bufferDesc });
 		}
 		if (Failed(res))
@@ -588,12 +592,12 @@ namespace UnlimRealms
 
 		// prepare VB
 		ur_uint vbSizeRequired = (ur_uint)drawData->TotalVtxCount * sizeof(ImDrawVert);
-		if (this->grafVB->GetDesc().SizeInBytes < vbSizeRequired)
+		if (this->vbSizePerFrame < vbSizeRequired)
 			return ResultWarning(OutOfMemory, "ImguiRender::Render: insufficient VB size");
 
 		// prepare IB
 		ur_uint ibSizeRequired = (ur_uint)drawData->TotalIdxCount * sizeof(ImDrawIdx);
-		if (this->grafIB->GetDesc().SizeInBytes < ibSizeRequired)
+		if (this->ibSizePerFrame < ibSizeRequired)
 			return ResultWarning(OutOfMemory, "ImguiRender::Render: insufficient IB size");
 
 		// prepare CB
@@ -656,7 +660,8 @@ namespace UnlimRealms
 			}
 			return Result(Success);
 		};
-		this->grafVB->Write(updateVB);
+		ur_size vbOffset = frameIdx * this->vbSizePerFrame;
+		this->grafVB->Write(updateVB, vbSizeRequired, 0, vbOffset);
 
 		// fill IB
 		GrafWriteCallback updateIB = [&drawData](ur_byte* mappedDataPtr) -> Result
@@ -670,7 +675,8 @@ namespace UnlimRealms
 			}
 			return Result(Success);
 		};
-		this->grafIB->Write(updateIB);
+		ur_size ibOffset = frameIdx * this->ibSizePerFrame;
+		this->grafIB->Write(updateIB, ibSizeRequired, 0, ibOffset);
 
 		// fill shader inputs
 		this->grafBindingTables[frameIdx]->SetConstantBuffer(0, this->grafCB.get());
@@ -679,8 +685,8 @@ namespace UnlimRealms
 		// setup pipeline
 		grafCmdList.BindPipeline(this->grafPipeline.get());
 		grafCmdList.BindDescriptorTable(this->grafBindingTables[frameIdx].get(), this->grafPipeline.get());
-		grafCmdList.BindVertexBuffer(this->grafVB.get(), 0);
-		grafCmdList.BindIndexBuffer(this->grafIB.get(), GrafIndexType::UINT16);
+		grafCmdList.BindVertexBuffer(this->grafVB.get(), 0, vbOffset);
+		grafCmdList.BindIndexBuffer(this->grafIB.get(), GrafIndexType::UINT16, ibOffset);
 
 		// draw command lists
 		ur_uint vbOfs = 0;

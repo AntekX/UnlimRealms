@@ -1022,25 +1022,25 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafCommandListVulkan::BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx)
+	Result GrafCommandListVulkan::BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx, ur_size bufferOffset)
 	{
 		if (ur_null == grafVertexBuffer)
 			return Result(InvalidArgs);
 
 		VkBuffer vkBuffers[] = { static_cast<GrafBufferVulkan*>(grafVertexBuffer)->GetVkBuffer() };
-		VkDeviceSize vkOffsets[] = { 0 };
+		VkDeviceSize vkOffsets[] = { bufferOffset };
 		vkCmdBindVertexBuffers(this->vkCommandBuffer, bindingIdx, 1, vkBuffers, vkOffsets);
 
 		return Result(Success);
 	}
 
-	Result GrafCommandListVulkan::BindIndexBuffer(GrafBuffer* grafIndexBuffer, GrafIndexType indexType)
+	Result GrafCommandListVulkan::BindIndexBuffer(GrafBuffer* grafIndexBuffer, GrafIndexType indexType, ur_size bufferOffset)
 	{
 		if (ur_null == grafIndexBuffer)
 			return Result(InvalidArgs);
 
 		vkCmdBindIndexBuffer(this->vkCommandBuffer, static_cast<GrafBufferVulkan*>(grafIndexBuffer)->GetVkBuffer(),
-			0, GrafUtilsVulkan::GrafToVkIndexType(indexType));
+			VkDeviceSize(bufferOffset), GrafUtilsVulkan::GrafToVkIndexType(indexType));
 
 		return Result(Success);
 	}

@@ -257,12 +257,12 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafCommandList::BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx)
+	Result GrafCommandList::BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx, ur_size bufferOffset)
 	{
 		return Result(NotImplemented);
 	}
 
-	Result GrafCommandList::BindIndexBuffer(GrafBuffer* grafIndexBuffer, GrafIndexType indexType)
+	Result GrafCommandList::BindIndexBuffer(GrafBuffer* grafIndexBuffer, GrafIndexType indexType, ur_size bufferOffset)
 	{
 		return Result(NotImplemented);
 	}
