@@ -111,7 +111,7 @@ namespace UnlimRealms
 
 		Result InitializeCanvasRenderTargets();
 
-		Result ProcessPendingCommandListCallbacks(ur_bool immediteMode);
+		Result ProcessPendingCommandListCallbacks(ur_bool immediateMode);
 
 		GrafCanvas::InitParams grafCanvasParams;
 		std::unique_ptr<GrafSystem> grafSystem;
@@ -131,6 +131,8 @@ namespace UnlimRealms
 		std::vector<std::unique_ptr<PendingCommandListCallbackData>> pendingCommandListCallbacks;
 		std::vector<std::unique_ptr<PendingCommandListCallbackData>> finishedCommandListCallbacks;
 		std::shared_ptr<Job> finishedCommandListCallbacksJob;
+		//std::shared_ptr<Job> processingCommandListCallbacksJob;
+		//ur_uint pendingCommandListCallbacksIdx;
 		std::mutex pendingCommandListMutex;
 	};
 

@@ -63,6 +63,7 @@ namespace UnlimRealms
 			// can differ from swap chain size
 			this->frameCount = std::max(ur_uint(2), this->grafCanvas->GetSwapChainImageCount() - 1);
 			this->frameIdx = 0;
+			//this->pendingCommandListCallbacksIdx = 0;
 
 			// swap chain render pass
 			// used to render into swap chain render target(s)
@@ -306,10 +307,11 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafRenderer::ProcessPendingCommandListCallbacks(ur_bool immediteMode)
+	Result GrafRenderer::ProcessPendingCommandListCallbacks(ur_bool immediateMode)
 	{
 		Result res(Success);
 
+		#if (1)
 		ur_bool previousCallbackProcessed = (ur_null == this->finishedCommandListCallbacksJob || this->finishedCommandListCallbacksJob->Finished());
 		if (previousCallbackProcessed)
 		{
@@ -348,7 +350,7 @@ namespace UnlimRealms
 				}
 				ctx.resultCode = res;
 			};
-			if (immediteMode)
+			if (immediateMode)
 			{
 				Job immediateJob(this->GetRealm().GetJobSystem(), &this->finishedCommandListCallbacks, executeCallbacksJobFunc);
 				immediateJob.Execute();
@@ -358,6 +360,56 @@ namespace UnlimRealms
 				this->finishedCommandListCallbacksJob = this->GetRealm().GetJobSystem().Add(JobPriority::High, &this->finishedCommandListCallbacks, executeCallbacksJobFunc);
 			}
 		}
+		#else
+		ur_bool previousCallbackProcessed = (ur_null == this->processingCommandListCallbacksJob || this->processingCommandListCallbacksJob->Finished());
+		if (!previousCallbackProcessed && immediateMode) this->processingCommandListCallbacksJob->Wait();
+		if (previousCallbackProcessed)
+		{
+			this->pendingCommandListMutex.lock();
+			auto accumulatedCommandListCallbacks = &this->pendingCommandListCallbacks[this->pendingCommandListCallbacksIdx];
+			this->pendingCommandListCallbacksIdx = !this->pendingCommandListCallbacksIdx;
+			this->pendingCommandListMutex.unlock();
+
+			// execute accumulated callbacks
+			auto& executeCallbacksJobFunc = [](Job::Context& ctx) -> void
+			{
+				typedef std::vector<std::unique_ptr<PendingCommandListCallbackData>> CommandListCallbacks;
+				CommandListCallbacks& commandListCallbacks = *reinterpret_cast<CommandListCallbacks*>(ctx.data);
+				Result res(Success);
+				ur_size idx = 0;
+				while (idx < commandListCallbacks.size())
+				{
+					auto& pendingCallback = commandListCallbacks[idx];
+					if (pendingCallback->cmdList->Wait(0) == Success)
+					{
+						// command list is finished, execute a callback and remove from the list
+						pendingCallback->callback(pendingCallback->context);
+						commandListCallbacks[idx] = std::move(commandListCallbacks.back());
+						commandListCallbacks.pop_back();
+					}
+					else
+					{
+						// still pending
+						++idx;
+					}
+				}
+				ctx.resultCode = res;
+			};
+			if (immediateMode)
+			{
+				for (ur_uint ilist = 0; ilist < 2; ++ilist)
+				{
+					Job immediateJob(this->GetRealm().GetJobSystem(), &this->pendingCommandListCallbacks[ilist], executeCallbacksJobFunc);
+					immediateJob.Execute();
+				}
+			}
+			else
+			{
+				this->processingCommandListCallbacksJob = this->GetRealm().GetJobSystem().Add(JobPriority::High, accumulatedCommandListCallbacks, executeCallbacksJobFunc);
+			}
+			
+		}
+		#endif
 
 		return res;
 	}
