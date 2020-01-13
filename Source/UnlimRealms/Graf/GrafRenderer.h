@@ -46,6 +46,8 @@ namespace UnlimRealms
 			static const ur_uint RecommendedDeviceId;
 		};
 
+		static const ur_uint CurrentFrameId = ur_uint(-1);
+
 		GrafRenderer(Realm &realm);
 
 		virtual ~GrafRenderer();
@@ -82,9 +84,7 @@ namespace UnlimRealms
 
 		inline GrafRenderTarget* GetCanvasRenderTarget() const;
 
-		inline GrafCommandList* GetCurrentCommandList() const;
-
-		inline GrafCommandList* GetFrameCommandList(ur_uint frameIdx) const;
+		inline GrafCommandList* GetCommandList(ur_uint frameId = CurrentFrameId);
 
 		inline ur_uint GetRecordedFrameCount() const;
 
@@ -109,7 +109,11 @@ namespace UnlimRealms
 			GrafCallbackContext context;
 		};
 
+		typedef std::vector<std::unique_ptr<GrafCommandList>> GrafCommandListArray;
+
 		Result InitializeCanvasRenderTargets();
+
+		Result GetOrCreateCommandListForCurrentThread(GrafCommandList*& grafCommandList, ur_uint frameId, ur_bool beginRecording);
 
 		Result ProcessPendingCommandListCallbacks(ur_bool immediateMode);
 
@@ -127,7 +131,8 @@ namespace UnlimRealms
 		std::mutex constantBufferMutex;
 		ur_uint frameCount;
 		ur_uint frameIdx;
-		std::vector<std::unique_ptr<GrafCommandList>> grafPrimaryCommandList;
+		std::map<std::thread::id, std::unique_ptr<GrafCommandListArray>> grafCommandLists;
+		std::mutex grafCommandListsMutex;
 		std::vector<std::unique_ptr<PendingCommandListCallbackData>> pendingCommandListCallbacks;
 		std::vector<std::unique_ptr<PendingCommandListCallbackData>> finishedCommandListCallbacks;
 		std::shared_ptr<Job> finishedCommandListCallbacksJob;

@@ -313,7 +313,7 @@ int VoxelPlanetApp::Run()
 				canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 				canvasHeight = realm.GetCanvas()->GetClientBound().Height();
 				// use prev frame command list to make sure RT objects are no longer used before destroying
-				deinitializeGrafRenderTargetObjects(grafRenderer->GetFrameCommandList(grafRenderer->GetPrevFrameId()));
+				deinitializeGrafRenderTargetObjects(grafRenderer->GetCommandList(grafRenderer->GetPrevFrameId()));
 				// recreate RT objects for new canvas dimensions
 				initializeGrafRenderTargetObjects();
 			}
@@ -322,7 +322,7 @@ int VoxelPlanetApp::Run()
 			{
 				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
-				GrafCommandList* grafCmdListCrnt = grafRenderer->GetCurrentCommandList();
+				GrafCommandList* grafCmdListCrnt = grafRenderer->GetCommandList();
 
 				GrafViewportDesc grafViewport = {};
 				grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
