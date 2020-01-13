@@ -821,6 +821,26 @@ namespace UnlimRealms
 		return Result(vkRes == VK_SUCCESS ? Success : TimeOut);
 	}
 
+	Result GrafCommandListVulkan::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferUsageFlags srcUsage, GrafBufferUsageFlags dstUsage)
+	{
+		// TODO:
+
+		// note: example of transfering a vertex buffer access mask from TransferSrc to VertexBuffer state
+		VkBufferMemoryBarrier vkBufferBarrier = {};
+		vkBufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+		vkBufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		vkBufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+		vkBufferBarrier.srcQueueFamilyIndex = 0;
+		vkBufferBarrier.dstQueueFamilyIndex = 0;
+		vkBufferBarrier.buffer = static_cast<GrafBufferVulkan*>(grafBuffer)->GetVkBuffer();
+		vkBufferBarrier.offset = 0;
+		vkBufferBarrier.size = VK_WHOLE_SIZE;
+		vkCmdPipelineBarrier(this->vkCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0,
+			0, ur_null, 1, &vkBufferBarrier, 0, ur_null);
+
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandListVulkan::ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState)
 	{
 		if (ur_null == grafImage)

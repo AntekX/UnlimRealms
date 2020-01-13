@@ -1682,32 +1682,6 @@ namespace UnlimRealms
 			if (Succeeded(res))
 			{
 				grafRenderer->Upload((ur_byte*)vertexBuffer.data(), grafVB.get(), bufferDesc.SizeInBytes);
-
-				// temp: buffer memory transition
-				std::unique_ptr<GrafCommandList> cmdList;
-				grafSystem->CreateCommandList(cmdList);
-				cmdList->Initialize(grafDevice);
-				cmdList->Begin();
-				VkCommandBuffer vkCmdBuffer = static_cast<GrafCommandListVulkan*>(cmdList.get())->GetVkCommandBuffer();
-				VkBufferMemoryBarrier vkBufferBarrier = {};
-				vkBufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-				vkBufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-				vkBufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-				vkBufferBarrier.srcQueueFamilyIndex = 0;
-				vkBufferBarrier.dstQueueFamilyIndex = 0;
-				vkBufferBarrier.buffer = static_cast<GrafBufferVulkan*>(grafVB.get())->GetVkBuffer();
-				vkBufferBarrier.offset = 0;
-				vkBufferBarrier.size = VK_WHOLE_SIZE;
-				vkCmdPipelineBarrier(vkCmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0,
-					0, ur_null, 1, &vkBufferBarrier, 0, ur_null);
-				cmdList->End();
-				grafDevice->Record(cmdList.get());
-				GrafCommandList *cmdListPtr = cmdList.release();
-				grafRenderer->AddCommandListCallback(cmdListPtr, {}, [cmdListPtr](GrafCallbackContext& ctx) -> Result
-				{
-					delete cmdListPtr;
-					return Result(Success);
-				});
 			}
 		}
 		if (Failed(res))
@@ -1726,32 +1700,6 @@ namespace UnlimRealms
 			if (Succeeded(res))
 			{
 				grafRenderer->Upload((ur_byte*)indexBuffer.data(), grafIB.get(), bufferDesc.SizeInBytes);
-
-				// temp: buffer memory transition
-				std::unique_ptr<GrafCommandList> cmdList;
-				grafSystem->CreateCommandList(cmdList);
-				cmdList->Initialize(grafDevice);
-				cmdList->Begin();
-				VkCommandBuffer vkCmdBuffer = static_cast<GrafCommandListVulkan*>(cmdList.get())->GetVkCommandBuffer();
-				VkBufferMemoryBarrier vkBufferBarrier = {};
-				vkBufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-				vkBufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-				vkBufferBarrier.dstAccessMask = VK_ACCESS_INDEX_READ_BIT;
-				vkBufferBarrier.srcQueueFamilyIndex = 0;
-				vkBufferBarrier.dstQueueFamilyIndex = 0;
-				vkBufferBarrier.buffer = static_cast<GrafBufferVulkan*>(grafIB.get())->GetVkBuffer();
-				vkBufferBarrier.offset = 0;
-				vkBufferBarrier.size = VK_WHOLE_SIZE;
-				vkCmdPipelineBarrier(vkCmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0,
-					0, ur_null, 1, &vkBufferBarrier, 0, ur_null);
-				cmdList->End();
-				grafDevice->Record(cmdList.get());
-				GrafCommandList *cmdListPtr = cmdList.release();
-				grafRenderer->AddCommandListCallback(cmdListPtr, {}, [cmdListPtr](GrafCallbackContext& ctx) -> Result
-				{
-					delete cmdListPtr;
-					return Result(Success);
-				});
 			}
 		}
 		if (Failed(res))

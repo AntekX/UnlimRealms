@@ -217,6 +217,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandList::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferUsageFlags srcUsage, GrafBufferUsageFlags dstUsage)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandList::SetFenceState(GrafFence* grafFence, GrafFenceState state)
 	{
 		return Result(NotImplemented);
