@@ -70,6 +70,7 @@ int VoxelPlanetApp::Run()
 	}
 
 	// initialize GRAF objects
+	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
 	std::unique_ptr<GrafRenderPass> grafPassColorDepth;
 	std::unique_ptr<GrafImage> grafImageRTDepth;
 	std::vector<std::unique_ptr<GrafRenderTarget>> grafTargetColorDepth;
@@ -135,6 +136,20 @@ int VoxelPlanetApp::Run()
 		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
 		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 
+		// match number of recorded (in flight) frames to the GrafRenderer
+		ur_uint frameCount = grafRenderer->GetRecordedFrameCount();
+
+		// command lists (per frame)
+		grafMainCmdList.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			res = grafSystem->CreateCommandList(grafMainCmdList[iframe]);
+			if (Failed(res)) break;
+			res = grafMainCmdList[iframe]->Initialize(grafDevice);
+			if (Failed(res)) break;
+		}
+		if (Failed(res)) return res;
+
 		// color & depth render pass
 		res = grafSystem->CreateRenderPass(grafPassColorDepth);
 		if (Failed(res)) return res;
@@ -164,6 +179,7 @@ int VoxelPlanetApp::Run()
 	{
 		deinitializeGrafRenderTargetObjects();
 		grafPassColorDepth.reset();
+		grafMainCmdList.clear();
 		return Result(Success);
 	};
 	res = initializeGrafObjects();
@@ -313,7 +329,7 @@ int VoxelPlanetApp::Run()
 				canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 				canvasHeight = realm.GetCanvas()->GetClientBound().Height();
 				// use prev frame command list to make sure RT objects are no longer used before destroying
-				deinitializeGrafRenderTargetObjects(grafRenderer->GetCommandList(grafRenderer->GetPrevFrameId()));
+				deinitializeGrafRenderTargetObjects(grafMainCmdList[grafRenderer->GetPrevFrameId()].get());
 				// recreate RT objects for new canvas dimensions
 				initializeGrafRenderTargetObjects();
 			}
@@ -322,7 +338,8 @@ int VoxelPlanetApp::Run()
 			{
 				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
-				GrafCommandList* grafCmdListCrnt = grafRenderer->GetCommandList();
+				GrafCommandList* grafCmdListCrnt = grafMainCmdList[grafRenderer->GetCurrentFrameId()].get();
+				grafCmdListCrnt->Begin();
 
 				GrafViewportDesc grafViewport = {};
 				grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
@@ -382,6 +399,10 @@ int VoxelPlanetApp::Run()
 
 					grafCmdListCrnt->EndRenderPass();
 				}
+
+				// finalize current command list
+				grafCmdListCrnt->End();
+				grafDevice->Record(grafCmdListCrnt);
 			});
 
 			drawFrameJob->Wait();

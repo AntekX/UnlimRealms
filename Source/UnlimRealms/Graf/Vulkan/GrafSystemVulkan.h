@@ -107,7 +107,7 @@ namespace UnlimRealms
 		struct UR_DECL ThreadCommandPool
 		{
 			VkCommandPool vkCommandPool;
-			std::mutex accessMutex;
+			std::recursive_mutex accessMutex;
 		};
 
 		ThreadCommandPool* GetVkGraphicsCommandPool();

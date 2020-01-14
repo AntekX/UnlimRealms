@@ -528,7 +528,6 @@ int VulkanSandboxApp::Run()
 
 				// updateFrameJob->Wait(); // wait till update job is fully finished; WaitProgress can be used instead to wait for specific update stage to avoid stalling draw thread
 				
-				
 				GrafCommandList* grafCmdListCrnt = grafMainCmdList[frameIdx].get();
 				grafCmdListCrnt->Begin();
 

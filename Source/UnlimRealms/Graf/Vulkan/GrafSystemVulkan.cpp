@@ -710,7 +710,7 @@ namespace UnlimRealms
 		if (this->vkCommandBuffer != VK_NULL_HANDLE)
 		{
 			GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice());
-			std::lock_guard<std::mutex> lockPool(this->commandPool->accessMutex);
+			std::lock_guard<std::recursive_mutex> lockPool(this->commandPool->accessMutex);
 			vkFreeCommandBuffers(grafDeviceVulkan->GetVkDevice(), this->commandPool->vkCommandPool, 1, &this->vkCommandBuffer);
 			this->vkCommandBuffer = VK_NULL_HANDLE;
 		}
@@ -751,7 +751,7 @@ namespace UnlimRealms
 
 		VkResult vkRes(VK_SUCCESS);
 		{
-			std::lock_guard<std::mutex> lockPool(this->commandPool->accessMutex);
+			std::lock_guard<std::recursive_mutex> lockPool(this->commandPool->accessMutex);
 			vkRes = vkAllocateCommandBuffers(vkDevice, &vkCommandBufferInfo, &this->vkCommandBuffer);
 		}
 		if (vkRes != VK_SUCCESS)

@@ -117,10 +117,11 @@ namespace UnlimRealms
 			this->constantBufferAllocator.Init(constantBufferDesc.SizeInBytes, this->grafDevice->GetPhysicalDeviceDesc()->ConstantBufferOffsetAlignment);
 
 			// pre initialize default command list for current thread
-			crntStageLogName = "command list(s)";
-			GrafCommandList* grafDefaultCommandList = ur_null;
-			res = GetOrCreateCommandListForCurrentThread(grafDefaultCommandList, this->frameIdx, false);
-			if (Failed(res)) break;
+			// TODO
+			//crntStageLogName = "command list(s)";
+			//GrafCommandList* grafDefaultCommandList = ur_null;
+			//res = GetOrCreateCommandListForCurrentThread(grafDefaultCommandList, this->frameIdx);
+			//if (Failed(res)) break;
 
 		} while (false);
 
@@ -158,51 +159,42 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result GrafRenderer::GetOrCreateCommandListForCurrentThread(GrafCommandList*& grafCommandList, ur_uint frameId, ur_bool beginRecording)
+	Result GrafRenderer::GetOrCreateCommandListForCurrentThread(GrafCommandList*& grafCommandList, ur_uint frameId)
 	{
 		Result res(Success);
+
+		std::lock_guard<std::mutex> lock(this->grafCommandListsMutex);
+
+		// try to find corresponding command list
+
+		std::thread::id thisThreadId = std::this_thread::get_id();
+		frameId = (CurrentFrameId == frameId ? this->frameIdx : frameId);
+		auto& cmdListIter = this->grafCommandLists.find(thisThreadId);
+		if (cmdListIter != this->grafCommandLists.end())
 		{
-			std::lock_guard<std::mutex> lock(this->grafCommandListsMutex);
-
-			// try to find corresponding command list
-
-			std::thread::id thisThreadId = std::this_thread::get_id();
-			frameId = (CurrentFrameId == frameId ? this->frameIdx : frameId);
-			auto& cmdListIter = this->grafCommandLists.find(thisThreadId);
-			if (cmdListIter != this->grafCommandLists.end())
-			{
-				GrafCommandListArray& cmdListArray = *cmdListIter->second.get();
-				grafCommandList = cmdListArray[frameId].get();
-				return res;
-			}
-
-			// create new command list(s)
-
-			std::unique_ptr<GrafCommandListArray> cmdListArray(new GrafCommandListArray);
-			cmdListArray->resize(this->frameCount);
-			for (ur_uint iframe = 0; iframe < this->frameCount; ++iframe)
-			{
-				auto& frameCmdList = (*cmdListArray.get())[iframe];
-				res = this->grafSystem->CreateCommandList(frameCmdList);
-				if (Failed(res)) break;
-				res = frameCmdList->Initialize(this->grafDevice.get());
-				if (Failed(res)) break;
-			}
-			if (Failed(res))
-				return res;
-			this->grafCommandLists[thisThreadId] = std::move(cmdListArray);
-
-			grafCommandList = (*this->grafCommandLists[thisThreadId].get())[frameId].get();
+			GrafCommandListArray& cmdListArray = *cmdListIter->second.get();
+			grafCommandList = cmdListArray[frameId].get();
+			return res;
 		}
 
-		if (beginRecording)
+		// create new command list(s)
+
+		std::unique_ptr<GrafCommandListArray> cmdListArray(new GrafCommandListArray);
+		cmdListArray->resize(this->frameCount);
+		for (ur_uint iframe = 0; iframe < this->frameCount; ++iframe)
 		{
-			if (frameId != this->frameIdx)
-				return Result(InvalidArgs); // can not begin command list from another frame
-
-			grafCommandList->Begin();
+			auto& frameCmdList = (*cmdListArray.get())[iframe];
+			res = this->grafSystem->CreateCommandList(frameCmdList);
+			if (Failed(res)) break;
+			res = frameCmdList->Initialize(this->grafDevice.get());
+			if (Failed(res)) break;
 		}
+		if (Failed(res))
+			return res;
+		this->grafCommandLists[thisThreadId] = std::move(cmdListArray);
 
+		grafCommandList = (*this->grafCommandLists[thisThreadId].get())[frameId].get();
+		
 		return res;
 	}
 
@@ -262,13 +254,13 @@ namespace UnlimRealms
 		}
 
 		// begin current frame command list(s)
-		this->grafCommandListsMutex.lock();
+		/*this->grafCommandListsMutex.lock();
 		for (auto& threadCmdLists : this->grafCommandLists)
 		{
 			GrafCommandList* frameCmdList = (*threadCmdLists.second)[this->frameIdx].get();
 			frameCmdList->Begin();
 		}
-		this->grafCommandListsMutex.unlock();
+		this->grafCommandListsMutex.unlock();*/
 
 		return Result(Success);
 	}
@@ -276,14 +268,14 @@ namespace UnlimRealms
 	Result GrafRenderer::EndFrameAndPresent()
 	{
 		// finalize & current frame's command list(s)
-		this->grafCommandListsMutex.lock();
+		/*this->grafCommandListsMutex.lock();
 		for (auto& threadCmdLists : this->grafCommandLists)
 		{
 			GrafCommandList* frameCmdList = (*threadCmdLists.second)[this->frameIdx].get();
 			frameCmdList->End();
 			this->grafDevice->Record(frameCmdList);
 		}
-		this->grafCommandListsMutex.unlock();
+		this->grafCommandListsMutex.unlock();*/
 		
 		// submit command list(s) to device execution queue
 		this->grafDevice->Submit();

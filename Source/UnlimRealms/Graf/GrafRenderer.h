@@ -84,7 +84,7 @@ namespace UnlimRealms
 
 		inline GrafRenderTarget* GetCanvasRenderTarget() const;
 
-		inline GrafCommandList* GetCommandList(ur_uint frameId = CurrentFrameId);
+		//inline GrafCommandList* GetCommandList(ur_uint frameId = CurrentFrameId); // TODO: fix multithreading support!
 
 		inline ur_uint GetRecordedFrameCount() const;
 
@@ -113,7 +113,7 @@ namespace UnlimRealms
 
 		Result InitializeCanvasRenderTargets();
 
-		Result GetOrCreateCommandListForCurrentThread(GrafCommandList*& grafCommandList, ur_uint frameId, ur_bool beginRecording);
+		Result GetOrCreateCommandListForCurrentThread(GrafCommandList*& grafCommandList, ur_uint frameId);
 
 		Result ProcessPendingCommandListCallbacks(ur_bool immediateMode);
 

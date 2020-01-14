@@ -35,12 +35,12 @@ namespace UnlimRealms
 		return this->grafCanvasRenderTarget[this->grafCanvas->GetCurrentImageId()].get();
 	}
 
-	inline GrafCommandList* GrafRenderer::GetCommandList(ur_uint frameId)
+	/*inline GrafCommandList* GrafRenderer::GetCommandList(ur_uint frameId)
 	{
 		GrafCommandList* crntCmdList = ur_null;
-		GetOrCreateCommandListForCurrentThread(crntCmdList, frameId, true);
+		GetOrCreateCommandListForCurrentThread(crntCmdList, frameId);
 		return crntCmdList;
-	}
+	}*/
 
 	inline ur_uint GrafRenderer::GetRecordedFrameCount() const
 	{
