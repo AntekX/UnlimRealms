@@ -415,7 +415,6 @@ namespace UnlimRealms
 			std::vector<std::unique_ptr<GrafDescriptorTable>> shaderDescriptorTable;
 			std::unique_ptr<GrafPipeline> pipelineSolid;
 			std::unique_ptr<GrafPipeline> pipelineDebug;
-			//std::unique_ptr<GrafCommandList> upload;
 		} grafObjects;
 		GrafRenderer *grafRenderer;
 

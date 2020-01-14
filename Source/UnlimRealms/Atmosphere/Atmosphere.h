@@ -50,7 +50,11 @@ namespace UnlimRealms
 
 		Result Init(const Desc &desc);
 
+		Result Init(const Desc &desc, GrafRenderPass* grafRenderPass);
+
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
+
+		Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
 
 		Result RenderPostEffects(GfxContext &gfxContext, GfxRenderTarget &renderTarget,
 			const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
@@ -61,9 +65,27 @@ namespace UnlimRealms
 
 	protected:
 
-		Result CreateGfxObjects();
-
 		Result CreateMesh();
+
+		#if defined(UR_GRAF)
+
+		struct GrafObjects
+		{
+			std::unique_ptr<GrafShader> VS;
+			std::unique_ptr<GrafShader> PS;
+			std::unique_ptr<GrafShader> PSDbg;
+			std::unique_ptr<GrafDescriptorTableLayout> shaderDescriptorLayout;
+			std::vector<std::unique_ptr<GrafDescriptorTable>> shaderDescriptorTable;
+			std::unique_ptr<GrafPipeline> pipelineSolid;
+			std::unique_ptr<GrafPipeline> pipelineDebug;
+			std::unique_ptr<GrafBuffer> VB;
+			std::unique_ptr<GrafBuffer> IB;
+		} grafObjects;
+		GrafRenderer* grafRenderer;
+
+		Result CreateGrafObjects(GrafRenderPass* grafRenderPass);
+
+		#else
 
 		struct GfxObjects
 		{
@@ -83,6 +105,10 @@ namespace UnlimRealms
 			std::unique_ptr<GenericRender::State> screenQuadStateBlendLightShafts;
 			std::unique_ptr<GfxSampler> pointSampler;
 		} gfxObjects;
+		
+		Result CreateGfxObjects();
+
+		#endif
 
 		struct alignas(16) CommonCB
 		{

@@ -247,6 +247,18 @@ int VoxelPlanetApp::Run()
 		isosurface->Init(std::move(dataVolume), std::move(presentation), grafPassColorDepth.get());
 	}
 
+	// demo atmosphere
+	std::unique_ptr<Atmosphere> atmosphere(new Atmosphere(realm));
+	{
+		Atmosphere::Desc desc = Atmosphere::Desc::Default;
+		desc.InnerRadius = lerp(surfaceRadiusMin, surfaceRadiusMax, 0.75f);
+		desc.OuterRadius = surfaceRadiusMin * 1.2f;
+		desc.Kr = 0.00005f;
+		desc.Km = 0.00005f;
+		desc.ScaleDepth = 0.16f;
+		atmosphere->Init(desc);
+	}
+
 	// main application camera
 	Camera camera(realm);
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::Free);
@@ -368,6 +380,10 @@ int VoxelPlanetApp::Run()
 					// draw isosurface
 					// TODO: must be rendered in HDR pass
 					isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), ur_null);
+
+					// draw atmosphere
+					// TODO: must be rendered in HDR pass
+					//atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
 
 					// render immediate mode generic primitives
 					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());

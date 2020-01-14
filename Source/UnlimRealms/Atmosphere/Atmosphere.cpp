@@ -54,6 +54,9 @@ namespace UnlimRealms
 		RealmEntity(realm)
 	{
 		this->lightShafts = LightShaftsDesc::Default;
+		#if defined(UR_GRAF)
+		this->grafRenderer = realm.GetComponent<GrafRenderer>();
+		#endif
 	}
 
 	Atmosphere::~Atmosphere()
@@ -62,10 +65,12 @@ namespace UnlimRealms
 
 	Result Atmosphere::Init(const Desc &desc)
 	{
+	#if defined(UR_GRAF)
+		return Result(NotImplemented);
+	#else
 		Result res(Success);
 
 		this->desc = desc;
-
 		res = this->CreateGfxObjects();
 
 		if (Succeeded(res))
@@ -74,7 +79,75 @@ namespace UnlimRealms
 		}
 
 		return res;
+	#endif
 	}
+
+	Result Atmosphere::Init(const Desc &desc, GrafRenderPass* grafRenderPass)
+	{
+	#if !defined(UR_GRAF)
+		return Result(NotImplemented);
+	#else
+		Result res(Success);
+
+		this->desc = desc;
+		res = this->CreateGrafObjects(grafRenderPass);
+
+		if (Succeeded(res))
+		{
+			res = this->CreateMesh();
+		}
+
+		return res;
+	#endif
+	}
+
+	#if defined(UR_GRAF)
+
+	Result Atmosphere::CreateGrafObjects(GrafRenderPass* grafRenderPass)
+	{
+		Result res = Result(Success);
+
+		this->grafObjects = {}; // reset resources
+
+		if (ur_null == this->grafRenderer)
+			return ResultError(InvalidArgs, "Atmosphere::CreateGrafObjects: invalid GrafRenderer");
+		if (ur_null == grafRenderPass)
+			return ResultError(InvalidArgs, "Atmosphere::CreateGrafObjects: invalid GrafRenderPass");
+
+		GrafSystem* grafSystem = this->grafRenderer->GetGrafSystem();
+		GrafDevice* grafDevice = this->grafRenderer->GetGrafDevice();
+		ur_uint frameCount = this->grafRenderer->GetRecordedFrameCount();
+
+		// VS
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Atmosphere_vs.spv", GrafShaderType::Vertex, this->grafObjects.VS);
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize VS");
+
+		// PS
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Atmosphere_ps.spv", GrafShaderType::Pixel, this->grafObjects.PS);
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize PS");
+
+		// shader descriptors layout
+		res = grafSystem->CreateDescriptorTableLayout(this->grafObjects.shaderDescriptorLayout);
+		if (Succeeded(res))
+		{
+			GrafDescriptorRangeDesc grafDescriptorRanges[] = {
+				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+			};
+			GrafDescriptorTableLayoutDesc grafDescriptorLayoutDesc = {
+				GrafShaderStageFlags((ur_uint)GrafShaderStageFlag::Vertex | (ur_uint)GrafShaderStageFlag::Pixel),
+				grafDescriptorRanges, ur_array_size(grafDescriptorRanges)
+			};
+			res = this->grafObjects.shaderDescriptorLayout->Initialize(grafDevice, { grafDescriptorLayoutDesc });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize descriptor table layout");
+
+		return res;
+	}
+
+	#else
 
 	Result Atmosphere::CreateGfxObjects()
 	{
@@ -188,6 +261,7 @@ namespace UnlimRealms
 
 		return res;
 	}
+	#endif
 
 	Result Atmosphere::CreateMesh()
 	{
@@ -228,6 +302,12 @@ namespace UnlimRealms
 			}
 		}
 
+		#if defined(UR_GRAF)
+
+		// todo
+
+		#else
+
 		// create vertex buffer
 		res = this->GetRealm().GetGfxSystem()->CreateBuffer(this->gfxObjects.VB);
 		if (Succeeded(res))
@@ -248,11 +328,16 @@ namespace UnlimRealms
 		if (Failed(res))
 			return Result(Failure);
 
+		#endif
+
 		return Result(Success);
 	}
 
 	Result Atmosphere::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
 	{
+	#if defined(UR_GRAF)
+		return Result(NotImplemented);
+	#else
 		if (ur_null == this->gfxObjects.VB ||
 			ur_null == this->gfxObjects.IB)
 			return NotInitialized;
@@ -276,11 +361,15 @@ namespace UnlimRealms
 		gfxContext.DrawIndexed(indexCount, 0, 0, 0, 0);
 
 		return Success;
+	#endif
 	}
 
 	Result Atmosphere::RenderPostEffects(GfxContext &gfxContext, GfxRenderTarget &renderTarget,
 		const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
 	{
+	#if defined(UR_GRAF)
+		return Result(NotImplemented);
+	#else
 		GenericRender *genericRender = this->GetRealm().GetComponent<GenericRender>();
 		if (ur_null == this->gfxObjects.lightShaftsRT || ur_null == genericRender)
 			return NotInitialized;
@@ -329,6 +418,20 @@ namespace UnlimRealms
 			this->gfxObjects.screenQuadStateBlendLightShafts.get());
 
 		return res;
+	#endif
+	}
+
+	Result Atmosphere::Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
+	{
+	#if !defined(UR_GRAF)
+		return Result(NotImplemented);
+	#else
+		Result res = Success;
+
+		// todo
+
+		return res;
+	#endif
 	}
 
 	void Atmosphere::ShowImgui()
