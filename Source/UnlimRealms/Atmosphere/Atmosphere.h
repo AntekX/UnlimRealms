@@ -69,8 +69,9 @@ namespace UnlimRealms
 
 		#if defined(UR_GRAF)
 
-		struct GrafObjects
+		class GrafObjects : public GrafEntity
 		{
+		public:
 			std::unique_ptr<GrafShader> VS;
 			std::unique_ptr<GrafShader> PS;
 			std::unique_ptr<GrafShader> PSDbg;
@@ -80,7 +81,10 @@ namespace UnlimRealms
 			std::unique_ptr<GrafPipeline> pipelineDebug;
 			std::unique_ptr<GrafBuffer> VB;
 			std::unique_ptr<GrafBuffer> IB;
-		} grafObjects;
+			GrafObjects(GrafSystem& grafSystem);
+			~GrafObjects();
+		};
+		std::unique_ptr<GrafObjects> grafObjects;
 		GrafRenderer* grafRenderer;
 
 		Result CreateGrafObjects(GrafRenderPass* grafRenderPass);

@@ -1033,7 +1033,7 @@ namespace UnlimRealms
 	{
 		if (ur_null == grafPipeline)
 			return Result(InvalidArgs);
-
+		
 		vkCmdBindPipeline(this->vkCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, static_cast<GrafPipelineVulkan*>(grafPipeline)->GetVkPipeline());
 
 		return Result(Success);
@@ -3191,30 +3191,47 @@ namespace UnlimRealms
 		vkDepthStencilStateInfo.depthCompareOp = GrafUtilsVulkan::GrafToVkCompareOp(initParams.DepthCompareOp);
 		vkDepthStencilStateInfo.depthBoundsTestEnable = VK_FALSE;
 		vkDepthStencilStateInfo.stencilTestEnable = initParams.StencilTestEnable;
-		vkDepthStencilStateInfo.front = {};
-		vkDepthStencilStateInfo.back = {};
+		vkDepthStencilStateInfo.front.failOp = GrafUtilsVulkan::GrafToVkStencilOp(initParams.StencilFront.FailOp);
+		vkDepthStencilStateInfo.front.passOp = GrafUtilsVulkan::GrafToVkStencilOp(initParams.StencilFront.PassOp);
+		vkDepthStencilStateInfo.front.depthFailOp = GrafUtilsVulkan::GrafToVkStencilOp(initParams.StencilFront.DepthFailOp);
+		vkDepthStencilStateInfo.front.compareOp = GrafUtilsVulkan::GrafToVkCompareOp(initParams.StencilFront.CompareOp);
+		vkDepthStencilStateInfo.front.compareMask = initParams.StencilFront.CompareMask;
+		vkDepthStencilStateInfo.front.writeMask = initParams.StencilFront.WriteMask;
+		vkDepthStencilStateInfo.front.reference = initParams.StencilFront.Reference;
+		vkDepthStencilStateInfo.back.failOp = GrafUtilsVulkan::GrafToVkStencilOp(initParams.StencilBack.FailOp);
+		vkDepthStencilStateInfo.back.passOp = GrafUtilsVulkan::GrafToVkStencilOp(initParams.StencilBack.PassOp);
+		vkDepthStencilStateInfo.back.depthFailOp = GrafUtilsVulkan::GrafToVkStencilOp(initParams.StencilBack.DepthFailOp);
+		vkDepthStencilStateInfo.back.compareOp = GrafUtilsVulkan::GrafToVkCompareOp(initParams.StencilBack.CompareOp);
+		vkDepthStencilStateInfo.back.compareMask = initParams.StencilBack.CompareMask;
+		vkDepthStencilStateInfo.back.writeMask = initParams.StencilBack.WriteMask;
+		vkDepthStencilStateInfo.back.reference = initParams.StencilBack.Reference;
 		vkDepthStencilStateInfo.minDepthBounds = 0.0f;
 		vkDepthStencilStateInfo.maxDepthBounds = 0.0f;
 
 		// color blend state
 
-		VkPipelineColorBlendAttachmentState vkAttachmentBlendState = {};
-		vkAttachmentBlendState.blendEnable = initParams.BlendEnable;
-		vkAttachmentBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-		vkAttachmentBlendState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-		vkAttachmentBlendState.colorBlendOp = VK_BLEND_OP_ADD;
-		vkAttachmentBlendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-		vkAttachmentBlendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-		vkAttachmentBlendState.alphaBlendOp = VK_BLEND_OP_ADD;
-		vkAttachmentBlendState.colorWriteMask = (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT);
+		std::vector<VkPipelineColorBlendAttachmentState> vkAttachmentBlendStates(initParams.ColorBlendOpDescCount);
+		for (ur_uint iimg = 0; iimg < initParams.ColorBlendOpDescCount; ++iimg)
+		{
+			GrafColorBlendOpDesc& blendOpDesc = initParams.ColorBlendOpDesc[iimg];
+			VkPipelineColorBlendAttachmentState& vkBlendState = vkAttachmentBlendStates[iimg];
+			vkBlendState.blendEnable = blendOpDesc.BlendEnable;
+			vkBlendState.srcColorBlendFactor = GrafUtilsVulkan::GrafToVkBlendFactor(blendOpDesc.SrcColorFactor);
+			vkBlendState.dstColorBlendFactor = GrafUtilsVulkan::GrafToVkBlendFactor(blendOpDesc.DstColorFactor);
+			vkBlendState.colorBlendOp = GrafUtilsVulkan::GrafToVkBlendOp(blendOpDesc.ColorOp);
+			vkBlendState.srcAlphaBlendFactor = GrafUtilsVulkan::GrafToVkBlendFactor(blendOpDesc.SrcAlphaFactor);
+			vkBlendState.dstAlphaBlendFactor = GrafUtilsVulkan::GrafToVkBlendFactor(blendOpDesc.DstAlphaFactor);
+			vkBlendState.alphaBlendOp = GrafUtilsVulkan::GrafToVkBlendOp(blendOpDesc.AlphaOp);
+			vkBlendState.colorWriteMask = VkColorComponentFlags(blendOpDesc.WriteMask);
+		}
 
 		VkPipelineColorBlendStateCreateInfo vkColorBlendStateInfo = {};
 		vkColorBlendStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 		vkColorBlendStateInfo.flags = 0;
 		vkColorBlendStateInfo.logicOpEnable = VK_FALSE;
 		vkColorBlendStateInfo.logicOp = VK_LOGIC_OP_COPY;
-		vkColorBlendStateInfo.attachmentCount = 1;
-		vkColorBlendStateInfo.pAttachments = &vkAttachmentBlendState;
+		vkColorBlendStateInfo.attachmentCount = (ur_uint32)vkAttachmentBlendStates.size();
+		vkColorBlendStateInfo.pAttachments = vkAttachmentBlendStates.data();
 		vkColorBlendStateInfo.blendConstants[0] = 0.0f;
 		vkColorBlendStateInfo.blendConstants[1] = 0.0f;
 		vkColorBlendStateInfo.blendConstants[2] = 0.0f;
@@ -3229,9 +3246,9 @@ namespace UnlimRealms
 			VK_DYNAMIC_STATE_DEPTH_BIAS,
 			VK_DYNAMIC_STATE_BLEND_CONSTANTS,
 			VK_DYNAMIC_STATE_DEPTH_BOUNDS,
-			VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
-			VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
-			VK_DYNAMIC_STATE_STENCIL_REFERENCE
+			//VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
+			//VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
+			//VK_DYNAMIC_STATE_STENCIL_REFERENCE
 		};
 
 		VkPipelineDynamicStateCreateInfo vkDynamicStateInfo = {};
@@ -3473,6 +3490,51 @@ namespace UnlimRealms
 		case GrafCompareOp::Always: vkCompareOp = VK_COMPARE_OP_ALWAYS; break;
 		};
 		return vkCompareOp;
+	}
+
+	VkStencilOp GrafUtilsVulkan::GrafToVkStencilOp(GrafStencilOp stencilOp)
+	{
+		VkStencilOp vkStencilOp = VK_STENCIL_OP_MAX_ENUM;
+		switch (stencilOp)
+		{
+		case GrafStencilOp::Keep: vkStencilOp = VK_STENCIL_OP_KEEP; break;
+		case GrafStencilOp::Zero: vkStencilOp = VK_STENCIL_OP_ZERO; break;
+		case GrafStencilOp::Replace: vkStencilOp = VK_STENCIL_OP_REPLACE; break;
+		};
+		return vkStencilOp;
+	}
+
+	VkBlendOp GrafUtilsVulkan::GrafToVkBlendOp(GrafBlendOp blendOp)
+	{
+		VkBlendOp vkBlendOp = VK_BLEND_OP_MAX_ENUM;
+		switch (blendOp)
+		{
+		case GrafBlendOp::Add: vkBlendOp = VK_BLEND_OP_ADD; break;
+		case GrafBlendOp::Subtract: vkBlendOp = VK_BLEND_OP_SUBTRACT; break;
+		case GrafBlendOp::ReverseSubtract: vkBlendOp = VK_BLEND_OP_REVERSE_SUBTRACT; break;
+		case GrafBlendOp::Min: vkBlendOp = VK_BLEND_OP_MIN; break;
+		case GrafBlendOp::Max: vkBlendOp = VK_BLEND_OP_MAX; break;
+		};
+		return vkBlendOp;
+	}
+
+	VkBlendFactor GrafUtilsVulkan::GrafToVkBlendFactor(GrafBlendFactor blendFactor)
+	{
+		VkBlendFactor vkBlendFactor = VK_BLEND_FACTOR_MAX_ENUM;
+		switch (blendFactor)
+		{
+		case GrafBlendFactor::Zero: vkBlendFactor = VK_BLEND_FACTOR_ZERO; break;
+		case GrafBlendFactor::One: vkBlendFactor = VK_BLEND_FACTOR_ONE; break;
+		case GrafBlendFactor::SrcColor: vkBlendFactor = VK_BLEND_FACTOR_SRC_COLOR; break;
+		case GrafBlendFactor::InvSrcColor: vkBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR; break;
+		case GrafBlendFactor::DstColor: vkBlendFactor = VK_BLEND_FACTOR_DST_COLOR; break;
+		case GrafBlendFactor::InvDstColor: vkBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR; break;
+		case GrafBlendFactor::SrcAlpha: vkBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA; break;
+		case GrafBlendFactor::InvSrcAlpha: vkBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; break;
+		case GrafBlendFactor::DstAlpha: vkBlendFactor = VK_BLEND_FACTOR_DST_ALPHA; break;
+		case GrafBlendFactor::InvDstAlpha: vkBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA; break;
+		};
+		return vkBlendFactor;
 	}
 
 	VkFilter GrafUtilsVulkan::GrafToVkFilter(GrafFilterType filter)

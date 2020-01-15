@@ -297,29 +297,20 @@ namespace UnlimRealms
 		if (ur_null == executionCmdList)
 			return Result(InvalidArgs);
 
-		if (executionCmdList->Wait(0) == Success)
-		{
-			// command list is not in pending state, call back right now
-			callback(ctx);
-		}
-		else
-		{
-			// command list fence is not signaled, add to pending list
-			std::unique_ptr<PendingCommandListCallbackData> pendingCallback(new PendingCommandListCallbackData());
-			pendingCallback->cmdList = executionCmdList;
-			pendingCallback->callback = callback;
-			pendingCallback->context = ctx;
-			this->pendingCommandListMutex.lock();
-			this->pendingCommandListCallbacks.push_back(std::move(pendingCallback));
-			this->pendingCommandListMutex.unlock();
-		}
+		std::unique_ptr<PendingCommandListCallbackData> pendingCallback(new PendingCommandListCallbackData());
+		pendingCallback->cmdList = executionCmdList;
+		pendingCallback->callback = callback;
+		pendingCallback->context = ctx;
+		this->pendingCommandListMutex.lock();
+		this->pendingCommandListCallbacks.push_back(std::move(pendingCallback));
+		this->pendingCommandListMutex.unlock();
 
 		return Result(Success);
 	}
 
-	Result GrafRenderer::SafeDelete(GrafDeviceEntity* grafDeviceEntity, GrafCommandList *grafSycnCmdList)
+	Result GrafRenderer::SafeDelete(GrafEntity* grafEnity, GrafCommandList *grafSycnCmdList)
 	{
-		if (ur_null == grafDeviceEntity)
+		if (ur_null == grafEnity)
 			return Result(InvalidArgs);
 
 		if (ur_null == grafSycnCmdList)
@@ -343,9 +334,9 @@ namespace UnlimRealms
 		}
 
 		// destroy object when fence is signaled
-		this->AddCommandListCallback(grafSycnCmdList, {}, [grafSycnCmdList, grafDeviceEntity](GrafCallbackContext& ctx) -> Result
+		this->AddCommandListCallback(grafSycnCmdList, {}, [grafSycnCmdList, grafEnity](GrafCallbackContext& ctx) -> Result
 		{
-			delete grafDeviceEntity;
+			delete grafEnity;
 			delete grafSycnCmdList;
 			return Result(Success);
 		});

@@ -1865,7 +1865,7 @@ namespace UnlimRealms
 					const ur_uint indexCount = ur_uint(grafIB.get() ? grafIB->GetDesc().SizeInBytes / sizeof(Isosurface::Index) : 0);
 					this->stats.primitivesRendered += indexCount / 3;
 					grafCmdList.BindVertexBuffer(grafVB.get(), 0);
-					grafCmdList.BindIndexBuffer(grafIB.get(), (sizeof(Isosurface::Index) == 16 ? GrafIndexType::UINT16 : GrafIndexType::UINT32));
+					grafCmdList.BindIndexBuffer(grafIB.get(), (sizeof(Isosurface::Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32));
 					grafCmdList.DrawIndexed(indexCount, 1, 0, 0, 0);
 				}
 			}
@@ -2131,12 +2131,12 @@ namespace UnlimRealms
 			pipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
 			pipelineParams.VertexInputDesc = vertexInputs;
 			pipelineParams.VertexInputCount = ur_array_size(vertexInputs);
-			pipelineParams.DepthTestEnable = true;
-			pipelineParams.DepthWriteEnable = true;
-			pipelineParams.DepthCompareOp = GrafCompareOp::LessOrEqual;
 			pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleList;
 			pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
 			pipelineParams.CullMode = GrafCullMode::Back;
+			pipelineParams.DepthTestEnable = true;
+			pipelineParams.DepthWriteEnable = true;
+			pipelineParams.DepthCompareOp = GrafCompareOp::LessOrEqual;
 			res = this->grafObjects.pipelineSolid->Initialize(grafDevice, pipelineParams);
 		}
 		if (Failed(res))

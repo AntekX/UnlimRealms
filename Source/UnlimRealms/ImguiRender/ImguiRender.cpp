@@ -490,6 +490,7 @@ namespace UnlimRealms
 				GrafVertexInputType::PerVertex, 0, sizeof(ImDrawVert),
 				vertexElements, ur_array_size(vertexElements)
 			} };
+			GrafColorBlendOpDesc colorBlendOpDesc = GrafColorBlendOpDesc::DefaultBlendEnable;
 			GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
 			pipelineParams.RenderPass = grafRenderPass;
 			pipelineParams.ShaderStages = shaderStages;
@@ -498,7 +499,8 @@ namespace UnlimRealms
 			pipelineParams.DescriptorTableLayoutCount = ur_array_size(bindingLayouts);
 			pipelineParams.VertexInputDesc = vertexInputs;
 			pipelineParams.VertexInputCount = ur_array_size(vertexInputs);
-			pipelineParams.BlendEnable = true;
+			pipelineParams.ColorBlendOpDescCount = 1;
+			pipelineParams.ColorBlendOpDesc = &colorBlendOpDesc;
 			res = this->grafPipeline->Initialize(grafDevice, pipelineParams);
 		}
 		if (Failed(res))

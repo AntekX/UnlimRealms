@@ -27,6 +27,38 @@ namespace UnlimRealms
 		128.0f, // MipLodMax
 	};
 
+	const GrafStencilOpDesc GrafStencilOpDesc::Default = {
+		GrafStencilOp::Keep, // FailOp
+		GrafStencilOp::Keep, // PassOp
+		GrafStencilOp::Keep, // DepthFailOp
+		GrafCompareOp::Never, // CompareOp
+		0x0, // CompareMask
+		0x0, // WriteMask
+		0x0 // Reference
+	};
+
+	const GrafColorBlendOpDesc GrafColorBlendOpDesc::Default = {
+		GrafColorChannelFlags(GrafColorChannelFlag::All),
+		false, // BlendEnable
+		GrafBlendOp::Add, // GrafBlendOp
+		GrafBlendFactor::SrcAlpha, // GrafBlendFactor
+		GrafBlendFactor::InvSrcAlpha, // GrafBlendFactor
+		GrafBlendOp::Add, // GrafBlendOp
+		GrafBlendFactor::One, // GrafBlendFactor
+		GrafBlendFactor::Zero, // GrafBlendFactor
+	};
+
+	const GrafColorBlendOpDesc GrafColorBlendOpDesc::DefaultBlendEnable = {
+		GrafColorChannelFlags(GrafColorChannelFlag::All),
+		true, // BlendEnable
+		GrafBlendOp::Add, // GrafBlendOp
+		GrafBlendFactor::SrcAlpha, // GrafBlendFactor
+		GrafBlendFactor::InvSrcAlpha, // GrafBlendFactor
+		GrafBlendOp::Add, // GrafBlendOp
+		GrafBlendFactor::One, // GrafBlendFactor
+		GrafBlendFactor::Zero, // GrafBlendFactor
+	};
+
 	GrafSystem::GrafSystem(Realm &realm) :
 		RealmEntity(realm)
 	{
@@ -546,6 +578,7 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	static GrafColorBlendOpDesc GrafPipelineDefaultColorBlendOpDesc = GrafColorBlendOpDesc::Default;
 	const GrafPipeline::InitParams GrafPipeline::InitParams::Default = {
 		ur_null, // RenderPass
 		ur_null, // GrafShader**
@@ -562,7 +595,10 @@ namespace UnlimRealms
 		false, // DepthWriteEnable
 		GrafCompareOp::LessOrEqual, // DepthCompareOp
 		false, // StencilTestEnable
-		false, // BlendEnable
+		GrafStencilOpDesc::Default, // GrafStencilOpDesc
+		GrafStencilOpDesc::Default, // GrafStencilOpDesc
+		&GrafPipelineDefaultColorBlendOpDesc, // GrafColorBlendOpDesc
+		1 // ColorBlendOpDescCount
 	};
 
 	GrafPipeline::GrafPipeline(GrafSystem &grafSystem) :

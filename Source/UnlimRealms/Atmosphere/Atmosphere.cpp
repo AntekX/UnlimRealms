@@ -61,6 +61,12 @@ namespace UnlimRealms
 
 	Atmosphere::~Atmosphere()
 	{
+	#if defined(UR_GRAF)
+		if (this->grafObjects != ur_null)
+		{
+			this->grafRenderer->SafeDelete(this->grafObjects.release());
+		}
+	#endif
 	}
 
 	Result Atmosphere::Init(const Desc &desc)
@@ -103,11 +109,22 @@ namespace UnlimRealms
 
 	#if defined(UR_GRAF)
 
+	Atmosphere::GrafObjects::GrafObjects(GrafSystem& grafSystem) :
+		GrafEntity(grafSystem)
+	{
+	}
+	Atmosphere::GrafObjects::~GrafObjects()
+	{
+	}
+
 	Result Atmosphere::CreateGrafObjects(GrafRenderPass* grafRenderPass)
 	{
 		Result res = Result(Success);
 
-		this->grafObjects = {}; // reset resources
+		if (this->grafObjects != ur_null)
+		{
+			this->grafRenderer->SafeDelete(this->grafObjects.release());
+		}
 
 		if (ur_null == this->grafRenderer)
 			return ResultError(InvalidArgs, "Atmosphere::CreateGrafObjects: invalid GrafRenderer");
@@ -117,19 +134,20 @@ namespace UnlimRealms
 		GrafSystem* grafSystem = this->grafRenderer->GetGrafSystem();
 		GrafDevice* grafDevice = this->grafRenderer->GetGrafDevice();
 		ur_uint frameCount = this->grafRenderer->GetRecordedFrameCount();
+		std::unique_ptr<GrafObjects> grafObjects(new GrafObjects(*grafSystem));
 
 		// VS
-		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Atmosphere_vs.spv", GrafShaderType::Vertex, this->grafObjects.VS);
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Atmosphere_vs.spv", GrafShaderType::Vertex, grafObjects->VS);
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize VS");
 
 		// PS
-		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Atmosphere_ps.spv", GrafShaderType::Pixel, this->grafObjects.PS);
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Atmosphere_ps.spv", GrafShaderType::Pixel, grafObjects->PS);
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize PS");
 
 		// shader descriptors layout
-		res = grafSystem->CreateDescriptorTableLayout(this->grafObjects.shaderDescriptorLayout);
+		res = grafSystem->CreateDescriptorTableLayout(grafObjects->shaderDescriptorLayout);
 		if (Succeeded(res))
 		{
 			GrafDescriptorRangeDesc grafDescriptorRanges[] = {
@@ -139,10 +157,71 @@ namespace UnlimRealms
 				GrafShaderStageFlags((ur_uint)GrafShaderStageFlag::Vertex | (ur_uint)GrafShaderStageFlag::Pixel),
 				grafDescriptorRanges, ur_array_size(grafDescriptorRanges)
 			};
-			res = this->grafObjects.shaderDescriptorLayout->Initialize(grafDevice, { grafDescriptorLayoutDesc });
+			res = grafObjects->shaderDescriptorLayout->Initialize(grafDevice, { grafDescriptorLayoutDesc });
 		}
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize descriptor table layout");
+
+		// per frame descriptor tables
+		grafObjects->shaderDescriptorTable.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			res = grafSystem->CreateDescriptorTable(grafObjects->shaderDescriptorTable[iframe]);
+			if (Failed(res)) break;
+			res = grafObjects->shaderDescriptorTable[iframe]->Initialize(grafDevice, { grafObjects->shaderDescriptorLayout.get() });
+			if (Failed(res)) break;
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize descriptor table(s)");
+
+		// graphics pipeline configuration(s)
+		res = grafSystem->CreatePipeline(grafObjects->pipelineSolid);
+		if (Succeeded(res))
+		{
+			GrafShader* shaderStages[] = {
+				grafObjects->VS.get(),
+				grafObjects->PS.get()
+			};
+			GrafDescriptorTableLayout* descriptorLayouts[] = {
+				grafObjects->shaderDescriptorLayout.get(),
+			};
+			GrafVertexElementDesc vertexElements[] = {
+				{ GrafFormat::R32G32B32_SFLOAT, 0 }
+			};
+			GrafVertexInputDesc vertexInputs[] = { {
+				GrafVertexInputType::PerVertex, 0, sizeof(Vertex),
+				vertexElements, ur_array_size(vertexElements)
+			} };
+			GrafColorBlendOpDesc colorBlendOpDesc = {
+				GrafColorChannelFlags(GrafColorChannelFlag::All), true,
+				GrafBlendOp::Add, GrafBlendFactor::SrcAlpha, GrafBlendFactor::One,
+				GrafBlendOp::Add, GrafBlendFactor::SrcAlpha, GrafBlendFactor::One,
+			};
+			GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
+			pipelineParams.RenderPass = grafRenderPass;
+			pipelineParams.ShaderStages = shaderStages;
+			pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+			pipelineParams.DescriptorTableLayouts = descriptorLayouts;
+			pipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+			pipelineParams.VertexInputDesc = vertexInputs;
+			pipelineParams.VertexInputCount = ur_array_size(vertexInputs);
+			pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleList;
+			pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
+			pipelineParams.CullMode = GrafCullMode::Front;
+			pipelineParams.DepthTestEnable = true;
+			pipelineParams.DepthWriteEnable = false;
+			pipelineParams.DepthCompareOp = GrafCompareOp::LessOrEqual;
+			pipelineParams.StencilTestEnable = false;// true; //todo
+			pipelineParams.StencilBack.PassOp = GrafStencilOp::Replace;
+			pipelineParams.StencilBack.Reference = 0x1;
+			pipelineParams.ColorBlendOpDescCount = 1;
+			pipelineParams.ColorBlendOpDesc = &colorBlendOpDesc;
+			res = grafObjects->pipelineSolid->Initialize(grafDevice, pipelineParams);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize pipeline object");
+
+		this->grafObjects = std::move(grafObjects);
 
 		return res;
 	}
@@ -304,7 +383,42 @@ namespace UnlimRealms
 
 		#if defined(UR_GRAF)
 
-		// todo
+		GrafSystem* grafSystem = this->grafRenderer->GetGrafSystem();
+		GrafDevice* grafDevice = this->grafRenderer->GetGrafDevice();
+
+		// create vertex buffer
+		res = grafSystem->CreateBuffer(this->grafObjects->VB);
+		if (Succeeded(res))
+		{
+			GrafBufferDesc bufferDesc;
+			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer | (ur_uint)GrafBufferUsageFlag::TransferDst;
+			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
+			bufferDesc.SizeInBytes = (ur_size)vertices.size() * sizeof(Atmosphere::Vertex);
+			res = this->grafObjects->VB->Initialize(grafDevice, { bufferDesc });
+			if (Succeeded(res))
+			{
+				grafRenderer->Upload((ur_byte*)vertices.data(), this->grafObjects->VB.get(), bufferDesc.SizeInBytes);
+			}
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateMesh: failed to initialize VB");
+
+		// create index buffer
+		res = grafSystem->CreateBuffer(this->grafObjects->IB);
+		if (Succeeded(res))
+		{
+			GrafBufferDesc bufferDesc;
+			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::IndexBuffer | (ur_uint)GrafBufferUsageFlag::TransferDst;
+			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
+			bufferDesc.SizeInBytes = (ur_size)indices.size() * sizeof(Atmosphere::Index);
+			res = this->grafObjects->IB->Initialize(grafDevice, { bufferDesc });
+			if (Succeeded(res))
+			{
+				grafRenderer->Upload((ur_byte*)indices.data(), this->grafObjects->IB.get(), bufferDesc.SizeInBytes);
+			}
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateMesh: failed to initialize IB");
 
 		#else
 
@@ -326,7 +440,7 @@ namespace UnlimRealms
 			res = this->gfxObjects.IB->Initialize(gfxRes.RowPitch, sizeof(Atmosphere::Index), GfxUsage::Immutable, (ur_uint)GfxBindFlag::IndexBuffer, 0, &gfxRes);
 		}
 		if (Failed(res))
-			return Result(Failure);
+			return ResultError(Failure, "Atmosphere::CreateMesh: failed to initialize IB");
 
 		#endif
 
@@ -425,10 +539,35 @@ namespace UnlimRealms
 	{
 	#if !defined(UR_GRAF)
 		return Result(NotImplemented);
-	#else
+	#else	
+		if (ur_null == this->grafObjects)
+			return NotInitialized;
+
 		Result res = Success;
 
-		// todo
+		// fill CB
+		CommonCB cbData;
+		cbData.ViewProj = viewProj;
+		cbData.CameraPos = cameraPos;
+		cbData.Params = this->desc;
+		GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
+		Allocation dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(CommonCB));
+		dynamicCB->Write((ur_byte*)&cbData, sizeof(cbData), 0, dynamicCBAlloc.Offset);
+
+		// update shader descriptors
+		ur_uint frameIdx = this->grafRenderer->GetCurrentFrameId();
+		GrafDescriptorTable *shaderDescriptorTable = this->grafObjects->shaderDescriptorTable[frameIdx].get();
+		shaderDescriptorTable->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
+
+		// bind pipeline
+		const ur_uint indexCount = ur_uint(this->grafObjects->IB->GetDesc().SizeInBytes / sizeof(Atmosphere::Index));
+		grafCmdList.BindVertexBuffer(this->grafObjects->VB.get(), 0);
+		grafCmdList.BindIndexBuffer(this->grafObjects->IB.get(), (sizeof(Atmosphere::Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32));
+		grafCmdList.BindPipeline(this->grafObjects->pipelineSolid.get());
+		grafCmdList.BindDescriptorTable(shaderDescriptorTable, this->grafObjects->pipelineSolid.get());
+
+		// draw
+		grafCmdList.DrawIndexed(indexCount, 1, 0, 0, 0);
 
 		return res;
 	#endif

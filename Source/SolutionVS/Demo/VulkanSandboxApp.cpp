@@ -228,7 +228,6 @@ int VulkanSandboxApp::Run()
 		samplePipelineParams.DescriptorTableLayoutCount = ur_array_size(sampleBindingLayouts);
 		samplePipelineParams.VertexInputDesc = sampleVertexInputs;
 		samplePipelineParams.VertexInputCount = ur_array_size(sampleVertexInputs);
-		samplePipelineParams.BlendEnable = false;
 		grafRes = grafPipelineSample->Initialize(grafDevice, samplePipelineParams);
 		if (Failed(grafRes)) return;
 	};

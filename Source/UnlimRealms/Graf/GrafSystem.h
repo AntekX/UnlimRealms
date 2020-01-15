@@ -407,6 +407,81 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafStencilOp
+	{
+		Undefined = -1,
+		Keep = 0,
+		Zero,
+		Replace
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafStencilOpDesc
+	{
+		GrafStencilOp FailOp;
+		GrafStencilOp PassOp;
+		GrafStencilOp DepthFailOp;
+		GrafCompareOp CompareOp;
+		ur_uint32 CompareMask;
+		ur_uint32 WriteMask;
+		ur_uint32 Reference;
+		static const GrafStencilOpDesc Default;
+	};
+	
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafColorChannelFlag
+	{
+		Red = (1 << 0),
+		Green = (1 << 1),
+		Blue = (1 << 2),
+		Alpha = (1 << 3),
+		All = (1 << 4) - 1
+	};
+	typedef ur_uint GrafColorChannelFlags;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafBlendOp
+	{
+		Undefined = -1,
+		Add = 0,
+		Subtract,
+		ReverseSubtract,
+		Min,
+		Max
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafBlendFactor
+	{
+		Undefined = -1,
+		Zero = 0,
+		One,
+		SrcColor,
+		InvSrcColor,
+		DstColor,
+		InvDstColor,
+		SrcAlpha,
+		InvSrcAlpha,
+		DstAlpha,
+		InvDstAlpha
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafColorBlendOpDesc
+	{
+		GrafColorChannelFlags WriteMask;
+		ur_bool BlendEnable;
+		GrafBlendOp ColorOp;
+		GrafBlendFactor SrcColorFactor;
+		GrafBlendFactor DstColorFactor;
+		GrafBlendOp AlphaOp;
+		GrafBlendFactor SrcAlphaFactor;
+		GrafBlendFactor DstAlphaFactor;
+		static const GrafColorBlendOpDesc Default;
+		static const GrafColorBlendOpDesc DefaultBlendEnable;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	typedef std::function<Result(ur_byte *mappedDataPtr)> GrafWriteCallback;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -871,7 +946,10 @@ namespace UnlimRealms
 			ur_bool DepthWriteEnable;
 			GrafCompareOp DepthCompareOp;
 			ur_bool StencilTestEnable;
-			ur_bool BlendEnable;
+			GrafStencilOpDesc StencilFront;
+			GrafStencilOpDesc StencilBack;
+			GrafColorBlendOpDesc *ColorBlendOpDesc;
+			ur_uint ColorBlendOpDescCount;
 			static const InitParams Default;
 		};
 

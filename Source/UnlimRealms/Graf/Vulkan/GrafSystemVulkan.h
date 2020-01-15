@@ -509,6 +509,9 @@ namespace UnlimRealms
 		static inline VkFrontFace GrafToVkFrontFace(GrafFrontFaceOrder frontFaceOrder);
 		static inline VkCullModeFlags GrafToVkCullModeFlags(GrafCullMode cullMode);
 		static inline VkCompareOp GrafToVkCompareOp(GrafCompareOp compareOp);
+		static inline VkStencilOp GrafToVkStencilOp(GrafStencilOp stencilOp);
+		static inline VkBlendOp GrafToVkBlendOp(GrafBlendOp blendOp);
+		static inline VkBlendFactor GrafToVkBlendFactor(GrafBlendFactor blendFactor);
 		static inline VkFilter GrafToVkFilter(GrafFilterType filter);
 		static inline VkSamplerAddressMode GrafToVkAddressMode(GrafAddressMode address);
 		static inline VkIndexType GrafToVkIndexType(GrafIndexType indexType);

@@ -256,7 +256,7 @@ int VoxelPlanetApp::Run()
 		desc.Kr = 0.00005f;
 		desc.Km = 0.00005f;
 		desc.ScaleDepth = 0.16f;
-		atmosphere->Init(desc);
+		atmosphere->Init(desc, grafPassColorDepth.get());
 	}
 
 	// main application camera
@@ -379,11 +379,11 @@ int VoxelPlanetApp::Run()
 
 					// draw isosurface
 					// TODO: must be rendered in HDR pass
-					isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), ur_null);
+					isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
 
 					// draw atmosphere
 					// TODO: must be rendered in HDR pass
-					//atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
+					atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition());
 
 					// render immediate mode generic primitives
 					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());
@@ -436,6 +436,7 @@ int VoxelPlanetApp::Run()
 
 	// destroy application objects
 	isosurface.reset();
+	atmosphere.reset();
 
 	// destroy GRAF objects
 	deinitializeGrafObjects();
