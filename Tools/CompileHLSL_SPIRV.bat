@@ -29,13 +29,13 @@ echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
 set "SHADER_PATH_SRC=..\Source\UnlimRealms\Isosurface"
 set "SHADER_NAME=Isosurface"
 dxc -spirv -T vs_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_vs.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_vs.spv -fvk-invert-y -I ..\Source\UnlimRealms\ShaderLib
-dxc -spirv -T ps_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_ps.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_ps.spv -I ..\Source\UnlimRealms\ShaderLib
+dxc -spirv -T ps_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_ps.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_ps.spv -I ..\Source\UnlimRealms\ShaderLib -D SIMPLE_TONEMAPPING
 echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
 
 set "SHADER_PATH_SRC=..\Source\UnlimRealms\Atmosphere"
 set "SHADER_NAME=Atmosphere"
 dxc -spirv -T vs_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_vs.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_vs.spv -fvk-invert-y -I ..\Source\UnlimRealms\ShaderLib
-dxc -spirv -T ps_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_ps.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_ps.spv -I ..\Source\UnlimRealms\ShaderLib
+dxc -spirv -T ps_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_ps.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_ps.spv -I ..\Source\UnlimRealms\ShaderLib -D SIMPLE_TONEMAPPING
 echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
 
 echo CompileHLSL_SPIRV finished

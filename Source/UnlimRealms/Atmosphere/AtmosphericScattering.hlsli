@@ -136,7 +136,11 @@ float4 AtmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const
 {
 	float3 light = AtmosphericSingleScattering(a, vpos, cameraPos);
 	float alpha = max(max(light.r, light.g), light.b);
-	return float4(light.rgb, min(alpha, 1.0));
+	float4 result = float4(light.rgb, min(alpha, 1.0));
+#if defined(SIMPLE_TONEMAPPING) // temp: inplace tonemapping till properly supported in GRAF rendering branch
+	result.rgb /= (1.0 + result.rgb);
+#endif
+	return result;
 }
 
 float4 AtmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, float3 vpos, float3 cameraPos)
@@ -170,5 +174,9 @@ float4 AtmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, fl
 	float3 scatteredLight = lightIntensity * totalInscatteringRayleigh * a.Kr * LightWaveLengthScatterConst;
 	float3 light = scatteredLight + surfLight * transmittance;
 
-	return float4(light.rgb, 1.0);
+	float4 result = float4(light.rgb, 1.0);
+#if defined(SIMPLE_TONEMAPPING)
+	result.rgb /= (1.0 + result.rgb);
+#endif
+	return result;
 }
