@@ -403,7 +403,7 @@ namespace UnlimRealms
 				}
 				else
 				{
-					this->finishedCommandListCallbacksJob = this->GetRealm().GetJobSystem().Add(JobPriority::Debug, &this->finishedCommandListCallbacks, executeCallbacksJobFunc);
+					this->finishedCommandListCallbacksJob = this->GetRealm().GetJobSystem().Add(JobPriority::High, &this->finishedCommandListCallbacks, executeCallbacksJobFunc);
 				}
 			}
 		}
