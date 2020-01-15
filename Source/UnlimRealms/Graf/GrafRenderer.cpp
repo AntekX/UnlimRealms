@@ -217,6 +217,8 @@ namespace UnlimRealms
 		this->grafCanvasRenderTarget.clear();
 		this->grafCanvasRenderPass.reset();
 		this->grafCanvas.reset();
+		assert(this->pendingCommandListCallbacks.empty());
+		assert(this->finishedCommandListCallbacks.empty());
 		this->grafDevice.reset();
 		this->grafSystem.reset();
 
@@ -350,6 +352,11 @@ namespace UnlimRealms
 
 		#if (1)
 		ur_bool previousCallbackProcessed = (ur_null == this->finishedCommandListCallbacksJob || this->finishedCommandListCallbacksJob->Finished());
+		if (!previousCallbackProcessed && immediateMode)
+		{
+			this->finishedCommandListCallbacksJob->Wait();
+			previousCallbackProcessed = true;
+		}
 		if (previousCallbackProcessed)
 		{
 			// check pending command lists and prepare a list of callbacks for background processing
@@ -387,14 +394,17 @@ namespace UnlimRealms
 				}
 				ctx.resultCode = res;
 			};
-			if (immediateMode)
+			if (!this->finishedCommandListCallbacks.empty())
 			{
-				Job immediateJob(this->GetRealm().GetJobSystem(), &this->finishedCommandListCallbacks, executeCallbacksJobFunc);
-				immediateJob.Execute();
-			}
-			else
-			{
-				this->finishedCommandListCallbacksJob = this->GetRealm().GetJobSystem().Add(JobPriority::High, &this->finishedCommandListCallbacks, executeCallbacksJobFunc);
+				if (immediateMode)
+				{
+					Job immediateJob(this->GetRealm().GetJobSystem(), &this->finishedCommandListCallbacks, executeCallbacksJobFunc);
+					immediateJob.Execute();
+				}
+				else
+				{
+					this->finishedCommandListCallbacksJob = this->GetRealm().GetJobSystem().Add(JobPriority::Debug, &this->finishedCommandListCallbacks, executeCallbacksJobFunc);
+				}
 			}
 		}
 		#else

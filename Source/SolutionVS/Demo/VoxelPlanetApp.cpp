@@ -379,11 +379,17 @@ int VoxelPlanetApp::Run()
 
 					// draw isosurface
 					// TODO: must be rendered in HDR pass
-					isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
+					if (isosurface != ur_null)
+					{
+						isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
+					}
 
 					// draw atmosphere
 					// TODO: must be rendered in HDR pass
-					atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition());
+					if (atmosphere != ur_null)
+					{
+						atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition());
+					}
 
 					// render immediate mode generic primitives
 					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());
@@ -408,7 +414,14 @@ int VoxelPlanetApp::Run()
 						
 						grafRenderer->ShowImgui();
 						cameraControl.ShowImgui();
-						isosurface->ShowImgui();
+						if (isosurface != ur_null)
+						{
+							isosurface->ShowImgui();
+						}
+						if (atmosphere != ur_null)
+						{
+							atmosphere->ShowImgui();
+						}
 
 						imguiRender->Render(*grafCmdListCrnt);
 					}
