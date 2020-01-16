@@ -363,11 +363,14 @@ namespace UnlimRealms
 			this->pendingCommandListMutex.lock();
 			this->finishedCommandListCallbacks.clear();
 			this->finishedCommandListCallbacks.reserve(this->pendingCommandListCallbacks.size());
+			ur_size processedItems = 0;
+			ur_size processedItemsMax = (immediateMode ? ur_size(-1) : 1024);
+			ur_uint64 waitTimeout = (immediateMode ? ur_uint64(-1) : 0);
 			ur_size idx = 0;
-			while (idx < this->pendingCommandListCallbacks.size())
+			while (idx < this->pendingCommandListCallbacks.size() && processedItems < processedItemsMax)
 			{
 				auto& pendingCallback = this->pendingCommandListCallbacks[idx];
-				if (pendingCallback->cmdList->Wait(0) == Success)
+				if (pendingCallback->cmdList->Wait(waitTimeout) == Success)
 				{
 					// command list is finished, add to processing list
 					this->finishedCommandListCallbacks.push_back(std::move(pendingCallback));
@@ -379,6 +382,7 @@ namespace UnlimRealms
 					// still pending
 					++idx;
 				}
+				++processedItems;
 			}
 			this->pendingCommandListMutex.unlock();
 
