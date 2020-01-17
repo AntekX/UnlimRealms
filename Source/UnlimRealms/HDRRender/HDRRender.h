@@ -35,7 +35,7 @@ namespace UnlimRealms
 		~HDRRender();
 
 		Result SetParams(const Params &params);
-
+		
 		Result Init(ur_uint width, ur_uint height, bool depthStencilEnabled = true);
 
 		Result BeginRender(GfxContext &gfxContext);
@@ -44,13 +44,35 @@ namespace UnlimRealms
 
 		Result Resolve(GfxContext &gfxContext);
 
+		Result Init(ur_uint width, ur_uint height, GrafImage* depthStnecilRTImage);
+
+		Result BeginRender(GrafCommandList &grafCmdList);
+
+		Result EndRender(GrafCommandList &grafCmdList);
+
+		Result Resolve(GrafCommandList &grafCmdList, GrafImage* colorTargetImage);
+
 		void ShowImgui();
 
-		inline GfxRenderTarget* GetHDRTarget() const { return (gfxObjects != ur_null ? this->gfxObjects->hdrRT.get() : ur_null); }
+		inline GfxRenderTarget* GetHDRTarget() const
+		{
+		#if defined(UR_GRAF)
+			return ur_null;
+		#else
+			return (gfxObjects != ur_null ? this->gfxObjects->hdrRT.get() : ur_null);
+		#endif
+		}
 
+		inline GrafRenderPass* GetRenderPass() const
+		{
+		#if defined(UR_GRAF)
+			return (this->grafRTObjects != ur_null ? this->grafRTObjects->hdrRenderPass.get() : ur_null);
+		#else
+			return ur_null;
+		#endif
+		}
+	
 	protected:
-
-		Result CreateGfxObjects();
 
 		static GfxRenderState AverageLuminanceRenderState;
 
@@ -60,6 +82,34 @@ namespace UnlimRealms
 			ur_float BlurDirection;
 			Params params;
 		};
+
+		#if defined(UR_GRAF)
+
+		class GrafObjects : public GrafEntity
+		{
+		public:
+			std::unique_ptr<GrafShader> calculateLuminancePS;
+			std::unique_ptr<GrafShader> toneMappingPS;
+			GrafObjects(GrafSystem& grafSystem);
+			~GrafObjects();
+		};
+		class GrafRTObjects : public GrafEntity
+		{
+		public:
+			GrafImage* depthStencilRTImage;
+			std::unique_ptr<GrafRenderPass> hdrRenderPass;
+			std::unique_ptr<GrafRenderTarget> hdrRT;
+			std::unique_ptr<GrafImage> hdrRTImage;
+			std::vector<std::unique_ptr<GrafRenderTarget>> lumRTChain;
+			std::vector<std::unique_ptr<GrafImage>> lumRTChainImages;
+			GrafRTObjects(GrafSystem& grafSystem);
+			~GrafRTObjects();
+		};
+		std::unique_ptr<GrafObjects> grafObjects;
+		std::unique_ptr<GrafRTObjects> grafRTObjects;
+		GrafRenderer* grafRenderer;
+		
+		#else
 
 		struct GfxObjects
 		{
@@ -78,10 +128,13 @@ namespace UnlimRealms
 			std::unique_ptr<GenericRender::State> screenQuadStateBlur;
 			std::unique_ptr<GenericRender::State> screenQuadStateTonemapping;
 			std::unique_ptr<GenericRender::State> screenQuadStateDebug;
-
 		};
-
 		std::unique_ptr<GfxObjects> gfxObjects;
+
+		Result CreateGfxObjects();
+
+		#endif
+
 		Params params;
 		
 		enum DebugRT

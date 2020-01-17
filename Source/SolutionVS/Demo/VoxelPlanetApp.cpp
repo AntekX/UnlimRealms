@@ -217,6 +217,21 @@ int VoxelPlanetApp::Run()
 		}
 	}
 
+	// HDR rendering
+	/*std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
+	{
+		HDRRender::Params hdrParams = HDRRender::Params::Default;
+		hdrParams.BloomThreshold = 4.0f;
+		hdrRender->SetParams(hdrParams);
+		res = hdrRender->Init(canvasWidth, canvasHeight, grafImageRTDepth.get());
+		if (Failed(res))
+		{
+			realm.GetLog().WriteLine("VoxelPlanetApp: failed to initialize HDRRender", Log::Error);
+			hdrRender.reset();
+		}
+	}*/
+	std::unique_ptr<HDRRender> hdrRender;
+
 	// demo isosurface
 	ur_float surfaceRadiusMin = 1000.0f;
 	ur_float surfaceRadiusMax = 1100.0f;
@@ -244,7 +259,7 @@ int VoxelPlanetApp::Run()
 		desc.DetailLevelDistance = desc.CellSize * desc.LatticeResolution.x * 1.0f;
 		std::unique_ptr<Isosurface::HybridCubes> presentation(new Isosurface::HybridCubes(*isosurface.get(), desc));
 
-		isosurface->Init(std::move(dataVolume), std::move(presentation), grafPassColorDepth.get());
+		isosurface->Init(std::move(dataVolume), std::move(presentation), (hdrRender ? hdrRender->GetRenderPass() : grafPassColorDepth.get()));
 	}
 
 	// demo atmosphere
@@ -256,7 +271,7 @@ int VoxelPlanetApp::Run()
 		desc.Kr = 0.00005f;
 		desc.Km = 0.00005f;
 		desc.ScaleDepth = 0.16f;
-		atmosphere->Init(desc, grafPassColorDepth.get());
+		atmosphere->Init(desc, (hdrRender ? hdrRender->GetRenderPass() : grafPassColorDepth.get()));
 	}
 
 	// main application camera
@@ -361,10 +376,29 @@ int VoxelPlanetApp::Run()
 				grafCmdListCrnt->SetViewport(grafViewport, true);
 				grafCmdListCrnt->SetScissorsRect({ 0, 0, (ur_int)grafViewport.Width, (ur_int)grafViewport.Height });
 
-				{ // HDR & depth render pass
-					
-					updateFrameJob->WaitProgress(UpdateStage_IsosurfaceReady);
-					// TODO: render demo isosurface here
+				if (hdrRender != ur_null)
+				{ 
+					// HDR & depth render pass
+
+					hdrRender->BeginRender(*grafCmdListCrnt);
+
+					// draw isosurface
+					if (isosurface != ur_null)
+					{
+						updateFrameJob->WaitProgress(UpdateStage_IsosurfaceReady);
+						isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
+					}
+
+					// draw atmosphere
+					if (atmosphere != ur_null)
+					{
+						atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition());
+					}
+
+					hdrRender->EndRender(*grafCmdListCrnt);
+
+					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
+					hdrRender->Resolve(*grafCmdListCrnt, grafCanvas->GetCurrentImage());
 				}
 
 				{ // color & depth render pass
@@ -377,18 +411,21 @@ int VoxelPlanetApp::Run()
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 					grafCmdListCrnt->BeginRenderPass(grafPassColorDepth.get(), grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get(), rtClearValues);
 
-					// draw isosurface
-					// TODO: must be rendered in HDR pass
-					if (isosurface != ur_null)
+					if (ur_null == hdrRender)
 					{
-						isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
-					}
+						// TEMP: fallback rendering if HRRender is unavailable
+						
+						// draw isosurface
+						if (isosurface != ur_null)
+						{
+							isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
+						}
 
-					// draw atmosphere
-					// TODO: must be rendered in HDR pass
-					if (atmosphere != ur_null)
-					{
-						atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition());
+						// draw atmosphere
+						if (atmosphere != ur_null)
+						{
+							atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition());
+						}
 					}
 
 					// render immediate mode generic primitives
@@ -450,6 +487,7 @@ int VoxelPlanetApp::Run()
 	// destroy application objects
 	isosurface.reset();
 	atmosphere.reset();
+	hdrRender.reset();
 
 	// destroy GRAF objects
 	deinitializeGrafObjects();
