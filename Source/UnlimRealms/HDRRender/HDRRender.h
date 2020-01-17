@@ -66,7 +66,7 @@ namespace UnlimRealms
 		inline GrafRenderPass* GetRenderPass() const
 		{
 		#if defined(UR_GRAF)
-			return (this->grafRTObjects != ur_null ? this->grafRTObjects->hdrRenderPass.get() : ur_null);
+			return (this->grafObjects != ur_null ? this->grafObjects->hdrRenderPass.get() : ur_null);
 		#else
 			return ur_null;
 		#endif
@@ -88,20 +88,26 @@ namespace UnlimRealms
 		class GrafObjects : public GrafEntity
 		{
 		public:
+			std::unique_ptr<GrafShader> fullScreenQuadVS;
 			std::unique_ptr<GrafShader> calculateLuminancePS;
 			std::unique_ptr<GrafShader> toneMappingPS;
+			std::unique_ptr<GrafDescriptorTableLayout> descriptorsLayout;
+			std::unique_ptr<GrafRenderPass> hdrRenderPass;
+			std::unique_ptr<GrafRenderPass> lumRenderPass;
+			std::unique_ptr<GrafPipeline> lumPipeline;
+			std::unique_ptr<GrafSampler> samplerLinear;
+			std::unique_ptr<GrafSampler> samplerPoint;
 			GrafObjects(GrafSystem& grafSystem);
 			~GrafObjects();
 		};
 		class GrafRTObjects : public GrafEntity
 		{
 		public:
-			GrafImage* depthStencilRTImage;
-			std::unique_ptr<GrafRenderPass> hdrRenderPass;
 			std::unique_ptr<GrafRenderTarget> hdrRT;
 			std::unique_ptr<GrafImage> hdrRTImage;
 			std::vector<std::unique_ptr<GrafRenderTarget>> lumRTChain;
 			std::vector<std::unique_ptr<GrafImage>> lumRTChainImages;
+			std::vector<std::unique_ptr<GrafDescriptorTable>> lumRTChainTables;
 			GrafRTObjects(GrafSystem& grafSystem);
 			~GrafRTObjects();
 		};

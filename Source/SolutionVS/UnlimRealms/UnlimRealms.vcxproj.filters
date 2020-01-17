@@ -816,6 +816,9 @@
     <FxCompile Include="..\..\UnlimRealms\Terrain\Terrain_ps.hlsl">
       <Filter>Terrain</Filter>
     </FxCompile>
+    <FxCompile Include="..\..\UnlimRealms\GenericRender\FullScreenQuad_vs.hlsl">
+      <Filter>GenericRender</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli">

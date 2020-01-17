@@ -374,7 +374,6 @@ int VoxelPlanetApp::Run()
 				grafViewport.Near = 0.0f;
 				grafViewport.Far = 1.0f;
 				grafCmdListCrnt->SetViewport(grafViewport, true);
-				grafCmdListCrnt->SetScissorsRect({ 0, 0, (ur_int)grafViewport.Width, (ur_int)grafViewport.Height });
 
 				if (hdrRender != ur_null)
 				{ 
@@ -438,6 +437,7 @@ int VoxelPlanetApp::Run()
 
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 					grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
+					grafCmdListCrnt->SetViewport(grafViewport, true);
 
 					// draw GUI
 					static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);

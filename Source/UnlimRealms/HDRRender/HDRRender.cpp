@@ -406,6 +406,12 @@ namespace UnlimRealms
 
 			std::unique_ptr<GrafObjects> grafObjects(new GrafObjects(*this->grafRenderer->GetGrafSystem()));
 
+			// shaders
+
+			res = GrafUtils::CreateShaderFromFile(*grafDevice, "FullScreenQuad_vs.spv", GrafShaderType::Vertex, grafObjects->fullScreenQuadVS);
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to create shader for FullScreenQuad_vs");
+
 			res = GrafUtils::CreateShaderFromFile(*grafDevice, "HDRTargetLuminance_ps.spv", GrafShaderType::Pixel, grafObjects->calculateLuminancePS);
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to create shader for HDRTargetLuminance_ps");
@@ -413,6 +419,121 @@ namespace UnlimRealms
 			res = GrafUtils::CreateShaderFromFile(*grafDevice, "ToneMapping_ps.spv", GrafShaderType::Pixel, grafObjects->toneMappingPS);
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to create shader for ToneMapping_ps");
+
+			// shader descriptors layout
+
+			res = grafSystem->CreateDescriptorTableLayout(grafObjects->descriptorsLayout);
+			if (Succeeded(res))
+			{
+				GrafDescriptorRangeDesc grafDescriptorRanges[] = {
+					{ GrafDescriptorType::ConstantBuffer, 1, 1 },
+					{ GrafDescriptorType::Sampler, 0, 1 },
+					{ GrafDescriptorType::Texture, 0, 1 }
+				};
+				GrafDescriptorTableLayoutDesc grafDescriptorLayoutDesc = {
+					GrafShaderStageFlags((ur_uint)GrafShaderStageFlag::Vertex | (ur_uint)GrafShaderStageFlag::Pixel),
+					grafDescriptorRanges, ur_array_size(grafDescriptorRanges)
+				};
+				res = grafObjects->descriptorsLayout->Initialize(grafDevice, { grafDescriptorLayoutDesc });
+			}
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to initialize descriptors layout");
+
+			// HDR render pass
+
+			res = grafSystem->CreateRenderPass(grafObjects->hdrRenderPass);
+			if (Succeeded(res))
+			{
+				GrafRenderPassImageDesc hdrRenderPassDesc[] = {
+					{ // color
+						GrafFormat::R16G16B16A16_SFLOAT,
+						GrafImageState::Undefined, GrafImageState::ColorWrite,
+						GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
+						GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+					},
+					{ // depth
+						GrafFormat::D24_UNORM_S8_UINT,
+						GrafImageState::Undefined, GrafImageState::DepthStencilWrite,
+						GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
+						GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+					}
+				};
+				res = grafObjects->hdrRenderPass->Initialize(grafDevice, { hdrRenderPassDesc, (depthStnecilRTImage ? 2u : 1u) });
+			}
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to initialize HDR render pass");
+
+			// luminance render pass
+
+			res = grafSystem->CreateRenderPass(grafObjects->lumRenderPass);
+			if (Succeeded(res))
+			{
+				GrafRenderPassImageDesc lumRenderPassDesc[] = {
+					{
+						GrafFormat::R16_SFLOAT,
+						GrafImageState::Undefined, GrafImageState::ColorWrite,
+						GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::Store,
+						GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+					}
+				};
+				res = grafObjects->lumRenderPass->Initialize(grafDevice, { lumRenderPassDesc, 1u });
+			}
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to initialize luminance render pass");
+
+			// pipeline config: calculate luminance 
+
+			res = grafSystem->CreatePipeline(grafObjects->lumPipeline);
+			if (Succeeded(res))
+			{
+				GrafShader* shaderStages[] = {
+					grafObjects->fullScreenQuadVS.get(),
+					grafObjects->calculateLuminancePS.get()
+				};
+				GrafDescriptorTableLayout* descriptorLayouts[] = {
+					grafObjects->descriptorsLayout.get(),
+				};
+				GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
+				pipelineParams.RenderPass = grafObjects->lumRenderPass.get();
+				pipelineParams.ShaderStages = shaderStages;
+				pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+				pipelineParams.DescriptorTableLayouts = descriptorLayouts;
+				pipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+				pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleStrip;
+				pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
+				pipelineParams.CullMode = GrafCullMode::Back;
+				res = grafObjects->lumPipeline->Initialize(grafDevice, pipelineParams);
+			}
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to initialize luminance pipeline");
+
+			// default sampler
+
+			res = grafSystem->CreateSampler(grafObjects->samplerLinear);
+			if (Succeeded(res))
+			{
+				GrafSamplerDesc samplerDesc = GrafSamplerDesc::Default;
+				samplerDesc = {
+					GrafFilterType::Linear, GrafFilterType::Linear, GrafFilterType::Linear,
+					GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp
+				};
+				res = grafObjects->samplerLinear->Initialize(grafDevice, { samplerDesc });
+			}
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to initialize sampler");
+
+			res = grafSystem->CreateSampler(grafObjects->samplerPoint);
+			if (Succeeded(res))
+			{
+				GrafSamplerDesc samplerDesc = GrafSamplerDesc::Default;
+				samplerDesc = {
+					GrafFilterType::Nearest, GrafFilterType::Nearest, GrafFilterType::Nearest,
+					GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp
+				};
+				res = grafObjects->samplerPoint->Initialize(grafDevice, { samplerDesc });
+			}
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to initialize sampler");
 
 			this->grafObjects.reset(grafObjects.release());
 		}
@@ -425,30 +546,6 @@ namespace UnlimRealms
 		}
 		
 		std::unique_ptr<GrafRTObjects> grafRTObjects(new GrafRTObjects(*this->grafRenderer->GetGrafSystem()));
-		
-		// render pass
-
-		res = grafSystem->CreateRenderPass(grafRTObjects->hdrRenderPass);
-		if (Succeeded(res))
-		{
-			GrafRenderPassImageDesc hdrRenderPassDesc[] = {
-				{ // color
-					GrafFormat::R16G16B16A16_SFLOAT,
-					GrafImageState::Undefined, GrafImageState::ColorWrite,
-					GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
-					GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
-				},
-				{ // depth
-					GrafFormat::D24_UNORM_S8_UINT,
-					GrafImageState::Undefined, GrafImageState::DepthStencilWrite,
-					GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
-					GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
-				}
-			};
-			res = grafRTObjects->hdrRenderPass->Initialize(grafDevice, { hdrRenderPassDesc, (depthStnecilRTImage ? 2u : 1u) });
-		}
-		if (Failed(res))
-			return ResultError(Failure, "HDRRender::Init: failed to initialize render pass");
 
 		// HDR target image
 
@@ -476,7 +573,7 @@ namespace UnlimRealms
 				grafRTObjects->hdrRTImage.get(),
 				depthStnecilRTImage
 			};
-			res = grafRTObjects->hdrRT->Initialize(grafDevice, { grafRTObjects->hdrRenderPass.get(), hdrRTImages, (depthStnecilRTImage ? 2u : 1u) } );
+			res = grafRTObjects->hdrRT->Initialize(grafDevice, { grafObjects->hdrRenderPass.get(), hdrRTImages, (depthStnecilRTImage ? 2u : 1u) } );
 		}
 		if (Failed(res))
 			return ResultError(Failure, "HDRRender::Init: failed to initialize hdrRT");
@@ -511,7 +608,7 @@ namespace UnlimRealms
 			if (Succeeded(res))
 			{
 				GrafImage* lumRTImages[] = { avgLumImage.get() };
-				res = avgLumRT->Initialize(grafDevice, { grafRTObjects->hdrRenderPass.get(), lumRTImages, 1 });
+				res = avgLumRT->Initialize(grafDevice, { grafObjects->lumRenderPass.get(), lumRTImages, 1 });
 			}
 			if (Failed(res))
 				break;
@@ -521,6 +618,23 @@ namespace UnlimRealms
 		}
 		if (Failed(res))
 			return ResultError(Failure, "HDRRender::Init: failed to initialize luminance image(s)");
+
+		// luminance pass descriptor tables
+
+		ur_size descTableCount = lumRTChainSize * this->grafRenderer->GetRecordedFrameCount();
+		grafRTObjects->lumRTChainTables.resize(descTableCount);
+		for (ur_uint i = 0; i < descTableCount; ++i)
+		{
+			res = grafSystem->CreateDescriptorTable(grafRTObjects->lumRTChainTables[i]);
+			if (Succeeded(res))
+			{
+				res = grafRTObjects->lumRTChainTables[i]->Initialize(grafDevice, { this->grafObjects->descriptorsLayout.get() });
+			}
+			if (Failed(res))
+				break;
+		}
+		if (Failed(res))
+			return ResultError(Failure, "HDRRender::Init: failed to initialize decsriptor table(s)");
 
 		this->grafRTObjects.reset(grafRTObjects.release());
 
@@ -548,7 +662,7 @@ namespace UnlimRealms
 			{ 1.0f, 0.0f, 0.0f, 0.0f }, // depth & stencil
 		};
 		grafCmdList.ImageMemoryBarrier(this->grafRTObjects->hdrRTImage.get(), GrafImageState::Current, GrafImageState::ColorWrite);
-		grafCmdList.BeginRenderPass(this->grafRTObjects->hdrRenderPass.get(), this->grafRTObjects->hdrRT.get(), hdrRTClearValues);
+		grafCmdList.BeginRenderPass(this->grafObjects->hdrRenderPass.get(), this->grafRTObjects->hdrRT.get(), hdrRTClearValues);
 
 		return Result(Success);
 	#endif
@@ -573,6 +687,74 @@ namespace UnlimRealms
 	#if !defined(UR_GRAF)
 		return Result(NotImplemented);
 	#else
+		if (ur_null == this->grafRTObjects.get())
+			return Result(NotInitialized);
+
+		Result res = Success;
+		ur_uint frameIdx = this->grafRenderer->GetCurrentFrameId();
+		ur_uint frameFirstTableId = frameIdx * (ur_uint)this->grafRTObjects->lumRTChain.size();
+
+		// HDR RT to first luminance image
+
+		ConstantsCB cb;
+		cb.SrcTargetSize.x = (ur_float)this->grafRTObjects->hdrRTImage->GetDesc().Size.x;
+		cb.SrcTargetSize.y = (ur_float)this->grafRTObjects->hdrRTImage->GetDesc().Size.y;
+		cb.params = this->params;
+		GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
+		Allocation dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(ConstantsCB));
+		dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
+
+		GrafDescriptorTable* descTable = this->grafRTObjects->lumRTChainTables[frameFirstTableId].get();
+		descTable->SetConstantBuffer(1, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
+		descTable->SetSampler(0, this->grafObjects->samplerLinear.get());
+		descTable->SetImage(0, this->grafRTObjects->hdrRTImage.get());
+
+		GrafViewportDesc rtViewport = {};
+		rtViewport.Width = (ur_float)this->grafRTObjects->lumRTChainImages[0]->GetDesc().Size.x;
+		rtViewport.Height = (ur_float)this->grafRTObjects->lumRTChainImages[0]->GetDesc().Size.y;
+		rtViewport.Near = 0.0f;
+		rtViewport.Far = 1.0f;
+		
+		grafCmdList.SetViewport(rtViewport, true);
+		grafCmdList.ImageMemoryBarrier(this->grafRTObjects->hdrRTImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
+		grafCmdList.ImageMemoryBarrier(this->grafRTObjects->lumRTChainImages[0].get(), GrafImageState::Current, GrafImageState::ColorWrite);
+		grafCmdList.BeginRenderPass(this->grafObjects->lumRenderPass.get(), this->grafRTObjects->lumRTChain[0].get());
+		grafCmdList.BindPipeline(this->grafObjects->lumPipeline.get());
+		grafCmdList.BindDescriptorTable(descTable, this->grafObjects->lumPipeline.get());
+		grafCmdList.Draw(4, 1, 0, 0);
+		grafCmdList.EndRenderPass();
+
+		// compute average luminance from 2x2 texels of source RT and write to the next target in chain
+
+		for (ur_size irt = 1; irt < this->grafRTObjects->lumRTChain.size(); ++irt)
+		{
+			auto &srcRTImage = this->grafRTObjects->lumRTChainImages[irt - 1];
+			auto &dstRTImage = this->grafRTObjects->lumRTChainImages[irt];
+
+			cb.SrcTargetSize.x = (ur_float)srcRTImage->GetDesc().Size.x;
+			cb.SrcTargetSize.y = (ur_float)srcRTImage->GetDesc().Size.y;
+			dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
+			dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(ConstantsCB));
+			dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
+
+			descTable = this->grafRTObjects->lumRTChainTables[frameFirstTableId + irt].get();
+			descTable->SetConstantBuffer(1, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
+			descTable->SetSampler(0, this->grafObjects->samplerPoint.get());
+			descTable->SetImage(0, srcRTImage.get());
+
+			rtViewport.Width = (ur_float)dstRTImage->GetDesc().Size.x;
+			rtViewport.Height = (ur_float)dstRTImage->GetDesc().Size.y;
+
+			grafCmdList.SetViewport(rtViewport, true);
+			grafCmdList.ImageMemoryBarrier(srcRTImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
+			grafCmdList.ImageMemoryBarrier(dstRTImage.get(), GrafImageState::Current, GrafImageState::ColorWrite);
+			grafCmdList.BeginRenderPass(this->grafObjects->lumRenderPass.get(), this->grafRTObjects->lumRTChain[irt].get());
+			grafCmdList.BindDescriptorTable(this->grafRTObjects->lumRTChainTables[frameFirstTableId + irt].get(), this->grafObjects->lumPipeline.get());
+			grafCmdList.Draw(4, 1, 0, 0);
+			grafCmdList.EndRenderPass();
+		}
+
+		// TODO: generate bloom texture
 
 		// TODO: do tonemapping
 
