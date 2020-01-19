@@ -50,7 +50,7 @@ namespace UnlimRealms
 
 		Result EndRender(GrafCommandList &grafCmdList);
 
-		Result Resolve(GrafCommandList &grafCmdList, GrafImage* colorTargetImage);
+		Result Resolve(GrafCommandList &grafCmdList, GrafRenderTarget* resolveTarget);
 
 		void ShowImgui();
 
@@ -89,12 +89,18 @@ namespace UnlimRealms
 		{
 		public:
 			std::unique_ptr<GrafShader> fullScreenQuadVS;
-			std::unique_ptr<GrafShader> calculateLuminancePS;
-			std::unique_ptr<GrafShader> toneMappingPS;
-			std::unique_ptr<GrafDescriptorTableLayout> descriptorsLayout;
+			std::unique_ptr<GrafShader> luminancePS;
+			std::unique_ptr<GrafShader> luminanceAvgPS;
+			std::unique_ptr<GrafShader> tonemapPS;
+			std::unique_ptr<GrafDescriptorTableLayout> luminancePSDescLayout;
+			std::unique_ptr<GrafDescriptorTableLayout> tonemapPSDescLayout;
+			std::vector<std::unique_ptr<GrafDescriptorTable>> tonemapPSDescTables;
 			std::unique_ptr<GrafRenderPass> hdrRenderPass;
 			std::unique_ptr<GrafRenderPass> lumRenderPass;
+			std::unique_ptr<GrafRenderPass> tonemapRenderPass;
 			std::unique_ptr<GrafPipeline> lumPipeline;
+			std::unique_ptr<GrafPipeline> avgPipeline;
+			std::unique_ptr<GrafPipeline> tonemapPipeline;
 			std::unique_ptr<GrafSampler> samplerLinear;
 			std::unique_ptr<GrafSampler> samplerPoint;
 			GrafObjects(GrafSystem& grafSystem);
@@ -108,6 +114,7 @@ namespace UnlimRealms
 			std::vector<std::unique_ptr<GrafRenderTarget>> lumRTChain;
 			std::vector<std::unique_ptr<GrafImage>> lumRTChainImages;
 			std::vector<std::unique_ptr<GrafDescriptorTable>> lumRTChainTables;
+			std::unique_ptr<GrafImage> bloomImage;
 			GrafRTObjects(GrafSystem& grafSystem);
 			~GrafRTObjects();
 		};

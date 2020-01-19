@@ -156,14 +156,14 @@ int VoxelPlanetApp::Run()
 		GrafRenderPassImageDesc grafPassColorDepthImages[] = {
 			{ // color
 				GrafFormat::B8G8R8A8_UNORM,
-				GrafImageState::Undefined, GrafImageState::ColorWrite,
-				GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
+				GrafImageState::ColorWrite, GrafImageState::ColorWrite,
+				GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
 				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
 			},
 			{ // depth
 				GrafFormat::D24_UNORM_S8_UINT,
-				GrafImageState::Undefined, GrafImageState::DepthStencilWrite,
-				GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
+				GrafImageState::DepthStencilWrite, GrafImageState::DepthStencilWrite,
+				GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
 				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
 			}
 		};
@@ -218,7 +218,7 @@ int VoxelPlanetApp::Run()
 	}
 
 	// HDR rendering
-	/*std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
+	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
 		hdrParams.BloomThreshold = 4.0f;
@@ -229,8 +229,8 @@ int VoxelPlanetApp::Run()
 			realm.GetLog().WriteLine("VoxelPlanetApp: failed to initialize HDRRender", Log::Error);
 			hdrRender.reset();
 		}
-	}*/
-	std::unique_ptr<HDRRender> hdrRender;
+	}
+	//std::unique_ptr<HDRRender> hdrRender;
 
 	// demo isosurface
 	ur_float surfaceRadiusMin = 1000.0f;
@@ -359,6 +359,11 @@ int VoxelPlanetApp::Run()
 				deinitializeGrafRenderTargetObjects(grafMainCmdList[grafRenderer->GetPrevFrameId()].get());
 				// recreate RT objects for new canvas dimensions
 				initializeGrafRenderTargetObjects();
+				// reinit HDR renderer images
+				if (hdrRender != ur_null)
+				{
+					hdrRender->Init(canvasWidth, canvasHeight, grafImageRTDepth.get());
+				}
 			}
 
 			auto drawFrameJob = realm.GetJobSystem().Add(JobPriority::High, ur_null, [&](Job::Context& ctx) -> void
@@ -374,6 +379,10 @@ int VoxelPlanetApp::Run()
 				grafViewport.Near = 0.0f;
 				grafViewport.Far = 1.0f;
 				grafCmdListCrnt->SetViewport(grafViewport, true);
+
+				GrafClearValue rtClearValue = { 0.05f, 0.05f, 0.1f, 1.0f };
+				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
+				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), rtClearValue);
 
 				if (hdrRender != ur_null)
 				{ 
@@ -397,35 +406,13 @@ int VoxelPlanetApp::Run()
 					hdrRender->EndRender(*grafCmdListCrnt);
 
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
-					hdrRender->Resolve(*grafCmdListCrnt, grafCanvas->GetCurrentImage());
+					hdrRender->Resolve(*grafCmdListCrnt, grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get());
 				}
 
 				{ // color & depth render pass
 
-					// temp: clearing while HDR pass is not ready, otherwise it is not required
-					GrafClearValue rtClearValues[] = {
-						{ 0.1f, 0.1f, 0.2f, 1.0f }, // color
-						{ 1.0f, 0.0f, 0.0f, 0.0f }, // depth & stencil
-					};
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
-					grafCmdListCrnt->BeginRenderPass(grafPassColorDepth.get(), grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get(), rtClearValues);
-
-					if (ur_null == hdrRender)
-					{
-						// TEMP: fallback rendering if HRRender is unavailable
-						
-						// draw isosurface
-						if (isosurface != ur_null)
-						{
-							isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
-						}
-
-						// draw atmosphere
-						if (atmosphere != ur_null)
-						{
-							atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition());
-						}
-					}
+					grafCmdListCrnt->BeginRenderPass(grafPassColorDepth.get(), grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get());
 
 					// render immediate mode generic primitives
 					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());
@@ -458,6 +445,10 @@ int VoxelPlanetApp::Run()
 						if (atmosphere != ur_null)
 						{
 							atmosphere->ShowImgui();
+						}
+						if (hdrRender != ur_null)
+						{
+							hdrRender->ShowImgui();
 						}
 
 						imguiRender->Render(*grafCmdListCrnt);

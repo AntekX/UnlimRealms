@@ -128,5 +128,5 @@ float4 main(GenericQuadVertex input) : SV_Target
 
 	finalColor = LinearToGamma(finalColor);
 
-	return finalColor;
+	return float4(finalColor.xyz, hdrVal.w);
 }
