@@ -217,7 +217,7 @@ int VoxelPlanetApp::Run()
 		}
 	}
 
-	// HDR rendering
+	// HDR rendering manager
 	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
@@ -230,7 +230,6 @@ int VoxelPlanetApp::Run()
 			hdrRender.reset();
 		}
 	}
-	//std::unique_ptr<HDRRender> hdrRender;
 
 	// demo isosurface
 	ur_float surfaceRadiusMin = 1000.0f;

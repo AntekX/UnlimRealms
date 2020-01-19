@@ -217,8 +217,6 @@ namespace UnlimRealms
 		this->grafCanvasRenderTarget.clear();
 		this->grafCanvasRenderPass.reset();
 		this->grafCanvas.reset();
-		assert(this->pendingCommandListCallbacks.empty());
-		assert(this->finishedCommandListCallbacks.empty());
 		this->grafDevice.reset();
 		this->grafSystem.reset();
 
