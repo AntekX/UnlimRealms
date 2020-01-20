@@ -54,6 +54,16 @@ dxc -spirv -T ps_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT%
 echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
 
 set "SHADER_PATH_SRC=..\Source\UnlimRealms\HDRRender"
+set "SHADER_NAME=BloomLuminance"
+dxc -spirv -T ps_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_ps.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_ps.spv
+echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
+
+set "SHADER_PATH_SRC=..\Source\UnlimRealms\HDRRender"
+set "SHADER_NAME=Blur"
+dxc -spirv -T ps_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_ps.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_ps.spv
+echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
+
+set "SHADER_PATH_SRC=..\Source\UnlimRealms\HDRRender"
 set "SHADER_NAME=ToneMapping"
 dxc -spirv -T ps_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_ps.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_ps.spv
 echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)

@@ -404,6 +404,12 @@ int VoxelPlanetApp::Run()
 
 					hdrRender->EndRender(*grafCmdListCrnt);
 
+					// atmospheric post effects
+					if (atmosphere != ur_null)
+					{
+						//atmosphere->RenderPostEffects(*grafCmdListCrnt, *hdrRender->GetHDRTarget(), camera.GetViewProj(), camera.GetPosition());
+					}
+
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 					hdrRender->Resolve(*grafCmdListCrnt, grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get());
 				}

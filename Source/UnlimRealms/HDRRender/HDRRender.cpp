@@ -22,6 +22,8 @@ namespace UnlimRealms
 		1.0f,		// BloomThreshold
 	};
 
+	const ur_uint BlurPasses = 8;
+
 	HDRRender::HDRRender(Realm &realm) :
 		RealmEntity(realm)
 	{
@@ -420,6 +422,14 @@ namespace UnlimRealms
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to create shader for AverageLuminance_ps");
 
+			res = GrafUtils::CreateShaderFromFile(*grafDevice, "BloomLuminance_ps.spv", GrafShaderType::Pixel, grafObjects->bloomPS);
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to create shader for BloomLuminance_ps");
+
+			res = GrafUtils::CreateShaderFromFile(*grafDevice, "Blur_ps.spv", GrafShaderType::Pixel, grafObjects->blurPS);
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to create shader for Blur_ps");
+
 			res = GrafUtils::CreateShaderFromFile(*grafDevice, "ToneMapping_ps.spv", GrafShaderType::Pixel, grafObjects->tonemapPS);
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to create shader for ToneMapping_ps");
@@ -477,7 +487,24 @@ namespace UnlimRealms
 					break;
 			}
 			if (Failed(res))
-				return ResultError(Failure, "HDRRender::Init: failed to initialize decsriptor table(s)");
+				return ResultError(Failure, "HDRRender::Init: failed to initialize tonemapping decsriptor table(s)");
+
+			// bloom & blur descriptor tables
+
+			ur_size bloomTableCount = this->grafRenderer->GetRecordedFrameCount() * (BlurPasses * 2 + 1);
+			grafObjects->bloomPSDescTables.resize(bloomTableCount);
+			for (ur_uint i = 0; i < bloomTableCount; ++i)
+			{
+				res = grafSystem->CreateDescriptorTable(grafObjects->bloomPSDescTables[i]);
+				if (Succeeded(res))
+				{
+					res = grafObjects->bloomPSDescTables[i]->Initialize(grafDevice, { grafObjects->luminancePSDescLayout.get() });
+				}
+				if (Failed(res))
+					break;
+			}
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to initialize bloom decsriptor table(s)");
 
 			// HDR render pass
 
@@ -521,13 +548,31 @@ namespace UnlimRealms
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to initialize luminance render pass");
 
+			// bloom render pass
+
+			res = grafSystem->CreateRenderPass(grafObjects->bloomRenderPass);
+			if (Succeeded(res))
+			{
+				GrafRenderPassImageDesc lumRenderPassDesc[] = {
+					{
+						GrafFormat::R16G16B16A16_SFLOAT,
+						GrafImageState::Undefined, GrafImageState::ColorWrite,
+						GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::Store,
+						GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+					}
+				};
+				res = grafObjects->bloomRenderPass->Initialize(grafDevice, { lumRenderPassDesc, 1u });
+			}
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to initialize bloom render pass");
+
 			// tonemapping render pass
 
 			res = grafSystem->CreateRenderPass(grafObjects->tonemapRenderPass);
 			if (Succeeded(res))
 			{
 				GrafRenderPassImageDesc tonemapRenderPassDesc[] = {
-					{
+					{ // color
 						GrafFormat::B8G8R8A8_UNORM,
 						GrafImageState::ColorWrite, GrafImageState::ColorWrite,
 						GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
@@ -545,7 +590,7 @@ namespace UnlimRealms
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to initialize tonemapping render pass");
 
-			// pipeline config: calculate luminance 
+			// pipeline config: calculate luminance
 
 			res = grafSystem->CreatePipeline(grafObjects->lumPipeline);
 			if (Succeeded(res))
@@ -571,7 +616,7 @@ namespace UnlimRealms
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to initialize luminance pipeline");
 
-			// pipeline config: calculate average luminance 
+			// pipeline config: calculate average luminance
 
 			res = grafSystem->CreatePipeline(grafObjects->avgPipeline);
 			if (Succeeded(res))
@@ -596,6 +641,58 @@ namespace UnlimRealms
 			}
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to initialize average luminance pipeline");
+
+			// pipeline config: calculate bloom luminance
+
+			res = grafSystem->CreatePipeline(grafObjects->bloomPipeline);
+			if (Succeeded(res))
+			{
+				GrafShader* shaderStages[] = {
+					grafObjects->fullScreenQuadVS.get(),
+					grafObjects->bloomPS.get()
+				};
+				GrafDescriptorTableLayout* descriptorLayouts[] = {
+					grafObjects->luminancePSDescLayout.get(),
+				};
+				GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
+				pipelineParams.RenderPass = grafObjects->bloomRenderPass.get();
+				pipelineParams.ShaderStages = shaderStages;
+				pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+				pipelineParams.DescriptorTableLayouts = descriptorLayouts;
+				pipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+				pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleStrip;
+				pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
+				pipelineParams.CullMode = GrafCullMode::Back;
+				res = grafObjects->bloomPipeline->Initialize(grafDevice, pipelineParams);
+			}
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to initialize bloom pipeline");
+
+			// pipeline config: bloom blur filter
+
+			res = grafSystem->CreatePipeline(grafObjects->blurPipeline);
+			if (Succeeded(res))
+			{
+				GrafShader* shaderStages[] = {
+					grafObjects->fullScreenQuadVS.get(),
+					grafObjects->blurPS.get()
+				};
+				GrafDescriptorTableLayout* descriptorLayouts[] = {
+					grafObjects->luminancePSDescLayout.get(),
+				};
+				GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
+				pipelineParams.RenderPass = grafObjects->bloomRenderPass.get();
+				pipelineParams.ShaderStages = shaderStages;
+				pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+				pipelineParams.DescriptorTableLayouts = descriptorLayouts;
+				pipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+				pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleStrip;
+				pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
+				pipelineParams.CullMode = GrafCullMode::Back;
+				res = grafObjects->blurPipeline->Initialize(grafDevice, pipelineParams);
+			}
+			if (Failed(res))
+				return ResultError(Failure, "HDRRender::Init: failed to initialize blur pipeline");
 
 			// pipeline config: tonemapping
 
@@ -761,26 +858,34 @@ namespace UnlimRealms
 
 		// bloom image
 
-		res = grafSystem->CreateImage(grafRTObjects->bloomImage);
-		if (Succeeded(res))
+		GrafImageDesc bloomImageDesc = {
+			GrafImageType::Tex2D,
+			GrafFormat::R16G16B16A16_SFLOAT,
+			ur_uint3((ur_uint)std::max(ur_uint(1), width / 4), (ur_uint)std::max(ur_uint(1), height / 4), 1), 1,
+			ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderInput),
+			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+		};
+		for (ur_size iimg = 0; iimg < 2; ++iimg)
 		{
-			GrafImageDesc imageDesc = {
-				GrafImageType::Tex2D,
-				GrafFormat::R16G16B16A16_SFLOAT,
-				ur_uint3((ur_uint)std::max(ur_uint(1), width / 4), (ur_uint)std::max(ur_uint(1), height / 4), 1), 1,
-				ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderInput),
-				ur_uint(GrafDeviceMemoryFlag::GpuLocal)
-			};
-			res = grafRTObjects->bloomImage->Initialize(grafDevice, { imageDesc });
-			//if (Succeeded(res))
-			//{
-			//	// TEMP: clean up while not properly generated
-			//	ur_uint16 pixels[4] = { 0x0, 0x0, 0x0, 0x0 };
-			//	res = this->grafRenderer->Upload((ur_byte*)&pixels, sizeof(pixels), grafRTObjects->bloomImage.get(), GrafImageState::ShaderRead);
-			//}
+			res = grafSystem->CreateImage(grafRTObjects->bloomImage[iimg]);
+			if (Succeeded(res))
+			{
+				res = grafRTObjects->bloomImage[iimg]->Initialize(grafDevice, { bloomImageDesc });
+			}
+			if (Failed(res))
+				break;
+			
+			res = grafSystem->CreateRenderTarget(grafRTObjects->bloomRT[iimg]);
+			if (Succeeded(res))
+			{
+				GrafImage* bloomRTImages[] = {
+					grafRTObjects->bloomImage[iimg].get(),
+				};
+				res = grafRTObjects->bloomRT[iimg]->Initialize(grafDevice, { grafObjects->bloomRenderPass.get(), bloomRTImages, 1u });
+			}
 		}
 		if (Failed(res))
-			return ResultError(Failure, "HDRRender::Init: failed to initialize bloom image");
+			return ResultError(Failure, "HDRRender::Init: failed to initialize bloom image(s)");
 
 		this->grafRTObjects.reset(grafRTObjects.release());
 
@@ -900,7 +1005,57 @@ namespace UnlimRealms
 			grafCmdList.EndRenderPass();
 		}
 
-		// TODO: generate bloom texture
+		// compute bloom texture from HDR source
+		
+		rtViewport.Width = (ur_float)this->grafRTObjects->bloomImage[0]->GetDesc().Size.x;
+		rtViewport.Height = (ur_float)this->grafRTObjects->bloomImage[0]->GetDesc().Size.y;
+		
+		cb.SrcTargetSize.x = (ur_float)rtViewport.Width;
+		cb.SrcTargetSize.y = (ur_float)rtViewport.Height;
+		dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(ConstantsCB));
+		dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
+
+		ur_size bloomTableId = frameIdx * (BlurPasses * 2 + 1);
+		descTable = this->grafObjects->bloomPSDescTables[bloomTableId++].get();
+		descTable->SetConstantBuffer(1, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
+		descTable->SetSampler(0, this->grafObjects->samplerPoint.get());
+		descTable->SetImage(0, this->grafRTObjects->hdrRTImage.get());
+
+		grafCmdList.SetViewport(rtViewport, true);
+		grafCmdList.ImageMemoryBarrier(this->grafRTObjects->bloomImage[0].get(), GrafImageState::Current, GrafImageState::ColorWrite);
+		grafCmdList.BeginRenderPass(this->grafObjects->bloomRenderPass.get(), this->grafRTObjects->bloomRT[0].get());
+		grafCmdList.BindPipeline(this->grafObjects->bloomPipeline.get());
+		grafCmdList.BindDescriptorTable(descTable, this->grafObjects->bloomPipeline.get());
+		grafCmdList.Draw(4, 1, 0, 0);
+		grafCmdList.EndRenderPass();
+
+		// apply blur to bloom texture
+
+		ur_uint srcIdx = 0;
+		ur_uint dstIdx = 0;
+		for (ur_uint ipass = 0; ipass < BlurPasses * 2; ++ipass, ++srcIdx)
+		{
+			srcIdx = srcIdx % 2;
+			dstIdx = (srcIdx + 1) % 2;
+
+			cb.BlurDirection = floor(ur_float(ipass) / BlurPasses);
+			dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(ConstantsCB));
+			dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
+
+			descTable = this->grafObjects->bloomPSDescTables[bloomTableId++].get();
+			descTable->SetConstantBuffer(1, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
+			descTable->SetSampler(0, this->grafObjects->samplerPoint.get());
+			descTable->SetImage(0, this->grafRTObjects->bloomImage[srcIdx].get());
+			
+			grafCmdList.ImageMemoryBarrier(this->grafRTObjects->bloomImage[srcIdx].get(), GrafImageState::Current, GrafImageState::ShaderRead);
+			grafCmdList.ImageMemoryBarrier(this->grafRTObjects->bloomImage[dstIdx].get(), GrafImageState::Current, GrafImageState::ColorWrite);
+			grafCmdList.BeginRenderPass(this->grafObjects->bloomRenderPass.get(), this->grafRTObjects->bloomRT[dstIdx].get());
+			grafCmdList.BindPipeline(this->grafObjects->blurPipeline.get());
+			grafCmdList.BindDescriptorTable(descTable, this->grafObjects->blurPipeline.get());
+			grafCmdList.Draw(4, 1, 0, 0);
+			grafCmdList.EndRenderPass();
+		}
+		if (dstIdx != 0) this->grafRTObjects->bloomImage[0].swap(this->grafRTObjects->bloomImage[1]);
 
 		// apply tonemapping and write to resolve target
 
@@ -915,14 +1070,14 @@ namespace UnlimRealms
 		descTable->SetSampler(1, this->grafObjects->samplerLinear.get());
 		descTable->SetImage(0, this->grafRTObjects->hdrRTImage.get());
 		descTable->SetImage(1, this->grafRTObjects->lumRTChainImages.back().get());
-		descTable->SetImage(2, this->grafRTObjects->bloomImage.get());
+		descTable->SetImage(2, this->grafRTObjects->bloomImage[0].get());
 
 		rtViewport.Width = (ur_float)resolveTarget->GetImage(0)->GetDesc().Size.x;
 		rtViewport.Height = (ur_float)resolveTarget->GetImage(0)->GetDesc().Size.y;
 
 		grafCmdList.SetViewport(rtViewport, true);
 		grafCmdList.ImageMemoryBarrier(this->grafRTObjects->lumRTChainImages.back().get(), GrafImageState::Current, GrafImageState::ShaderRead);
-		grafCmdList.ImageMemoryBarrier(this->grafRTObjects->bloomImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
+		grafCmdList.ImageMemoryBarrier(this->grafRTObjects->bloomImage[0].get(), GrafImageState::Current, GrafImageState::ShaderRead);
 		grafCmdList.BeginRenderPass(this->grafObjects->tonemapRenderPass.get(), resolveTarget);
 		grafCmdList.BindPipeline(this->grafObjects->tonemapPipeline.get());
 		grafCmdList.BindDescriptorTable(descTable, this->grafObjects->tonemapPipeline.get());
