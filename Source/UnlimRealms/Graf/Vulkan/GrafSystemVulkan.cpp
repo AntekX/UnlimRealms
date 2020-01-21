@@ -876,6 +876,18 @@ namespace UnlimRealms
 			vkImageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 			vkStageSrc = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			break;
+		case GrafImageState::ColorWrite:
+			vkImageBarrier.srcAccessMask = (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+			vkStageSrc = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			break;
+		case GrafImageState::DepthStencilWrite:
+			vkImageBarrier.srcAccessMask = (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+			vkStageSrc = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+			break;
+		case GrafImageState::ShaderRead:
+			vkImageBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			break;
 		};
 
 		switch (dstState)
@@ -888,9 +900,17 @@ namespace UnlimRealms
 			vkImageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 			vkStageDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			break;
+		case GrafImageState::ColorWrite:
+			vkImageBarrier.dstAccessMask = (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+			vkStageDst = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			break;
 		case GrafImageState::DepthStencilWrite:
 			vkImageBarrier.dstAccessMask = (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 			vkStageDst = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+			break;
+		case GrafImageState::ShaderRead:
+			vkImageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			break;
 		};
 
