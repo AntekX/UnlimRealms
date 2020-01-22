@@ -71,6 +71,15 @@ namespace UnlimRealms
 			return ur_null;
 		#endif
 		}
+
+		inline GrafRenderTarget* GetHDRRenderTarget() const
+		{
+		#if defined(UR_GRAF)
+			return (this->grafRTObjects != ur_null ? this->grafRTObjects->hdrRT.get() : ur_null);
+		#else
+			return ur_null;
+		#endif
+		}
 	
 	protected:
 

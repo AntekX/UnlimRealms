@@ -50,13 +50,16 @@ namespace UnlimRealms
 
 		Result Init(const Desc &desc);
 
-		Result Init(const Desc &desc, GrafRenderPass* grafRenderPass);
-
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
+
+		Result RenderPostEffects(GfxContext &gfxContext, GfxRenderTarget &renderTarget,
+			const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
+
+		Result Init(const Desc& desc, GrafRenderPass* grafRenderPass);
 
 		Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
 
-		Result RenderPostEffects(GfxContext &gfxContext, GfxRenderTarget &renderTarget,
+		Result RenderPostEffects(GrafCommandList &grafCmdList, GrafRenderTarget &renderTarget,
 			const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
 
 		void ShowImgui();

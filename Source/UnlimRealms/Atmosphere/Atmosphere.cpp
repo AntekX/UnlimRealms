@@ -539,7 +539,7 @@ namespace UnlimRealms
 	{
 	#if !defined(UR_GRAF)
 		return Result(NotImplemented);
-	#else	
+	#else
 		if (ur_null == this->grafObjects)
 			return NotInitialized;
 
@@ -570,6 +570,19 @@ namespace UnlimRealms
 		grafCmdList.DrawIndexed(indexCount, 1, 0, 0, 0);
 
 		return res;
+	#endif
+	}
+
+	Result Atmosphere::RenderPostEffects(GrafCommandList &grafCmdList, GrafRenderTarget &renderTarget,
+		const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
+	{
+	#if !defined(UR_GRAF)
+		return Result(NotImplemented);
+	#else
+		if (ur_null == this->grafObjects)
+			return NotInitialized;
+
+		return Result(Success);
 	#endif
 	}
 
