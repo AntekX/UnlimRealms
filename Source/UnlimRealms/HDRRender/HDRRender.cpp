@@ -708,7 +708,7 @@ namespace UnlimRealms
 				};
 				GrafColorBlendOpDesc colorBlendOpDesc = {
 					GrafColorChannelFlags(GrafColorChannelFlag::All), true,
-					GrafBlendOp::Add, GrafBlendFactor::SrcAlpha, GrafBlendFactor::InvSrcAlpha,
+					GrafBlendOp::Add, GrafBlendFactor::One, GrafBlendFactor::InvSrcAlpha,
 					GrafBlendOp::Add, GrafBlendFactor::SrcAlpha, GrafBlendFactor::InvSrcAlpha,
 				};
 				GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
