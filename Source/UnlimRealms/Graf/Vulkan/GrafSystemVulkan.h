@@ -303,6 +303,7 @@ namespace UnlimRealms
 		VkDeviceSize vkDeviceMemoryOffset;
 		VkDeviceSize vkDeviceMemorySize;
 		VkDeviceSize vkDeviceMemoryAlignment;
+		VmaAllocation vmaAllocation;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

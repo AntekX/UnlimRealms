@@ -1826,6 +1826,7 @@ namespace UnlimRealms
 		this->vkDeviceMemoryOffset = 0;
 		this->vkDeviceMemorySize = 0;
 		this->vkDeviceMemoryAlignment = 0;
+		this->vmaAllocation = VK_NULL_HANDLE;
 	}
 
 	GrafImageVulkan::~GrafImageVulkan()
@@ -1850,6 +1851,12 @@ namespace UnlimRealms
 		this->vkDeviceMemoryOffset = 0;
 		this->vkDeviceMemorySize = 0;
 		this->vkDeviceMemoryAlignment = 0;
+		if (this->vmaAllocation != VK_NULL_HANDLE)
+		{
+			vmaFreeMemory(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVmaAllocator(), this->vmaAllocation);
+			this->vmaAllocation = VK_NULL_HANDLE;
+			this->vkDeviceMemory = VK_NULL_HANDLE;  // handle to VMA allocation info
+		}
 		if (this->vkDeviceMemory != VK_NULL_HANDLE)
 		{
 			vkFreeMemory(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDeviceMemory, ur_null);
@@ -1916,6 +1923,39 @@ namespace UnlimRealms
 		VkPhysicalDeviceMemoryProperties vkDeviceMemoryProperties;
 		vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &vkDeviceMemoryProperties);
 
+		#if (UR_GRAF_VULKAN_VMA_ENABLED)
+
+		VmaAllocationCreateInfo vmaAllocationCreateInfo = {};
+		for (ur_uint32 itype = 0; itype < vkDeviceMemoryProperties.memoryTypeCount; ++itype)
+		{
+			if ((vkDeviceMemoryProperties.memoryTypes[itype].propertyFlags & vkMemoryPropertiesExpected) &&
+				(vkMemoryRequirements.memoryTypeBits & (1 << itype)))
+			{
+				vmaAllocationCreateInfo.memoryTypeBits |= (1 << itype);
+				break;
+			}
+		}
+		if (ur_uint32(0) == vmaAllocationCreateInfo.memoryTypeBits)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, "GrafImageVulkan: failed to find required memory type");
+		}
+
+		VmaAllocationInfo vmaAllocationInfo = {};
+		vkRes = vmaAllocateMemoryForImage(grafDeviceVulkan->GetVmaAllocator(), this->vkImage, &vmaAllocationCreateInfo, &this->vmaAllocation, &vmaAllocationInfo);
+		if (vkRes != VK_SUCCESS)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafImageVulkan: vmaAllocateMemoryForBuffer failed with VkResult = ") + VkResultToString(vkRes));
+		}
+
+		this->vkDeviceMemory = vmaAllocationInfo.deviceMemory;
+		this->vkDeviceMemoryOffset = vmaAllocationInfo.offset;
+		this->vkDeviceMemorySize = vmaAllocationInfo.size;
+		this->vkDeviceMemoryAlignment = vkMemoryRequirements.alignment;
+
+		#else
+
 		VkMemoryAllocateInfo vkAllocateInfo = {};
 		vkAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		vkAllocateInfo.allocationSize = vkMemoryRequirements.size;
@@ -1948,7 +1988,9 @@ namespace UnlimRealms
 		this->vkDeviceMemorySize = vkMemoryRequirements.size;
 		this->vkDeviceMemoryAlignment = vkMemoryRequirements.alignment;
 
-		// bind device memory allocation to buffer
+		#endif
+
+		// bind device memory allocation to image
 
 		vkRes = vkBindImageMemory(vkDevice, this->vkImage, this->vkDeviceMemory, this->vkDeviceMemoryOffset);
 		if (vkRes != VK_SUCCESS)
