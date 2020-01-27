@@ -1912,9 +1912,6 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafImageVulkan: vkCreateImage failed with VkResult = ") + VkResultToString(vkRes));
 		}
 
-		// TODO: move allocation to GrafDevice (allocate big chunks of memory and return offsets, consider integrating VulkanAllocator)
-		// request image memory requirements and find corresponding physical device memory type for allocation
-
 		VkMemoryPropertyFlags vkMemoryPropertiesExpected = GrafUtilsVulkan::GrafToVkMemoryProperties(initParams.ImageDesc.MemoryType);
 
 		VkMemoryRequirements vkMemoryRequirements = {};

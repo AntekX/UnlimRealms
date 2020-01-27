@@ -253,30 +253,11 @@ namespace UnlimRealms
 			}
 		}
 
-		// begin current frame command list(s)
-		/*this->grafCommandListsMutex.lock();
-		for (auto& threadCmdLists : this->grafCommandLists)
-		{
-			GrafCommandList* frameCmdList = (*threadCmdLists.second)[this->frameIdx].get();
-			frameCmdList->Begin();
-		}
-		this->grafCommandListsMutex.unlock();*/
-
 		return Result(Success);
 	}
 
 	Result GrafRenderer::EndFrameAndPresent()
 	{
-		// finalize & current frame's command list(s)
-		/*this->grafCommandListsMutex.lock();
-		for (auto& threadCmdLists : this->grafCommandLists)
-		{
-			GrafCommandList* frameCmdList = (*threadCmdLists.second)[this->frameIdx].get();
-			frameCmdList->End();
-			this->grafDevice->Record(frameCmdList);
-		}
-		this->grafCommandListsMutex.unlock();*/
-		
 		// submit command list(s) to device execution queue
 		this->grafDevice->Submit();
 
