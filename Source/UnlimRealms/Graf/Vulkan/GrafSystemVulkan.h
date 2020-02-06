@@ -98,6 +98,8 @@ namespace UnlimRealms
 
 		inline VmaAllocator GetVmaAllocator() const;
 
+		inline VkDescriptorPool GetVkDescriptorPool() const;
+
 		inline ur_uint GetVkDeviceGraphicsQueueId() const;
 
 		inline ur_uint GetVkDeviceComputeQueueId() const;
@@ -122,6 +124,7 @@ namespace UnlimRealms
 
 		VkDevice vkDevice;
 		VmaAllocator vmaAllocator;
+		VkDescriptorPool vkDescriptorPool;
 		ur_uint deviceGraphicsQueueId;
 		ur_uint deviceComputeQueueId;
 		ur_uint deviceTransferQueueId;

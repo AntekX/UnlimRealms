@@ -45,6 +45,22 @@ namespace UnlimRealms
 	#define LogNoteGrafDbg(text)
 	#endif
 
+	// descritor pool per type size
+	static const ur_size VulkanDescriptorPoolSize[VK_DESCRIPTOR_TYPE_RANGE_SIZE] = {
+		1024,		// VK_DESCRIPTOR_TYPE_SAMPLER
+		0,			// VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER 
+		1024,		// VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+		0,			// VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+		0,			// VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
+		0,			// VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER
+		2048,		// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+		0,			// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+		0,			// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+		0,			// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+		0,			// VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
+	};
+	static const ur_size VulkanDescriptorPoolMaxSetCount = 1024;
+
 	// binding offsets per descriptor type
 	// spir-v bytecode compiled from HLSL must use "-fvk-<b,s,t,u>-shift N M" command to apply offsets to corresponding register types (b,s,t,u)
 	static const ur_uint VulkanBindingsPerSpace = 256;
@@ -398,6 +414,7 @@ namespace UnlimRealms
 	{
 		this->vkDevice = VK_NULL_HANDLE;
 		this->vmaAllocator = VK_NULL_HANDLE;
+		this->vkDescriptorPool = VK_NULL_HANDLE;
 		this->deviceGraphicsQueueId = ur_uint(-1);
 		this->deviceComputeQueueId = ur_uint(-1);
 		this->deviceTransferQueueId = ur_uint(-1);
@@ -445,6 +462,12 @@ namespace UnlimRealms
 		{
 			vmaDestroyAllocator(this->vmaAllocator);
 			this->vmaAllocator = VK_NULL_HANDLE;
+		}
+
+		if (this->vkDescriptorPool != VK_NULL_HANDLE)
+		{
+			vkDestroyDescriptorPool(this->vkDevice, this->vkDescriptorPool, ur_null);
+			this->vkDescriptorPool = VK_NULL_HANDLE;
 		}
 
 		if (this->vkDevice != VK_NULL_HANDLE)
@@ -554,6 +577,32 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafDeviceVulkan: vmaCreateAllocator failed with VkResult = ") + VkResultToString(res));
 		}
 		#endif
+
+		// create common descriptor pool
+
+		std::vector<VkDescriptorPoolSize> vkDescriptorPoolSizes;
+		ur_size descriptorPoolSizeCount = ur_array_size(VulkanDescriptorPoolSize);
+		vkDescriptorPoolSizes.reserve(descriptorPoolSizeCount);
+		for (ur_size i = 0; i < descriptorPoolSizeCount; ++i)
+		{
+			if (VulkanDescriptorPoolSize[i] > 0)
+			{
+				vkDescriptorPoolSizes.push_back({ VkDescriptorType(i), ur_uint32(VulkanDescriptorPoolSize[i]) });
+			}
+		}
+
+		VkDescriptorPoolCreateInfo vkDescriptorPoolInfo = {};
+		vkDescriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		vkDescriptorPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+		vkDescriptorPoolInfo.maxSets = (ur_uint32)VulkanDescriptorPoolMaxSetCount;
+		vkDescriptorPoolInfo.poolSizeCount = (ur_uint32)vkDescriptorPoolSizes.size();
+		vkDescriptorPoolInfo.pPoolSizes = vkDescriptorPoolSizes.data();
+		VkResult vkRes = vkCreateDescriptorPool(this->vkDevice, &vkDescriptorPoolInfo, ur_null, &this->vkDescriptorPool);
+		if (vkRes != VK_SUCCESS)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafDeviceVulkan: vkCreateDescriptorPool failed with VkResult = ") + VkResultToString(vkRes));
+		}
 
 		// pre-initialize default command pool for current thread
 
@@ -2848,11 +2897,7 @@ namespace UnlimRealms
 			vkFreeDescriptorSets(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDescriptorPool, 1, &this->vkDescriptorSet);
 			this->vkDescriptorSet = VK_NULL_HANDLE;
 		}
-		if (this->vkDescriptorPool != VK_NULL_HANDLE)
-		{
-			vkDestroyDescriptorPool(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkDescriptorPool, ur_null);
-			this->vkDescriptorPool = VK_NULL_HANDLE;
-		}
+		this->vkDescriptorPool = VK_NULL_HANDLE;
 
 		return Result(Success);
 	}
@@ -2880,8 +2925,8 @@ namespace UnlimRealms
 		}
 		VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
 
-		// TEMP: create pool per table
-		// TODO: pool should be part of GrafDevice, consider to grow/shrink allocated pool automatically
+		#if (0)
+		// TEST: create pool per table
 
 		GrafDescriptorTableLayoutVulkan* tableLayoutVulkan = static_cast<GrafDescriptorTableLayoutVulkan*>(initParams.Layout);
 		const GrafDescriptorTableLayoutDesc& layoutDesc = tableLayoutVulkan->GetLayoutDesc();
@@ -2916,8 +2961,12 @@ namespace UnlimRealms
 			this->Deinitialize();
 			return ResultError(Failure, std::string("GrafDescriptorTableVulkan: vkCreateDescriptorPool failed with VkResult = ") + VkResultToString(vkRes));
 		}
+		#endif
 
 		// allocate descriptor set
+		
+		this->vkDescriptorPool = grafDeviceVulkan->GetVkDescriptorPool();
+		GrafDescriptorTableLayoutVulkan* tableLayoutVulkan = static_cast<GrafDescriptorTableLayoutVulkan*>(initParams.Layout);
 
 		VkDescriptorSetAllocateInfo vkDescriptorSetAllocateInfo = {};
 		vkDescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -2925,7 +2974,7 @@ namespace UnlimRealms
 		VkDescriptorSetLayout vkDescritorSetLayouts[] = { tableLayoutVulkan->GetVkDescriptorSetLayout() };
 		vkDescriptorSetAllocateInfo.pSetLayouts = vkDescritorSetLayouts;
 		vkDescriptorSetAllocateInfo.descriptorSetCount = 1;
-		vkRes = vkAllocateDescriptorSets(vkDevice, &vkDescriptorSetAllocateInfo, &this->vkDescriptorSet);
+		VkResult vkRes = vkAllocateDescriptorSets(vkDevice, &vkDescriptorSetAllocateInfo, &this->vkDescriptorSet);
 		if (vkRes != VK_SUCCESS)
 		{
 			this->Deinitialize();

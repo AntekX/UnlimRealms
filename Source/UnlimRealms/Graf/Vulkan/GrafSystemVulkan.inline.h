@@ -30,6 +30,11 @@ namespace UnlimRealms
 		return this->vmaAllocator;
 	}
 
+	inline VkDescriptorPool GrafDeviceVulkan::GetVkDescriptorPool() const
+	{
+		return this->vkDescriptorPool;
+	}
+
 	inline ur_uint GrafDeviceVulkan::GetVkDeviceGraphicsQueueId() const
 	{
 		return this->deviceGraphicsQueueId;
