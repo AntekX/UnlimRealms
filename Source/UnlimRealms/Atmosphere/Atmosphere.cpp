@@ -212,8 +212,8 @@ namespace UnlimRealms
 			pipelineParams.DepthWriteEnable = false;
 			pipelineParams.DepthCompareOp = GrafCompareOp::LessOrEqual;
 			pipelineParams.StencilTestEnable = true;
-            pipelineParams.StencilBack.WriteMask = ur_uint32(~0);
-            pipelineParams.StencilBack.CompareOp = GrafCompareOp::Always;
+			pipelineParams.StencilBack.WriteMask = ur_uint32(~0);
+			pipelineParams.StencilBack.CompareOp = GrafCompareOp::Always;
 			pipelineParams.StencilBack.PassOp = GrafStencilOp::Replace;
 			pipelineParams.StencilBack.Reference = 0x1;
 			pipelineParams.ColorBlendOpDescCount = 1;
