@@ -518,11 +518,11 @@ namespace UnlimRealms
 						GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
 						GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
 					},
-					{ // depth
+					{ // depth & stencil
 						GrafFormat::D24_UNORM_S8_UINT,
 						GrafImageState::Undefined, GrafImageState::DepthStencilWrite,
 						GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
-						GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+						GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store
 					}
 				};
 				res = grafObjects->hdrRenderPass->Initialize(grafDevice, { hdrRenderPassDesc, (depthStnecilRTImage ? 2u : 1u) });
@@ -578,11 +578,11 @@ namespace UnlimRealms
 						GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
 						GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
 					},
-					{ // depth
+					{ // depth & stencil
 						GrafFormat::D24_UNORM_S8_UINT,
 						GrafImageState::DepthStencilWrite, GrafImageState::DepthStencilWrite,
 						GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
-						GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+						GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store
 					}
 				};
 				res = grafObjects->tonemapRenderPass->Initialize(grafDevice, { tonemapRenderPassDesc, (depthStnecilRTImage ? 2u : 1u) });
