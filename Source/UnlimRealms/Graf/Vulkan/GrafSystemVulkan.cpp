@@ -47,19 +47,19 @@ namespace UnlimRealms
 
 	// descritor pool per type size
 	static const ur_size VulkanDescriptorPoolSize[VK_DESCRIPTOR_TYPE_RANGE_SIZE] = {
-		4 * (1 << 10),		// VK_DESCRIPTOR_TYPE_SAMPLER
-		0,					// VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER 
-		4 * (1 << 10),		// VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
-		0,					// VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-		0,					// VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
-		0,					// VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER
-		8 * (1 << 10),		// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-		0,					// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
-		0,					// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
-		0,					// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
-		0,					// VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
+		1 * 1024,		// VK_DESCRIPTOR_TYPE_SAMPLER
+		0,				// VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER 
+		2 * 1024,		// VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+		0,				// VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+		0,				// VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
+		0,				// VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER
+		4 * 1024,		// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+		0,				// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+		0,				// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+		0,				// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+		0,				// VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
 	};
-	static const ur_size VulkanDescriptorPoolMaxSetCount = 1024;
+	static const ur_size VulkanDescriptorPoolMaxSetCount = 2 * 1024;
 
 	// binding offsets per descriptor type
 	// spir-v bytecode compiled from HLSL must use "-fvk-<b,s,t,u>-shift N M" command to apply offsets to corresponding register types (b,s,t,u)
