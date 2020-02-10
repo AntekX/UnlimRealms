@@ -47,17 +47,17 @@ namespace UnlimRealms
 
 	// descritor pool per type size
 	static const ur_size VulkanDescriptorPoolSize[VK_DESCRIPTOR_TYPE_RANGE_SIZE] = {
-		1024,		// VK_DESCRIPTOR_TYPE_SAMPLER
-		0,			// VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER 
-		1024,		// VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
-		0,			// VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-		0,			// VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
-		0,			// VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER
-		2048,		// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-		0,			// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
-		0,			// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
-		0,			// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
-		0,			// VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
+		4 * (1 << 10),		// VK_DESCRIPTOR_TYPE_SAMPLER
+		0,					// VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER 
+		4 * (1 << 10),		// VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+		0,					// VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+		0,					// VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
+		0,					// VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER
+		8 * (1 << 10),		// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+		0,					// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+		0,					// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+		0,					// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+		0,					// VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
 	};
 	static const ur_size VulkanDescriptorPoolMaxSetCount = 1024;
 
@@ -706,15 +706,15 @@ namespace UnlimRealms
 			vkSubmitInfo.commandBufferCount = 1;
 			vkSubmitInfo.pCommandBuffers = &vkCommandBuffer;
 
-			VkResult vkRes = vkQueueSubmit(vkSubmissionQueue, 1, &vkSubmitInfo, grafCommandListVulkan->GetVkSubmitFence());
+			vkRes = vkQueueSubmit(vkSubmissionQueue, 1, &vkSubmitInfo, grafCommandListVulkan->GetVkSubmitFence());
 			if (vkRes != VK_SUCCESS)
 				break;
 		}
 		this->graphicsCommandLists.clear();
 
-		this->graphicsCommandListsMutex.unlock();
-		this->graphicsCommandPoolsMutex.unlock();
 		for (auto &threadCmdPool : this->graphicsCommandPools) threadCmdPool.second->accessMutex.unlock();
+		this->graphicsCommandPoolsMutex.unlock();
+		this->graphicsCommandListsMutex.unlock();
 
 		if (vkRes != VK_SUCCESS)
 			ResultError(Failure, std::string("GrafDeviceVulkan: vkQueueSubmit failed with VkResult = ") + VkResultToString(vkRes));
