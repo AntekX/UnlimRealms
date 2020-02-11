@@ -146,6 +146,21 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize PS");
 
+		// VS fullscreen quad
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "FullScreenQuad_vs.spv", GrafShaderType::Vertex, grafObjects->fullScreenQuadVS);
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to create shader for FullScreenQuad_vs");
+
+		// PS fullscreen quad
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Generic_ps.spv", GrafShaderType::Pixel, grafObjects->fullScreenQuadPS);
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to create shader for Generic_ps");
+
+		// PS LightShafts
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "LightShafts_ps.spv", GrafShaderType::Pixel, grafObjects->lightShaftsPS);
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize LightShafts PS");
+
 		// shader descriptors layout
 		res = grafSystem->CreateDescriptorTableLayout(grafObjects->shaderDescriptorLayout);
 		if (Succeeded(res))
@@ -162,6 +177,41 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize descriptor table layout");
 
+		// fullscreen quad descriptors layout
+		res = grafSystem->CreateDescriptorTableLayout(grafObjects->fullscreenQuadDescriptorLayout);
+		if (Succeeded(res))
+		{
+			GrafDescriptorRangeDesc grafDescriptorRanges[] = {
+				{ GrafDescriptorType::Sampler, 0, 1 },
+				{ GrafDescriptorType::Texture, 0, 1 }
+			};
+			GrafDescriptorTableLayoutDesc grafDescriptorLayoutDesc = {
+				GrafShaderStageFlags(GrafShaderStageFlag::Pixel),
+				grafDescriptorRanges, ur_array_size(grafDescriptorRanges)
+			};
+			res = grafObjects->fullscreenQuadDescriptorLayout->Initialize(grafDevice, { grafDescriptorLayoutDesc });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize fullscreenQuadDescriptorLayout");
+
+		// light shafts descriptors layout
+		res = grafSystem->CreateDescriptorTableLayout(grafObjects->lightShaftsApplyDescriptorLayout);
+		if (Succeeded(res))
+		{
+			GrafDescriptorRangeDesc grafDescriptorRanges[] = {
+				{ GrafDescriptorType::ConstantBuffer, 1, 2 },
+				{ GrafDescriptorType::Sampler, 0, 1 },
+				{ GrafDescriptorType::Texture, 0, 1 }
+			};
+			GrafDescriptorTableLayoutDesc grafDescriptorLayoutDesc = {
+				GrafShaderStageFlags(GrafShaderStageFlag::Pixel),
+				grafDescriptorRanges, ur_array_size(grafDescriptorRanges)
+			};
+			res = grafObjects->lightShaftsApplyDescriptorLayout->Initialize(grafDevice, { grafDescriptorLayoutDesc });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize lightShaftsApplyDescriptorLayout");
+
 		// per frame descriptor tables
 		grafObjects->shaderDescriptorTable.resize(frameCount);
 		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
@@ -174,7 +224,54 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize descriptor table(s)");
 
-		// graphics pipeline configuration(s)
+		// per frame LightShafts mask pass descriptor tables
+		grafObjects->lightShaftsMaskDescriptorTable.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			res = grafSystem->CreateDescriptorTable(grafObjects->lightShaftsMaskDescriptorTable[iframe]);
+			if (Failed(res)) break;
+			res = grafObjects->lightShaftsMaskDescriptorTable[iframe]->Initialize(grafDevice, { grafObjects->fullscreenQuadDescriptorLayout.get() });
+			if (Failed(res)) break;
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize lightShaftsMaskDescriptorTable(s)");
+
+		// per frame LightShafts apply pass descriptor tables
+		grafObjects->lightShaftsApplyDescriptorTable.resize(frameCount);
+		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
+		{
+			res = grafSystem->CreateDescriptorTable(grafObjects->lightShaftsApplyDescriptorTable[iframe]);
+			if (Failed(res)) break;
+			res = grafObjects->lightShaftsApplyDescriptorTable[iframe]->Initialize(grafDevice, { grafObjects->lightShaftsApplyDescriptorLayout.get() });
+			if (Failed(res)) break;
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize lightShaftsApplyDescriptorTable(s)");
+
+		// LightShafts occlusion mask render pass
+		res = grafSystem->CreateRenderPass(grafObjects->lightShaftsMaskRenderPass);
+		if (Succeeded(res))
+		{
+			GrafRenderPassImageDesc renderPassDesc[] = {
+				{ // color
+					GrafFormat::R16G16B16A16_SFLOAT,
+					GrafImageState::Undefined, GrafImageState::ColorWrite,
+					GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::Store,
+					GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+				},
+				{ // depth & stencil
+					GrafFormat::D24_UNORM_S8_UINT,
+					GrafImageState::DepthStencilWrite, GrafImageState::DepthStencilWrite,
+					GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
+					GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store
+				}
+			};
+			res = grafObjects->lightShaftsMaskRenderPass->Initialize(grafDevice, { renderPassDesc, 2u });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize lightShaftsMaskRenderPass");
+
+		// graphics pipeline configuration
 		res = grafSystem->CreatePipeline(grafObjects->pipelineSolid);
 		if (Succeeded(res))
 		{
@@ -222,6 +319,63 @@ namespace UnlimRealms
 		}
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize pipeline object");
+
+		// LightShafts mask pass pipeline configuration
+		res = grafSystem->CreatePipeline(grafObjects->pipelineLightShaftsMask);
+		if (Succeeded(res))
+		{
+			GrafShader* shaderStages[] = {
+				grafObjects->fullScreenQuadVS.get(),
+				grafObjects->fullScreenQuadPS.get()
+			};
+			GrafDescriptorTableLayout* descriptorLayouts[] = {
+				grafObjects->fullscreenQuadDescriptorLayout.get(),
+			};
+			GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
+			pipelineParams.RenderPass = grafObjects->lightShaftsMaskRenderPass.get();
+			pipelineParams.ShaderStages = shaderStages;
+			pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+			pipelineParams.DescriptorTableLayouts = descriptorLayouts;
+			pipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+			pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleStrip;
+			pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
+			pipelineParams.CullMode = GrafCullMode::Back;
+			res = grafObjects->pipelineLightShaftsMask->Initialize(grafDevice, pipelineParams);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize pipelineLightShaftsMask object");
+
+		// LightShafts apply pass pipeline configuration
+		res = grafSystem->CreatePipeline(grafObjects->pipelineLightShaftsApply);
+		if (Succeeded(res))
+		{
+			GrafShader* shaderStages[] = {
+				grafObjects->fullScreenQuadVS.get(),
+				grafObjects->lightShaftsPS.get()
+			};
+			GrafDescriptorTableLayout* descriptorLayouts[] = {
+				grafObjects->lightShaftsApplyDescriptorLayout.get(),
+			};
+			GrafColorBlendOpDesc colorBlendOpDesc = {
+				GrafColorChannelFlags(GrafColorChannelFlag::All), true,
+				GrafBlendOp::Add, GrafBlendFactor::SrcAlpha, GrafBlendFactor::One,
+				GrafBlendOp::Add, GrafBlendFactor::SrcAlpha, GrafBlendFactor::One,
+			};
+			GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
+			pipelineParams.RenderPass = grafRenderPass;
+			pipelineParams.ShaderStages = shaderStages;
+			pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+			pipelineParams.DescriptorTableLayouts = descriptorLayouts;
+			pipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+			pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleStrip;
+			pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
+			pipelineParams.CullMode = GrafCullMode::Back;
+			pipelineParams.ColorBlendOpDescCount = 1;
+			pipelineParams.ColorBlendOpDesc = &colorBlendOpDesc;
+			res = grafObjects->pipelineLightShaftsApply->Initialize(grafDevice, pipelineParams);
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize pipelineLightShaftsApply object");
 
 		this->grafObjects = std::move(grafObjects);
 
@@ -583,6 +737,52 @@ namespace UnlimRealms
 	#else
 		if (ur_null == this->grafObjects)
 			return NotInitialized;
+		if (ur_null == renderTarget.GetImage(0))
+			return InvalidArgs;
+
+		// (re)init post process RT
+		/*const GfxTextureDesc &targetDesc = renderTarget.GetTargetBuffer()->GetDesc();
+		if (this->gfxObjects.lightShaftsRT == ur_null || this->gfxObjects.lightShaftsRT->GetTargetBuffer() == ur_null ||
+			this->gfxObjects.lightShaftsRT->GetTargetBuffer()->GetDesc().Width != targetDesc.Width ||
+			this->gfxObjects.lightShaftsRT->GetTargetBuffer()->GetDesc().Height != targetDesc.Height)
+		{
+			GfxTextureDesc descRT;
+			descRT.Width = targetDesc.Width;
+			descRT.Height = targetDesc.Height;
+			descRT.Levels = 1;
+			descRT.Format = targetDesc.Format;
+			descRT.FormatView = targetDesc.FormatView;
+			descRT.Usage = GfxUsage::Default;
+			descRT.BindFlags = ur_uint(GfxBindFlag::RenderTarget) | ur_uint(GfxBindFlag::ShaderResource);
+			descRT.AccessFlags = ur_uint(0);
+			res &= this->gfxObjects.lightShaftsRT->Initialize(descRT, false, GfxFormat::Unknown);
+			if (Failed(res))
+				return ResultError(Failure, "Atmosphere::RenderPostEffects: failed to (re)init Light Shafts render target");
+		}*/
+		/*if (this->grafObjects.lightShaftsRT == ur_null || this->gfxObjects.lightShaftsRT->GetTargetBuffer() == ur_null ||
+			this->gfxObjects.lightShaftsRT->GetTargetBuffer()->GetDesc().Width != targetDesc.Width ||
+			this->gfxObjects.lightShaftsRT->GetTargetBuffer()->GetDesc().Height != targetDesc.Height)
+		{
+
+		}*/
+
+		// constants
+		/*GfxResourceData cbResData = { &this->lightShafts, sizeof(LightShaftsCB), 0 };
+		res &= gfxContext.UpdateBuffer(this->gfxObjects.lightShaftsCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
+		res &= gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 1);
+		res &= gfxContext.SetConstantBuffer(this->gfxObjects.lightShaftsCB.get(), 2);*/
+
+		// draw atmosphere into separate RT and mask out occlusion fragments using atmosphere's stencil ref
+		/*res &= gfxContext.SetRenderTarget(this->gfxObjects.lightShaftsRT.get(), &renderTarget);
+		res &= gfxContext.ClearTarget(this->gfxObjects.lightShaftsRT.get(), true, { 0.0f, 0.0f, 0.0f, 0.0f }, false, 0, false, 0);
+		res &= genericRender->RenderScreenQuad(gfxContext, renderTarget.GetTargetBuffer(), ur_null,
+			this->gfxObjects.screenQuadStateOcclusionMask.get());
+		gfxContext.SetRenderTarget(ur_null);*/
+
+		// draw lights shafts into given RT
+		/*res &= gfxContext.SetRenderTarget(&renderTarget);
+		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects.lightShaftsRT->GetTargetBuffer(), ur_null,
+			this->gfxObjects.screenQuadStateBlendLightShafts.get());*/
 
 		return Result(Success);
 	#endif
