@@ -88,12 +88,17 @@ namespace UnlimRealms
 			std::vector<std::unique_ptr<GrafDescriptorTable>> lightShaftsMaskDescriptorTable;
 			std::vector<std::unique_ptr<GrafDescriptorTable>> lightShaftsApplyDescriptorTable;
 			std::unique_ptr<GrafRenderPass> lightShaftsMaskRenderPass;
+			std::unique_ptr<GrafRenderPass> lightShaftsApplyRenderPass;
 			std::unique_ptr<GrafPipeline> pipelineSolid;
 			std::unique_ptr<GrafPipeline> pipelineDebug;
 			std::unique_ptr<GrafPipeline> pipelineLightShaftsMask;
 			std::unique_ptr<GrafPipeline> pipelineLightShaftsApply;
 			std::unique_ptr<GrafBuffer> VB;
 			std::unique_ptr<GrafBuffer> IB;
+			std::unique_ptr<GrafImage> lightShaftsRTImage;
+			std::unique_ptr<GrafRenderTarget> lightShaftsRT;
+			std::unique_ptr<GrafSampler> samplerPoint;
+			std::unique_ptr<GrafSampler> samplerLinear;
 			GrafObjects(GrafSystem& grafSystem);
 			~GrafObjects();
 		};

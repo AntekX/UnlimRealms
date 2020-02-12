@@ -407,7 +407,7 @@ int VoxelPlanetApp::Run()
 					// atmospheric post effects
 					if (atmosphere != ur_null)
 					{
-						//atmosphere->RenderPostEffects(*grafCmdListCrnt, *hdrRender->GetHDRTarget(), camera.GetViewProj(), camera.GetPosition());
+						atmosphere->RenderPostEffects(*grafCmdListCrnt, *hdrRender->GetHDRRenderTarget(), camera.GetViewProj(), camera.GetPosition());
 					}
 
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);

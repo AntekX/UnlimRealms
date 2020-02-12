@@ -161,6 +161,34 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize LightShafts PS");
 
+		// sampler point
+		res = grafSystem->CreateSampler(grafObjects->samplerPoint);
+		if (Succeeded(res))
+		{
+			GrafSamplerDesc samplerDesc = GrafSamplerDesc::Default;
+			samplerDesc = {
+				GrafFilterType::Nearest, GrafFilterType::Nearest, GrafFilterType::Nearest,
+				GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp
+			};
+			res = grafObjects->samplerPoint->Initialize(grafDevice, { samplerDesc });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize sampler");
+
+		// sampler linear
+		res = grafSystem->CreateSampler(grafObjects->samplerLinear);
+		if (Succeeded(res))
+		{
+			GrafSamplerDesc samplerDesc = GrafSamplerDesc::Default;
+			samplerDesc = {
+				GrafFilterType::Linear, GrafFilterType::Linear, GrafFilterType::Linear,
+				GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp
+			};
+			res = grafObjects->samplerLinear->Initialize(grafDevice, { samplerDesc });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize sampler");
+
 		// shader descriptors layout
 		res = grafSystem->CreateDescriptorTableLayout(grafObjects->shaderDescriptorLayout);
 		if (Succeeded(res))
@@ -256,7 +284,7 @@ namespace UnlimRealms
 				{ // color
 					GrafFormat::R16G16B16A16_SFLOAT,
 					GrafImageState::Undefined, GrafImageState::ColorWrite,
-					GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::Store,
+					GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
 					GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
 				},
 				{ // depth & stencil
@@ -270,6 +298,29 @@ namespace UnlimRealms
 		}
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize lightShaftsMaskRenderPass");
+
+		// LightShafts apply render pass
+		res = grafSystem->CreateRenderPass(grafObjects->lightShaftsApplyRenderPass);
+		if (Succeeded(res))
+		{
+			GrafRenderPassImageDesc renderPassDesc[] = {
+				{ // color
+					GrafFormat::R16G16B16A16_SFLOAT,
+					GrafImageState::ColorWrite, GrafImageState::ColorWrite,
+					GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
+					GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+				},
+				{ // depth & stencil
+					GrafFormat::D24_UNORM_S8_UINT,
+					GrafImageState::DepthStencilWrite, GrafImageState::DepthStencilWrite,
+					GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
+					GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store
+				}
+			};
+			res = grafObjects->lightShaftsApplyRenderPass->Initialize(grafDevice, { renderPassDesc, 2u });
+		}
+		if (Failed(res))
+			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize lightShaftsApplyRenderPass");
 
 		// graphics pipeline configuration
 		res = grafSystem->CreatePipeline(grafObjects->pipelineSolid);
@@ -340,6 +391,13 @@ namespace UnlimRealms
 			pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleStrip;
 			pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
 			pipelineParams.CullMode = GrafCullMode::Back;
+			pipelineParams.DepthTestEnable = false;
+			pipelineParams.DepthWriteEnable = false;
+			pipelineParams.StencilTestEnable = true;
+			pipelineParams.StencilFront.WriteMask = 0x0;
+			pipelineParams.StencilFront.CompareOp = GrafCompareOp::Equal;
+			pipelineParams.StencilFront.CompareMask = 0x1;
+			pipelineParams.StencilFront.Reference = 0x1;
 			res = grafObjects->pipelineLightShaftsMask->Initialize(grafDevice, pipelineParams);
 		}
 		if (Failed(res))
@@ -358,11 +416,11 @@ namespace UnlimRealms
 			};
 			GrafColorBlendOpDesc colorBlendOpDesc = {
 				GrafColorChannelFlags(GrafColorChannelFlag::All), true,
-				GrafBlendOp::Add, GrafBlendFactor::SrcAlpha, GrafBlendFactor::One,
-				GrafBlendOp::Add, GrafBlendFactor::SrcAlpha, GrafBlendFactor::One,
+				GrafBlendOp::Add, GrafBlendFactor::SrcAlpha, GrafBlendFactor::InvSrcAlpha,
+				GrafBlendOp::Add, GrafBlendFactor::SrcAlpha, GrafBlendFactor::InvSrcAlpha,
 			};
 			GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
-			pipelineParams.RenderPass = grafRenderPass;
+			pipelineParams.RenderPass = grafObjects->lightShaftsApplyRenderPass.get();
 			pipelineParams.ShaderStages = shaderStages;
 			pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
 			pipelineParams.DescriptorTableLayouts = descriptorLayouts;
@@ -737,52 +795,103 @@ namespace UnlimRealms
 	#else
 		if (ur_null == this->grafObjects)
 			return NotInitialized;
-		if (ur_null == renderTarget.GetImage(0))
-			return InvalidArgs;
+		if (renderTarget.GetImageCount() < 2)
+			return InvalidArgs; // color & stencil images are expected
 
-		// (re)init post process RT
-		/*const GfxTextureDesc &targetDesc = renderTarget.GetTargetBuffer()->GetDesc();
-		if (this->gfxObjects.lightShaftsRT == ur_null || this->gfxObjects.lightShaftsRT->GetTargetBuffer() == ur_null ||
-			this->gfxObjects.lightShaftsRT->GetTargetBuffer()->GetDesc().Width != targetDesc.Width ||
-			this->gfxObjects.lightShaftsRT->GetTargetBuffer()->GetDesc().Height != targetDesc.Height)
+		// (re)init post process image(s)
+
+		Result res(Success);
+		if (this->grafObjects->lightShaftsRTImage == ur_null ||
+			this->grafObjects->lightShaftsRTImage->GetDesc().Size != renderTarget.GetImage(0)->GetDesc().Size)
 		{
-			GfxTextureDesc descRT;
-			descRT.Width = targetDesc.Width;
-			descRT.Height = targetDesc.Height;
-			descRT.Levels = 1;
-			descRT.Format = targetDesc.Format;
-			descRT.FormatView = targetDesc.FormatView;
-			descRT.Usage = GfxUsage::Default;
-			descRT.BindFlags = ur_uint(GfxBindFlag::RenderTarget) | ur_uint(GfxBindFlag::ShaderResource);
-			descRT.AccessFlags = ur_uint(0);
-			res &= this->gfxObjects.lightShaftsRT->Initialize(descRT, false, GfxFormat::Unknown);
+			if (this->grafObjects->lightShaftsRTImage) this->grafRenderer->SafeDelete(this->grafObjects->lightShaftsRTImage.release());
+			if (this->grafObjects->lightShaftsRT) this->grafRenderer->SafeDelete(this->grafObjects->lightShaftsRT.release());
+			
+			res = this->grafRenderer->GetGrafSystem()->CreateImage(this->grafObjects->lightShaftsRTImage);
+			if (Succeeded(res))
+			{
+				GrafImageDesc lightShaftsImageDesc = {
+					GrafImageType::Tex2D,
+					GrafFormat::R16G16B16A16_SFLOAT,
+					renderTarget.GetImage(0)->GetDesc().Size, 1,
+					ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderInput),
+					ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+				};
+				res = this->grafObjects->lightShaftsRTImage->Initialize(this->grafRenderer->GetGrafDevice(), { lightShaftsImageDesc });
+			}
 			if (Failed(res))
-				return ResultError(Failure, "Atmosphere::RenderPostEffects: failed to (re)init Light Shafts render target");
-		}*/
-		/*if (this->grafObjects.lightShaftsRT == ur_null || this->gfxObjects.lightShaftsRT->GetTargetBuffer() == ur_null ||
-			this->gfxObjects.lightShaftsRT->GetTargetBuffer()->GetDesc().Width != targetDesc.Width ||
-			this->gfxObjects.lightShaftsRT->GetTargetBuffer()->GetDesc().Height != targetDesc.Height)
-		{
+			{
+				this->grafObjects->lightShaftsRTImage.reset();
+				return ResultError(Failure, "Atmosphere::RenderPostEffects: failed to (re)init lightShaftsRTImage");
+			}
 
-		}*/
-
-		// constants
-		/*GfxResourceData cbResData = { &this->lightShafts, sizeof(LightShaftsCB), 0 };
-		res &= gfxContext.UpdateBuffer(this->gfxObjects.lightShaftsCB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
-		res &= gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 1);
-		res &= gfxContext.SetConstantBuffer(this->gfxObjects.lightShaftsCB.get(), 2);*/
+			res = this->grafRenderer->GetGrafSystem()->CreateRenderTarget(this->grafObjects->lightShaftsRT);
+			if (Succeeded(res))
+			{
+				GrafImage* lightShaftsRTImages[] = {
+					this->grafObjects->lightShaftsRTImage.get(), // destination masked light
+					renderTarget.GetImage(1) // depth & stencil image from the main pass used to render atmosphere
+				};
+				res = this->grafObjects->lightShaftsRT->Initialize(this->grafRenderer->GetGrafDevice(), { grafObjects->lightShaftsMaskRenderPass.get(), lightShaftsRTImages, 2u });
+			}
+			if (Failed(res))
+			{
+				this->grafObjects->lightShaftsRTImage.reset();
+				this->grafObjects->lightShaftsRT.reset();
+				return ResultError(Failure, "Atmosphere::RenderPostEffects: failed to (re)init lightShaftsRT");
+			}
+		}
 
 		// draw atmosphere into separate RT and mask out occlusion fragments using atmosphere's stencil ref
-		/*res &= gfxContext.SetRenderTarget(this->gfxObjects.lightShaftsRT.get(), &renderTarget);
-		res &= gfxContext.ClearTarget(this->gfxObjects.lightShaftsRT.get(), true, { 0.0f, 0.0f, 0.0f, 0.0f }, false, 0, false, 0);
-		res &= genericRender->RenderScreenQuad(gfxContext, renderTarget.GetTargetBuffer(), ur_null,
-			this->gfxObjects.screenQuadStateOcclusionMask.get());
-		gfxContext.SetRenderTarget(ur_null);*/
+
+		GrafViewportDesc rtViewport = {};
+		rtViewport.Width = (ur_float)this->grafObjects->lightShaftsRTImage->GetDesc().Size.x;
+		rtViewport.Height = (ur_float)this->grafObjects->lightShaftsRTImage->GetDesc().Size.y;
+		rtViewport.Near = 0.0f;
+		rtViewport.Far = 1.0f;
+
+		static GrafClearValue rtClearValues[] = {
+			{ 0.0f, 0.0f, 0.0f, 0.0f }
+		};
+
+		GrafDescriptorTable* descTable = this->grafObjects->lightShaftsMaskDescriptorTable[this->grafRenderer->GetCurrentFrameId()].get();
+		descTable->SetSampler(0, this->grafObjects->samplerPoint.get());
+		descTable->SetImage(0, renderTarget.GetImage(0));
+
+		grafCmdList.SetViewport(rtViewport, true);
+		grafCmdList.ImageMemoryBarrier(renderTarget.GetImage(0), GrafImageState::Current, GrafImageState::ShaderRead);
+		grafCmdList.ImageMemoryBarrier(this->grafObjects->lightShaftsRTImage.get(), GrafImageState::Current, GrafImageState::ColorWrite);
+		grafCmdList.BeginRenderPass(this->grafObjects->lightShaftsMaskRenderPass.get(), this->grafObjects->lightShaftsRT.get(), rtClearValues);
+		grafCmdList.BindPipeline(this->grafObjects->pipelineLightShaftsMask.get());
+		grafCmdList.BindDescriptorTable(descTable, this->grafObjects->pipelineLightShaftsMask.get());
+		grafCmdList.Draw(4, 1, 0, 0);
+		grafCmdList.EndRenderPass();
 
 		// draw lights shafts into given RT
-		/*res &= gfxContext.SetRenderTarget(&renderTarget);
-		res &= genericRender->RenderScreenQuad(gfxContext, this->gfxObjects.lightShaftsRT->GetTargetBuffer(), ur_null,
-			this->gfxObjects.screenQuadStateBlendLightShafts.get());*/
+
+		GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
+		CommonCB cbData;
+		cbData.ViewProj = viewProj;
+		cbData.CameraPos = cameraPos;
+		cbData.Params = this->desc;
+		Allocation commonCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(CommonCB));
+		dynamicCB->Write((ur_byte*)&cbData, sizeof(cbData), 0, commonCBAlloc.Offset);
+		Allocation lightShaftsCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(LightShaftsCB));
+		dynamicCB->Write((ur_byte*)&this->lightShafts, sizeof(this->lightShafts), 0, lightShaftsCBAlloc.Offset);
+
+		descTable = this->grafObjects->lightShaftsApplyDescriptorTable[this->grafRenderer->GetCurrentFrameId()].get();
+		descTable->SetConstantBuffer(1, dynamicCB, commonCBAlloc.Offset, commonCBAlloc.Size);
+		descTable->SetConstantBuffer(2, dynamicCB, lightShaftsCBAlloc.Offset, lightShaftsCBAlloc.Size);
+		descTable->SetSampler(0, this->grafObjects->samplerLinear.get());
+		descTable->SetImage(0, this->grafObjects->lightShaftsRTImage.get());
+
+		grafCmdList.ImageMemoryBarrier(renderTarget.GetImage(0), GrafImageState::Current, GrafImageState::ColorWrite);
+		grafCmdList.ImageMemoryBarrier(this->grafObjects->lightShaftsRTImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
+		grafCmdList.BeginRenderPass(this->grafObjects->lightShaftsApplyRenderPass.get(), &renderTarget);
+		grafCmdList.BindPipeline(this->grafObjects->pipelineLightShaftsApply.get());
+		grafCmdList.BindDescriptorTable(descTable, this->grafObjects->pipelineLightShaftsApply.get());
+		grafCmdList.Draw(4, 1, 0, 0);
+		grafCmdList.EndRenderPass();
 
 		return Result(Success);
 	#endif
