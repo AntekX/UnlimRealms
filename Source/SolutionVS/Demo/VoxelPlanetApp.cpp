@@ -343,14 +343,15 @@ int VoxelPlanetApp::Run()
 		});
 		
 		// draw frame
-		if (grafRenderer != ur_null && canvasValid)
+		if (grafRenderer != ur_null)
 		{
 			// begin frame rendering
 			grafRenderer->BeginFrame();
 
 			// resize render target(s)
-			if (canvasWidth != realm.GetCanvas()->GetClientBound().Width() ||
-				canvasHeight != realm.GetCanvas()->GetClientBound().Height())
+			if (canvasValid &&
+				(canvasWidth != realm.GetCanvas()->GetClientBound().Width() ||
+				canvasHeight != realm.GetCanvas()->GetClientBound().Height()))
 			{
 				canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 				canvasHeight = realm.GetCanvas()->GetClientBound().Height();

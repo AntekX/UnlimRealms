@@ -258,14 +258,20 @@ namespace UnlimRealms
 
 	Result GrafRenderer::EndFrameAndPresent()
 	{
+		Result res(Success);
+
 		// submit command list(s) to device execution queue
-		this->grafDevice->Submit();
+		res &= this->grafDevice->Submit();
 
 		// process pending callbacks
-		this->ProcessPendingCommandListCallbacks(false);
+		res &= this->ProcessPendingCommandListCallbacks(false);
 
 		// present current swap chain image
-		Result res = this->grafCanvas->Present();
+		ur_bool canvasValid = (this->GetRealm().GetCanvas()->GetClientBound().Area() > 0); // canvas area can be zero if window is minimized
+		if (canvasValid)
+		{
+			res = this->grafCanvas->Present();
+		}
 
 		// move to next frame
 		this->frameIdx = (this->frameIdx + 1) % this->frameCount;
