@@ -31,10 +31,9 @@ namespace UnlimRealms
 	#define UR_GRAF_VULKAN_VMA_ENABLED 1
 	#define UR_GRAF_VULKAN_IMPLICIT_WAIT_DEVICE 1
 
-	// vulkan objects destruction safety policy
-	#define UR_GRAF_VULKAN_DESTROY_DO_NOT_WAIT 0		// destroy immediately, do not check synchronization objects
-	#define UR_GRAF_VULKAN_DESTROY_WAIT_IMMEDIATE 1		// stall thread and wait synchronization object
-	#define UR_GRAF_VULKAN_DESTROY_WAIT_DEFERRED 0		// TODO: check if vulkan object is still used on device, and place it into deferred deinitialization list if it is
+	// command buffer synchronisation policy
+	#define UR_GRAF_VULKAN_COMMAND_BUFFER_SYNC_DESTROY	1
+	#define UR_GRAF_VULKAN_COMMAND_BUFFER_SYNC_RESET	1
 
 	// enables swap chain image layout automatic transition to general/common state when it becomes a current render target
 	#define UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL 1
@@ -749,7 +748,7 @@ namespace UnlimRealms
 	{
 		if (this->vkSubmitFence != VK_NULL_HANDLE)
 		{
-			#if (UR_GRAF_VULKAN_DESTROY_WAIT_IMMEDIATE)
+			#if (UR_GRAF_VULKAN_COMMAND_BUFFER_SYNC_DESTROY)
 			vkWaitForFences(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), 1, &this->vkSubmitFence, true, ~ur_uint64(0));
 			#endif
 			vkDestroyFence(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkSubmitFence, ur_null);
@@ -828,7 +827,9 @@ namespace UnlimRealms
 			return Result(NotInitialized);
 
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
+		#if (UR_GRAF_VULKAN_COMMAND_BUFFER_SYNC_RESET)
 		vkWaitForFences(vkDevice, 1, &this->vkSubmitFence, true, ~ur_uint64(0)); // make sure command buffer is no longer used (previous submission can still be executed)
+		#endif
 		vkResetFences(vkDevice, 1, &this->vkSubmitFence);
 
 		VkCommandBufferBeginInfo vkBeginInfo = {};
