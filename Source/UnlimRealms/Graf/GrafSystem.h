@@ -34,6 +34,18 @@ namespace UnlimRealms
 	class GrafPipeline;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafRayTracingProperties
+	{
+		ur_bool RayTraceSupported;
+		ur_bool RayQuerySupported;
+		ur_uint32 ShaderGroupHandleSize;
+		ur_uint32 RecursionDepthMax;
+		ur_uint64 GeometryCountMax;
+		ur_uint64 InstanceCountMax;
+		ur_uint64 PrimitiveCountMax;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GrafPhysicalDeviceDesc
 	{
 		std::string Description;
@@ -43,6 +55,7 @@ namespace UnlimRealms
 		ur_size DedicatedSystemMemory;
 		ur_size SharedSystemMemory;
 		ur_size ConstantBufferOffsetAlignment;
+		GrafRayTracingProperties RayTracing;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

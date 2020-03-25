@@ -11,8 +11,14 @@
 
 #pragma once
 
+#define VK_ENABLE_BETA_EXTENSIONS // TEMP: required for ray tracing prototyep
+
 #include "Graf/GrafSystem.h"
+#if defined(VK_ENABLE_BETA_EXTENSIONS)
+#include "../Tools/vulkan_beta/include/vulkan/vulkan.h"
+#else
 #include "vulkan/vulkan.h"
+#endif
 #if defined(_WINDOWS)
 #include "vulkan/vulkan_win32.h"
 #endif

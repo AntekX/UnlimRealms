@@ -10,7 +10,11 @@
 #if defined(_WINDOWS)
 #include "Sys/Windows/WinCanvas.h"
 #endif
+#if defined(VK_ENABLE_BETA_EXTENSIONS)
+#pragma comment(lib, "../../../Tools/vulkan_beta/lib/vulkan-1.lib")
+#else
 #pragma comment(lib, "vulkan-1.lib")
+#endif
 #define VMA_IMPLEMENTATION
 #include "3rdParty/VulkanMemoryAllocator/vk_mem_alloc.h"
 
@@ -27,8 +31,9 @@ namespace UnlimRealms
 	#define UR_GRAF_VULKAN_DEBUG_MSG_SEVIRITY_MIN VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
 	#endif
 
-	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_1
+	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_2
 	#define UR_GRAF_VULKAN_VMA_ENABLED 1
+	#define UR_GRAF_VULKAN_RAY_TRACING 0
 	#define UR_GRAF_VULKAN_IMPLICIT_WAIT_DEVICE 1
 
 	// command buffer synchronisation policy
@@ -77,7 +82,8 @@ namespace UnlimRealms
 	#endif
 
 	static const char* VulkanExtensions[] = {
-		"VK_KHR_surface"
+		"VK_KHR_surface",
+		"VK_KHR_get_physical_device_properties2"
 		#if defined(_WINDOWS)
 		, "VK_KHR_win32_surface"
 		#endif
@@ -88,6 +94,14 @@ namespace UnlimRealms
 
 	static const char* VulkanDeviceExtensions[] = {
 		"VK_KHR_swapchain"
+		#if (UR_GRAF_VULKAN_RAY_TRACING)
+		, "VK_KHR_ray_tracing"
+		, "VK_KHR_pipeline_library"
+		, "VK_EXT_descriptor_indexing"
+		, "VK_KHR_buffer_device_address"
+		, "VK_KHR_deferred_host_operations"
+		, "VK_KHR_get_memory_requirements2"
+		#endif
 	};
 
 	static const char* VkResultToString(VkResult res)
@@ -245,9 +259,31 @@ namespace UnlimRealms
 		for (ur_uint32 deviceId = 0; deviceId < physicalDeviceCount; ++deviceId)
 		{
 			VkPhysicalDevice& vkPhysicalDevice = vkPhysicalDevices[deviceId];
-			VkPhysicalDeviceProperties vkDeviceProperties;
+			
+			VkPhysicalDeviceProperties2 vkDeviceProperties2 = {};
+			VkPhysicalDeviceProperties& vkDeviceProperties = vkDeviceProperties2.properties;
+			vkDeviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+			vkDeviceProperties2.pNext = ur_null;
+			#if (UR_GRAF_VULKAN_RAY_TRACING)
+			VkPhysicalDeviceRayTracingPropertiesKHR vkDeviceRayTracingProperties = {};
+			vkDeviceRayTracingProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PROPERTIES_KHR;
+			vkDeviceRayTracingProperties.pNext = ur_null;
+			vkDeviceProperties2.pNext = &vkDeviceRayTracingProperties;
+			#endif
+			vkGetPhysicalDeviceProperties2(vkPhysicalDevice, &vkDeviceProperties2);
+
+			VkPhysicalDeviceFeatures2 vkDeviceFeatures2 = {};
+			VkPhysicalDeviceFeatures& vkDeviceFeatures = vkDeviceFeatures2.features;
+			vkDeviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+			vkDeviceFeatures2.pNext = ur_null;
+			#if (UR_GRAF_VULKAN_RAY_TRACING)
+			VkPhysicalDeviceRayTracingFeaturesKHR vkDeviceRayTracingFeatures = {};
+			vkDeviceRayTracingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_FEATURES_KHR;
+			vkDeviceRayTracingFeatures.pNext = ur_null;
+			#endif
+			vkGetPhysicalDeviceFeatures2(vkPhysicalDevice, &vkDeviceFeatures2);
+
 			VkPhysicalDeviceMemoryProperties vkDeviceMemoryProperties;
-			vkGetPhysicalDeviceProperties(vkPhysicalDevice, &vkDeviceProperties);
 			vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &vkDeviceMemoryProperties);
 
 			GrafPhysicalDeviceDesc& grafDeviceDesc = this->grafPhysicalDeviceDesc[deviceId];
@@ -268,6 +304,16 @@ namespace UnlimRealms
 				if (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT & perHeapFlags[memHeapIdx]) grafDeviceDesc.DedicatedVideoMemory += (ur_size)vkMemHeap.size;
 				if (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & perHeapFlags[memHeapIdx]) grafDeviceDesc.SharedSystemMemory += (ur_size)vkMemHeap.size;
 			}
+
+			#if (UR_GRAF_VULKAN_RAY_TRACING)
+			grafDeviceDesc.RayTracing.RayTraceSupported = (ur_bool)vkDeviceRayTracingFeatures.rayTracing;
+			grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)vkDeviceRayTracingFeatures.rayQuery;
+			grafDeviceDesc.RayTracing.ShaderGroupHandleSize = vkDeviceRayTracingProperties.shaderGroupHandleSize;
+			grafDeviceDesc.RayTracing.RecursionDepthMax = vkDeviceRayTracingProperties.maxRecursionDepth;
+			grafDeviceDesc.RayTracing.GeometryCountMax = vkDeviceRayTracingProperties.maxGeometryCount;
+			grafDeviceDesc.RayTracing.InstanceCountMax = vkDeviceRayTracingProperties.maxInstanceCount;
+			grafDeviceDesc.RayTracing.PrimitiveCountMax = vkDeviceRayTracingProperties.maxPrimitiveCount;
+			#endif
 
 			#if defined(UR_GRAF_LOG_LEVEL_DEBUG)
 			LogNoteGrafDbg(std::string("GrafSystemVulkan: device available ") + grafDeviceDesc.Description +
