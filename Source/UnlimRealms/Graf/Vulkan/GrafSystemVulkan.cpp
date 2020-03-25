@@ -899,11 +899,13 @@ namespace UnlimRealms
 		if (grafImage->GetState() == dstState)
 			return Result(Success);
 
+		srcState = (GrafImageState::Current == srcState ? grafImage->GetState() : srcState);
+
 		VkImageMemoryBarrier vkImageBarrier = {};
 		vkImageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		vkImageBarrier.srcAccessMask = 0;
 		vkImageBarrier.dstAccessMask = 0;
-		vkImageBarrier.oldLayout = GrafUtilsVulkan::GrafToVkImageLayout(GrafImageState::Current == srcState ? grafImage->GetState() : srcState);
+		vkImageBarrier.oldLayout = GrafUtilsVulkan::GrafToVkImageLayout(srcState);
 		vkImageBarrier.newLayout = GrafUtilsVulkan::GrafToVkImageLayout(dstState);
 		vkImageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		vkImageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
