@@ -3152,9 +3152,6 @@ namespace UnlimRealms
 		VkRenderPass vkRenderPass = static_cast<GrafRenderPassVulkan*>(initParams.RenderPass)->GetVkRenderPass();
 		VkResult vkRes = VK_SUCCESS;
 
-		// TEMP: hardcoded pipeline state for test purpose
-		// TODO: must be described through GRAF structures and converted into vulkan here
-
 		// shader stages
 
 		std::vector<VkPipelineShaderStageCreateInfo> vkShaderStagesInfo(initParams.ShaderStageCount);
