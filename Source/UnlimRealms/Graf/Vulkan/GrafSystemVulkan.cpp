@@ -280,6 +280,7 @@ namespace UnlimRealms
 			VkPhysicalDeviceRayTracingFeaturesKHR vkDeviceRayTracingFeatures = {};
 			vkDeviceRayTracingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_FEATURES_KHR;
 			vkDeviceRayTracingFeatures.pNext = ur_null;
+			vkDeviceFeatures2.pNext = &vkDeviceRayTracingFeatures;
 			#endif
 			vkGetPhysicalDeviceFeatures2(vkPhysicalDevice, &vkDeviceFeatures2);
 
