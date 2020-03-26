@@ -65,13 +65,13 @@ namespace UnlimRealms
 	};
 	static const ur_size VulkanDescriptorPoolMaxSetCount = 2 * 1024;
 
-	// binding offsets per descriptor type
+	// binding offsets per descriptor register type
 	// spir-v bytecode compiled from HLSL must use "-fvk-<b,s,t,u>-shift N M" command to apply offsets to corresponding register types (b,s,t,u)
-	static const ur_uint VulkanBindingsPerSpace = 256;
+	static const ur_uint VulkanBindingsPerRegisterType = 256;
 	static const ur_uint VulkanBindingOffsetBuffer = 0;
-	static const ur_uint VulkanBindingOffsetSampler = VulkanBindingOffsetBuffer + VulkanBindingsPerSpace;
-	static const ur_uint VulkanBindingOffsetTexture = VulkanBindingOffsetSampler + VulkanBindingsPerSpace;
-	static const ur_uint VulkanBindingOffsetRWResource = VulkanBindingOffsetTexture + VulkanBindingsPerSpace;
+	static const ur_uint VulkanBindingOffsetSampler = VulkanBindingOffsetBuffer + VulkanBindingsPerRegisterType;
+	static const ur_uint VulkanBindingOffsetTexture = VulkanBindingOffsetSampler + VulkanBindingsPerRegisterType;
+	static const ur_uint VulkanBindingOffsetRWResource = VulkanBindingOffsetTexture + VulkanBindingsPerRegisterType;
 
 	#if defined(UR_GRAF_VULKAN_DEBUG_LAYER)
 	static const char* VulkanLayers[] = {

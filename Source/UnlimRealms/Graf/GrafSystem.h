@@ -372,8 +372,8 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// note: binding ids from different spaces can overlap
-	enum class GrafDescriptorSpaceType
+	// note: binding ids of different register types can overlap (hlsl style)
+	enum class GrafDescriptorRegisterType
 	{
 		Undefined = -1,
 		Buffer,
@@ -387,9 +387,9 @@ namespace UnlimRealms
 	enum class GrafDescriptorType
 	{
 		Undefined = -1,
-		ConstantBuffer,	// space: Buffer
-		Sampler,		// space: Sampler
-		Texture,		// space: Texture
+		ConstantBuffer,	// register type: Buffer
+		Sampler,		// register type: Sampler
+		Texture,		// register type: Texture
 		Count
 	};
 
