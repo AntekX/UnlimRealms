@@ -13,6 +13,10 @@
 #define UR_DECL __declspec(dllimport)
 #endif
 
+#define UR_GRAF // this definition enables new graphics abstraction layer
+
+#define ur_assert(expression) assert(expression)
+
 #define GDIPLUS
 
 #ifdef _WINDOWS
@@ -50,6 +54,7 @@
 #include <typeindex>
 #include <array>
 #include <vector>
+#include <list>
 #include <set>
 #include <map>
 #include <unordered_map>
