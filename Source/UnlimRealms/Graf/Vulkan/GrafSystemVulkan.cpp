@@ -582,9 +582,6 @@ namespace UnlimRealms
 		ur_float queuePriority = 1.0f;
 		vkQueueInfo.pQueuePriorities = &queuePriority;
 
-		VkPhysicalDeviceFeatures vkDeviceFeatures = {};
-		// NOTE: pass to Initialize a GRAF structure describing essential user defined feature list and fill corresponding fields in VkPhysicalDeviceFeatures
-
 		VkDeviceCreateInfo vkDeviceInfo = {};
 		vkDeviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		vkDeviceInfo.flags = 0;
@@ -594,7 +591,7 @@ namespace UnlimRealms
 		vkDeviceInfo.ppEnabledLayerNames = VulkanLayers;
 		vkDeviceInfo.enabledExtensionCount = (VulkanDeviceExtensions ? ur_array_size(VulkanDeviceExtensions) : 0);
 		vkDeviceInfo.ppEnabledExtensionNames = VulkanDeviceExtensions;
-		vkDeviceInfo.pEnabledFeatures = &vkDeviceFeatures;
+		vkDeviceInfo.pEnabledFeatures = ur_null;
 
 		VkResult res = vkCreateDevice(vkPhysicalDevice, &vkDeviceInfo, ur_null, &this->vkDevice);
 		if (res != VK_SUCCESS)

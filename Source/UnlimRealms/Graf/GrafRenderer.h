@@ -62,7 +62,7 @@ namespace UnlimRealms
 
 		virtual Result AddCommandListCallback(GrafCommandList *executionCmdList, GrafCallbackContext ctx, GrafCommandListCallback callback);
 
-		virtual Result SafeDelete(GrafEntity* grafEnity, GrafCommandList *grafSycnCmdList = ur_null);
+		virtual Result SafeDelete(GrafEntity* grafEnity, GrafCommandList *grafSyncCmdList = ur_null, ur_bool deleteCmdList = true);
 
 		virtual Result Upload(ur_byte *dataPtr, GrafBuffer* dstBuffer, ur_size dataSize, ur_size dstOffset = 0);
 
@@ -84,7 +84,7 @@ namespace UnlimRealms
 
 		inline GrafRenderTarget* GetCanvasRenderTarget() const;
 
-		//inline GrafCommandList* GetCommandList(ur_uint frameId = CurrentFrameId); // TODO: fix multithreading support!
+		inline GrafCommandList* GetTransientCommandList();
 
 		inline ur_uint GetRecordedFrameCount() const;
 
@@ -109,11 +109,18 @@ namespace UnlimRealms
 			GrafCallbackContext context;
 		};
 
-		typedef std::vector<std::unique_ptr<GrafCommandList>> GrafCommandListArray;
+		struct UR_DECL CommandListCache
+		{
+			std::mutex cmdListsMutex;
+			std::list<std::unique_ptr<GrafCommandList>> availableCmdLists;
+			std::list<std::unique_ptr<GrafCommandList>> acquiredCmdLists;
+		};
 
 		Result InitializeCanvasRenderTargets();
 
-		Result GetOrCreateCommandListForCurrentThread(GrafCommandList*& grafCommandList, ur_uint frameId);
+		Result GetOrCreateCommandListForCurrentThread(GrafCommandList*& grafCommandList);
+
+		Result UpdateCommandListCache(ur_bool forceWait);
 
 		Result ProcessPendingCommandListCallbacks(ur_bool immediateMode);
 
@@ -131,8 +138,8 @@ namespace UnlimRealms
 		std::mutex constantBufferMutex;
 		ur_uint frameCount;
 		ur_uint frameIdx;
-		std::map<std::thread::id, std::unique_ptr<GrafCommandListArray>> grafCommandLists;
-		std::mutex grafCommandListsMutex;
+		std::map<std::thread::id, std::unique_ptr<CommandListCache>> grafCommandListCache;
+		std::mutex grafCommandListCacheMutex;
 		std::vector<std::unique_ptr<PendingCommandListCallbackData>> pendingCommandListCallbacks;
 		std::vector<std::unique_ptr<PendingCommandListCallbackData>> finishedCommandListCallbacks;
 		std::shared_ptr<Job> finishedCommandListCallbacksJob;

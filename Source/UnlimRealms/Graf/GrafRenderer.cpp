@@ -116,13 +116,6 @@ namespace UnlimRealms
 			if (Failed(res)) break;
 			this->constantBufferAllocator.Init(constantBufferDesc.SizeInBytes, this->grafDevice->GetPhysicalDeviceDesc()->ConstantBufferOffsetAlignment);
 
-			// pre initialize default command list for current thread
-			// TODO
-			//crntStageLogName = "command list(s)";
-			//GrafCommandList* grafDefaultCommandList = ur_null;
-			//res = GetOrCreateCommandListForCurrentThread(grafDefaultCommandList, this->frameIdx);
-			//if (Failed(res)) break;
-
 		} while (false);
 
 		if (Failed(res))
@@ -159,41 +152,47 @@ namespace UnlimRealms
 		return res;
 	}
 
-	Result GrafRenderer::GetOrCreateCommandListForCurrentThread(GrafCommandList*& grafCommandList, ur_uint frameId)
+	Result GrafRenderer::GetOrCreateCommandListForCurrentThread(GrafCommandList*& grafCommandList)
 	{
 		Result res(Success);
 
-		std::lock_guard<std::mutex> lock(this->grafCommandListsMutex);
+		// get or create cache for this thread
 
-		// try to find corresponding command list
-
+		this->grafCommandListCacheMutex.lock();
 		std::thread::id thisThreadId = std::this_thread::get_id();
-		frameId = (CurrentFrameId == frameId ? this->frameIdx : frameId);
-		auto& cmdListIter = this->grafCommandLists.find(thisThreadId);
-		if (cmdListIter != this->grafCommandLists.end())
+		auto& threadCacheIter = this->grafCommandListCache.find(thisThreadId);
+		if (this->grafCommandListCache.end() == threadCacheIter)
 		{
-			GrafCommandListArray& cmdListArray = *cmdListIter->second.get();
-			grafCommandList = cmdListArray[frameId].get();
+			std::unique_ptr<CommandListCache> cmdListCache(new CommandListCache);
+			this->grafCommandListCache[thisThreadId] = std::move(cmdListCache);
+			threadCacheIter = this->grafCommandListCache.find(thisThreadId);
+		}
+		CommandListCache& cmdListCache = *threadCacheIter->second.get();
+		this->grafCommandListCacheMutex.unlock();
+
+		// try to recycle command list
+
+		std::lock_guard<std::mutex> lockCmdLists(cmdListCache.cmdListsMutex);
+
+		if (!cmdListCache.availableCmdLists.empty())
+		{
+			std::unique_ptr<GrafCommandList> recycledCmdList = std::move(cmdListCache.availableCmdLists.back());
+			ur_assert(recycledCmdList->Wait(0) == Success);
+			cmdListCache.availableCmdLists.pop_back();
+			grafCommandList = recycledCmdList.get();
+			cmdListCache.acquiredCmdLists.emplace_back(std::move(recycledCmdList));
 			return res;
 		}
 
-		// create new command list(s)
+		// create new command list
 
-		std::unique_ptr<GrafCommandListArray> cmdListArray(new GrafCommandListArray);
-		cmdListArray->resize(this->frameCount);
-		for (ur_uint iframe = 0; iframe < this->frameCount; ++iframe)
-		{
-			auto& frameCmdList = (*cmdListArray.get())[iframe];
-			res = this->grafSystem->CreateCommandList(frameCmdList);
-			if (Failed(res)) break;
-			res = frameCmdList->Initialize(this->grafDevice.get());
-			if (Failed(res)) break;
-		}
-		if (Failed(res))
-			return res;
-		this->grafCommandLists[thisThreadId] = std::move(cmdListArray);
-
-		grafCommandList = (*this->grafCommandLists[thisThreadId].get())[frameId].get();
+		std::unique_ptr<GrafCommandList> newCmdList;
+		res = this->grafSystem->CreateCommandList(newCmdList);
+		if (Failed(res)) return res;
+		res = newCmdList->Initialize(this->grafDevice.get());
+		if (Failed(res)) return res;
+		grafCommandList = newCmdList.get();
+		cmdListCache.acquiredCmdLists.emplace_back(std::move(newCmdList));
 		
 		return res;
 	}
@@ -207,11 +206,12 @@ namespace UnlimRealms
 		{
 			this->grafDevice->Submit();
 			this->grafDevice->WaitIdle();
+			this->UpdateCommandListCache(true);
 			this->ProcessPendingCommandListCallbacks(true);
 		}
 
 		// destroy objects
-		this->grafCommandLists.clear();
+		this->grafCommandListCache.clear();
 		this->grafDynamicConstantBuffer.reset();
 		this->grafDynamicUploadBuffer.reset();
 		this->grafCanvasRenderTarget.clear();
@@ -266,6 +266,9 @@ namespace UnlimRealms
 		// process pending callbacks
 		res &= this->ProcessPendingCommandListCallbacks(false);
 
+		// update command lists cache
+		res &= this->UpdateCommandListCache(false);
+
 		// present current swap chain image
 		ur_bool canvasValid = (this->GetRealm().GetCanvas()->GetClientBound().Area() > 0); // canvas area can be zero if window is minimized
 		if (canvasValid)
@@ -295,13 +298,16 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafRenderer::SafeDelete(GrafEntity* grafEnity, GrafCommandList *grafSycnCmdList)
+	Result GrafRenderer::SafeDelete(GrafEntity* grafEnity, GrafCommandList *grafSyncCmdList, ur_bool deleteCmdList)
 	{
 		if (ur_null == grafEnity)
 			return Result(InvalidArgs);
 
-		if (ur_null == grafSycnCmdList)
+		ur_bool recycledCmdList = false;
+		if (ur_null == grafSyncCmdList)
 		{
+			#if (0)
+
 			// create synchronization command list
 			std::unique_ptr<GrafCommandList> newSyncCmdList;
 			Result res = this->grafSystem->CreateCommandList(newSyncCmdList);
@@ -317,18 +323,66 @@ namespace UnlimRealms
 			newSyncCmdList->End();
 			this->grafDevice->Record(newSyncCmdList.get());
 
-			grafSycnCmdList = newSyncCmdList.release();
+			grafSyncCmdList = newSyncCmdList.release();
+			deleteCmdList = true;
+			
+			#else
+			
+			// create or recycle transient command list
+			GrafCommandList* transientCmdList = this->GetTransientCommandList();
+
+			// record empty list (we are interesed in submission fence only)
+			transientCmdList->Begin();
+			transientCmdList->End();
+			this->grafDevice->Record(transientCmdList);
+
+			grafSyncCmdList = transientCmdList;
+			deleteCmdList = false;
+
+			#endif
 		}
 
 		// destroy object when fence is signaled
-		this->AddCommandListCallback(grafSycnCmdList, {}, [grafSycnCmdList, grafEnity](GrafCallbackContext& ctx) -> Result
+		this->AddCommandListCallback(grafSyncCmdList, {}, [grafEnity, grafSyncCmdList, deleteCmdList](GrafCallbackContext& ctx) -> Result
 		{
 			delete grafEnity;
-			delete grafSycnCmdList;
+			if (deleteCmdList)
+			{
+				delete grafSyncCmdList;
+			}
 			return Result(Success);
 		});
 
 		return Result(Success);
+	}
+
+	Result GrafRenderer::UpdateCommandListCache(ur_bool forceWait)
+	{
+		Result res(Success);
+
+		ur_uint64 waitTimeout = (forceWait ? ur_uint64(-1) : 0);
+
+		std::lock_guard<std::mutex> lockCaches(this->grafCommandListCacheMutex);
+		for (auto& cmdListCache : this->grafCommandListCache)
+		{
+			std::lock_guard<std::mutex> lockCmdLists(cmdListCache.second->cmdListsMutex);
+			auto cmdListIter = cmdListCache.second->acquiredCmdLists.begin();
+			while (cmdListIter != cmdListCache.second->acquiredCmdLists.end())
+			{
+				auto cmdListNextIter = cmdListIter;
+				cmdListNextIter++;
+				if (cmdListIter->get()->Wait(waitTimeout) == Success)
+				{
+					// command list is no longer in use
+					std::unique_ptr<GrafCommandList> recycledCmdList = std::move(*cmdListIter);
+					cmdListCache.second->availableCmdLists.emplace_back(std::move(recycledCmdList));
+					cmdListCache.second->acquiredCmdLists.erase(cmdListIter);
+				}
+				cmdListIter = cmdListNextIter;
+			}
+		}
+
+		return res;
 	}
 
 	Result GrafRenderer::ProcessPendingCommandListCallbacks(ur_bool immediateMode)
@@ -575,6 +629,7 @@ namespace UnlimRealms
 		ImGui::SetNextWindowSize(windowSize, ImGuiSetCond_Once);
 		ImGui::SetNextWindowPos({ canvasRect.Width() - windowSize.x, 0.0f }, ImGuiSetCond_Once);
 		ImGui::Begin("GrafRenderer");
+		
 		ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
 		if (ImGui::TreeNode("GrafSystem"))
 		{
@@ -583,6 +638,7 @@ namespace UnlimRealms
 			{
 				ImGui::Text("Device used: %s", this->grafDevice->GetPhysicalDeviceDesc()->Description.c_str());
 			}
+			
 			ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
 			if (ImGui::TreeNode("Devices Available"))
 			{
@@ -599,6 +655,7 @@ namespace UnlimRealms
 				}
 				ImGui::TreePop();
 			}
+
 			if (this->grafCanvas != ur_null)
 			{
 				ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
@@ -614,8 +671,10 @@ namespace UnlimRealms
 					ImGui::TreePop();
 				}
 			}
+
 			ImGui::TreePop();
 		}
+
 		if (this->grafDynamicUploadBuffer)
 		{
 			ur_size crntAllocatorOffset = 0;
@@ -640,6 +699,7 @@ namespace UnlimRealms
 				ImGui::TreePop();
 			}
 		}
+
 		if (this->grafDynamicConstantBuffer)
 		{
 			ur_size crntAllocatorOffset = 0;
@@ -664,10 +724,36 @@ namespace UnlimRealms
 				ImGui::TreePop();
 			}
 		}
+
+		ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
+		if (ImGui::TreeNode("Command List Cache"))
+		{
+			ur_size inflightCount = 0;
+			ur_size availableCount = 0;
+			if (ImGui::TreeNode("per thread"))
+			{
+				std::lock_guard<std::mutex> lock(this->grafCommandListCacheMutex);
+				ur_uint32 cacheIdx = 0;
+				for (auto& cmdListCache : this->grafCommandListCache)
+				{
+					std::lock_guard<std::mutex> lockCmdLists(cmdListCache.second->cmdListsMutex);
+					availableCount += cmdListCache.second->availableCmdLists.size();
+					inflightCount += cmdListCache.second->acquiredCmdLists.size();
+					ImGui::Text("cache %i: %i", cacheIdx, cmdListCache.second->availableCmdLists.size());
+					++cacheIdx;
+				}
+				ImGui::TreePop();
+			}
+			ImGui::Text("Available: %i", availableCount);
+			ImGui::Text("In flight: %i", inflightCount);
+			ImGui::TreePop();
+		}
+
 		{
 			std::lock_guard<std::mutex> lock(this->pendingCommandListMutex);
 			ImGui::Text("PendingCallbacks: %i", this->pendingCommandListCallbacks.size());
 		}
+
 		ImGui::End();
 
 		return Result(Success);
