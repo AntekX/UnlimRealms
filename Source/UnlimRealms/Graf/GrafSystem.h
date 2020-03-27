@@ -32,6 +32,7 @@ namespace UnlimRealms
 	class GrafDescriptorTableLayout;
 	class GrafDescriptorTable;
 	class GrafPipeline;
+	class GrafAccelerationStructure;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GrafRayTracingProperties
@@ -197,7 +198,9 @@ namespace UnlimRealms
 		TransferDst = (1 << 1),
 		VertexBuffer = (1 << 2),
 		IndexBuffer = (1 << 3),
-		ConstantBuffer = (1 << 4)
+		ConstantBuffer = (1 << 4),
+		ShaderDeviceAddress = (1 << 5),
+		RayTracing = (1 << 6)
 	};
 	typedef ur_uint GrafBufferUsageFlags;
 
@@ -499,6 +502,42 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafAccelerationStructureType
+	{
+		TopLevel,
+		BottomLevel
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafAccelerationStructureBuildFlag
+	{
+		AllowUpdate = (1 << 0),
+		AllowCompaction = (1 << 1),
+		PreferFastTrace = (1 << 2),
+		PreferFastBuild = (1 << 3)
+	};
+	typedef ur_uint GrafAccelerationStructureBuildFlags;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafAccelerationStructureGeometryType
+	{
+		Triangles,
+		AABBs,
+		Instances
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafAccelerationStructureGeometryDesc
+	{
+		GrafAccelerationStructureGeometryType GeometryType;
+		GrafFormat VertexFormat;
+		GrafIndexType IndexType;
+		ur_uint32 PrimitiveCountMax;
+		ur_uint32 VertexCountMax;
+		ur_bool TransformsEnabled;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	typedef std::function<Result(ur_byte *mappedDataPtr)> GrafWriteCallback;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -537,6 +576,8 @@ namespace UnlimRealms
 		virtual Result CreateDescriptorTable(std::unique_ptr<GrafDescriptorTable>& grafDescriptorTable);
 
 		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
+
+		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
 
 		virtual ur_uint GetRecommendedDeviceId();
 
@@ -772,9 +813,12 @@ namespace UnlimRealms
 
 		inline const GrafBufferDesc& GetDesc() const;
 
+		inline ur_uint64 GetDeviceAddress() const;
+
 	protected:
 
 		GrafBufferDesc bufferDesc;
+		ur_uint64 bufferDeviceAddress;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -973,6 +1017,26 @@ namespace UnlimRealms
 		GrafPipeline(GrafSystem &grafSystem);
 
 		~GrafPipeline();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafAccelerationStructure : public GrafDeviceEntity
+	{
+	public:
+
+		struct UR_DECL InitParams
+		{
+			GrafAccelerationStructureType StructureType;
+			GrafAccelerationStructureBuildFlags BuildFlags;
+			GrafAccelerationStructureGeometryDesc* Geometry;
+			ur_uint GeometryCount;
+		};
+
+		GrafAccelerationStructure(GrafSystem &grafSystem);
+
+		~GrafAccelerationStructure();
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 	};

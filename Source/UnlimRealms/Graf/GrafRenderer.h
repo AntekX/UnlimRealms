@@ -62,7 +62,7 @@ namespace UnlimRealms
 
 		virtual Result AddCommandListCallback(GrafCommandList *executionCmdList, GrafCallbackContext ctx, GrafCommandListCallback callback);
 
-		virtual Result SafeDelete(GrafEntity* grafEnity, GrafCommandList *grafSyncCmdList = ur_null, ur_bool deleteCmdList = true);
+		virtual Result SafeDelete(GrafEntity* grafEnity, GrafCommandList *grafSyncCmdList = ur_null, ur_bool deleteCmdList = false);
 
 		virtual Result Upload(ur_byte *dataPtr, GrafBuffer* dstBuffer, ur_size dataSize, ur_size dstOffset = 0);
 

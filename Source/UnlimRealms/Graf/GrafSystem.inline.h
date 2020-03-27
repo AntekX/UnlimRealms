@@ -65,6 +65,11 @@ namespace UnlimRealms
 		return this->bufferDesc;
 	}
 
+	inline ur_uint64 GrafBuffer::GetDeviceAddress() const
+	{
+		return this->bufferDeviceAddress;
+	}
+
 	inline const GrafSamplerDesc& GrafSampler::GetDesc() const
 	{
 		return this->samplerDesc;

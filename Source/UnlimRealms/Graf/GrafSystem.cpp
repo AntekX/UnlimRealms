@@ -140,6 +140,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafSystem::CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct)
+	{
+		return Result(NotImplemented);
+	}
+
 	ur_uint GrafSystem::GetRecommendedDeviceId()
 	{
 		ur_uint recommendedDeviceId = ur_uint(-1);
@@ -446,6 +451,7 @@ namespace UnlimRealms
 	{
 		GrafDeviceEntity::Initialize(grafDevice);
 		this->bufferDesc = initParams.BufferDesc;
+		this->bufferDeviceAddress = ur_uint64(-1);
 		return Result(NotImplemented);
 	}
 
@@ -630,6 +636,21 @@ namespace UnlimRealms
 		GrafDeviceEntity::Initialize(grafDevice);
 		this->renderPassImageDescs.resize(initParams.PassDesc.ImageCount);
 		memcpy(this->renderPassImageDescs.data(), initParams.PassDesc.Images, sizeof(GrafRenderPassImageDesc) * initParams.PassDesc.ImageCount);
+		return Result(NotImplemented);
+	}
+
+	GrafAccelerationStructure::GrafAccelerationStructure(GrafSystem &grafSystem) :
+		GrafDeviceEntity(grafSystem)
+	{
+	}
+
+	GrafAccelerationStructure::~GrafAccelerationStructure()
+	{
+	}
+
+	Result GrafAccelerationStructure::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	{
+		GrafDeviceEntity::Initialize(grafDevice);
 		return Result(NotImplemented);
 	}
 

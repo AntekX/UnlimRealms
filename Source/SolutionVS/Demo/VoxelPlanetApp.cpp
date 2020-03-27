@@ -279,6 +279,53 @@ int VoxelPlanetApp::Run()
 	camera.SetPosition(ur_float3(0.0f, 0.0f, -surfaceRadiusMax * 3.0f));
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
 
+	// TEMP: ray tracing test
+	class RayTracingTest : public RealmEntity
+	{
+	public:
+		
+		std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
+
+		RayTracingTest(Realm& realm) : RealmEntity(realm) {}
+		~RayTracingTest()
+		{
+			GrafRenderer* grafRenderer = this->GetRealm().GetComponent<GrafRenderer>();
+			if (grafRenderer != ur_null)
+			{
+				GrafCommandList* syncCmdList = grafRenderer->GetTransientCommandList();
+				grafRenderer->SafeDelete(accelerationStructureBL.release(), syncCmdList);
+			}
+		}
+	};
+	std::unique_ptr<RayTracingTest> rayTracingTest;
+	if (grafRenderer != ur_null)
+	{
+		GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
+		GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
+		const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
+		if (grafDeviceDesc != ur_null && grafDeviceDesc->RayTracing.RayTraceSupported)
+		{
+			rayTracingTest.reset(new RayTracingTest(realm));
+
+			GrafAccelerationStructureGeometryDesc accelStructGeomDesc = {};
+			accelStructGeomDesc.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
+			accelStructGeomDesc.VertexFormat = GrafFormat::R32G32B32A32_SFLOAT;
+			accelStructGeomDesc.IndexType = GrafIndexType::UINT16;
+			accelStructGeomDesc.PrimitiveCountMax = 12; // 1 cube
+			accelStructGeomDesc.VertexCountMax = 4;
+			accelStructGeomDesc.TransformsEnabled = false;
+
+			GrafAccelerationStructure::InitParams accelStructParams = {};
+			accelStructParams.StructureType = GrafAccelerationStructureType::BottomLevel;
+			accelStructParams.BuildFlags = GrafAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlag::PreferFastTrace);
+			accelStructParams.Geometry = &accelStructGeomDesc;
+			accelStructParams.GeometryCount = 1;
+			
+			grafSystem->CreateAccelerationStructure(rayTracingTest->accelerationStructureBL);
+			rayTracingTest->accelerationStructureBL->Initialize(grafDevice, accelStructParams);
+		};
+	}
+
 	// Main message loop:
 	ClockTime timer = Clock::now();
 	MSG msg;
@@ -482,6 +529,7 @@ int VoxelPlanetApp::Run()
 	}
 
 	// destroy application objects
+	rayTracingTest.reset();
 	isosurface.reset();
 	atmosphere.reset();
 	hdrRender.reset();

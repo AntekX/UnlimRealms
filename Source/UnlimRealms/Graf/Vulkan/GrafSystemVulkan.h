@@ -11,16 +11,16 @@
 
 #pragma once
 
-#define VK_ENABLE_BETA_EXTENSIONS // TEMP: required for ray tracing prototyep
+//#define VK_ENABLE_BETA_EXTENSIONS // TEMP: required for ray tracing prototyep
+#if defined(_WINDOWS)
+#define VK_USE_PLATFORM_WIN32_KHR
+#endif
 
 #include "Graf/GrafSystem.h"
 #if defined(VK_ENABLE_BETA_EXTENSIONS)
 #include "../Tools/vulkan_beta/include/vulkan/vulkan.h"
 #else
 #include "vulkan/vulkan.h"
-#endif
-#if defined(_WINDOWS)
-#include "vulkan/vulkan_win32.h"
 #endif
 #include "3rdParty/VulkanMemoryAllocator/vk_mem_alloc.h"
 
@@ -63,6 +63,8 @@ namespace UnlimRealms
 		virtual Result CreateDescriptorTable(std::unique_ptr<GrafDescriptorTable>& grafDescriptorTable);
 
 		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
+
+		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
 
 		inline VkInstance GetVkInstance() const;
 
@@ -500,6 +502,29 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafAccelerationStructureVulkan : public GrafAccelerationStructure
+	{
+	public:
+
+		GrafAccelerationStructureVulkan(GrafSystem &grafSystem);
+
+		~GrafAccelerationStructureVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+	protected:
+
+		Result Deinitialize();
+
+	#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		VkAccelerationStructureKHR vkAccelerationStructure;
+	#endif
+		VmaAllocation vmaAllocation;
+		VmaAllocationInfo vmaAllocationInfo;
+		std::unique_ptr<GrafBuffer> grafScratchBuffer;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafUtilsVulkan
 	{
 	public:
@@ -529,6 +554,11 @@ namespace UnlimRealms
 		static inline VkAttachmentStoreOp GrafToVkStoreOp(GrafRenderPassDataOp dataOp);
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
+		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		static inline VkGeometryTypeKHR GrafToVkAccelerationStructureGeometryType(GrafAccelerationStructureGeometryType geometryType);
+		static inline VkAccelerationStructureTypeKHR GrafToVkAccelerationStructureType(GrafAccelerationStructureType structureType);
+		static inline VkBuildAccelerationStructureFlagsKHR GrafToVkAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlags buildFlags);
+		#endif
 	};
 
 } // end namespace UnlimRealms
