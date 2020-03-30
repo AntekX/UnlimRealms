@@ -199,6 +199,8 @@ namespace UnlimRealms
 
 		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
 
+		virtual Result BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount);
+
 		inline VkCommandBuffer GetVkCommandBuffer() const;
 
 		inline VkFence GetVkSubmitFence() const;
@@ -512,6 +514,12 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
+	#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		inline VkAccelerationStructureKHR GetVkAccelerationStructure() const;
+	#endif
+
+		inline GrafBuffer* GetScratchBuffer() const;
+
 	protected:
 
 		Result Deinitialize();
@@ -556,6 +564,7 @@ namespace UnlimRealms
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
 		#if defined(VK_ENABLE_BETA_EXTENSIONS)
 		static inline VkGeometryTypeKHR GrafToVkAccelerationStructureGeometryType(GrafAccelerationStructureGeometryType geometryType);
+		static inline VkGeometryFlagsKHR GrafToVkAccelerationStructureGeometryFlags(GrafAccelerationStructureGeometryFlags geometryFlags);
 		static inline VkAccelerationStructureTypeKHR GrafToVkAccelerationStructureType(GrafAccelerationStructureType structureType);
 		static inline VkBuildAccelerationStructureFlagsKHR GrafToVkAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlags buildFlags);
 		#endif

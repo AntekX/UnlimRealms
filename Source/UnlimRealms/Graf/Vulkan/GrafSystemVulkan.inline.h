@@ -125,4 +125,16 @@ namespace UnlimRealms
 		return this->vkPipelineLayout;
 	}
 
+	#if defined(VK_ENABLE_BETA_EXTENSIONS)
+	inline VkAccelerationStructureKHR GrafAccelerationStructureVulkan::GetVkAccelerationStructure() const
+	{
+		return this->vkAccelerationStructure;
+	}
+	#endif
+
+	inline GrafBuffer* GrafAccelerationStructureVulkan::GetScratchBuffer() const
+	{
+		return this->grafScratchBuffer.get();
+	}
+
 } // end namespace UnlimRealmscs

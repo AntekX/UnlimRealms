@@ -339,6 +339,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandList::BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount)
+	{
+		return Result(NotImplemented);
+	}
+
 	GrafFence::GrafFence(GrafSystem &grafSystem) :
 		GrafDeviceEntity(grafSystem)
 	{
@@ -642,6 +647,8 @@ namespace UnlimRealms
 	GrafAccelerationStructure::GrafAccelerationStructure(GrafSystem &grafSystem) :
 		GrafDeviceEntity(grafSystem)
 	{
+		this->structureType = GrafAccelerationStructureType::Undefined;
+		this->structureBuildFlags = GrafAccelerationStructureBuildFlags(0);
 	}
 
 	GrafAccelerationStructure::~GrafAccelerationStructure()
@@ -651,6 +658,8 @@ namespace UnlimRealms
 	Result GrafAccelerationStructure::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
 		GrafDeviceEntity::Initialize(grafDevice);
+		this->structureType = initParams.StructureType;
+		this->structureBuildFlags = initParams.BuildFlags;
 		return Result(NotImplemented);
 	}
 

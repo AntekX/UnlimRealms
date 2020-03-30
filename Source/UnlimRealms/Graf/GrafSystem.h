@@ -504,6 +504,7 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class UR_DECL GrafAccelerationStructureType
 	{
+		Undefined = -1,
 		TopLevel,
 		BottomLevel
 	};
@@ -521,10 +522,19 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class UR_DECL GrafAccelerationStructureGeometryType
 	{
+		Undefined = -1,
 		Triangles,
 		AABBs,
 		Instances
 	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafAccelerationStructureGeometryFlag
+	{
+		Opaque = (1 << 0),
+		NoDuplicateAnyHit = (1 << 1)
+	};
+	typedef ur_uint GrafAccelerationStructureGeometryFlags;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GrafAccelerationStructureGeometryDesc
@@ -535,6 +545,50 @@ namespace UnlimRealms
 		ur_uint32 PrimitiveCountMax;
 		ur_uint32 VertexCountMax;
 		ur_bool TransformsEnabled;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafAccelerationStructureTrianglesData
+	{
+		GrafFormat VertexFormat;
+		ur_size VertexStride;
+		ur_uint64 VerticesDeviceAddress;
+		void* VerticesHostAddress;
+		GrafIndexType IndexType;
+		ur_uint64 IndicesDeviceAddress;
+		void* IndicesHostAddress;
+		ur_uint64 TransformsDeviceAddress;
+		void* TransformsHostAddress;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafAccelerationStructureInstancesData
+	{
+		ur_bool IsPointersArray;
+		ur_uint64 DeviceAddress;
+		void* HostAddress;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafAccelerationStructureAabbsData
+	{
+		ur_size Stride;
+		ur_uint64 DeviceAddress;
+		void* HostAddress;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafAccelerationStructureGeometryData
+	{
+		GrafAccelerationStructureGeometryType GeometryType;
+		GrafAccelerationStructureGeometryFlags GeometryFlags;
+		GrafAccelerationStructureTrianglesData* TrianglesData;
+		GrafAccelerationStructureAabbsData* AabbsData;
+		GrafAccelerationStructureInstancesData* InstancesData;
+		ur_uint32 PrimitiveCount;
+		ur_uint32 PrimitivesOffset;
+		ur_uint32 FirstVertexIndex;
+		ur_uint32 TransformsOffset;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -702,6 +756,8 @@ namespace UnlimRealms
 		virtual Result Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
 
 		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
+
+		virtual Result BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1039,7 +1095,38 @@ namespace UnlimRealms
 		~GrafAccelerationStructure();
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+
+		inline GrafAccelerationStructureType GetStructureType() const;
+
+		inline GrafAccelerationStructureBuildFlags GetStructureBuildFlags() const;
+
+	protected:
+
+		GrafAccelerationStructureType structureType;
+		GrafAccelerationStructureBuildFlags structureBuildFlags;
 	};
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//class UR_DECL GrafAccelerationStructureGeometry : public GrafDeviceEntity
+	//{
+	//public:
+
+	//	struct UR_DECL InitParams
+	//	{
+	//		GrafAccelerationStructureGeometryType GeometryType;
+	//		GrafAccelerationStructureGeometryFlags GeometryFlags;
+	//		GrafAccelerationStructureTrianglesData* TrianglesData;
+	//		GrafAccelerationStructureAabbsData* AabbsData;
+	//		GrafAccelerationStructureInstancesData* InstancesData;
+	//	};
+
+	//	GrafAccelerationStructureGeometry(GrafSystem &grafSystem);
+
+	//	~GrafAccelerationStructureGeometry();
+
+	//	virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+	//};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafUtils

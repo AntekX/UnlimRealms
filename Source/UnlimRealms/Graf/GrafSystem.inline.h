@@ -120,6 +120,16 @@ namespace UnlimRealms
 		return this->layout;
 	}
 
+	inline GrafAccelerationStructureType GrafAccelerationStructure::GetStructureType() const
+	{
+		return this->structureType;
+	}
+
+	inline GrafAccelerationStructureBuildFlags GrafAccelerationStructure::GetStructureBuildFlags() const
+	{
+		return this->structureBuildFlags;
+	}
+
 	ur_bool GrafUtils::IsDepthStencilFormat(GrafFormat grafFormat)
 	{
 		return (ur_uint(grafFormat) >= ur_uint(GrafFormat::D16_UNORM) && ur_uint(grafFormat) <= ur_uint(GrafFormat::D32_SFLOAT_S8_UINT));

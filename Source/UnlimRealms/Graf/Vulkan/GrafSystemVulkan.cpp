@@ -572,6 +572,18 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafDeviceVulkan: can not find VkPhysicalDevice for deviceId = ") + std::to_string(this->GetDeviceId()));
 		}
 
+		// enumerate extentions
+
+		ur_uint32 vkExtensionCount = 0;
+		vkEnumerateDeviceExtensionProperties(vkPhysicalDevice, ur_null, &vkExtensionCount, ur_null);
+		std::vector<VkExtensionProperties> vkExtensionProperties(vkExtensionCount);
+		vkEnumerateDeviceExtensionProperties(vkPhysicalDevice, ur_null, &vkExtensionCount, vkExtensionProperties.data());
+		LogNoteGrafDbg("GrafDeviceVulkan: extensions available:");
+		for (auto& extensionProperty : vkExtensionProperties)
+		{
+			LogNoteGrafDbg(extensionProperty.extensionName);
+		}
+
 		// enumerate device queue families
 
 		ur_uint32 vkQueueFamilyCount = 0;
@@ -1358,6 +1370,90 @@ namespace UnlimRealms
 			1, &vkImageCopy);
 
 		return Result(Success);
+	}
+
+	Result GrafCommandListVulkan::BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount)
+	{
+	#if (UR_GRAF_VULKAN_RAY_TRACING)
+		GrafAccelerationStructureVulkan* dstStructureVulkan = static_cast<GrafAccelerationStructureVulkan*>(dstStructrure);
+		if (ur_null == dstStructureVulkan || ur_null == dstStructureVulkan->GetScratchBuffer() || ur_null == geometryData || 0 == geometryCount)
+			return Result(InvalidArgs);
+
+		// fill geometry data structures
+
+		std::vector<VkAccelerationStructureGeometryKHR> vkGeometryArray(geometryCount);
+		VkAccelerationStructureGeometryKHR* vkGeometryArrayPtr = vkGeometryArray.data();
+		std::vector<VkAccelerationStructureBuildOffsetInfoKHR> vkBuildOffsetInfoArray(geometryCount);
+		VkAccelerationStructureBuildOffsetInfoKHR* vkBuildOffsetInfoArrayPtr = vkBuildOffsetInfoArray.data();
+		for (ur_uint igeom = 0; igeom < geometryCount; ++igeom)
+		{
+			GrafAccelerationStructureGeometryData* geometry = geometryData;
+			VkAccelerationStructureGeometryKHR& vkGeometry = vkGeometryArray[igeom];
+			vkGeometry = {};
+			vkGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+			vkGeometry.pNext = ur_null;
+			vkGeometry.geometryType = GrafUtilsVulkan::GrafToVkAccelerationStructureGeometryType(geometry->GeometryType);
+			vkGeometry.flags = GrafUtilsVulkan::GrafToVkAccelerationStructureGeometryFlags(geometry->GeometryFlags);
+			if (GrafAccelerationStructureGeometryType::Triangles == geometry->GeometryType && geometry->TrianglesData != ur_null)
+			{
+				vkGeometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+				vkGeometry.geometry.triangles.pNext = ur_null;
+				vkGeometry.geometry.triangles.vertexFormat = GrafUtilsVulkan::GrafToVkFormat(geometry->TrianglesData->VertexFormat);
+				vkGeometry.geometry.triangles.vertexData.deviceAddress = (VkDeviceAddress)geometry->TrianglesData->VerticesDeviceAddress;
+				vkGeometry.geometry.triangles.vertexData.hostAddress = geometry->TrianglesData->VerticesHostAddress;
+				vkGeometry.geometry.triangles.vertexStride = (VkDeviceSize)geometry->TrianglesData->VertexStride;
+				vkGeometry.geometry.triangles.indexType = GrafUtilsVulkan::GrafToVkIndexType(geometry->TrianglesData->IndexType);
+				vkGeometry.geometry.triangles.indexData.deviceAddress = (VkDeviceAddress)geometry->TrianglesData->IndicesDeviceAddress;;
+				vkGeometry.geometry.triangles.indexData.hostAddress = geometry->TrianglesData->IndicesHostAddress;
+				vkGeometry.geometry.triangles.transformData.deviceAddress = (VkDeviceAddress)geometry->TrianglesData->TransformsDeviceAddress;;
+				vkGeometry.geometry.triangles.transformData.hostAddress = geometry->TrianglesData->TransformsHostAddress;
+			}
+			if (GrafAccelerationStructureGeometryType::AABBs == geometry->GeometryType && geometry->AabbsData != ur_null)
+			{
+				vkGeometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
+				vkGeometry.geometry.aabbs.pNext = ur_null;
+				vkGeometry.geometry.aabbs.stride = (VkDeviceSize)geometry->AabbsData->Stride;
+				vkGeometry.geometry.aabbs.data.deviceAddress = (VkDeviceAddress)geometry->AabbsData->DeviceAddress;
+				vkGeometry.geometry.aabbs.data.hostAddress = geometry->AabbsData->HostAddress;
+			}
+			if (GrafAccelerationStructureGeometryType::Instances == geometry->GeometryType && geometry->InstancesData != ur_null)
+			{
+				vkGeometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+				vkGeometry.geometry.instances.pNext = ur_null;
+				vkGeometry.geometry.instances.arrayOfPointers = false;
+				vkGeometry.geometry.instances.data.deviceAddress = (VkDeviceAddress)geometry->InstancesData->DeviceAddress;
+				vkGeometry.geometry.instances.data.hostAddress = geometry->InstancesData->HostAddress;
+			}
+			VkAccelerationStructureBuildOffsetInfoKHR& vkBuildOffsetInfo = vkBuildOffsetInfoArray[igeom];
+			vkBuildOffsetInfo = {};
+			vkBuildOffsetInfo.primitiveCount = (ur_uint32)geometry->PrimitiveCount;
+			vkBuildOffsetInfo.primitiveOffset = (ur_uint32)geometry->PrimitivesOffset;
+			vkBuildOffsetInfo.firstVertex = (ur_uint32)geometry->FirstVertexIndex;
+			vkBuildOffsetInfo.transformOffset = (ur_uint32)geometry->TransformsOffset;
+		}
+
+		// fill build info
+		
+		VkAccelerationStructureBuildGeometryInfoKHR vkBuildInfo = {};
+		vkBuildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+		vkBuildInfo.pNext = ur_null;
+		vkBuildInfo.type = GrafUtilsVulkan::GrafToVkAccelerationStructureType(dstStructrure->GetStructureType());
+		vkBuildInfo.flags = GrafUtilsVulkan::GrafToVkAccelerationStructureBuildFlags(dstStructrure->GetStructureBuildFlags());
+		vkBuildInfo.update = false;
+		vkBuildInfo.srcAccelerationStructure = ur_null;
+		vkBuildInfo.dstAccelerationStructure = dstStructureVulkan->GetVkAccelerationStructure();
+		vkBuildInfo.geometryArrayOfPointers = false;
+		vkBuildInfo.geometryCount = (ur_uint32)geometryCount;
+		vkBuildInfo.ppGeometries = &vkGeometryArrayPtr;
+		vkBuildInfo.scratchData.deviceAddress = dstStructureVulkan->GetScratchBuffer()->GetDeviceAddress();
+		vkBuildInfo.scratchData.hostAddress = ur_null;
+
+		vkCmdBuildAccelerationStructureKHR(this->vkCommandBuffer, 1, &vkBuildInfo, &vkBuildOffsetInfoArrayPtr);
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3523,7 +3619,6 @@ namespace UnlimRealms
 
 	Result GrafAccelerationStructureVulkan::Deinitialize()
 	{
-		
 	#if (UR_GRAF_VULKAN_RAY_TRACING)
 		if (this->vkAccelerationStructure != VK_NULL_HANDLE)
 		{
@@ -3538,6 +3633,8 @@ namespace UnlimRealms
 			this->vmaAllocationInfo = {};
 		}
 		this->grafScratchBuffer.reset();
+		this->structureType = GrafAccelerationStructureType::Undefined;
+		this->structureBuildFlags = GrafAccelerationStructureBuildFlags(0);
 
 		return Result(Success);
 	}
@@ -3642,15 +3739,6 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafAccelerationStructureVulkan: vmaAllocateMemory failed with VkResult = ") + VkResultToString(vkRes));
 		}
 
-		// TEMP: debug
-		/*VkMemoryAllocateInfo memAllocInfo = {};
-		memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		memAllocInfo.pNext = nullptr;
-		memAllocInfo.allocationSize = vkMemoryRequirements.size;
-		memAllocInfo.memoryTypeIndex = memoryTypeIndex;
-		VkDeviceMemory vkDeviceMemory = VK_NULL_HANDLE;
-		vkRes = vkAllocateMemory(vkDevice, &memAllocInfo, nullptr, &vkDeviceMemory);*/
-
 		VkBindAccelerationStructureMemoryInfoKHR vkBindAccelStructMemoryInfo = {};
 		vkBindAccelStructMemoryInfo.sType = VK_STRUCTURE_TYPE_BIND_ACCELERATION_STRUCTURE_MEMORY_INFO_KHR;
 		vkBindAccelStructMemoryInfo.pNext = ur_null;
@@ -3670,9 +3758,6 @@ namespace UnlimRealms
 		// create scratch buffer
 
 		vkAccelStructMemoryRequirementsInfo.type = VK_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_TYPE_BUILD_SCRATCH_KHR;
-		vkAccelStructMemoryRequirementsInfo.buildType = VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR;
-		vkAccelStructMemoryRequirementsInfo.accelerationStructure = this->vkAccelerationStructure;
-
 		vkGetAccelerationStructureMemoryRequirementsKHR(vkDevice, &vkAccelStructMemoryRequirementsInfo, &vkMemoryRequirements2);
 
 		Result res = grafSystemVulkan.CreateBuffer(this->grafScratchBuffer);
@@ -4029,6 +4114,16 @@ namespace UnlimRealms
 		case GrafAccelerationStructureGeometryType::Instances: vkGeometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR; break;
 		};
 		return vkGeometryType;
+	}
+
+	VkGeometryFlagsKHR GrafUtilsVulkan::GrafToVkAccelerationStructureGeometryFlags(GrafAccelerationStructureGeometryFlags geometryFlags)
+	{
+		VkGeometryFlagsKHR vkGeometryFlags = VkGeometryFlagsKHR(0);
+		if (ur_uint(GrafAccelerationStructureGeometryFlag::Opaque) & geometryFlags)
+			vkGeometryFlags |= VK_GEOMETRY_OPAQUE_BIT_KHR;
+		if (ur_uint(GrafAccelerationStructureGeometryFlag::NoDuplicateAnyHit) & geometryFlags)
+			vkGeometryFlags |= VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
+		return vkGeometryFlags;
 	}
 
 	VkAccelerationStructureTypeKHR GrafUtilsVulkan::GrafToVkAccelerationStructureType(GrafAccelerationStructureType structureType)
