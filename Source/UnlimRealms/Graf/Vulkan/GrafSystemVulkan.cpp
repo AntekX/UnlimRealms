@@ -58,18 +58,26 @@ namespace UnlimRealms
 	#endif
 
 	// descritor pool per type size
-	static const ur_size VulkanDescriptorPoolSize[VK_DESCRIPTOR_TYPE_RANGE_SIZE] = {
-		1 * 1024,		// VK_DESCRIPTOR_TYPE_SAMPLER
-		0,				// VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER 
-		2 * 1024,		// VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
-		0,				// VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-		0,				// VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
-		0,				// VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER
-		4 * 1024,		// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-		0,				// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
-		0,				// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
-		0,				// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
-		0,				// VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
+	struct VulkanDescriptorTypeSize
+	{
+		VkDescriptorType Type;
+		ur_size Size;
+	};
+	static const VulkanDescriptorTypeSize VulkanDescriptorPoolSize[] = {
+		{ VK_DESCRIPTOR_TYPE_SAMPLER,						1 * 1024 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		0 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,					2 * 1024 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,					0 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,			0 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,			0 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				4 * 1024 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				0 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,		0 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC,		0 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,				0 },
+		#if (UR_GRAF_VULKAN_RAY_TRACING)
+		{ VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	1 * 1024 },
+		#endif
 	};
 	static const ur_size VulkanDescriptorPoolMaxSetCount = 2 * 1024;
 
@@ -689,9 +697,9 @@ namespace UnlimRealms
 		vkDescriptorPoolSizes.reserve(descriptorPoolSizeCount);
 		for (ur_size i = 0; i < descriptorPoolSizeCount; ++i)
 		{
-			if (VulkanDescriptorPoolSize[i] > 0)
+			if (VulkanDescriptorPoolSize[i].Size > 0)
 			{
-				vkDescriptorPoolSizes.push_back({ VkDescriptorType(i), ur_uint32(VulkanDescriptorPoolSize[i]) });
+				vkDescriptorPoolSizes.push_back({ VulkanDescriptorPoolSize[i].Type, ur_uint32(VulkanDescriptorPoolSize[i].Size) });
 			}
 		}
 
@@ -1399,30 +1407,40 @@ namespace UnlimRealms
 				vkGeometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
 				vkGeometry.geometry.triangles.pNext = ur_null;
 				vkGeometry.geometry.triangles.vertexFormat = GrafUtilsVulkan::GrafToVkFormat(geometry->TrianglesData->VertexFormat);
-				vkGeometry.geometry.triangles.vertexData.deviceAddress = (VkDeviceAddress)geometry->TrianglesData->VerticesDeviceAddress;
-				vkGeometry.geometry.triangles.vertexData.hostAddress = geometry->TrianglesData->VerticesHostAddress;
+				if (geometry->TrianglesData->VerticesDeviceAddress != 0)
+					vkGeometry.geometry.triangles.vertexData.deviceAddress = (VkDeviceAddress)geometry->TrianglesData->VerticesDeviceAddress;
+				else
+					vkGeometry.geometry.triangles.vertexData.hostAddress = geometry->TrianglesData->VerticesHostAddress;
 				vkGeometry.geometry.triangles.vertexStride = (VkDeviceSize)geometry->TrianglesData->VertexStride;
 				vkGeometry.geometry.triangles.indexType = GrafUtilsVulkan::GrafToVkIndexType(geometry->TrianglesData->IndexType);
-				vkGeometry.geometry.triangles.indexData.deviceAddress = (VkDeviceAddress)geometry->TrianglesData->IndicesDeviceAddress;;
-				vkGeometry.geometry.triangles.indexData.hostAddress = geometry->TrianglesData->IndicesHostAddress;
-				vkGeometry.geometry.triangles.transformData.deviceAddress = (VkDeviceAddress)geometry->TrianglesData->TransformsDeviceAddress;;
-				vkGeometry.geometry.triangles.transformData.hostAddress = geometry->TrianglesData->TransformsHostAddress;
+				if (geometry->TrianglesData->IndicesDeviceAddress != 0)
+					vkGeometry.geometry.triangles.indexData.deviceAddress = (VkDeviceAddress)geometry->TrianglesData->IndicesDeviceAddress;
+				else
+					vkGeometry.geometry.triangles.indexData.hostAddress = geometry->TrianglesData->IndicesHostAddress;
+				if (geometry->TrianglesData->TransformsDeviceAddress != 0)
+					vkGeometry.geometry.triangles.transformData.deviceAddress = (VkDeviceAddress)geometry->TrianglesData->TransformsDeviceAddress;
+				else
+					vkGeometry.geometry.triangles.transformData.hostAddress = geometry->TrianglesData->TransformsHostAddress;
 			}
 			if (GrafAccelerationStructureGeometryType::AABBs == geometry->GeometryType && geometry->AabbsData != ur_null)
 			{
 				vkGeometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
 				vkGeometry.geometry.aabbs.pNext = ur_null;
 				vkGeometry.geometry.aabbs.stride = (VkDeviceSize)geometry->AabbsData->Stride;
-				vkGeometry.geometry.aabbs.data.deviceAddress = (VkDeviceAddress)geometry->AabbsData->DeviceAddress;
-				vkGeometry.geometry.aabbs.data.hostAddress = geometry->AabbsData->HostAddress;
+				if (geometry->AabbsData->DeviceAddress)
+					vkGeometry.geometry.aabbs.data.deviceAddress = (VkDeviceAddress)geometry->AabbsData->DeviceAddress;
+				else
+					vkGeometry.geometry.aabbs.data.hostAddress = geometry->AabbsData->HostAddress;
 			}
 			if (GrafAccelerationStructureGeometryType::Instances == geometry->GeometryType && geometry->InstancesData != ur_null)
 			{
 				vkGeometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
 				vkGeometry.geometry.instances.pNext = ur_null;
 				vkGeometry.geometry.instances.arrayOfPointers = false;
-				vkGeometry.geometry.instances.data.deviceAddress = (VkDeviceAddress)geometry->InstancesData->DeviceAddress;
-				vkGeometry.geometry.instances.data.hostAddress = geometry->InstancesData->HostAddress;
+				if (geometry->InstancesData->DeviceAddress != 0)
+					vkGeometry.geometry.instances.data.deviceAddress = (VkDeviceAddress)geometry->InstancesData->DeviceAddress;
+				else
+					vkGeometry.geometry.instances.data.hostAddress = geometry->InstancesData->HostAddress;
 			}
 			VkAccelerationStructureBuildOffsetInfoKHR& vkBuildOffsetInfo = vkBuildOffsetInfoArray[igeom];
 			vkBuildOffsetInfo = {};
@@ -1446,7 +1464,6 @@ namespace UnlimRealms
 		vkBuildInfo.geometryCount = (ur_uint32)geometryCount;
 		vkBuildInfo.ppGeometries = &vkGeometryArrayPtr;
 		vkBuildInfo.scratchData.deviceAddress = dstStructureVulkan->GetScratchBuffer()->GetDeviceAddress();
-		vkBuildInfo.scratchData.hostAddress = ur_null;
 
 		vkCmdBuildAccelerationStructureKHR(this->vkCommandBuffer, 1, &vkBuildInfo, &vkBuildOffsetInfoArrayPtr);
 
@@ -3926,8 +3943,13 @@ namespace UnlimRealms
 		switch (descriptorType)
 		{
 		case GrafDescriptorType::ConstantBuffer: vkDescriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; break;
-		case GrafDescriptorType::Texture: vkDescriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE; break;
 		case GrafDescriptorType::Sampler: vkDescriptorType = VK_DESCRIPTOR_TYPE_SAMPLER; break;
+		case GrafDescriptorType::Texture: vkDescriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE; break;
+		case GrafDescriptorType::RWBuffer: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
+		case GrafDescriptorType::RWTexture: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; break;
+		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		case GrafDescriptorType::AccelerationStructure: vkDescriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR; break;
+		#endif
 		};
 		return vkDescriptorType;
 	}

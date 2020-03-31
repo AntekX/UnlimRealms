@@ -14,6 +14,11 @@ dxc -spirv -T vs_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT%
 dxc -spirv -T ps_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_ps.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_ps.spv
 echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
 
+set "SHADER_PATH_SRC=..\Source\SolutionVS\Demo"
+set "SHADER_NAME=sample_raytracing"
+dxc -spirv -T lib_6_3 %SHADER_REGISTER_BINDING% %SHADER_PATH_SRC%\%SHADER_NAME%_lib.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_lib.spv
+echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
+
 set "SHADER_PATH_SRC=..\Source\UnlimRealms\ImguiRender"
 set "SHADER_NAME=Imgui"
 dxc -spirv -T vs_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_vs.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_vs.spv -fvk-invert-y

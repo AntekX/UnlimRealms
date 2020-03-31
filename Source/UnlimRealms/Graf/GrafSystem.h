@@ -393,6 +393,9 @@ namespace UnlimRealms
 		ConstantBuffer,	// register type: Buffer
 		Sampler,		// register type: Sampler
 		Texture,		// register type: Texture
+		RWBuffer,		// register type: RWResource
+		RWTexture,		// register type: RWResource
+		AccelerationStructure, // register type: Texture
 		Count
 	};
 
