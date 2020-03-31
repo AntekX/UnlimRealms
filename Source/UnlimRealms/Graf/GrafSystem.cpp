@@ -589,6 +589,21 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafDescriptorTable::SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafDescriptorTable::SetRWImage(ur_uint bindingIdx, GrafImage* image)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafDescriptorTable::SetAccelerationStructure(ur_uint bindingIdx, GrafAccelerationStructure* accelerationStructure)
+	{
+		return Result(NotImplemented);
+	}
+
 	static GrafColorBlendOpDesc GrafPipelineDefaultColorBlendOpDesc = GrafColorBlendOpDesc::Default;
 	const GrafPipeline::InitParams GrafPipeline::InitParams::Default = {
 		ur_null, // RenderPass

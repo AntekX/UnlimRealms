@@ -6,9 +6,9 @@ struct SceneConstants
 	float4 viewportSize; // w, h, 1/w, 1/h
 };
 
+ConstantBuffer<SceneConstants> g_SceneCB : register(b0);
 RaytracingAccelerationStructure g_SceneStructure : register(t0);
 RWTexture2D<float4> g_TargetTexture : register(u0);
-ConstantBuffer<SceneConstants> g_SceneCB : register(b0);
 
 typedef BuiltInTriangleIntersectionAttributes SampleHitAttributes;
 struct SampleRayData

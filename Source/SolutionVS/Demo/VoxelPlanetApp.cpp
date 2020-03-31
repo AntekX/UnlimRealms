@@ -285,7 +285,9 @@ int VoxelPlanetApp::Run()
 	public:
 		
 		std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
-		std::unique_ptr<GrafBuffer> sampleVB;
+		std::unique_ptr<GrafBuffer> vertexBuffer;
+		std::unique_ptr<GrafDescriptorTableLayout> shaderTableLayout;
+		std::unique_ptr<GrafDescriptorTable> shaderTable;
 
 		RayTracingTest(Realm& realm) : RealmEntity(realm) {}
 		~RayTracingTest()
@@ -294,7 +296,8 @@ int VoxelPlanetApp::Run()
 			if (grafRenderer != ur_null)
 			{
 				grafRenderer->SafeDelete(accelerationStructureBL.release());
-				grafRenderer->SafeDelete(sampleVB.release());
+				grafRenderer->SafeDelete(vertexBuffer.release());
+				grafRenderer->SafeDelete(shaderTable.release());
 			}
 		}
 	};
@@ -324,9 +327,9 @@ int VoxelPlanetApp::Run()
 			sampleVBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			sampleVBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			sampleVBParams.BufferDesc.SizeInBytes = sizeof(sampleVertices);
-			grafSystem->CreateBuffer(rayTracingTest->sampleVB);
-			rayTracingTest->sampleVB->Initialize(grafDevice, sampleVBParams);
-			rayTracingTest->sampleVB->Write((ur_byte*)sampleVertices);
+			grafSystem->CreateBuffer(rayTracingTest->vertexBuffer);
+			rayTracingTest->vertexBuffer->Initialize(grafDevice, sampleVBParams);
+			rayTracingTest->vertexBuffer->Write((ur_byte*)sampleVertices);
 
 			// initiaize acceleration structure container
 
@@ -352,7 +355,7 @@ int VoxelPlanetApp::Run()
 			GrafAccelerationStructureTrianglesData sampleTrianglesData = {};
 			sampleTrianglesData.VertexFormat = GrafFormat::R32G32B32A32_SFLOAT;
 			sampleTrianglesData.VertexStride = sizeof(VertexSample);
-			sampleTrianglesData.VerticesDeviceAddress = rayTracingTest->sampleVB->GetDeviceAddress();
+			sampleTrianglesData.VerticesDeviceAddress = rayTracingTest->vertexBuffer->GetDeviceAddress();
 
 			GrafAccelerationStructureGeometryData sampleGeometryData = {};
 			sampleGeometryData.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
@@ -365,7 +368,26 @@ int VoxelPlanetApp::Run()
 			buildCmdList->BuildAccelerationStructure(rayTracingTest->accelerationStructureBL.get(), &sampleGeometryData, 1);
 			buildCmdList->End();
 			grafDevice->Record(buildCmdList);
-			grafDevice->Submit();
+
+			// shader bindings
+			
+			GrafDescriptorRangeDesc shaderTableLayoutRanges[] = {
+				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+				{ GrafDescriptorType::AccelerationStructure, 0, 1 },
+				{ GrafDescriptorType::RWTexture, 0, 1 }
+			};
+			GrafDescriptorTableLayoutDesc shaderTableLayoutDesc = {
+				ur_uint(GrafShaderStageFlag::AllRayTracing),
+				shaderTableLayoutRanges, ur_array_size(shaderTableLayoutRanges)
+			};
+			grafSystem->CreateDescriptorTableLayout(rayTracingTest->shaderTableLayout);
+			rayTracingTest->shaderTableLayout->Initialize(grafDevice, { shaderTableLayoutDesc });
+			grafSystem->CreateDescriptorTable(rayTracingTest->shaderTable);
+			rayTracingTest->shaderTable->Initialize(grafDevice, { rayTracingTest->shaderTableLayout.get() });
+			// TODO:
+			//rayTracingTest->shaderTable->SetConstantBuffer(0, ur_null);
+			//rayTracingTest->shaderTable->SetRWImage(0, ur_null);
+			//rayTracingTest->shaderTable->SetAccelerationStructure(0, ur_null);
 		};
 	}
 

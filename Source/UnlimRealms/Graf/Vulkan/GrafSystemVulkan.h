@@ -470,6 +470,12 @@ namespace UnlimRealms
 
 		virtual Result SetImage(ur_uint bindingIdx, GrafImage* image);
 
+		virtual Result SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer);
+
+		virtual Result SetRWImage(ur_uint bindingIdx, GrafImage* image);
+
+		virtual Result SetAccelerationStructure(ur_uint bindingIdx, GrafAccelerationStructure* accelerationStructure);
+
 		inline VkDescriptorSet GetVkDescriptorSet() const;
 
 	private:
@@ -544,8 +550,8 @@ namespace UnlimRealms
 		static inline VkImageLayout GrafToVkImageLayout(GrafImageState imageState);
 		static inline VkBufferUsageFlags GrafToVkBufferUsage(GrafBufferUsageFlags usage);
 		static inline VkMemoryPropertyFlags GrafToVkMemoryProperties(GrafDeviceMemoryFlags memoryType);
-		static inline VkShaderStageFlagBits GrafToVkShaderStage(GrafShaderType shaderType);
 		static inline VkShaderStageFlags GrafToVkShaderStage(GrafShaderStageFlags shaderStages);
+		static inline VkShaderStageFlagBits GrafToVkShaderStage(GrafShaderType shaderType);
 		static inline VkDescriptorType GrafToVkDescriptorType(GrafDescriptorType descriptorType);
 		static inline ur_uint32 GrafToVkDescriptorBindingOffset(GrafDescriptorType descriptorType);
 		static inline VkPrimitiveTopology GrafToVkPrimitiveTopology(GrafPrimitiveTopology topology);

@@ -265,25 +265,26 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	enum class UR_DECL GrafShaderType
-	{
-		Undefined = -1,
-		Vertex,
-		Pixel,
-		Compute,
-		Count
-	};
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	enum class UR_DECL GrafShaderStageFlag
 	{
 		Undefined = -1,
 		Vertex = (0x1 << 0),
 		Pixel = (0x1 << 1),
 		Compute = (0x1 << 2),
-		All = (Vertex | Pixel | Compute)
+		RayGen = (0x1 << 3),
+		AnyHit = (0x1 << 4),
+		ClosestHit = (0x1 << 5),
+		Miss = (0x1 << 6),
+		Intersection = (0x1 << 7),
+		Callable = (0x1 << 8),
+		Task = (0x1 << 9),
+		Mesh = (0x1 << 10),
+		AllGraphics = (Vertex | Pixel),
+		AllRayTracing = (RayGen | AnyHit | ClosestHit | Miss | Intersection | Callable),
+		All = ~(0)
 	};
 	typedef ur_uint GrafShaderStageFlags;
+	typedef GrafShaderStageFlag GrafShaderType;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GrafViewportDesc
@@ -1035,6 +1036,12 @@ namespace UnlimRealms
 		virtual Result SetSampler(ur_uint bindingIdx, GrafSampler* sampler);
 
 		virtual Result SetImage(ur_uint bindingIdx, GrafImage* image);
+
+		virtual Result SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer);
+
+		virtual Result SetRWImage(ur_uint bindingIdx, GrafImage* image);
+
+		virtual Result SetAccelerationStructure(ur_uint bindingIdx, GrafAccelerationStructure* accelerationStructure);
 
 
 		inline GrafDescriptorTableLayout* GetLayout() const;
