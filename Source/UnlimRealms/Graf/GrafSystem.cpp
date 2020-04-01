@@ -27,6 +27,14 @@ namespace UnlimRealms
 		128.0f, // MipLodMax
 	};
 
+	const GrafRayTracingShaderGroupDesc GrafRayTracingShaderGroupDesc::Default = {
+		GrafRayTracingShaderGroupType::Undefined, // GrafRayTracingShaderGroupType
+		UnusedShaderIdx, // GeneralShaderIdx;
+		UnusedShaderIdx, // AnyHitShaderIdx;
+		UnusedShaderIdx, // ClosestHitShaderIdx;
+		UnusedShaderIdx, // IntersectionShaderIdx;
+	};
+
 	const GrafStencilOpDesc GrafStencilOpDesc::Default = {
 		GrafStencilOp::Keep, // FailOp
 		GrafStencilOp::Keep, // PassOp
@@ -136,6 +144,11 @@ namespace UnlimRealms
 	}
 
 	Result GrafSystem::CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafSystem::CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline)
 	{
 		return Result(NotImplemented);
 	}
@@ -340,6 +353,11 @@ namespace UnlimRealms
 	}
 
 	Result GrafCommandList::BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandList::DispatchRays(ur_uint32 width, ur_uint32 height, ur_uint32 depth)
 	{
 		return Result(NotImplemented);
 	}
@@ -642,6 +660,36 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	const GrafRayTracingPipeline::InitParams GrafRayTracingPipeline::InitParams::Default = {
+		ur_null, // GrafShader**
+		0, // ShaderStageCount;
+		ur_null, // GrafRayTracingShaderGroupDesc*
+		0, // ShaderGroupCount
+		ur_null, // GrafDescriptorTableLayout**
+		0, // DescriptorTableLayoutCount;
+		1 // MaxRecursionDepth
+	};
+
+	GrafRayTracingPipeline::GrafRayTracingPipeline(GrafSystem &grafSystem) :
+		GrafDeviceEntity(grafSystem)
+	{
+	}
+
+	GrafRayTracingPipeline::~GrafRayTracingPipeline()
+	{
+	}
+
+	Result GrafRayTracingPipeline::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	{
+		GrafDeviceEntity::Initialize(grafDevice);
+		return Result(NotImplemented);
+	}
+
+	Result GrafRayTracingPipeline::GetShaderGroupHandles(ur_uint firstGroup, ur_uint groupCount, ur_size dstBufferSize, ur_byte* dstBufferPtr)
+	{
+		return Result(NotImplemented);
+	}
+
 	GrafRenderPass::GrafRenderPass(GrafSystem& grafSystem) :
 		GrafDeviceEntity(grafSystem)
 	{
@@ -794,6 +842,11 @@ namespace UnlimRealms
 
 	Result GrafUtils::CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader)
 	{
+		return  GrafUtils::CreateShaderFromFile(grafDevice, resName, GrafShader::DefaultEntryPoint, shaderType, grafShader);
+	}
+
+	Result GrafUtils::CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, const std::string& entryPoint, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader)
+	{
 		Realm& realm = grafDevice.GetRealm();
 		GrafSystem& grafSystem = grafDevice.GetGrafSystem();
 
@@ -823,8 +876,8 @@ namespace UnlimRealms
 		{
 			return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to create shader " + resName);
 		}
-		
-		grafRes = grafShader->Initialize(&grafDevice, { shaderType, shaderBuffer.get(), shaderBufferSize, GrafShader::DefaultEntryPoint });
+
+		grafRes = grafShader->Initialize(&grafDevice, { shaderType, shaderBuffer.get(), shaderBufferSize, entryPoint.c_str() });
 		if (Failed(grafRes))
 		{
 			return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to create shader " + resName);

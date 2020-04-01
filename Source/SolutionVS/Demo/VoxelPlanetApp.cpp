@@ -284,10 +284,14 @@ int VoxelPlanetApp::Run()
 	{
 	public:
 		
-		std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
 		std::unique_ptr<GrafBuffer> vertexBuffer;
-		std::unique_ptr<GrafDescriptorTableLayout> shaderTableLayout;
-		std::unique_ptr<GrafDescriptorTable> shaderTable;
+		std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
+		std::unique_ptr<GrafDescriptorTableLayout> bindingTableLayout;
+		std::vector<std::unique_ptr<GrafDescriptorTable>> bindingTables;
+		std::unique_ptr<GrafShader> shaderRayGen;
+		std::unique_ptr<GrafShader> shaderClosestHit;
+		std::unique_ptr<GrafShader> shaderMiss;
+		std::unique_ptr<GrafRayTracingPipeline> pipelineState;
 
 		RayTracingTest(Realm& realm) : RealmEntity(realm) {}
 		~RayTracingTest()
@@ -295,9 +299,17 @@ int VoxelPlanetApp::Run()
 			GrafRenderer* grafRenderer = this->GetRealm().GetComponent<GrafRenderer>();
 			if (grafRenderer != ur_null)
 			{
-				grafRenderer->SafeDelete(accelerationStructureBL.release());
 				grafRenderer->SafeDelete(vertexBuffer.release());
-				grafRenderer->SafeDelete(shaderTable.release());
+				grafRenderer->SafeDelete(accelerationStructureBL.release());
+				grafRenderer->SafeDelete(bindingTableLayout.release());
+				for (auto& bindingTable : bindingTables)
+				{
+					grafRenderer->SafeDelete(bindingTable.release());
+				}
+				grafRenderer->SafeDelete(shaderRayGen.release());
+				grafRenderer->SafeDelete(shaderClosestHit.release());
+				grafRenderer->SafeDelete(shaderMiss.release());
+				grafRenderer->SafeDelete(pipelineState.release());
 			}
 		}
 	};
@@ -369,25 +381,73 @@ int VoxelPlanetApp::Run()
 			buildCmdList->End();
 			grafDevice->Record(buildCmdList);
 
-			// shader bindings
+			// shaders
+
+			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleRaygen", GrafShaderType::RayGen, rayTracingTest->shaderRayGen);
+			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleClosestHit", GrafShaderType::ClosestHit, rayTracingTest->shaderClosestHit);
+			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleMiss", GrafShaderType::Miss, rayTracingTest->shaderMiss);
+
+			// global shader bindings
 			
-			GrafDescriptorRangeDesc shaderTableLayoutRanges[] = {
+			GrafDescriptorRangeDesc bindingTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 				{ GrafDescriptorType::AccelerationStructure, 0, 1 },
 				{ GrafDescriptorType::RWTexture, 0, 1 }
 			};
-			GrafDescriptorTableLayoutDesc shaderTableLayoutDesc = {
+			GrafDescriptorTableLayoutDesc bindingTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::AllRayTracing),
-				shaderTableLayoutRanges, ur_array_size(shaderTableLayoutRanges)
+				bindingTableLayoutRanges, ur_array_size(bindingTableLayoutRanges)
 			};
-			grafSystem->CreateDescriptorTableLayout(rayTracingTest->shaderTableLayout);
-			rayTracingTest->shaderTableLayout->Initialize(grafDevice, { shaderTableLayoutDesc });
-			grafSystem->CreateDescriptorTable(rayTracingTest->shaderTable);
-			rayTracingTest->shaderTable->Initialize(grafDevice, { rayTracingTest->shaderTableLayout.get() });
+			grafSystem->CreateDescriptorTableLayout(rayTracingTest->bindingTableLayout);
+			rayTracingTest->bindingTableLayout->Initialize(grafDevice, { bindingTableLayoutDesc });
+			rayTracingTest->bindingTables.resize(grafRenderer->GetRecordedFrameCount());
+			for (auto& bindingTable : rayTracingTest->bindingTables)
+			{
+				grafSystem->CreateDescriptorTable(bindingTable);
+				bindingTable->Initialize(grafDevice, { rayTracingTest->bindingTableLayout.get() });
+			}
 			// TODO:
-			//rayTracingTest->shaderTable->SetConstantBuffer(0, ur_null);
-			//rayTracingTest->shaderTable->SetRWImage(0, ur_null);
-			//rayTracingTest->shaderTable->SetAccelerationStructure(0, ur_null);
+			//bindingTable->SetConstantBuffer(0, ur_null);
+			//bindingTable->SetRWImage(0, ur_null);
+			//bindingTable->SetAccelerationStructure(0, ur_null);
+
+			// pipeline
+
+			GrafShader* shaderStages[] = {
+				rayTracingTest->shaderRayGen.get(),
+				rayTracingTest->shaderClosestHit.get(),
+				rayTracingTest->shaderMiss.get()
+			};
+			
+			GrafRayTracingShaderGroupDesc shaderGroups[3];
+			shaderGroups[0] = GrafRayTracingShaderGroupDesc::Default;
+			shaderGroups[0].Type = GrafRayTracingShaderGroupType::General;
+			shaderGroups[0].GeneralShaderIdx = 0; // shaderRayGen
+			shaderGroups[1] = GrafRayTracingShaderGroupDesc::Default;
+			shaderGroups[1].Type = GrafRayTracingShaderGroupType::TrianglesHit;
+			shaderGroups[1].ClosestHitShaderIdx = 1; // shaderClosestHit
+			shaderGroups[2] = GrafRayTracingShaderGroupDesc::Default;
+			shaderGroups[2].Type = GrafRayTracingShaderGroupType::General;
+			shaderGroups[2].GeneralShaderIdx = 2; // shaderMiss
+
+			GrafDescriptorTableLayout* bindingLayouts[] = {
+				rayTracingTest->bindingTableLayout.get()
+			};
+			GrafRayTracingPipeline::InitParams pipelineParams = GrafRayTracingPipeline::InitParams::Default;
+			pipelineParams.ShaderStages = shaderStages;
+			pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+			pipelineParams.ShaderGroups = shaderGroups;
+			pipelineParams.ShaderGroupCount = ur_array_size(shaderGroups);
+			pipelineParams.DescriptorTableLayouts = bindingLayouts;
+			pipelineParams.DescriptorTableLayoutCount = ur_array_size(bindingLayouts);
+			pipelineParams.MaxRecursionDepth = 8;
+			grafSystem->CreateRayTracingPipeline(rayTracingTest->pipelineState);
+			rayTracingTest->pipelineState->Initialize(grafDevice, pipelineParams);
+
+			// shader groups buffer
+
+			// TODO:
+			//rayTracingTest->pipelineState->GetShaderGroupHandles();
 		};
 	}
 

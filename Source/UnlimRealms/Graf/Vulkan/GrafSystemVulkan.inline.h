@@ -125,6 +125,16 @@ namespace UnlimRealms
 		return this->vkPipelineLayout;
 	}
 
+	inline VkPipeline GrafRayTracingPipelineVulkan::GetVkPipeline() const
+	{
+		return this->vkPipeline;
+	}
+
+	inline VkPipelineLayout GrafRayTracingPipelineVulkan::GetVkPipelineLayout() const
+	{
+		return this->vkPipelineLayout;
+	}
+
 	#if defined(VK_ENABLE_BETA_EXTENSIONS)
 	inline VkAccelerationStructureKHR GrafAccelerationStructureVulkan::GetVkAccelerationStructure() const
 	{

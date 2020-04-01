@@ -64,6 +64,8 @@ namespace UnlimRealms
 
 		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
 
+		virtual Result CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline);
+
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
 
 		inline VkInstance GetVkInstance() const;
@@ -200,6 +202,8 @@ namespace UnlimRealms
 		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
 
 		virtual Result BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount);
+
+		virtual Result DispatchRays(ur_uint32 width, ur_uint32 height, ur_uint32 depth);
 
 		inline VkCommandBuffer GetVkCommandBuffer() const;
 
@@ -510,6 +514,31 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafRayTracingPipelineVulkan : public GrafRayTracingPipeline
+	{
+	public:
+
+		GrafRayTracingPipelineVulkan(GrafSystem &grafSystem);
+
+		~GrafRayTracingPipelineVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		virtual Result GetShaderGroupHandles(ur_uint firstGroup, ur_uint groupCount, ur_size dstBufferSize, ur_byte* dstBufferPtr);
+
+		inline VkPipeline GetVkPipeline() const;
+
+		inline VkPipelineLayout GetVkPipelineLayout() const;
+
+	protected:
+
+		Result Deinitialize();
+
+		VkPipeline vkPipeline;
+		VkPipelineLayout vkPipelineLayout;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafAccelerationStructureVulkan : public GrafAccelerationStructure
 	{
 	public:
@@ -569,6 +598,7 @@ namespace UnlimRealms
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
 		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		static inline VkRayTracingShaderGroupTypeKHR GrafToVkRayTracingShaderGroupType(GrafRayTracingShaderGroupType shaderGroupType);
 		static inline VkGeometryTypeKHR GrafToVkAccelerationStructureGeometryType(GrafAccelerationStructureGeometryType geometryType);
 		static inline VkGeometryFlagsKHR GrafToVkAccelerationStructureGeometryFlags(GrafAccelerationStructureGeometryFlags geometryFlags);
 		static inline VkAccelerationStructureTypeKHR GrafToVkAccelerationStructureType(GrafAccelerationStructureType structureType);

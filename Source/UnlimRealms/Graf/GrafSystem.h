@@ -32,6 +32,7 @@ namespace UnlimRealms
 	class GrafDescriptorTableLayout;
 	class GrafDescriptorTable;
 	class GrafPipeline;
+	class GrafRayTracingPipeline;
 	class GrafAccelerationStructure;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -285,6 +286,27 @@ namespace UnlimRealms
 	};
 	typedef ur_uint GrafShaderStageFlags;
 	typedef GrafShaderStageFlag GrafShaderType;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafRayTracingShaderGroupType
+	{
+		Undefined = -1,
+		General,		// GrafShaderStageFlag: Raygen, Miss, Callable
+		TrianglesHit,	// GrafShaderStageFlag: AnyHit, ClosestHit
+		ProceduralHit	// GrafShaderStageFlag: Intersection, AnyHit, ClosestHit
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafRayTracingShaderGroupDesc
+	{
+		GrafRayTracingShaderGroupType Type;
+		ur_uint32 GeneralShaderIdx;
+		ur_uint32 AnyHitShaderIdx;
+		ur_uint32 ClosestHitShaderIdx;
+		ur_uint32 IntersectionShaderIdx;
+		static const ur_uint32 UnusedShaderIdx = ur_uint32(-1);
+		static const GrafRayTracingShaderGroupDesc Default;
+	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GrafViewportDesc
@@ -635,6 +657,8 @@ namespace UnlimRealms
 
 		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
 
+		virtual Result CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline);
+
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
 
 		virtual ur_uint GetRecommendedDeviceId();
@@ -762,6 +786,8 @@ namespace UnlimRealms
 		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
 
 		virtual Result BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount);
+
+		virtual Result DispatchRays(ur_uint32 width, ur_uint32 height, ur_uint32 depth);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1088,6 +1114,32 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafRayTracingPipeline : public GrafDeviceEntity
+	{
+	public:
+
+		struct UR_DECL InitParams
+		{
+			GrafShader** ShaderStages;
+			ur_uint ShaderStageCount;
+			GrafRayTracingShaderGroupDesc* ShaderGroups;
+			ur_uint ShaderGroupCount;
+			GrafDescriptorTableLayout** DescriptorTableLayouts;
+			ur_uint DescriptorTableLayoutCount;
+			ur_uint MaxRecursionDepth;
+			static const InitParams Default;
+		};
+
+		GrafRayTracingPipeline(GrafSystem &grafSystem);
+
+		~GrafRayTracingPipeline();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		virtual Result GetShaderGroupHandles(ur_uint firstGroup, ur_uint groupCount, ur_size dstBufferSize, ur_byte* dstBufferPtr);
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafAccelerationStructure : public GrafDeviceEntity
 	{
 	public:
@@ -1117,27 +1169,6 @@ namespace UnlimRealms
 		GrafAccelerationStructureBuildFlags structureBuildFlags;
 	};
 
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//class UR_DECL GrafAccelerationStructureGeometry : public GrafDeviceEntity
-	//{
-	//public:
-
-	//	struct UR_DECL InitParams
-	//	{
-	//		GrafAccelerationStructureGeometryType GeometryType;
-	//		GrafAccelerationStructureGeometryFlags GeometryFlags;
-	//		GrafAccelerationStructureTrianglesData* TrianglesData;
-	//		GrafAccelerationStructureAabbsData* AabbsData;
-	//		GrafAccelerationStructureInstancesData* InstancesData;
-	//	};
-
-	//	GrafAccelerationStructureGeometry(GrafSystem &grafSystem);
-
-	//	~GrafAccelerationStructureGeometry();
-
-	//	virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
-	//};
-
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafUtils
 	{
@@ -1155,6 +1186,8 @@ namespace UnlimRealms
 		static Result LoadImageFromFile(GrafDevice& grafDevice, const std::string& resName, ImageData& outputImageData);
 
 		static Result CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader);
+
+		static Result CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, const std::string& entryPoint, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

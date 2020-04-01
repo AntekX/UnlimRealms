@@ -17,7 +17,7 @@ struct SampleRayData
 };
 
 [shader("raygeneration")]
-void SampleRaygenShader()
+void SampleRaygen()
 {
 	uint3 dispatchIdx = DispatchRaysIndex();
 	uint3 dispatchSize = DispatchRaysDimensions();
@@ -51,4 +51,16 @@ void SampleRaygenShader()
 
 	// write ray result
 	g_TargetTexture[dispatchIdx.xy] = rayData.color;
+}
+
+[shader("closesthit")]
+void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attribs)
+{
+	rayData.color = float4(0.0f, 1.0f, 0.0f, 1.0f);
+}
+
+[shader("miss")]
+void SampleMiss(inout SampleRayData rayData)
+{
+	rayData.color = float4(0.0f, 0.0f, 0.0f, 0.0f);
 }

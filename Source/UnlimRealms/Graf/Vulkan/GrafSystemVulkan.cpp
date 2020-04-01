@@ -482,6 +482,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafSystemVulkan::CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline)
+	{
+		grafRayTracingPipeline.reset(new GrafRayTracingPipelineVulkan(*this));
+		return Result(Success);
+	}
+
 	Result GrafSystemVulkan::CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct)
 	{
 		grafAccelStruct.reset(new GrafAccelerationStructureVulkan(*this));
@@ -1469,6 +1475,18 @@ namespace UnlimRealms
 		vkCmdBuildAccelerationStructureKHR(this->vkCommandBuffer, 1, &vkBuildInfo, &vkBuildOffsetInfoArrayPtr);
 
 		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
+	Result GrafCommandListVulkan::DispatchRays(ur_uint32 width, ur_uint32 height, ur_uint32 depth)
+	{
+	#if (UR_GRAF_VULKAN_RAY_TRACING)
+		
+		// TODO
+
+		return Result(NotImplemented);
 	#else
 		return Result(NotImplemented);
 	#endif
@@ -2819,6 +2837,7 @@ namespace UnlimRealms
 
 		VkShaderModuleCreateInfo vkShaderInfo = {};
 		vkShaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		vkShaderInfo.pNext = ur_null;
 		vkShaderInfo.flags = 0;
 		vkShaderInfo.codeSize = initParams.ByteCodeSize;
 		vkShaderInfo.pCode = (const uint32_t*)initParams.ByteCode;
@@ -3707,6 +3726,158 @@ namespace UnlimRealms
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	GrafRayTracingPipelineVulkan::GrafRayTracingPipelineVulkan(GrafSystem &grafSystem) :
+		GrafRayTracingPipeline(grafSystem)
+	{
+		this->vkPipeline = VK_NULL_HANDLE;
+		this->vkPipelineLayout = VK_NULL_HANDLE;
+	}
+
+	GrafRayTracingPipelineVulkan::~GrafRayTracingPipelineVulkan()
+	{
+		this->Deinitialize();
+	}
+
+	Result GrafRayTracingPipelineVulkan::Deinitialize()
+	{
+		if (this->vkPipelineLayout != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipelineLayout, ur_null);
+			this->vkPipelineLayout = VK_NULL_HANDLE;
+		}
+		if (this->vkPipeline != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipeline, ur_null);
+			this->vkPipeline = VK_NULL_HANDLE;
+		}
+
+		return Result(Success);
+	}
+
+	Result GrafRayTracingPipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	{
+		this->Deinitialize();
+
+		GrafRayTracingPipeline::Initialize(grafDevice, initParams);
+	#if (UR_GRAF_VULKAN_RAY_TRACING)
+
+		// validate logical device 
+
+		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+		if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafRayTracingPipelineVulkan: failed to initialize, invalid GrafDevice"));
+		}
+		VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+		VkResult vkRes = VK_SUCCESS;
+
+		// shader stages
+
+		std::vector<VkPipelineShaderStageCreateInfo> vkShaderStagesInfo(initParams.ShaderStageCount);
+		for (ur_uint istage = 0; istage < initParams.ShaderStageCount; ++istage)
+		{
+			GrafShader* grafShader = initParams.ShaderStages[istage];
+			VkPipelineShaderStageCreateInfo& vkShaderStageInfo = vkShaderStagesInfo[istage];
+			vkShaderStageInfo = {};
+			vkShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			vkShaderStageInfo.flags = 0;
+			vkShaderStageInfo.stage = GrafUtilsVulkan::GrafToVkShaderStage(grafShader->GetShaderType());
+			vkShaderStageInfo.module = static_cast<GrafShaderVulkan*>(grafShader)->GetVkShaderModule();
+			vkShaderStageInfo.pName = grafShader->GetEntryPoint().c_str();
+		}
+
+		// shader groups
+
+		std::vector<VkRayTracingShaderGroupCreateInfoKHR> vkShaderGroupsInfo(initParams.ShaderGroupCount);
+		for (ur_uint igroup = 0; igroup < initParams.ShaderGroupCount; ++igroup)
+		{
+			GrafRayTracingShaderGroupDesc& grafShaderGroupDesc = initParams.ShaderGroups[igroup];
+			VkRayTracingShaderGroupCreateInfoKHR& vkShaderGroupInfo = vkShaderGroupsInfo[igroup];
+			vkShaderGroupInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+			vkShaderGroupInfo.pNext = ur_null;
+			vkShaderGroupInfo.type = GrafUtilsVulkan::GrafToVkRayTracingShaderGroupType(grafShaderGroupDesc.Type);
+			vkShaderGroupInfo.generalShader = (ur_uint32)grafShaderGroupDesc.GeneralShaderIdx;
+			vkShaderGroupInfo.closestHitShader = (ur_uint32)grafShaderGroupDesc.ClosestHitShaderIdx;
+			vkShaderGroupInfo.anyHitShader = (ur_uint32)grafShaderGroupDesc.AnyHitShaderIdx;
+			vkShaderGroupInfo.intersectionShader = (ur_uint32)grafShaderGroupDesc.IntersectionShaderIdx;
+			vkShaderGroupInfo.pShaderGroupCaptureReplayHandle = ur_null;
+		}
+
+		// pipeline layout
+
+		std::vector<VkDescriptorSetLayout> vkDescriptorSetLayouts(initParams.DescriptorTableLayoutCount);
+		for (ur_uint ilayout = 0; ilayout < initParams.DescriptorTableLayoutCount; ++ilayout)
+		{
+			vkDescriptorSetLayouts[ilayout] = static_cast<GrafDescriptorTableLayoutVulkan*>(initParams.DescriptorTableLayouts[ilayout])->GetVkDescriptorSetLayout();
+		}
+
+		VkPipelineLayoutCreateInfo vkPipelineLayoutInfo = {};
+		vkPipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		vkPipelineLayoutInfo.flags = 0;
+		vkPipelineLayoutInfo.setLayoutCount = (ur_uint32)vkDescriptorSetLayouts.size();
+		vkPipelineLayoutInfo.pSetLayouts = vkDescriptorSetLayouts.data();
+		vkPipelineLayoutInfo.pushConstantRangeCount = 0;
+		vkPipelineLayoutInfo.pPushConstantRanges = ur_null;
+
+		vkRes = vkCreatePipelineLayout(vkDevice, &vkPipelineLayoutInfo, ur_null, &this->vkPipelineLayout);
+		if (vkRes != VK_SUCCESS)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafRayTracingPipelineVulkan: vkCreatePipelineLayout failed with VkResult = ") + VkResultToString(vkRes));
+		}
+
+		// create pipeline object
+
+		VkRayTracingPipelineCreateInfoKHR vkPipelineInfo = {};
+		vkPipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
+		vkPipelineInfo.pNext = ur_null;
+		vkPipelineInfo.flags = 0;
+		vkPipelineInfo.stageCount = (ur_uint32)vkShaderStagesInfo.size();
+		vkPipelineInfo.pStages = vkShaderStagesInfo.data();
+		vkPipelineInfo.groupCount = (ur_uint32)vkShaderGroupsInfo.size();
+		vkPipelineInfo.pGroups = vkShaderGroupsInfo.data();
+		vkPipelineInfo.maxRecursionDepth = (ur_uint32)initParams.MaxRecursionDepth;
+		vkPipelineInfo.libraries = {};
+		vkPipelineInfo.libraries.sType = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR;
+		vkPipelineInfo.libraries.pNext = ur_null;
+		vkPipelineInfo.libraries.libraryCount = 0;
+		vkPipelineInfo.libraries.pLibraries = ur_null;
+		vkPipelineInfo.pLibraryInterface = ur_null;
+		vkPipelineInfo.layout = this->vkPipelineLayout;
+		vkPipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+		vkPipelineInfo.basePipelineIndex = 0;
+
+		vkRes = vkCreateRayTracingPipelinesKHR(vkDevice, VK_NULL_HANDLE, 1, &vkPipelineInfo, ur_null, &this->vkPipeline);
+		if (vkRes != VK_SUCCESS)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafRayTracingPipelineVulkan: vkCreateRayTracingPipelinesKHR failed with VkResult = ") + VkResultToString(vkRes));
+		}
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
+	Result GrafRayTracingPipelineVulkan::GetShaderGroupHandles(ur_uint firstGroup, ur_uint groupCount, ur_size dstBufferSize, ur_byte* dstBufferPtr)
+	{
+	#if (UR_GRAF_VULKAN_RAY_TRACING)
+
+		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
+		
+		VkResult vkRes = vkGetRayTracingShaderGroupHandlesKHR(vkDevice, this->vkPipeline, (ur_uint32)firstGroup, (ur_uint32)groupCount, dstBufferSize, dstBufferPtr);
+		if (vkRes != VK_SUCCESS)
+			return ResultError(Failure, std::string("GrafRayTracingPipelineVulkan: vkCreateRayTracingPipelinesKHR failed with VkResult = ") + VkResultToString(vkRes));
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	GrafAccelerationStructureVulkan::GrafAccelerationStructureVulkan(GrafSystem &grafSystem) :
 		GrafAccelerationStructure(grafSystem)
 	{
@@ -4228,6 +4399,18 @@ namespace UnlimRealms
 	}
 
 #if defined(VK_ENABLE_BETA_EXTENSIONS)
+
+	VkRayTracingShaderGroupTypeKHR GrafUtilsVulkan::GrafToVkRayTracingShaderGroupType(GrafRayTracingShaderGroupType shaderGroupType)
+	{
+		VkRayTracingShaderGroupTypeKHR vkShaderGroupType = VK_RAY_TRACING_SHADER_GROUP_TYPE_MAX_ENUM_KHR;
+		switch (shaderGroupType)
+		{
+		case GrafRayTracingShaderGroupType::General: vkShaderGroupType = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR; break;
+		case GrafRayTracingShaderGroupType::TrianglesHit: vkShaderGroupType = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR; break;
+		case GrafRayTracingShaderGroupType::ProceduralHit: vkShaderGroupType = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR; break;
+		};
+		return vkShaderGroupType;
+	}
 
 	VkGeometryTypeKHR GrafUtilsVulkan::GrafToVkAccelerationStructureGeometryType(GrafAccelerationStructureGeometryType geometryType)
 	{
