@@ -1054,12 +1054,30 @@ namespace UnlimRealms
 			break;
 		case GrafImageState::DepthStencilWrite:
 			vkImageBarrier.srcAccessMask = (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
-			vkStageSrc = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT; // wait last depth/stencil stage
+			break;
+		case GrafImageState::DepthStencilRead:
+			vkImageBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT; // wait last depth/stencil stage
 			break;
 		case GrafImageState::ShaderRead:
 			vkImageBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			vkStageSrc = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; // wait last graphics shader stage
 			break;
+		case GrafImageState::ShaderReadWrite:
+			vkImageBarrier.srcAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageSrc = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; // wait last graphics shader stage
+			break;
+		case GrafImageState::ComputeReadWrite:
+			vkImageBarrier.srcAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageSrc = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			break;
+		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		case GrafImageState::RayTracingReadWrite:
+			vkImageBarrier.srcAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageSrc = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+			break;
+		#endif
 		};
 
 		switch (dstState)
@@ -1078,12 +1096,30 @@ namespace UnlimRealms
 			break;
 		case GrafImageState::DepthStencilWrite:
 			vkImageBarrier.dstAccessMask = (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
-			vkStageDst = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT; // must be ready before early depth/stencil stage
+			break;
+		case GrafImageState::DepthStencilRead:
+			vkImageBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT; // must be ready before early depth/stencil stage
 			break;
 		case GrafImageState::ShaderRead:
 			vkImageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			vkStageDst = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; // must be ready before first graphics shader stage
 			break;
+		case GrafImageState::ShaderReadWrite:
+			vkImageBarrier.dstAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageDst = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; // must be ready before first graphics shader stage
+			break;
+		case GrafImageState::ComputeReadWrite:
+			vkImageBarrier.dstAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageDst = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			break;
+		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		case GrafImageState::RayTracingReadWrite:
+			vkImageBarrier.dstAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageDst = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+			break;
+		#endif
 		};
 
 		vkCmdPipelineBarrier(this->vkCommandBuffer, vkStageSrc, vkStageDst, VkDependencyFlags(0), 0, ur_null, 0, ur_null, 1, &vkImageBarrier);
@@ -1387,6 +1423,37 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafCommandListVulkan::BindComputePipeline(GrafPipeline* grafPipeline)
+	{
+		if (ur_null == grafPipeline)
+			return Result(InvalidArgs);
+
+		vkCmdBindPipeline(this->vkCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, static_cast<GrafPipelineVulkan*>(grafPipeline)->GetVkPipeline());
+
+		return Result(Success);
+	}
+
+	Result GrafCommandListVulkan::BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline)
+	{
+		if (ur_null == descriptorTable || ur_null == grafPipeline)
+			return Result(InvalidArgs);
+
+		GrafPipelineVulkan* grafPipelineVulkan = static_cast<GrafPipelineVulkan*>(grafPipeline);
+		GrafDescriptorTableVulkan* descriptorTableVulkan = static_cast<GrafDescriptorTableVulkan*>(descriptorTable);
+		VkDescriptorSet vkDescriptorSets[] = { descriptorTableVulkan->GetVkDescriptorSet() };
+
+		vkCmdBindDescriptorSets(this->vkCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, grafPipelineVulkan->GetVkPipelineLayout(), 0, 1, vkDescriptorSets, 0, ur_null);
+
+		return Result(Success);
+	}
+
+	Result GrafCommandListVulkan::Dispatch(ur_uint32 groupCountX, ur_uint32 groupCountY, ur_uint32 groupCountZ)
+	{
+		vkCmdDispatch(this->vkCommandBuffer, groupCountX, groupCountY, groupCountZ);
+
+		return Result(Success);
+	}
+
 	Result GrafCommandListVulkan::BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount)
 	{
 	#if (UR_GRAF_VULKAN_RAY_TRACING)
@@ -1480,13 +1547,63 @@ namespace UnlimRealms
 	#endif
 	}
 
+	Result GrafCommandListVulkan::BindRayTracingPipeline(GrafRayTracingPipeline* grafPipeline)
+	{
+	#if (UR_GRAF_VULKAN_RAY_TRACING)
+		if (ur_null == grafPipeline)
+			return Result(InvalidArgs);
+
+		vkCmdBindPipeline(this->vkCommandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, static_cast<GrafRayTracingPipelineVulkan*>(grafPipeline)->GetVkPipeline());
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
+	Result GrafCommandListVulkan::BindRayTracingDescriptorTable(GrafDescriptorTable* descriptorTable, GrafRayTracingPipeline* grafPipeline)
+	{
+	#if (UR_GRAF_VULKAN_RAY_TRACING)
+		if (ur_null == descriptorTable || ur_null == grafPipeline)
+			return Result(InvalidArgs);
+
+		GrafRayTracingPipelineVulkan* grafPipelineVulkan = static_cast<GrafRayTracingPipelineVulkan*>(grafPipeline);
+		GrafDescriptorTableVulkan* descriptorTableVulkan = static_cast<GrafDescriptorTableVulkan*>(descriptorTable);
+		VkDescriptorSet vkDescriptorSets[] = { descriptorTableVulkan->GetVkDescriptorSet() };
+
+		vkCmdBindDescriptorSets(this->vkCommandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, grafPipelineVulkan->GetVkPipelineLayout(), 0, 1, vkDescriptorSets, 0, ur_null);
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
 	Result GrafCommandListVulkan::DispatchRays(ur_uint32 width, ur_uint32 height, ur_uint32 depth)
 	{
 	#if (UR_GRAF_VULKAN_RAY_TRACING)
-		
-		// TODO
+		// todo
+		VkStridedBufferRegionKHR rayGenShaderHandlesRegion = {
+			VK_NULL_HANDLE, 0, 0, 0
+		};
+		VkStridedBufferRegionKHR rayMissShaderHandlesRegion = {
+			VK_NULL_HANDLE, 0, 0, 0
+		};
+		VkStridedBufferRegionKHR rayHitShaderHandlesRegion = {
+			VK_NULL_HANDLE, 0, 0, 0
+		};
+		VkStridedBufferRegionKHR rayCallShaderHandlesRegion = {
+			VK_NULL_HANDLE, 0, 0, 0
+		};
 
-		return Result(NotImplemented);
+		vkCmdTraceRaysKHR(this->vkCommandBuffer,
+			&rayGenShaderHandlesRegion,
+			&rayMissShaderHandlesRegion,
+			&rayHitShaderHandlesRegion,
+			&rayCallShaderHandlesRegion,
+			width, height, depth);
+
+		return Result(Success);
 	#else
 		return Result(NotImplemented);
 	#endif
@@ -4080,6 +4197,8 @@ namespace UnlimRealms
 			vkImageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		if (usage & (ur_uint)GrafImageUsageFlag::ShaderInput)
 			vkImageUsage |= (VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		if (usage & (ur_uint)GrafImageUsageFlag::ShaderReadWrite)
+			vkImageUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
 		return vkImageUsage;
 	}
 
@@ -4098,6 +4217,8 @@ namespace UnlimRealms
 			grafUsage |= (ur_uint)GrafImageUsageFlag::ShaderInput;
 		if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
 			grafUsage |= (ur_uint)GrafImageUsageFlag::ShaderInput;
+		if (usage & VK_IMAGE_USAGE_STORAGE_BIT)
+			grafUsage |= (ur_uint)GrafImageUsageFlag::ShaderReadWrite;
 		return grafUsage;
 	}
 
@@ -4129,13 +4250,16 @@ namespace UnlimRealms
 		switch (imageState)
 		{
 		case GrafImageState::Common: vkImageLayout = VK_IMAGE_LAYOUT_GENERAL; break;
+		case GrafImageState::TransferSrc: vkImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL; break;
+		case GrafImageState::TransferDst: vkImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; break;
+		case GrafImageState::Present: vkImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; break;
 		case GrafImageState::ColorWrite: vkImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; break;
 		case GrafImageState::DepthStencilWrite: vkImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL; break;
 		case GrafImageState::DepthStencilRead: vkImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL; break;
 		case GrafImageState::ShaderRead: vkImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; break;
-		case GrafImageState::TransferSrc: vkImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL; break;
-		case GrafImageState::TransferDst: vkImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; break;
-		case GrafImageState::Present: vkImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; break;
+		case GrafImageState::ShaderReadWrite: vkImageLayout = VK_IMAGE_LAYOUT_GENERAL; break;
+		case GrafImageState::ComputeReadWrite: vkImageLayout = VK_IMAGE_LAYOUT_GENERAL; break;
+		case GrafImageState::RayTracingReadWrite: vkImageLayout = VK_IMAGE_LAYOUT_GENERAL; break;
 		};
 		return vkImageLayout;
 	}
@@ -4153,12 +4277,12 @@ namespace UnlimRealms
 			vkUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 		if (usage & (ur_uint)GrafBufferUsageFlag::ConstantBuffer)
 			vkUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-	#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if defined(VK_ENABLE_BETA_EXTENSIONS)
 		if (usage & (ur_uint)GrafBufferUsageFlag::ShaderDeviceAddress)
 			vkUsage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 		if (usage & (ur_uint)GrafBufferUsageFlag::RayTracing)
 			vkUsage |= VK_BUFFER_USAGE_RAY_TRACING_BIT_KHR;
-	#endif
+		#endif
 		return vkUsage;
 	}
 

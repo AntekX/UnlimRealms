@@ -201,7 +201,17 @@ namespace UnlimRealms
 
 		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
 
+		virtual Result BindComputePipeline(GrafPipeline* grafPipeline);
+
+		virtual Result BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline);
+
+		virtual Result Dispatch(ur_uint32 groupCountX, ur_uint32 groupCountY, ur_uint32 groupCountZ);
+
 		virtual Result BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount);
+
+		virtual Result BindRayTracingPipeline(GrafRayTracingPipeline* grafPipeline);
+
+		virtual Result BindRayTracingDescriptorTable(GrafDescriptorTable* descriptorTable, GrafRayTracingPipeline* grafPipeline);
 
 		virtual Result DispatchRays(ur_uint32 width, ur_uint32 height, ur_uint32 depth);
 

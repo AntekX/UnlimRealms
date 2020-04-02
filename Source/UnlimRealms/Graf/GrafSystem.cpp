@@ -352,7 +352,32 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandList::BindComputePipeline(GrafPipeline* grafPipeline)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandList::BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandList::Dispatch(ur_uint32 groupCountX, ur_uint32 groupCountY, ur_uint32 groupCountZ)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandList::BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandList::BindRayTracingPipeline(GrafRayTracingPipeline* grafPipeline)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandList::BindRayTracingDescriptorTable(GrafDescriptorTable* descriptorTable, GrafRayTracingPipeline* grafPipeline)
 	{
 		return Result(NotImplemented);
 	}

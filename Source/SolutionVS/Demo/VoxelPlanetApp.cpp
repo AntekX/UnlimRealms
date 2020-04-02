@@ -284,6 +284,7 @@ int VoxelPlanetApp::Run()
 	{
 	public:
 		
+		GrafRenderer* grafRenderer;
 		std::unique_ptr<GrafBuffer> vertexBuffer;
 		std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
 		std::unique_ptr<GrafDescriptorTableLayout> bindingTableLayout;
@@ -292,36 +293,36 @@ int VoxelPlanetApp::Run()
 		std::unique_ptr<GrafShader> shaderClosestHit;
 		std::unique_ptr<GrafShader> shaderMiss;
 		std::unique_ptr<GrafRayTracingPipeline> pipelineState;
+		std::unique_ptr<GrafBuffer> shaderHandlesBuffer;
 
-		RayTracingTest(Realm& realm) : RealmEntity(realm) {}
+		RayTracingTest(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null) {}
 		~RayTracingTest()
 		{
-			GrafRenderer* grafRenderer = this->GetRealm().GetComponent<GrafRenderer>();
-			if (grafRenderer != ur_null)
+			if (ur_null == grafRenderer)
+				return;
+
+			grafRenderer->SafeDelete(vertexBuffer.release());
+			grafRenderer->SafeDelete(accelerationStructureBL.release());
+			grafRenderer->SafeDelete(bindingTableLayout.release());
+			for (auto& bindingTable : bindingTables)
 			{
-				grafRenderer->SafeDelete(vertexBuffer.release());
-				grafRenderer->SafeDelete(accelerationStructureBL.release());
-				grafRenderer->SafeDelete(bindingTableLayout.release());
-				for (auto& bindingTable : bindingTables)
-				{
-					grafRenderer->SafeDelete(bindingTable.release());
-				}
-				grafRenderer->SafeDelete(shaderRayGen.release());
-				grafRenderer->SafeDelete(shaderClosestHit.release());
-				grafRenderer->SafeDelete(shaderMiss.release());
-				grafRenderer->SafeDelete(pipelineState.release());
+				grafRenderer->SafeDelete(bindingTable.release());
 			}
+			grafRenderer->SafeDelete(shaderRayGen.release());
+			grafRenderer->SafeDelete(shaderClosestHit.release());
+			grafRenderer->SafeDelete(shaderMiss.release());
+			grafRenderer->SafeDelete(pipelineState.release());
 		}
-	};
-	std::unique_ptr<RayTracingTest> rayTracingTest;
-	if (grafRenderer != ur_null)
-	{
-		GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
-		GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
-		const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
-		if (grafDeviceDesc != ur_null && grafDeviceDesc->RayTracing.RayTraceSupported)
+
+		void Initialize()
 		{
-			rayTracingTest.reset(new RayTracingTest(realm));
+			this->grafRenderer = this->GetRealm().GetComponent<GrafRenderer>();
+			if (ur_null == grafRenderer)
+				return;
+
+			GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
+			GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
+			const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 
 			// sample geomtry data
 
@@ -339,9 +340,9 @@ int VoxelPlanetApp::Run()
 			sampleVBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			sampleVBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			sampleVBParams.BufferDesc.SizeInBytes = sizeof(sampleVertices);
-			grafSystem->CreateBuffer(rayTracingTest->vertexBuffer);
-			rayTracingTest->vertexBuffer->Initialize(grafDevice, sampleVBParams);
-			rayTracingTest->vertexBuffer->Write((ur_byte*)sampleVertices);
+			grafSystem->CreateBuffer(this->vertexBuffer);
+			this->vertexBuffer->Initialize(grafDevice, sampleVBParams);
+			this->vertexBuffer->Write((ur_byte*)sampleVertices);
 
 			// initiaize acceleration structure container
 
@@ -358,16 +359,16 @@ int VoxelPlanetApp::Run()
 			accelStructParams.BuildFlags = GrafAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlag::PreferFastTrace);
 			accelStructParams.Geometry = &accelStructGeomDesc;
 			accelStructParams.GeometryCount = 1;
-			
-			grafSystem->CreateAccelerationStructure(rayTracingTest->accelerationStructureBL);
-			rayTracingTest->accelerationStructureBL->Initialize(grafDevice, accelStructParams);
+
+			grafSystem->CreateAccelerationStructure(this->accelerationStructureBL);
+			this->accelerationStructureBL->Initialize(grafDevice, accelStructParams);
 
 			// build acceleration structure for sample geometry
-			
+
 			GrafAccelerationStructureTrianglesData sampleTrianglesData = {};
 			sampleTrianglesData.VertexFormat = GrafFormat::R32G32B32A32_SFLOAT;
 			sampleTrianglesData.VertexStride = sizeof(VertexSample);
-			sampleTrianglesData.VerticesDeviceAddress = rayTracingTest->vertexBuffer->GetDeviceAddress();
+			sampleTrianglesData.VerticesDeviceAddress = this->vertexBuffer->GetDeviceAddress();
 
 			GrafAccelerationStructureGeometryData sampleGeometryData = {};
 			sampleGeometryData.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
@@ -377,18 +378,18 @@ int VoxelPlanetApp::Run()
 
 			GrafCommandList* buildCmdList = grafRenderer->GetTransientCommandList();
 			buildCmdList->Begin();
-			buildCmdList->BuildAccelerationStructure(rayTracingTest->accelerationStructureBL.get(), &sampleGeometryData, 1);
+			buildCmdList->BuildAccelerationStructure(this->accelerationStructureBL.get(), &sampleGeometryData, 1);
 			buildCmdList->End();
 			grafDevice->Record(buildCmdList);
 
 			// shaders
 
-			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleRaygen", GrafShaderType::RayGen, rayTracingTest->shaderRayGen);
-			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleClosestHit", GrafShaderType::ClosestHit, rayTracingTest->shaderClosestHit);
-			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleMiss", GrafShaderType::Miss, rayTracingTest->shaderMiss);
+			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleRaygen", GrafShaderType::RayGen, this->shaderRayGen);
+			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleClosestHit", GrafShaderType::ClosestHit, this->shaderClosestHit);
+			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleMiss", GrafShaderType::Miss, this->shaderMiss);
 
 			// global shader bindings
-			
+
 			GrafDescriptorRangeDesc bindingTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 				{ GrafDescriptorType::AccelerationStructure, 0, 1 },
@@ -398,27 +399,23 @@ int VoxelPlanetApp::Run()
 				ur_uint(GrafShaderStageFlag::AllRayTracing),
 				bindingTableLayoutRanges, ur_array_size(bindingTableLayoutRanges)
 			};
-			grafSystem->CreateDescriptorTableLayout(rayTracingTest->bindingTableLayout);
-			rayTracingTest->bindingTableLayout->Initialize(grafDevice, { bindingTableLayoutDesc });
-			rayTracingTest->bindingTables.resize(grafRenderer->GetRecordedFrameCount());
-			for (auto& bindingTable : rayTracingTest->bindingTables)
+			grafSystem->CreateDescriptorTableLayout(this->bindingTableLayout);
+			this->bindingTableLayout->Initialize(grafDevice, { bindingTableLayoutDesc });
+			this->bindingTables.resize(grafRenderer->GetRecordedFrameCount());
+			for (auto& bindingTable : this->bindingTables)
 			{
 				grafSystem->CreateDescriptorTable(bindingTable);
-				bindingTable->Initialize(grafDevice, { rayTracingTest->bindingTableLayout.get() });
+				bindingTable->Initialize(grafDevice, { this->bindingTableLayout.get() });
 			}
-			// TODO:
-			//bindingTable->SetConstantBuffer(0, ur_null);
-			//bindingTable->SetRWImage(0, ur_null);
-			//bindingTable->SetAccelerationStructure(0, ur_null);
 
 			// pipeline
 
 			GrafShader* shaderStages[] = {
-				rayTracingTest->shaderRayGen.get(),
-				rayTracingTest->shaderClosestHit.get(),
-				rayTracingTest->shaderMiss.get()
+				this->shaderRayGen.get(),
+				this->shaderClosestHit.get(),
+				this->shaderMiss.get()
 			};
-			
+
 			GrafRayTracingShaderGroupDesc shaderGroups[3];
 			shaderGroups[0] = GrafRayTracingShaderGroupDesc::Default;
 			shaderGroups[0].Type = GrafRayTracingShaderGroupType::General;
@@ -431,7 +428,7 @@ int VoxelPlanetApp::Run()
 			shaderGroups[2].GeneralShaderIdx = 2; // shaderMiss
 
 			GrafDescriptorTableLayout* bindingLayouts[] = {
-				rayTracingTest->bindingTableLayout.get()
+				this->bindingTableLayout.get()
 			};
 			GrafRayTracingPipeline::InitParams pipelineParams = GrafRayTracingPipeline::InitParams::Default;
 			pipelineParams.ShaderStages = shaderStages;
@@ -441,13 +438,70 @@ int VoxelPlanetApp::Run()
 			pipelineParams.DescriptorTableLayouts = bindingLayouts;
 			pipelineParams.DescriptorTableLayoutCount = ur_array_size(bindingLayouts);
 			pipelineParams.MaxRecursionDepth = 8;
-			grafSystem->CreateRayTracingPipeline(rayTracingTest->pipelineState);
-			rayTracingTest->pipelineState->Initialize(grafDevice, pipelineParams);
+			grafSystem->CreateRayTracingPipeline(this->pipelineState);
+			this->pipelineState->Initialize(grafDevice, pipelineParams);
 
-			// shader groups buffer
+			// shader group handles buffer
 
-			// TODO:
-			//rayTracingTest->pipelineState->GetShaderGroupHandles();
+			ur_size shaderBufferSize = pipelineParams.ShaderGroupCount * grafDeviceDesc->RayTracing.ShaderGroupHandleSize;
+			GrafBuffer::InitParams shaderBufferParams;
+			shaderBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::TransferSrc);
+			shaderBufferParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			shaderBufferParams.BufferDesc.SizeInBytes = shaderBufferSize;
+			grafSystem->CreateBuffer(this->shaderHandlesBuffer);
+			this->shaderHandlesBuffer->Initialize(grafDevice, shaderBufferParams);
+			GrafRayTracingPipeline* rayTracingPipeline = this->pipelineState.get();
+			this->shaderHandlesBuffer->Write([rayTracingPipeline, pipelineParams, shaderBufferParams](ur_byte* mappedDataPtr) -> Result
+			{
+				rayTracingPipeline->GetShaderGroupHandles(0, pipelineParams.ShaderGroupCount, shaderBufferParams.BufferDesc.SizeInBytes, mappedDataPtr);
+				return Result(Success);
+			});
+		}
+
+		void Render(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
+		{
+			// TODO
+			if (ur_null == this->grafRenderer)
+				return;
+
+			struct SceneConstants
+			{
+				ur_float4x4 projToWorld;
+				ur_float4 cameraPos;
+				ur_float4 viewportSize;
+			} cb;
+			ur_uint3 targetSize = grafTargetImage->GetDesc().Size;
+			cb.projToWorld = ur_float4x4::Identity;// todo: calculate inverse matrix
+			cb.cameraPos = cameraPos;
+			cb.viewportSize.x = (ur_float)targetSize.x;
+			cb.viewportSize.y = (ur_float)targetSize.y;
+			cb.viewportSize.z = 1.0f / cb.viewportSize.x;
+			cb.viewportSize.w = 1.0f / cb.viewportSize.y;
+			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
+			Allocation dynamicCBAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
+			dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
+			
+			GrafDescriptorTable* descriptorTable = this->bindingTables[this->grafRenderer->GetCurrentFrameId()].get();
+			descriptorTable->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
+			descriptorTable->SetRWImage(0, grafTargetImage);
+			descriptorTable->SetAccelerationStructure(0, this->accelerationStructureBL.get());
+
+			grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+			grafCmdList->BindRayTracingPipeline(this->pipelineState.get());
+			grafCmdList->BindRayTracingDescriptorTable(descriptorTable, this->pipelineState.get());
+			//grafCmdListCrnt->DispatchRays();
+		}
+	};
+	std::unique_ptr<RayTracingTest> rayTracingTest;
+	if (grafRenderer != ur_null)
+	{
+		GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
+		GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
+		const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
+		if (grafDeviceDesc != ur_null && grafDeviceDesc->RayTracing.RayTraceSupported)
+		{
+			rayTracingTest.reset(new RayTracingTest(realm));
+			rayTracingTest->Initialize();
 		};
 	}
 
@@ -581,6 +635,12 @@ int VoxelPlanetApp::Run()
 					if (atmosphere != ur_null)
 					{
 						atmosphere->RenderPostEffects(*grafCmdListCrnt, *hdrRender->GetHDRRenderTarget(), camera.GetViewProj(), camera.GetPosition());
+					}
+
+					// ray tracing test
+					if (rayTracingTest != ur_null)
+					{
+						rayTracingTest->Render(grafCmdListCrnt, hdrRender->GetHDRRenderTarget()->GetImage(0), camera.GetViewProj(), camera.GetPosition());
 					}
 
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
