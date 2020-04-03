@@ -362,7 +362,7 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafCommandList::Dispatch(ur_uint32 groupCountX, ur_uint32 groupCountY, ur_uint32 groupCountZ)
+	Result GrafCommandList::Dispatch(ur_uint groupCountX, ur_uint groupCountY, ur_uint groupCountZ)
 	{
 		return Result(NotImplemented);
 	}
@@ -382,7 +382,9 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafCommandList::DispatchRays(ur_uint32 width, ur_uint32 height, ur_uint32 depth)
+	Result GrafCommandList::DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
+		const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
+		const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable)
 	{
 		return Result(NotImplemented);
 	}

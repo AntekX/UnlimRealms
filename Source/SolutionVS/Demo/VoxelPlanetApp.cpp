@@ -286,7 +286,9 @@ int VoxelPlanetApp::Run()
 		
 		GrafRenderer* grafRenderer;
 		std::unique_ptr<GrafBuffer> vertexBuffer;
+		std::unique_ptr<GrafBuffer> indexBuffer;
 		std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
+		std::unique_ptr<GrafAccelerationStructure> accelerationStructureTL;
 		std::unique_ptr<GrafDescriptorTableLayout> bindingTableLayout;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> bindingTables;
 		std::unique_ptr<GrafShader> shaderRayGen;
@@ -294,6 +296,9 @@ int VoxelPlanetApp::Run()
 		std::unique_ptr<GrafShader> shaderMiss;
 		std::unique_ptr<GrafRayTracingPipeline> pipelineState;
 		std::unique_ptr<GrafBuffer> shaderHandlesBuffer;
+		GrafStridedBufferRegionDesc rayGenShaderTable;
+		GrafStridedBufferRegionDesc missShaderTable;
+		GrafStridedBufferRegionDesc hitShaderTable;
 
 		RayTracingTest(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null) {}
 		~RayTracingTest()
@@ -302,7 +307,9 @@ int VoxelPlanetApp::Run()
 				return;
 
 			grafRenderer->SafeDelete(vertexBuffer.release());
+			grafRenderer->SafeDelete(indexBuffer.release());
 			grafRenderer->SafeDelete(accelerationStructureBL.release());
+			grafRenderer->SafeDelete(accelerationStructureTL.release());
 			grafRenderer->SafeDelete(bindingTableLayout.release());
 			for (auto& bindingTable : bindingTables)
 			{
@@ -312,6 +319,7 @@ int VoxelPlanetApp::Run()
 			grafRenderer->SafeDelete(shaderClosestHit.release());
 			grafRenderer->SafeDelete(shaderMiss.release());
 			grafRenderer->SafeDelete(pipelineState.release());
+			grafRenderer->SafeDelete(shaderHandlesBuffer.release());
 		}
 
 		void Initialize()
@@ -330,10 +338,15 @@ int VoxelPlanetApp::Run()
 			{
 				ur_float3 pos;
 			};
+			const ur_float vs = 10000.0;
 			VertexSample sampleVertices[] = {
-				{ {-0.5f, 0.5f, 0.0f } },
-				{ { 0.5f,-0.5f, 0.0f } },
-				{ {-0.5f,-0.5f, 0.0f } }
+				{ {-0.5f * vs, 0.5f * vs, 1.0f } },
+				{ { 0.5f * vs,-0.5f * vs, 1.0f } },
+				{ {-0.5f * vs,-0.5f * vs, 1.0f } }
+			};
+			typedef ur_uint32 IndexSample;
+			IndexSample sampleIndices[] = {
+				0, 1, 2
 			};
 
 			GrafBuffer::InitParams sampleVBParams;
@@ -344,31 +357,43 @@ int VoxelPlanetApp::Run()
 			this->vertexBuffer->Initialize(grafDevice, sampleVBParams);
 			this->vertexBuffer->Write((ur_byte*)sampleVertices);
 
-			// initiaize acceleration structure container
+			GrafBuffer::InitParams sampleIBParams;
+			sampleIBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
+			sampleIBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			sampleIBParams.BufferDesc.SizeInBytes = sizeof(sampleIndices);
+			grafSystem->CreateBuffer(this->indexBuffer);
+			this->indexBuffer->Initialize(grafDevice, sampleIBParams);
+			this->indexBuffer->Write((ur_byte*)sampleIndices);
 
-			GrafAccelerationStructureGeometryDesc accelStructGeomDesc = {};
-			accelStructGeomDesc.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
-			accelStructGeomDesc.VertexFormat = GrafFormat::R32G32B32A32_SFLOAT;
-			accelStructGeomDesc.IndexType = GrafIndexType::UINT16;
-			accelStructGeomDesc.PrimitiveCountMax = 12; // 1 cube
-			accelStructGeomDesc.VertexCountMax = 8;
-			accelStructGeomDesc.TransformsEnabled = false;
+			// initiaize bottom level acceleration structure container
 
-			GrafAccelerationStructure::InitParams accelStructParams = {};
-			accelStructParams.StructureType = GrafAccelerationStructureType::BottomLevel;
-			accelStructParams.BuildFlags = GrafAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlag::PreferFastTrace);
-			accelStructParams.Geometry = &accelStructGeomDesc;
-			accelStructParams.GeometryCount = 1;
+			GrafAccelerationStructureGeometryDesc accelStructGeomDescBL = {};
+			accelStructGeomDescBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
+			accelStructGeomDescBL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
+			accelStructGeomDescBL.IndexType = GrafIndexType::UINT32;
+			accelStructGeomDescBL.PrimitiveCountMax = 12; // 1 cube
+			accelStructGeomDescBL.VertexCountMax = 8;
+			accelStructGeomDescBL.TransformsEnabled = false;
+
+			GrafAccelerationStructure::InitParams accelStructParamsBL = {};
+			accelStructParamsBL.StructureType = GrafAccelerationStructureType::BottomLevel;
+			accelStructParamsBL.BuildFlags = GrafAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlag::PreferFastTrace);
+			accelStructParamsBL.Geometry = &accelStructGeomDescBL;
+			accelStructParamsBL.GeometryCount = 1;
 
 			grafSystem->CreateAccelerationStructure(this->accelerationStructureBL);
-			this->accelerationStructureBL->Initialize(grafDevice, accelStructParams);
+			this->accelerationStructureBL->Initialize(grafDevice, accelStructParamsBL);
 
-			// build acceleration structure for sample geometry
+			// TODO: try to get BLAS handle right after initialization
+
+			// build bottom level acceleration structure for sample geometry
 
 			GrafAccelerationStructureTrianglesData sampleTrianglesData = {};
-			sampleTrianglesData.VertexFormat = GrafFormat::R32G32B32A32_SFLOAT;
+			sampleTrianglesData.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
 			sampleTrianglesData.VertexStride = sizeof(VertexSample);
 			sampleTrianglesData.VerticesDeviceAddress = this->vertexBuffer->GetDeviceAddress();
+			sampleTrianglesData.IndexType = GrafIndexType::UINT32;
+			sampleTrianglesData.IndicesDeviceAddress = this->indexBuffer->GetDeviceAddress();
 
 			GrafAccelerationStructureGeometryData sampleGeometryData = {};
 			sampleGeometryData.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
@@ -376,11 +401,56 @@ int VoxelPlanetApp::Run()
 			sampleGeometryData.TrianglesData = &sampleTrianglesData;
 			sampleGeometryData.PrimitiveCount = ur_array_size(sampleVertices) / 3;
 
-			GrafCommandList* buildCmdList = grafRenderer->GetTransientCommandList();
-			buildCmdList->Begin();
-			buildCmdList->BuildAccelerationStructure(this->accelerationStructureBL.get(), &sampleGeometryData, 1);
-			buildCmdList->End();
-			grafDevice->Record(buildCmdList);
+			GrafCommandList* cmdListBuildAccelStructBL = grafRenderer->GetTransientCommandList();
+			cmdListBuildAccelStructBL->Begin();
+			cmdListBuildAccelStructBL->BuildAccelerationStructure(this->accelerationStructureBL.get(), &sampleGeometryData, 1);
+			cmdListBuildAccelStructBL->End();
+			grafDevice->Record(cmdListBuildAccelStructBL);
+			grafDevice->Submit();
+			grafDevice->WaitIdle(); // TODO: check whether we have to wait build execution on GPU before trying to retrieve BLAS handle for top level instance
+
+			// initiaize top level acceleration structure container
+
+			GrafAccelerationStructureGeometryDesc accelStructGeomDescTL = {};
+			accelStructGeomDescTL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
+			accelStructGeomDescTL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
+			accelStructGeomDescTL.IndexType = GrafIndexType::UINT32;
+			accelStructGeomDescTL.PrimitiveCountMax = 12; // 1 cube
+			accelStructGeomDescTL.VertexCountMax = 8;
+			accelStructGeomDescTL.TransformsEnabled = false;
+
+			GrafAccelerationStructure::InitParams accelStructParamsTL = {};
+			accelStructParamsTL.StructureType = GrafAccelerationStructureType::TopLevel;
+			accelStructParamsTL.BuildFlags = GrafAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlag::PreferFastTrace);
+			accelStructParamsTL.Geometry = &accelStructGeomDescTL;
+			accelStructParamsTL.GeometryCount = 1;
+
+			grafSystem->CreateAccelerationStructure(this->accelerationStructureTL);
+			this->accelerationStructureTL->Initialize(grafDevice, accelStructParamsTL);
+
+			// build top level acceleration structure
+
+			// TODO: build top level instance
+
+			/*GrafAccelerationStructureTrianglesData sampleTrianglesData = {};
+			sampleTrianglesData.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
+			sampleTrianglesData.VertexStride = sizeof(VertexSample);
+			sampleTrianglesData.VerticesDeviceAddress = this->vertexBuffer->GetDeviceAddress();
+			sampleTrianglesData.IndexType = GrafIndexType::UINT32;
+			sampleTrianglesData.IndicesDeviceAddress = this->indexBuffer->GetDeviceAddress();
+
+			GrafAccelerationStructureGeometryData sampleGeometryData = {};
+			sampleGeometryData.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
+			sampleGeometryData.GeometryFlags = ur_uint(GrafAccelerationStructureGeometryFlag::Opaque);
+			sampleGeometryData.TrianglesData = &sampleTrianglesData;
+			sampleGeometryData.PrimitiveCount = ur_array_size(sampleVertices) / 3;
+
+			GrafCommandList* cmdListBuildAccelStructTL = grafRenderer->GetTransientCommandList();
+			cmdListBuildAccelStructTL->Begin();
+			cmdListBuildAccelStructTL->BuildAccelerationStructure(this->accelerationStructureTL.get(), &sampleGeometryData, 1);
+			cmdListBuildAccelStructTL->End();
+			grafDevice->Record(cmdListBuildAccelStructTL);
+			grafDevice->Submit();*/
 
 			// shaders
 
@@ -443,7 +513,8 @@ int VoxelPlanetApp::Run()
 
 			// shader group handles buffer
 
-			ur_size shaderBufferSize = pipelineParams.ShaderGroupCount * grafDeviceDesc->RayTracing.ShaderGroupHandleSize;
+			ur_size shaderGroupHandleSize = grafDeviceDesc->RayTracing.ShaderGroupHandleSize;
+			ur_size shaderBufferSize = pipelineParams.ShaderGroupCount * shaderGroupHandleSize;
 			GrafBuffer::InitParams shaderBufferParams;
 			shaderBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::TransferSrc);
 			shaderBufferParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
@@ -456,6 +527,9 @@ int VoxelPlanetApp::Run()
 				rayTracingPipeline->GetShaderGroupHandles(0, pipelineParams.ShaderGroupCount, shaderBufferParams.BufferDesc.SizeInBytes, mappedDataPtr);
 				return Result(Success);
 			});
+			this->rayGenShaderTable = { this->shaderHandlesBuffer.get(), 0 * shaderGroupHandleSize, shaderGroupHandleSize, shaderGroupHandleSize };
+			this->missShaderTable = { this->shaderHandlesBuffer.get(), 2 * shaderGroupHandleSize, shaderGroupHandleSize, shaderGroupHandleSize };
+			this->hitShaderTable = { this->shaderHandlesBuffer.get(), 1 * shaderGroupHandleSize, shaderGroupHandleSize, shaderGroupHandleSize };
 		}
 
 		void Render(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
@@ -466,12 +540,12 @@ int VoxelPlanetApp::Run()
 
 			struct SceneConstants
 			{
-				ur_float4x4 projToWorld;
+				ur_float4x4 viewProjInv;
 				ur_float4 cameraPos;
 				ur_float4 viewportSize;
 			} cb;
 			ur_uint3 targetSize = grafTargetImage->GetDesc().Size;
-			cb.projToWorld = ur_float4x4::Identity;// todo: calculate inverse matrix
+			cb.viewProjInv = ur_float4x4::Identity;// todo: calculate inverse matrix
 			cb.cameraPos = cameraPos;
 			cb.viewportSize.x = (ur_float)targetSize.x;
 			cb.viewportSize.y = (ur_float)targetSize.y;
@@ -489,7 +563,7 @@ int VoxelPlanetApp::Run()
 			grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 			grafCmdList->BindRayTracingPipeline(this->pipelineState.get());
 			grafCmdList->BindRayTracingDescriptorTable(descriptorTable, this->pipelineState.get());
-			//grafCmdListCrnt->DispatchRays();
+			grafCmdList->DispatchRays(targetSize.x, targetSize.y, 1, &this->rayGenShaderTable, &this->missShaderTable, &this->hitShaderTable, ur_null);
 		}
 	};
 	std::unique_ptr<RayTracingTest> rayTracingTest;

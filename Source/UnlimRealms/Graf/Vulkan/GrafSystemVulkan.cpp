@@ -1447,9 +1447,9 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafCommandListVulkan::Dispatch(ur_uint32 groupCountX, ur_uint32 groupCountY, ur_uint32 groupCountZ)
+	Result GrafCommandListVulkan::Dispatch(ur_uint groupCountX, ur_uint groupCountY, ur_uint groupCountZ)
 	{
-		vkCmdDispatch(this->vkCommandBuffer, groupCountX, groupCountY, groupCountZ);
+		vkCmdDispatch(this->vkCommandBuffer, (ur_uint32)groupCountX, (ur_uint32)groupCountY, (ur_uint32)groupCountZ);
 
 		return Result(Success);
 	}
@@ -1579,29 +1579,42 @@ namespace UnlimRealms
 	#endif
 	}
 
-	Result GrafCommandListVulkan::DispatchRays(ur_uint32 width, ur_uint32 height, ur_uint32 depth)
+	Result GrafCommandListVulkan::DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
+		const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
+		const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable)
 	{
 	#if (UR_GRAF_VULKAN_RAY_TRACING)
-		// todo
-		VkStridedBufferRegionKHR rayGenShaderHandlesRegion = {
-			VK_NULL_HANDLE, 0, 0, 0
-		};
-		VkStridedBufferRegionKHR rayMissShaderHandlesRegion = {
-			VK_NULL_HANDLE, 0, 0, 0
-		};
-		VkStridedBufferRegionKHR rayHitShaderHandlesRegion = {
-			VK_NULL_HANDLE, 0, 0, 0
-		};
-		VkStridedBufferRegionKHR rayCallShaderHandlesRegion = {
-			VK_NULL_HANDLE, 0, 0, 0
+		static const VkStridedBufferRegionKHR NullShaderTableRegion = { VK_NULL_HANDLE, 0, 0, 0 };
+		auto FillVkStridedBufferRegion = [](VkStridedBufferRegionKHR& vkStridedBufferRegion, const GrafStridedBufferRegionDesc* grafStridedBufferRegion) -> void
+		{
+			if (grafStridedBufferRegion)
+			{
+				vkStridedBufferRegion.buffer = (grafStridedBufferRegion->BufferPtr ? static_cast<GrafBufferVulkan*>(grafStridedBufferRegion->BufferPtr)->GetVkBuffer() : VK_NULL_HANDLE);
+				vkStridedBufferRegion.offset = (VkDeviceSize)grafStridedBufferRegion->Offset;
+				vkStridedBufferRegion.size = (VkDeviceSize)grafStridedBufferRegion->Size;
+				vkStridedBufferRegion.stride = (VkDeviceSize)grafStridedBufferRegion->Stride;
+			}
+			else
+			{
+				vkStridedBufferRegion = NullShaderTableRegion;
+			}
 		};
 
+		VkStridedBufferRegionKHR rayGenShaderTableRegion;
+		VkStridedBufferRegionKHR rayMissShaderTableRegion;
+		VkStridedBufferRegionKHR rayHitShaderTableRegion;
+		VkStridedBufferRegionKHR rayCallShaderTableRegion;
+		FillVkStridedBufferRegion(rayGenShaderTableRegion, rayGenShaderTable);
+		FillVkStridedBufferRegion(rayMissShaderTableRegion, missShaderTable);
+		FillVkStridedBufferRegion(rayHitShaderTableRegion, hitShaderTable);
+		FillVkStridedBufferRegion(rayCallShaderTableRegion, callableShaderTable);
+
 		vkCmdTraceRaysKHR(this->vkCommandBuffer,
-			&rayGenShaderHandlesRegion,
-			&rayMissShaderHandlesRegion,
-			&rayHitShaderHandlesRegion,
-			&rayCallShaderHandlesRegion,
-			width, height, depth);
+			&rayGenShaderTableRegion,
+			&rayMissShaderTableRegion,
+			&rayHitShaderTableRegion,
+			&rayCallShaderTableRegion,
+			(ur_uint32)width, (ur_uint32)height, (ur_uint32)depth);
 
 		return Result(Success);
 	#else
@@ -4495,6 +4508,9 @@ namespace UnlimRealms
 		{
 		case GrafIndexType::UINT16: vkIndexType = VK_INDEX_TYPE_UINT16; break;
 		case GrafIndexType::UINT32: vkIndexType = VK_INDEX_TYPE_UINT32; break;
+		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		case GrafIndexType::None: vkIndexType = VK_INDEX_TYPE_NONE_KHR; break;
+		#endif
 		};
 		return vkIndexType;
 	}

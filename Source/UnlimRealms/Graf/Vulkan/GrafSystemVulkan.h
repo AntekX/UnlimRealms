@@ -205,7 +205,7 @@ namespace UnlimRealms
 
 		virtual Result BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline);
 
-		virtual Result Dispatch(ur_uint32 groupCountX, ur_uint32 groupCountY, ur_uint32 groupCountZ);
+		virtual Result Dispatch(ur_uint groupCountX, ur_uint groupCountY, ur_uint groupCountZ);
 
 		virtual Result BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount);
 
@@ -213,7 +213,9 @@ namespace UnlimRealms
 
 		virtual Result BindRayTracingDescriptorTable(GrafDescriptorTable* descriptorTable, GrafRayTracingPipeline* grafPipeline);
 
-		virtual Result DispatchRays(ur_uint32 width, ur_uint32 height, ur_uint32 depth);
+		virtual Result DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
+			const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
+			const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable);
 
 		inline VkCommandBuffer GetVkCommandBuffer() const;
 
