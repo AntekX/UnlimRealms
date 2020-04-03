@@ -130,6 +130,11 @@ namespace UnlimRealms
 		return this->structureBuildFlags;
 	}
 
+	inline ur_uint64 GrafAccelerationStructure::GetDeviceAddress() const
+	{
+		return this->structureDeviceAddress;
+	}
+
 	ur_bool GrafUtils::IsDepthStencilFormat(GrafFormat grafFormat)
 	{
 		return (ur_uint(grafFormat) >= ur_uint(GrafFormat::D16_UNORM) && ur_uint(grafFormat) <= ur_uint(GrafFormat::D32_SFLOAT_S8_UINT));

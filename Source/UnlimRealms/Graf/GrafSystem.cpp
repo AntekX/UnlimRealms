@@ -739,6 +739,7 @@ namespace UnlimRealms
 	{
 		this->structureType = GrafAccelerationStructureType::Undefined;
 		this->structureBuildFlags = GrafAccelerationStructureBuildFlags(0);
+		this->structureDeviceAddress = 0;
 	}
 
 	GrafAccelerationStructure::~GrafAccelerationStructure()

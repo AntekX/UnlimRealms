@@ -1510,7 +1510,7 @@ namespace UnlimRealms
 			{
 				vkGeometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
 				vkGeometry.geometry.instances.pNext = ur_null;
-				vkGeometry.geometry.instances.arrayOfPointers = false;
+				vkGeometry.geometry.instances.arrayOfPointers = geometry->InstancesData->IsPointersArray;
 				if (geometry->InstancesData->DeviceAddress != 0)
 					vkGeometry.geometry.instances.data.deviceAddress = (VkDeviceAddress)geometry->InstancesData->DeviceAddress;
 				else
@@ -4041,6 +4041,7 @@ namespace UnlimRealms
 		this->grafScratchBuffer.reset();
 		this->structureType = GrafAccelerationStructureType::Undefined;
 		this->structureBuildFlags = GrafAccelerationStructureBuildFlags(0);
+		this->structureDeviceAddress = 0;
 
 		return Result(Success);
 	}
@@ -4188,6 +4189,14 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 
 		#endif
+		// retrieve device address
+
+		VkAccelerationStructureDeviceAddressInfoKHR vkDeviceAddresInfo = {};
+		vkDeviceAddresInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+		vkDeviceAddresInfo.pNext = ur_null;
+		vkDeviceAddresInfo.accelerationStructure = this->vkAccelerationStructure;
+		
+		this->structureDeviceAddress = vkGetAccelerationStructureDeviceAddressKHR(vkDevice, &vkDeviceAddresInfo);
 
 		return Result(Success);
 	#else

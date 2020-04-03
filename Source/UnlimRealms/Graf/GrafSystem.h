@@ -578,6 +578,27 @@ namespace UnlimRealms
 	typedef ur_uint GrafAccelerationStructureGeometryFlags;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafAccelerationStructureInstanceFlag
+	{
+		TriangleFacingCullDisable = (1 << 0),
+		TriangleFrontCounterClockwise = (1 << 1),
+		ForceOpaque = (1 << 2),
+		ForceNoOpaque = (1 << 3)
+	};
+	typedef ur_uint GrafAccelerationStructureInstanceFlags;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafAccelerationStructureInstance
+	{
+		ur_float Transform[3][4];
+		ur_uint32 Index : 24;
+		ur_uint32 Mask : 8;
+		ur_uint32 ShaderTableRecordOffset : 24;
+		ur_uint32 Flags : 8;
+		ur_uint64 AccelerationStructureHandle;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GrafAccelerationStructureGeometryDesc
 	{
 		GrafAccelerationStructureGeometryType GeometryType;
@@ -1190,10 +1211,13 @@ namespace UnlimRealms
 
 		inline GrafAccelerationStructureBuildFlags GetStructureBuildFlags() const;
 
+		inline ur_uint64 GetDeviceAddress() const;
+
 	protected:
 
 		GrafAccelerationStructureType structureType;
 		GrafAccelerationStructureBuildFlags structureBuildFlags;
+		ur_uint64 structureDeviceAddress;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
