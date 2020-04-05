@@ -3553,6 +3553,8 @@ namespace UnlimRealms
 		vkWriteDescriptorSet.pBufferInfo = ur_null;
 		vkWriteDescriptorSet.pTexelBufferView = ur_null;
 
+		vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, ur_null);
+
 		return Result(Success);
 	#else
 		return Result(NotImplemented);

@@ -340,11 +340,11 @@ int VoxelPlanetApp::Run()
 			{
 				ur_float3 pos;
 			};
-			const ur_float vs = 10000.0;
+			const ur_float vs = 0.5f;
 			VertexSample sampleVertices[] = {
-				{ {-0.5f * vs, 0.5f * vs, 1.0f } },
-				{ { 0.5f * vs,-0.5f * vs, 1.0f } },
-				{ {-0.5f * vs,-0.5f * vs, 1.0f } }
+				{ {-1.0f * vs,-1.0f * vs, 1.0f } },
+				{ { 1.0f * vs,-1.0f * vs, 1.0f } },
+				{ { 0.0f * vs, 1.0f * vs, 1.0f } }
 			};
 			
 			typedef ur_uint32 IndexSample;
@@ -374,7 +374,7 @@ int VoxelPlanetApp::Run()
 			accelStructGeomDescBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
 			accelStructGeomDescBL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
 			accelStructGeomDescBL.IndexType = GrafIndexType::UINT32;
-			accelStructGeomDescBL.PrimitiveCountMax = 12; // 1 cube
+			accelStructGeomDescBL.PrimitiveCountMax = 128;
 			accelStructGeomDescBL.VertexCountMax = 8;
 			accelStructGeomDescBL.TransformsEnabled = false;
 
@@ -407,6 +407,8 @@ int VoxelPlanetApp::Run()
 			cmdListBuildAccelStructBL->BuildAccelerationStructure(this->accelerationStructureBL.get(), &sampleGeometryDataBL, 1);
 			cmdListBuildAccelStructBL->End();
 			grafDevice->Record(cmdListBuildAccelStructBL);
+			grafDevice->Submit();
+			grafDevice->WaitIdle();
 
 			// initiaize top level acceleration structure container
 
@@ -414,7 +416,7 @@ int VoxelPlanetApp::Run()
 			accelStructGeomDescTL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
 			accelStructGeomDescTL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
 			accelStructGeomDescTL.IndexType = GrafIndexType::UINT32;
-			accelStructGeomDescTL.PrimitiveCountMax = 12; // 1 cube
+			accelStructGeomDescTL.PrimitiveCountMax = 128;
 			accelStructGeomDescTL.VertexCountMax = 8;
 			accelStructGeomDescTL.TransformsEnabled = false;
 
@@ -431,7 +433,11 @@ int VoxelPlanetApp::Run()
 
 			GrafAccelerationStructureInstance sampleInstances[] = {
 				{
-					{ 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f },
+					{
+						1.0f, 0.0f, 0.0f, 0.0f,
+						0.0f, 1.0f, 0.0f, 0.0f,
+						0.0f, 0.0f, 1.0f, 0.0f
+					},
 					0, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
 					this->accelerationStructureBL->GetDeviceAddress()
 				}
@@ -461,12 +467,13 @@ int VoxelPlanetApp::Run()
 			cmdListBuildAccelStructTL->End();
 			grafDevice->Record(cmdListBuildAccelStructTL);
 			grafDevice->Submit();
+			grafDevice->WaitIdle();
 
 			// shaders
 
 			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleRaygen", GrafShaderType::RayGen, this->shaderRayGen);
-			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleClosestHit", GrafShaderType::ClosestHit, this->shaderClosestHit);
 			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleMiss", GrafShaderType::Miss, this->shaderMiss);
+			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleClosestHit", GrafShaderType::ClosestHit, this->shaderClosestHit);
 
 			// global shader bindings
 
@@ -492,8 +499,8 @@ int VoxelPlanetApp::Run()
 
 			GrafShader* shaderStages[] = {
 				this->shaderRayGen.get(),
-				this->shaderClosestHit.get(),
-				this->shaderMiss.get()
+				this->shaderMiss.get(),
+				this->shaderClosestHit.get()
 			};
 
 			GrafRayTracingShaderGroupDesc shaderGroups[3];
@@ -501,11 +508,11 @@ int VoxelPlanetApp::Run()
 			shaderGroups[0].Type = GrafRayTracingShaderGroupType::General;
 			shaderGroups[0].GeneralShaderIdx = 0; // shaderRayGen
 			shaderGroups[1] = GrafRayTracingShaderGroupDesc::Default;
-			shaderGroups[1].Type = GrafRayTracingShaderGroupType::TrianglesHit;
-			shaderGroups[1].ClosestHitShaderIdx = 1; // shaderClosestHit
+			shaderGroups[1].Type = GrafRayTracingShaderGroupType::General;
+			shaderGroups[1].GeneralShaderIdx = 1; // shaderMiss
 			shaderGroups[2] = GrafRayTracingShaderGroupDesc::Default;
-			shaderGroups[2].Type = GrafRayTracingShaderGroupType::General;
-			shaderGroups[2].GeneralShaderIdx = 2; // shaderMiss
+			shaderGroups[2].Type = GrafRayTracingShaderGroupType::TrianglesHit;
+			shaderGroups[2].ClosestHitShaderIdx = 2; // shaderClosestHit
 
 			GrafDescriptorTableLayout* bindingLayouts[] = {
 				this->bindingTableLayout.get()
@@ -538,8 +545,8 @@ int VoxelPlanetApp::Run()
 				return Result(Success);
 			});
 			this->rayGenShaderTable = { this->shaderHandlesBuffer.get(), 0 * shaderGroupHandleSize, shaderGroupHandleSize, shaderGroupHandleSize };
-			this->missShaderTable = { this->shaderHandlesBuffer.get(), 2 * shaderGroupHandleSize, shaderGroupHandleSize, shaderGroupHandleSize };
-			this->hitShaderTable = { this->shaderHandlesBuffer.get(), 1 * shaderGroupHandleSize, shaderGroupHandleSize, shaderGroupHandleSize };
+			this->missShaderTable = { this->shaderHandlesBuffer.get(), 1 * shaderGroupHandleSize, shaderGroupHandleSize, shaderGroupHandleSize };
+			this->hitShaderTable = { this->shaderHandlesBuffer.get(), 2 * shaderGroupHandleSize, shaderGroupHandleSize, shaderGroupHandleSize };
 		}
 
 		void Render(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4x4 &viewProj, const ur_float3 &cameraPos)

@@ -14,6 +14,7 @@ typedef BuiltInTriangleIntersectionAttributes SampleHitAttributes;
 struct SampleRayData
 {
 	float4 color;
+	float2 clipPos;
 };
 
 [shader("raygeneration")]
@@ -37,6 +38,7 @@ void SampleRaygen()
 
 	SampleRayData rayData;
 	rayData.color = 0.0;
+	rayData.clipPos = rayClip;
 
 	// ray trace
 	uint instanceInclusionMask = 0xff;
@@ -51,28 +53,22 @@ void SampleRaygen()
 		missShaderIndex,
 		ray, rayData);
 
-	if (rayData.color.a > 0)
-	{
-		// write ray result
-		g_TargetTexture[dispatchIdx.xy] = rayData.color;
-	}
-	else
-	{
-		// TEMP: debug
-		float4 targetValue = g_TargetTexture[dispatchIdx.xy];
-		targetValue.xyz = lerp(targetValue.xyz, pow(float3(max(0.0, ray.Origin.xy), 0.0), 2) * 5, 0.5);
-		g_TargetTexture[dispatchIdx.xy] = targetValue;
-	}
-}
-
-[shader("closesthit")]
-void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attribs)
-{
-	rayData.color = float4(0.0f, 0.0f, 1.0f, 1.0f);
+	// write ray result
+	float4 targetValue = g_TargetTexture[dispatchIdx.xy];
+	targetValue.xyz = lerp(targetValue.xyz, rayData.color.xyz, rayData.color.w);
+	targetValue.a = saturate(targetValue.a + rayData.color.a);
+	g_TargetTexture[dispatchIdx.xy] = targetValue;
 }
 
 [shader("miss")]
 void SampleMiss(inout SampleRayData rayData)
 {
-	//rayData.color = float4(1.0f, 0.0f, 0.0f, 1.0f);
+	rayData.color = float4(pow(float3(max(0.0, rayData.clipPos.xy), 0.0), 2) * 5, 0.5);
+}
+
+[shader("closesthit")]
+void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attribs)
+{
+	float3 baryCoords = float3(1.0 - attribs.barycentrics.x - attribs.barycentrics.y, attribs.barycentrics.x, attribs.barycentrics.y);
+	rayData.color = float4(baryCoords.xyz, 0.5f);
 }
