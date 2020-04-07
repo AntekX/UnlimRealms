@@ -6,6 +6,7 @@
 #include "VoxelPlanetApp.h"
 #include "D3D12SandboxApp.h"
 #include "VulkanSandboxApp.h"
+#include "RayTracingSandboxApp.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -15,6 +16,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	VoxelPlanetApp demoApp;
 	//D3D12SandboxApp demoApp;
 	//VulkanSandboxApp demoApp;
+	//RayTracingSandboxApp demoApp;
 	
 	return demoApp.Run();
 }

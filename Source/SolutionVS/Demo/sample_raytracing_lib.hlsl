@@ -4,6 +4,7 @@ struct SceneConstants
 	float4x4 viewProjInv;
 	float4 cameraPos;
 	float4 viewportSize; // w, h, 1/w, 1/h
+	float4 clearColor;
 };
 
 ConstantBuffer<SceneConstants> g_SceneCB : register(b0);
@@ -54,21 +55,19 @@ void SampleRaygen()
 		ray, rayData);
 
 	// write ray result
-	float4 targetValue = g_TargetTexture[dispatchIdx.xy];
-	targetValue.xyz = lerp(targetValue.xyz, rayData.color.xyz, rayData.color.w);
-	targetValue.a = saturate(targetValue.a + rayData.color.a);
-	g_TargetTexture[dispatchIdx.xy] = targetValue;
+	g_TargetTexture[dispatchIdx.xy] = rayData.color;
 }
 
 [shader("miss")]
 void SampleMiss(inout SampleRayData rayData)
 {
-	rayData.color = float4(pow(float3(max(0.0, rayData.clipPos.xy), 0.0), 2) * 5, 0.5);
+	//rayData.color = float4(pow(float3(abs(rayData.clipPos.xy), 0.0), 2), 1.0);
+	rayData.color = g_SceneCB.clearColor;
 }
 
 [shader("closesthit")]
 void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attribs)
 {
 	float3 baryCoords = float3(1.0 - attribs.barycentrics.x - attribs.barycentrics.y, attribs.barycentrics.x, attribs.barycentrics.y);
-	rayData.color = float4(baryCoords.xyz, 0.5f);
+	rayData.color = float4(baryCoords.xyz, 1.0);
 }
