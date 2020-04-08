@@ -68,16 +68,19 @@ void SampleRaygen()
 		ray, rayData);
 
 	// write ray result
-	float4 targetValue = g_SceneCB.clearColor;
-	targetValue.xyz = lerp(targetValue.xyz, rayData.color.xyz, rayData.color.a);
+	float4 targetValue = 0.0;
+	targetValue.xyz = lerp(targetValue.xyz, rayData.color.xyz, rayData.color.w);
+	targetValue.w = saturate(targetValue.w + rayData.color.w);
 	g_TargetTexture[dispatchIdx.xy] = targetValue;
 }
 
 [shader("miss")]
 void SampleMiss(inout SampleRayData rayData)
 {
-	rayData.color.xyz = float3(max(rayData.clipPos.xy, 0.0), 0.0);
-	rayData.color.w = saturate(max(rayData.color.x, rayData.color.y));
+	//rayData.color.xyz = float3(max(rayData.clipPos.xy, 0.0), 0.0);
+	//rayData.color.w = saturate(max(rayData.color.x, rayData.color.y));
+	
+	// TODO: calculate atmosphere color here
 }
 
 [shader("miss")]

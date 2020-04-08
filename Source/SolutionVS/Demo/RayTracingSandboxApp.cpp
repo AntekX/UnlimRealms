@@ -404,7 +404,7 @@ int RayTracingSandboxApp::Run()
 						0.0f, 1.0f, 0.0f, 0.0f,
 						0.0f, 0.0f, 1.0f, 0.0f
 					},
-					0, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) /*| ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)*/),
+					0, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
 					this->accelerationStructureBL->GetDeviceAddress()
 				}
 			};
@@ -657,7 +657,7 @@ int RayTracingSandboxApp::Run()
 				grafViewport.Far = 1.0f;
 				grafCmdListCrnt->SetViewport(grafViewport, true);
 
-				GrafClearValue rtClearValue = { 0.025f, 0.025f, 0.05f, 0.0f };
+				GrafClearValue rtClearValue = { 0.8f, 0.9f, 1.0f, 0.0f };
 				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
 				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), rtClearValue);
 
