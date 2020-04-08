@@ -57,6 +57,8 @@ namespace UnlimRealms
 
 		const ur_float4x4& GetViewProj();
 
+		const ur_float4x4& GetViewProjInv();
+
 		inline ur_float GetMinViewDist() const;
 
 		inline ur_float GetMaxViewDist() const;
@@ -81,6 +83,7 @@ namespace UnlimRealms
 		ur_float4x4 view;
 		ur_float4x4 proj;
 		ur_float4x4 viewProj;
+		ur_float4x4 viewProjInv;
 		bool viewChanged;
 		bool projChanged;
 	};

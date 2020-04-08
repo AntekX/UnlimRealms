@@ -14,6 +14,7 @@
 #include "ImguiRender/ImguiRender.h"
 #include "GenericRender/GenericRender.h"
 #include "Camera/CameraControl.h"
+#include "HDRRender/HDRRender.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
@@ -62,73 +63,70 @@ int RayTracingSandboxApp::Run()
 		realm.GetLog().WriteLine("RayTracingSandboxApp: failed to initialize GrafRenderer", Log::Error);
 	}
 
-	// initialize sample GRAF objects
-	std::unique_ptr<GrafImage> grafRTImageColor;
-	std::unique_ptr<GrafImage> grafRTImageDepth;
-	std::unique_ptr<GrafRenderTarget> grafColorDepthTarget;
-	std::unique_ptr<GrafRenderPass> grafColorDepthPass;
+	// initialize GRAF objects
 	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
-	auto& deinitializeGrafRenderTargetObjects = [&](GrafCommandList* deferredDestroyCmdList = ur_null) -> void
+	std::unique_ptr<GrafRenderPass> grafPassColorDepth;
+	std::unique_ptr<GrafImage> grafImageRTDepth;
+	std::vector<std::unique_ptr<GrafRenderTarget>> grafTargetColorDepth;
+	auto& initializeGrafRenderTargetObjects = [&]() -> Result
+	{
+		Result res(Success);
+		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
+		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
+
+		// depth target image
+		res = grafSystem->CreateImage(grafImageRTDepth);
+		if (Failed(res)) return res;
+		GrafImageDesc grafRTImageDepthDesc = {
+			GrafImageType::Tex2D,
+			GrafFormat::D24_UNORM_S8_UINT,
+			ur_uint3(canvasWidth, canvasHeight, 1), 1,
+			ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget),
+			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+		};
+		res = grafImageRTDepth->Initialize(grafDevice, { grafRTImageDepthDesc });
+		if (Failed(res)) return res;
+
+		// initialize render target(s)
+		grafTargetColorDepth.resize(grafRenderer->GetGrafCanvas()->GetSwapChainImageCount());
+		for (ur_uint iimg = 0; iimg < grafRenderer->GetGrafCanvas()->GetSwapChainImageCount(); ++iimg)
+		{
+			res = grafSystem->CreateRenderTarget(grafTargetColorDepth[iimg]);
+			if (Failed(res)) return res;
+			GrafImage* grafColorDepthTargetImages[] = {
+				grafRenderer->GetGrafCanvas()->GetSwapChainImage(iimg),
+				grafImageRTDepth.get()
+			};
+			GrafRenderTarget::InitParams grafColorDepthTargetParams = {
+				grafPassColorDepth.get(),
+				grafColorDepthTargetImages,
+				ur_array_size(grafColorDepthTargetImages)
+			};
+			res = grafTargetColorDepth[iimg]->Initialize(grafDevice, grafColorDepthTargetParams);
+			if (Failed(res)) return res;
+		}
+
+		return res;
+	};
+	auto& deinitializeGrafRenderTargetObjects = [&](GrafCommandList* deferredDestroyCmdList = ur_null) -> Result
 	{
 		if (deferredDestroyCmdList != ur_null)
 		{
-			GrafRenderTarget *grafPrevRT = grafColorDepthTarget.release();
-			GrafImage *grafPrevRTImageColor = grafRTImageColor.release();
-			GrafImage *grafPrevRTImageDepth = grafRTImageDepth.release();
+			GrafImage *grafPrevRTImageDepth = grafImageRTDepth.release();
 			grafRenderer->AddCommandListCallback(deferredDestroyCmdList, {},
-				[grafPrevRT, grafPrevRTImageColor, grafPrevRTImageDepth](GrafCallbackContext& ctx) -> Result
+				[grafPrevRTImageDepth](GrafCallbackContext& ctx) -> Result
 			{
-				delete grafPrevRT;
-				delete grafPrevRTImageColor;
 				delete grafPrevRTImageDepth;
 				return Result(Success);
 			});
 		}
-		grafColorDepthTarget.reset();
-		grafRTImageColor.reset();
-		grafRTImageDepth.reset();
+		grafTargetColorDepth.clear();
+		grafImageRTDepth.reset();
+		return Result(Success);
 	};
-	auto& deinitializeGrafFrameObjects = [&]() -> void
+	auto& initializeGrafObjects = [&]() -> Result
 	{
-		grafMainCmdList.clear();
-	};
-	auto& deinitializeGrafObjects = [&]() -> void
-	{
-		// order matters!
-		deinitializeGrafRenderTargetObjects();
-		deinitializeGrafFrameObjects();
-		grafColorDepthPass.reset();
-	};
-	Result grafRes = NotInitialized;
-	auto& initializeGrafObjects = [&]() -> void
-	{
-		if (ur_null == grafRenderer) return;
-		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
-		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
-
-		// color & depth render pass
-		grafRes = grafSystem->CreateRenderPass(grafColorDepthPass);
-		if (Failed(grafRes)) return;
-		GrafRenderPassImageDesc grafColorDepthPassImages[] = {
-			{ // color
-				GrafFormat::B8G8R8A8_UNORM,
-				GrafImageState::Undefined, GrafImageState::ColorWrite,
-				GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
-				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
-			},
-			{ // depth
-				GrafFormat::D24_UNORM_S8_UINT,
-				GrafImageState::Undefined, GrafImageState::DepthStencilWrite,
-				GrafRenderPassDataOp::Clear, GrafRenderPassDataOp::Store,
-				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
-			}
-		};
-		grafRes = grafColorDepthPass->Initialize(grafDevice, { grafColorDepthPassImages, ur_array_size(grafColorDepthPassImages) });
-		if (Failed(grafRes)) return;
-	};
-	auto& initializeGrafFrameObjects = [&]() -> void
-	{
-		if (Failed(grafRes)) return;
+		Result res(Success);
 		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
 		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 
@@ -139,64 +137,47 @@ int RayTracingSandboxApp::Run()
 		grafMainCmdList.resize(frameCount);
 		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
 		{
-			grafRes = grafSystem->CreateCommandList(grafMainCmdList[iframe]);
-			if (Failed(grafRes)) break;
-			grafRes = grafMainCmdList[iframe]->Initialize(grafDevice);
-			if (Failed(grafRes)) break;
+			res = grafSystem->CreateCommandList(grafMainCmdList[iframe]);
+			if (Failed(res)) break;
+			res = grafMainCmdList[iframe]->Initialize(grafDevice);
+			if (Failed(res)) break;
 		}
-		if (Failed(grafRes)) return;
+		if (Failed(res)) return res;
+
+		// color & depth render pass
+		res = grafSystem->CreateRenderPass(grafPassColorDepth);
+		if (Failed(res)) return res;
+		GrafRenderPassImageDesc grafPassColorDepthImages[] = {
+			{ // color
+				GrafFormat::B8G8R8A8_UNORM,
+				GrafImageState::ColorWrite, GrafImageState::ColorWrite,
+				GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
+				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+			},
+			{ // depth
+				GrafFormat::D24_UNORM_S8_UINT,
+				GrafImageState::DepthStencilWrite, GrafImageState::DepthStencilWrite,
+				GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
+				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+			}
+		};
+		res = grafPassColorDepth->Initialize(grafDevice, { grafPassColorDepthImages, ur_array_size(grafPassColorDepthImages) });
+		if (Failed(res)) return res;
+
+		// initialize render target(s)
+		res = initializeGrafRenderTargetObjects();
+
+		return res;
 	};
-	auto& initializeGrafRenderTargetObjects = [&]() -> void
+	auto& deinitializeGrafObjects = [&]() -> Result
 	{
-		if (Failed(grafRes)) return;
-		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
-		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
-
-		// color target image
-		grafRes = grafSystem->CreateImage(grafRTImageColor);
-		if (Failed(grafRes)) return;
-		GrafImageDesc grafRTImageColorDesc = {
-			GrafImageType::Tex2D,
-			GrafFormat::B8G8R8A8_UNORM,
-			ur_uint3(canvasWidth, canvasHeight, 1), 1,
-			ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderReadWrite) | ur_uint(GrafImageUsageFlag::TransferSrc),
-			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
-		};
-		grafRes = grafRTImageColor->Initialize(grafDevice, { grafRTImageColorDesc });
-		if (Failed(grafRes)) return;
-
-		// depth target image
-		grafRes = grafSystem->CreateImage(grafRTImageDepth);
-		if (Failed(grafRes)) return;
-		GrafImageDesc grafRTImageDepthDesc = {
-			GrafImageType::Tex2D,
-			GrafFormat::D24_UNORM_S8_UINT,
-			ur_uint3(canvasWidth, canvasHeight, 1), 1,
-			ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget),
-			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
-		};
-		grafRes = grafRTImageDepth->Initialize(grafDevice, { grafRTImageDepthDesc });
-		if (Failed(grafRes)) return;
-
-		// initialize render target
-		grafRes = grafSystem->CreateRenderTarget(grafColorDepthTarget);
-		if (Failed(grafRes)) return;
-		GrafImage* grafColorDepthTargetImages[] = {
-			grafRTImageColor.get(),
-			grafRTImageDepth.get()
-		};
-		GrafRenderTarget::InitParams grafColorDepthTargetParams = {
-			grafColorDepthPass.get(),
-			grafColorDepthTargetImages,
-			ur_array_size(grafColorDepthTargetImages)
-		};
-		grafRes = grafColorDepthTarget->Initialize(grafDevice, grafColorDepthTargetParams);
-		if (Failed(grafRes)) return;
+		deinitializeGrafRenderTargetObjects();
+		grafPassColorDepth.reset();
+		grafMainCmdList.clear();
+		return Result(Success);
 	};
-	initializeGrafObjects();
-	initializeGrafFrameObjects();
-	initializeGrafRenderTargetObjects();
-	if (Failed(grafRes))
+	res = initializeGrafObjects();
+	if (Failed(res))
 	{
 		deinitializeGrafObjects();
 		realm.GetLog().WriteLine("RayTracingSandboxApp: failed to initialize one or more graphics objects", Log::Error);
@@ -222,22 +203,19 @@ int RayTracingSandboxApp::Run()
 	camera.SetPosition(ur_float3(0.0f, 0.0f, -10.0f));
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
 
-	// animated clear color test
-	static const ur_float clearColorDelay = 2.0f;
-	static const ur_float4 clearColors[] = {
-		{ 0.0f, 0.0f, 0.0f, 1.0f },
-		{ 0.0f, 0.0f, 1.0f, 1.0f },
-		{ 0.0f, 1.0f, 0.0f, 1.0f },
-		{ 0.0f, 1.0f, 1.0f, 1.0f },
-		{ 1.0f, 0.0f, 0.0f, 1.0f },
-		{ 1.0f, 0.0f, 1.0f, 1.0f },
-		{ 1.0f, 1.0f, 0.0f, 1.0f },
-		{ 1.0f, 1.0f, 1.0f, 1.0f },
-	};
-	ur_uint crntColorId = 0;
-	ur_uint nextColorId = (crntColorId + 1) % ur_array_size(clearColors);
-	ur_float crntColorWeight = 0.0f;
-	ur_float4 crntClearColor(0.0f);
+	// HDR rendering manager
+	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
+	{
+		HDRRender::Params hdrParams = HDRRender::Params::Default;
+		hdrParams.BloomThreshold = 4.0f;
+		hdrRender->SetParams(hdrParams);
+		res = hdrRender->Init(canvasWidth, canvasHeight, grafImageRTDepth.get());
+		if (Failed(res))
+		{
+			realm.GetLog().WriteLine("RayTracingSandboxApp: failed to initialize HDRRender", Log::Error);
+			hdrRender.reset();
+		}
+	}
 
 	// ray tracing scene
 	class RayTracingScene : public RealmEntity
@@ -255,6 +233,7 @@ int RayTracingSandboxApp::Run()
 		std::unique_ptr<GrafShader> shaderRayGen;
 		std::unique_ptr<GrafShader> shaderClosestHit;
 		std::unique_ptr<GrafShader> shaderMiss;
+		std::unique_ptr<GrafShader> shaderMissShadow;
 		std::unique_ptr<GrafRayTracingPipeline> pipelineState;
 		std::unique_ptr<GrafBuffer> shaderHandlesBuffer;
 		GrafStridedBufferRegionDesc rayGenShaderTable;
@@ -280,6 +259,7 @@ int RayTracingSandboxApp::Run()
 			grafRenderer->SafeDelete(shaderRayGen.release());
 			grafRenderer->SafeDelete(shaderClosestHit.release());
 			grafRenderer->SafeDelete(shaderMiss.release());
+			grafRenderer->SafeDelete(shaderMissShadow.release());
 			grafRenderer->SafeDelete(pipelineState.release());
 			grafRenderer->SafeDelete(shaderHandlesBuffer.release());
 		}
@@ -300,17 +280,38 @@ int RayTracingSandboxApp::Run()
 			{
 				ur_float3 pos;
 			};
-			const ur_float vs = 0.5f;
+			typedef ur_uint32 IndexSample;
+			#if (0) // triangle
+			ur_float vs = 0.5f;
 			VertexSample sampleVertices[] = {
 				{ {-1.0f * vs,-1.0f * vs, 1.0f } },
 				{ { 1.0f * vs,-1.0f * vs, 1.0f } },
 				{ { 0.0f * vs, 1.0f * vs, 1.0f } }
 			};
-
-			typedef ur_uint32 IndexSample;
 			IndexSample sampleIndices[] = {
 				0, 1, 2
 			};
+			#endif
+			#if (1)
+			VertexSample sampleVertices[] = {
+				// cube
+				{ {-1.0f,-1.0f,-1.0f} }, { { 1.0f,-1.0f,-1.0f} }, { {-1.0f, 1.0f,-1.0f} }, { { 1.0f, 1.0f,-1.0f} },
+				{ {-1.0f,-1.0f, 1.0f} }, { { 1.0f,-1.0f, 1.0f} }, { {-1.0f, 1.0f, 1.0f} }, { { 1.0f, 1.0f, 1.0f} },
+				// plane
+				{ {-10.0f,-3.0f,-10.0f} }, { { 10.0f,-3.0f,-10.0f} }, { {-10.0f,-3.0f, 10.0f} }, { { 10.0f,-3.0f, 10.0f} },
+			};
+			IndexSample sampleIndices[] = {
+				// cube
+				2, 3, 1, 1, 0, 2,
+				4, 5, 7, 7, 6, 4,
+				3, 7, 5, 5, 1, 3,
+				6, 2, 0, 0, 4, 6,
+				6, 7, 3, 3, 2, 6,
+				0, 1, 5, 5, 4, 0,
+				// plane
+				10, 11, 9, 9, 8, 10
+			};
+			#endif
 
 			GrafBuffer::InitParams sampleVBParams;
 			sampleVBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
@@ -334,7 +335,7 @@ int RayTracingSandboxApp::Run()
 			accelStructGeomDescBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
 			accelStructGeomDescBL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
 			accelStructGeomDescBL.IndexType = GrafIndexType::UINT32;
-			accelStructGeomDescBL.PrimitiveCountMax = 128;
+			accelStructGeomDescBL.PrimitiveCountMax = 12;
 			accelStructGeomDescBL.VertexCountMax = 8;
 			accelStructGeomDescBL.TransformsEnabled = false;
 
@@ -360,7 +361,7 @@ int RayTracingSandboxApp::Run()
 			sampleGeometryDataBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
 			sampleGeometryDataBL.GeometryFlags = ur_uint(GrafAccelerationStructureGeometryFlag::Opaque);
 			sampleGeometryDataBL.TrianglesData = &sampleTrianglesData;
-			sampleGeometryDataBL.PrimitiveCount = ur_array_size(sampleVertices) / 3;
+			sampleGeometryDataBL.PrimitiveCount = ur_array_size(sampleIndices) / 3;
 
 			GrafCommandList* cmdListBuildAccelStructBL = grafRenderer->GetTransientCommandList();
 			cmdListBuildAccelStructBL->Begin();
@@ -373,12 +374,17 @@ int RayTracingSandboxApp::Run()
 			// initiaize top level acceleration structure container
 
 			GrafAccelerationStructureGeometryDesc accelStructGeomDescTL = {};
+			#if (1)
 			accelStructGeomDescTL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
 			accelStructGeomDescTL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
 			accelStructGeomDescTL.IndexType = GrafIndexType::UINT32;
-			accelStructGeomDescTL.PrimitiveCountMax = 128;
+			accelStructGeomDescTL.PrimitiveCountMax = 12;
 			accelStructGeomDescTL.VertexCountMax = 8;
 			accelStructGeomDescTL.TransformsEnabled = false;
+			#else
+			accelStructGeomDescTL.GeometryType = GrafAccelerationStructureGeometryType::Instances;
+			accelStructGeomDescTL.PrimitiveCountMax = 1;
+			#endif
 
 			GrafAccelerationStructure::InitParams accelStructParamsTL = {};
 			accelStructParamsTL.StructureType = GrafAccelerationStructureType::TopLevel;
@@ -398,7 +404,7 @@ int RayTracingSandboxApp::Run()
 						0.0f, 1.0f, 0.0f, 0.0f,
 						0.0f, 0.0f, 1.0f, 0.0f
 					},
-					0, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+					0, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) /*| ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)*/),
 					this->accelerationStructureBL->GetDeviceAddress()
 				}
 			};
@@ -433,6 +439,7 @@ int RayTracingSandboxApp::Run()
 
 			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleRaygen", GrafShaderType::RayGen, this->shaderRayGen);
 			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleMiss", GrafShaderType::Miss, this->shaderMiss);
+			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleMissShadow", GrafShaderType::Miss, this->shaderMissShadow);
 			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleClosestHit", GrafShaderType::ClosestHit, this->shaderClosestHit);
 
 			// global shader bindings
@@ -460,10 +467,11 @@ int RayTracingSandboxApp::Run()
 			GrafShader* shaderStages[] = {
 				this->shaderRayGen.get(),
 				this->shaderMiss.get(),
+				this->shaderMissShadow.get(),
 				this->shaderClosestHit.get()
 			};
 
-			GrafRayTracingShaderGroupDesc shaderGroups[3];
+			GrafRayTracingShaderGroupDesc shaderGroups[4];
 			shaderGroups[0] = GrafRayTracingShaderGroupDesc::Default;
 			shaderGroups[0].Type = GrafRayTracingShaderGroupType::General;
 			shaderGroups[0].GeneralShaderIdx = 0; // shaderRayGen
@@ -471,8 +479,11 @@ int RayTracingSandboxApp::Run()
 			shaderGroups[1].Type = GrafRayTracingShaderGroupType::General;
 			shaderGroups[1].GeneralShaderIdx = 1; // shaderMiss
 			shaderGroups[2] = GrafRayTracingShaderGroupDesc::Default;
-			shaderGroups[2].Type = GrafRayTracingShaderGroupType::TrianglesHit;
-			shaderGroups[2].ClosestHitShaderIdx = 2; // shaderClosestHit
+			shaderGroups[2].Type = GrafRayTracingShaderGroupType::General;
+			shaderGroups[2].GeneralShaderIdx = 2; // shaderMissShadow
+			shaderGroups[3] = GrafRayTracingShaderGroupDesc::Default;
+			shaderGroups[3].Type = GrafRayTracingShaderGroupType::TrianglesHit;
+			shaderGroups[3].ClosestHitShaderIdx = 3; // shaderClosestHit
 
 			GrafDescriptorTableLayout* bindingLayouts[] = {
 				this->bindingTableLayout.get()
@@ -504,12 +515,12 @@ int RayTracingSandboxApp::Run()
 				rayTracingPipeline->GetShaderGroupHandles(0, pipelineParams.ShaderGroupCount, shaderBufferParams.BufferDesc.SizeInBytes, mappedDataPtr);
 				return Result(Success);
 			});
-			this->rayGenShaderTable = { this->shaderHandlesBuffer.get(), 0 * shaderGroupHandleSize, shaderGroupHandleSize, shaderGroupHandleSize };
-			this->missShaderTable = { this->shaderHandlesBuffer.get(), 1 * shaderGroupHandleSize, shaderGroupHandleSize, shaderGroupHandleSize };
-			this->hitShaderTable = { this->shaderHandlesBuffer.get(), 2 * shaderGroupHandleSize, shaderGroupHandleSize, shaderGroupHandleSize };
+			this->rayGenShaderTable = { this->shaderHandlesBuffer.get(), 0 * shaderGroupHandleSize, 1 * shaderGroupHandleSize, shaderGroupHandleSize };
+			this->missShaderTable = { this->shaderHandlesBuffer.get(), 1 * shaderGroupHandleSize, 2 * shaderGroupHandleSize, shaderGroupHandleSize };
+			this->hitShaderTable = { this->shaderHandlesBuffer.get(), 3 * shaderGroupHandleSize, 1 * shaderGroupHandleSize, shaderGroupHandleSize };
 		}
 
-		void Render(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4 &clearColor, const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
+		void Render(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4 &clearColor, Camera& camera)
 		{
 			if (ur_null == this->grafRenderer)
 				return;
@@ -520,15 +531,17 @@ int RayTracingSandboxApp::Run()
 				ur_float4 cameraPos;
 				ur_float4 viewportSize;
 				ur_float4 clearColor;
+				ur_float4 lightDirection;
 			} cb;
 			ur_uint3 targetSize = grafTargetImage->GetDesc().Size;
-			cb.viewProjInv = ur_float4x4::Identity;// todo: calculate inverse matrix
-			cb.cameraPos = cameraPos;
+			cb.viewProjInv = camera.GetViewProjInv();
+			cb.cameraPos = camera.GetPosition();
 			cb.viewportSize.x = (ur_float)targetSize.x;
 			cb.viewportSize.y = (ur_float)targetSize.y;
 			cb.viewportSize.z = 1.0f / cb.viewportSize.x;
 			cb.viewportSize.w = 1.0f / cb.viewportSize.y;
 			cb.clearColor = clearColor;
+			cb.lightDirection = ur_float3::Normalize(ur_float3(1.0f, 1.0f, 1.0f));
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 			Allocation dynamicCBAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
 			dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
@@ -603,46 +616,38 @@ int RayTracingSandboxApp::Run()
 			timer = timeNow;
 			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f;  // to seconds
 
-			// clear color animation
-			crntColorWeight += elapsedTime / clearColorDelay;
-			if (crntColorWeight >= 1.0f)
-			{
-				ur_float intPart;
-				crntColorWeight = std::modf(crntColorWeight, &intPart);
-				crntColorId = (crntColorId + ur_uint(intPart)) % ur_array_size(clearColors);
-				nextColorId = (crntColorId + 1) % ur_array_size(clearColors);
-			}
-			crntClearColor = ur_float4::Lerp(clearColors[crntColorId], clearColors[nextColorId], crntColorWeight);
 			ctx.progress = 1;
 		});
 
 		// draw frame
-		if (grafRenderer != ur_null && canvasValid)
+		if (grafRenderer != ur_null)
 		{
-			// update render target size
-			if (canvasWidth != realm.GetCanvas()->GetClientBound().Width() ||
-				canvasHeight != realm.GetCanvas()->GetClientBound().Height())
-			{
-				// make sure prev RT objects are no longer used before destroying
-				GrafCommandList* grafCmdListPrev = grafMainCmdList[grafRenderer->GetPrevFrameId()].get();
-				deinitializeGrafRenderTargetObjects(grafCmdListPrev);
-				// recreate RT objects for new canvas dimensions
-				canvasWidth = realm.GetCanvas()->GetClientBound().Width();
-				canvasHeight = realm.GetCanvas()->GetClientBound().Height();
-				initializeGrafRenderTargetObjects();
-			}
-
 			// begin frame rendering
-			GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
-			GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
-			ur_uint frameIdx = grafRenderer->GetCurrentFrameId();
 			grafRenderer->BeginFrame();
 
-			auto drawFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void
+			// resize render target(s)
+			if (canvasValid &&
+				(canvasWidth != realm.GetCanvas()->GetClientBound().Width() ||
+					canvasHeight != realm.GetCanvas()->GetClientBound().Height()))
 			{
-				// updateFrameJob->Wait(); // wait till update job is fully finished; WaitProgress can be used instead to wait for specific update stage to avoid stalling draw thread
+				canvasWidth = realm.GetCanvas()->GetClientBound().Width();
+				canvasHeight = realm.GetCanvas()->GetClientBound().Height();
+				// use prev frame command list to make sure RT objects are no longer used before destroying
+				deinitializeGrafRenderTargetObjects(grafMainCmdList[grafRenderer->GetPrevFrameId()].get());
+				// recreate RT objects for new canvas dimensions
+				initializeGrafRenderTargetObjects();
+				// reinit HDR renderer images
+				if (hdrRender != ur_null)
+				{
+					hdrRender->Init(canvasWidth, canvasHeight, grafImageRTDepth.get());
+				}
+			}
 
-				GrafCommandList* grafCmdListCrnt = grafMainCmdList[frameIdx].get();
+			auto drawFrameJob = realm.GetJobSystem().Add(JobPriority::High, ur_null, [&](Job::Context& ctx) -> void
+			{
+				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
+				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
+				GrafCommandList* grafCmdListCrnt = grafMainCmdList[grafRenderer->GetCurrentFrameId()].get();
 				grafCmdListCrnt->Begin();
 
 				GrafViewportDesc grafViewport = {};
@@ -651,39 +656,41 @@ int RayTracingSandboxApp::Run()
 				grafViewport.Near = 0.0f;
 				grafViewport.Far = 1.0f;
 				grafCmdListCrnt->SetViewport(grafViewport, true);
-				grafCmdListCrnt->SetScissorsRect({ 0, 0, (ur_int)grafViewport.Width, (ur_int)grafViewport.Height });
-				//grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
-				//grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), { 1.0f, 0.0f, 0.0f, 1.0f }); // clear swap chain image directly
 
-				{ // color & depth render pass
+				GrafClearValue rtClearValue = { 0.025f, 0.025f, 0.05f, 0.0f };
+				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
+				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), rtClearValue);
 
-					updateFrameJob->WaitProgress(1); // make sure update job is done to this point
-					GrafClearValue rtClearValues[] = {
-						reinterpret_cast<GrafClearValue&>(crntClearColor), // color
-						{ 1.0f, 0.0f, 0.0f, 0.0f }, // depth & stencil
-					};
-					
-					// ray tracing scene
-					
+				if (hdrRender != ur_null)
+				{
+					// HDR & depth render pass
+
+					hdrRender->BeginRender(*grafCmdListCrnt);
+
+					// noet: non ray traced rendering can be done here
+
+					hdrRender->EndRender(*grafCmdListCrnt);
+
+					// ray traced scene
+
 					if (rayTracingScene != ur_null)
 					{
-						rayTracingScene->Render(grafCmdListCrnt, grafRTImageColor.get(), crntClearColor, camera.GetViewProj(), camera.GetPosition());
+						rayTracingScene->Render(grafCmdListCrnt, hdrRender->GetHDRRenderTarget()->GetImage(0), (ur_float4&)rtClearValue.f32, camera);
 					}
 
-					// copy RT color result to swap chain image
+					// resolve hdr result
 
-					grafCmdListCrnt->ImageMemoryBarrier(grafRTImageColor.get(), GrafImageState::Current, GrafImageState::TransferSrc);
-					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
-					grafCmdListCrnt->Copy(grafRTImageColor.get(), grafCanvas->GetCurrentImage());
-					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
+					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
+					hdrRender->Resolve(*grafCmdListCrnt, grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get());
 				}
 
 				{ // foreground color render pass (drawing directly into swap chain image)
 
+					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 					grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
+					grafCmdListCrnt->SetViewport(grafViewport, true);
 
 					// draw GUI
-
 					static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
 					static bool showGUI = true;
 					showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
@@ -694,6 +701,11 @@ int RayTracingSandboxApp::Run()
 						ImGui::ShowMetricsWindow();
 
 						grafRenderer->ShowImgui();
+						cameraControl.ShowImgui();
+						if (hdrRender != ur_null)
+						{
+							hdrRender->ShowImgui();
+						}
 
 						imguiRender->Render(*grafCmdListCrnt);
 					}
@@ -708,10 +720,7 @@ int RayTracingSandboxApp::Run()
 
 			drawFrameJob->Wait();
 
-			// submit command list(s) to device execution queue
-			grafDevice->Submit();
-
-			// present & move to next frame
+			// finalize & move to next frame
 			grafRenderer->EndFrameAndPresent();
 		}
 	}
@@ -724,6 +733,7 @@ int RayTracingSandboxApp::Run()
 
 	// destroy application objects
 	rayTracingScene.reset();
+	hdrRender.reset();
 
 	// destroy sample GRAF objects
 	deinitializeGrafObjects();

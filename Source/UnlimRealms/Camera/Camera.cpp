@@ -20,6 +20,10 @@ namespace UnlimRealms
 		this->fieldOfView = MathConst<float>::Pi * 0.3f;
 		this->aspectRatio = 1.0f;
 		this->frame.SetIdentity();
+		this->view.SetIdentity();
+		this->proj.SetIdentity();
+		this->viewProj.SetIdentity();
+		this->viewProjInv.SetIdentity();
 		this->viewChanged = true;
 		this->projChanged = true;
 	}
@@ -153,8 +157,21 @@ namespace UnlimRealms
 			this->GetView();
 			this->GetProj();
 			this->viewProj = ur_float4x4::Multiply(this->view, this->proj);
+			ur_float4x4::Inverse(this->viewProjInv, this->viewProj);
 		}
 		return this->viewProj;
+	}
+
+	const ur_float4x4& Camera::GetViewProjInv()
+	{
+		if (this->viewChanged || this->projChanged)
+		{
+			this->GetView();
+			this->GetProj();
+			this->viewProj = ur_float4x4::Multiply(this->view, this->proj);
+			ur_float4x4::Inverse(this->viewProjInv, this->viewProj);
+		}
+		return this->viewProjInv;
 	}
 	
 } // end namespace UnlimRealms
