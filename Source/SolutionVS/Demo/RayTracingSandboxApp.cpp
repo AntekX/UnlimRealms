@@ -279,42 +279,34 @@ int RayTracingSandboxApp::Run()
 			struct VertexSample
 			{
 				ur_float3 pos;
+				ur_float3 norm;
 			};
 			typedef ur_uint32 IndexSample;
-			#if (0) // triangle
-			ur_float vs = 0.5f;
-			VertexSample sampleVertices[] = {
-				{ {-1.0f * vs,-1.0f * vs, 1.0f } },
-				{ { 1.0f * vs,-1.0f * vs, 1.0f } },
-				{ { 0.0f * vs, 1.0f * vs, 1.0f } }
-			};
-			IndexSample sampleIndices[] = {
-				0, 1, 2
-			};
-			#endif
-			#if (1)
 			VertexSample sampleVertices[] = {
 				// cube
-				{ {-1.0f,-1.0f,-1.0f} }, { { 1.0f,-1.0f,-1.0f} }, { {-1.0f, 1.0f,-1.0f} }, { { 1.0f, 1.0f,-1.0f} },
-				{ {-1.0f,-1.0f, 1.0f} }, { { 1.0f,-1.0f, 1.0f} }, { {-1.0f, 1.0f, 1.0f} }, { { 1.0f, 1.0f, 1.0f} },
+				{ {-1.0f,-1.0f,-1.0f }, { 0.0f, 0.0f,-1.0f } }, { { 1.0f,-1.0f,-1.0f }, { 0.0f, 0.0f,-1.0f } }, { {-1.0f, 1.0f,-1.0f }, { 0.0f, 0.0f,-1.0f } }, { { 1.0f, 1.0f,-1.0f }, { 0.0f, 0.0f,-1.0f } },
+				{ {-1.0f,-1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } }, { { 1.0f,-1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } }, { {-1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } }, { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } },
+				{ { 1.0f,-1.0f,-1.0f }, { 1.0f, 0.0f, 0.0f } }, { { 1.0f,-1.0f, 1.0f }, { 1.0f, 0.0f, 0.0f } }, { { 1.0f, 1.0f,-1.0f }, { 1.0f, 0.0f, 0.0f } }, { { 1.0f, 1.0f, 1.0f }, { 1.0f, 0.0f, 0.0f } },
+				{ {-1.0f,-1.0f, 1.0f }, {-1.0f, 0.0f, 0.0f } }, { {-1.0f,-1.0f,-1.0f }, {-1.0f, 0.0f, 0.0f } }, { {-1.0f, 1.0f, 1.0f }, {-1.0f, 0.0f, 0.0f } }, { {-1.0f, 1.0f,-1.0f }, {-1.0f, 0.0f, 0.0f } },
+				{ {-1.0f, 1.0f,-1.0f }, { 0.0f, 1.0f, 0.0f } }, { { 1.0f, 1.0f,-1.0f }, { 0.0f, 1.0f, 0.0f } }, { {-1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f } }, { { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f } },
+				{ {-1.0f,-1.0f, 1.0f }, { 0.0f,-1.0f, 0.0f } }, { { 1.0f,-1.0f, 1.0f }, { 0.0f,-1.0f, 0.0f } }, { {-1.0f,-1.0f,-1.0f }, { 0.0f,-1.0f, 0.0f } }, { { 1.0f,-1.0f,-1.0f }, { 0.0f,-1.0f, 0.0f } },
 				// plane
-				{ {-10.0f,-3.0f,-10.0f} }, { { 10.0f,-3.0f,-10.0f} }, { {-10.0f,-3.0f, 10.0f} }, { { 10.0f,-3.0f, 10.0f} },
+				{ {-10.0f,-3.0f,-10.0f }, { 0.0f, 1.0f, 0.0f } }, { { 10.0f,-3.0f,-10.0f}, { 0.0f, 1.0f, 0.0f } }, { {-10.0f,-3.0f, 10.0f}, { 0.0f, 1.0f, 0.0f } }, { { 10.0f,-3.0f, 10.0f}, { 0.0f, 1.0f, 0.0f } },
 			};
 			IndexSample sampleIndices[] = {
 				// cube
 				2, 3, 1, 1, 0, 2,
 				4, 5, 7, 7, 6, 4,
-				3, 7, 5, 5, 1, 3,
-				6, 2, 0, 0, 4, 6,
-				6, 7, 3, 3, 2, 6,
-				0, 1, 5, 5, 4, 0,
+				10, 11, 9, 9, 8, 10,
+				14, 15, 13, 13, 12, 14,
+				18, 19, 17, 17, 16, 18,
+				22, 23, 21, 21, 20, 22,
 				// plane
-				10, 11, 9, 9, 8, 10
+				26, 27, 25, 25, 24, 26,
 			};
-			#endif
 
 			GrafBuffer::InitParams sampleVBParams;
-			sampleVBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
+			sampleVBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			sampleVBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			sampleVBParams.BufferDesc.SizeInBytes = sizeof(sampleVertices);
 			grafSystem->CreateBuffer(this->vertexBuffer);
@@ -322,7 +314,7 @@ int RayTracingSandboxApp::Run()
 			this->vertexBuffer->Write((ur_byte*)sampleVertices);
 
 			GrafBuffer::InitParams sampleIBParams;
-			sampleIBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
+			sampleIBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			sampleIBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			sampleIBParams.BufferDesc.SizeInBytes = sizeof(sampleIndices);
 			grafSystem->CreateBuffer(this->indexBuffer);
@@ -335,8 +327,8 @@ int RayTracingSandboxApp::Run()
 			accelStructGeomDescBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
 			accelStructGeomDescBL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
 			accelStructGeomDescBL.IndexType = GrafIndexType::UINT32;
-			accelStructGeomDescBL.PrimitiveCountMax = 12;
-			accelStructGeomDescBL.VertexCountMax = 8;
+			accelStructGeomDescBL.PrimitiveCountMax = ur_array_size(sampleIndices) / 3;
+			accelStructGeomDescBL.VertexCountMax = ur_array_size(sampleVertices);
 			accelStructGeomDescBL.TransformsEnabled = false;
 
 			GrafAccelerationStructure::InitParams accelStructParamsBL = {};
@@ -378,8 +370,8 @@ int RayTracingSandboxApp::Run()
 			accelStructGeomDescTL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
 			accelStructGeomDescTL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
 			accelStructGeomDescTL.IndexType = GrafIndexType::UINT32;
-			accelStructGeomDescTL.PrimitiveCountMax = 12;
-			accelStructGeomDescTL.VertexCountMax = 8;
+			accelStructGeomDescTL.PrimitiveCountMax = ur_array_size(sampleIndices) / 3;
+			accelStructGeomDescTL.VertexCountMax = ur_array_size(sampleVertices);
 			accelStructGeomDescTL.TransformsEnabled = false;
 			#else
 			accelStructGeomDescTL.GeometryType = GrafAccelerationStructureGeometryType::Instances;
@@ -447,6 +439,7 @@ int RayTracingSandboxApp::Run()
 			GrafDescriptorRangeDesc bindingTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 				{ GrafDescriptorType::AccelerationStructure, 0, 1 },
+				{ GrafDescriptorType::Buffer, 1, 2 },
 				{ GrafDescriptorType::RWTexture, 0, 1 }
 			};
 			GrafDescriptorTableLayoutDesc bindingTableLayoutDesc = {
@@ -548,8 +541,10 @@ int RayTracingSandboxApp::Run()
 
 			GrafDescriptorTable* descriptorTable = this->bindingTables[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
-			descriptorTable->SetRWImage(0, grafTargetImage);
 			descriptorTable->SetAccelerationStructure(0, this->accelerationStructureTL.get());
+			descriptorTable->SetBuffer(1, this->vertexBuffer.get());
+			descriptorTable->SetBuffer(2, this->indexBuffer.get());
+			descriptorTable->SetRWImage(0, grafTargetImage);
 
 			grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 			grafCmdList->BindRayTracingPipeline(this->pipelineState.get());

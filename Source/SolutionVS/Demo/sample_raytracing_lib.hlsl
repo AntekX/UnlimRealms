@@ -8,8 +8,17 @@ struct SceneConstants
 	float4 lightDirection;
 };
 
+struct Vertex
+{
+	float3 pos;
+	float3 norm;
+};
+
 ConstantBuffer<SceneConstants> g_SceneCB : register(b0);
 RaytracingAccelerationStructure g_SceneStructure : register(t0);
+//StructuredBuffer<Vertex> g_VertexBuffer: register(t1); // todo: fix
+ByteAddressBuffer g_VertexBuffer: register(t1);
+ByteAddressBuffer g_IndexBuffer: register(t2);
 RWTexture2D<float4> g_TargetTexture : register(u0);
 
 typedef BuiltInTriangleIntersectionAttributes SampleHitAttributes;
@@ -22,6 +31,44 @@ struct SampleShadowData
 {
 	bool occluded;
 };
+
+float CalculateDiffuseCoefficient(in float3 worldPos, in float3 incidentLightRay, in float3 normal)
+{
+	float fNDotL = saturate(dot(-incidentLightRay, normal));
+	return fNDotL;
+}
+
+float4 CalculateSpecularCoefficient(in float3 worldPos, in float3 incidentLightRay, in float3 normal, in float specularPower)
+{
+	float3 reflectedLightRay = normalize(reflect(incidentLightRay, normal));
+	return pow(saturate(dot(reflectedLightRay, normalize(-WorldRayDirection()))), specularPower);
+}
+
+float4 CalculatePhongLighting(in float3 worldPos, in float3 normal, in float4 albedo, in bool isInShadow, in float diffuseCoef = 1.0, in float specularCoef = 1.0, in float specularPower = 50)
+{
+	float shadowFactor = isInShadow ? 0.0 : 1.0;
+	float3 incidentLightRay = -g_SceneCB.lightDirection.xyz;
+
+	// diffuse
+	float4 lightDiffuseColor = float4(1.0, 1.0, 1.0, 1.0);
+	float Kd = CalculateDiffuseCoefficient(worldPos, incidentLightRay, normal);
+	float4 diffuseColor = shadowFactor * diffuseCoef * Kd * lightDiffuseColor * albedo;
+
+	// specular
+	float4 specularColor = float4(0, 0, 0, 0);
+	if (!isInShadow)
+	{
+		float4 lightSpecularColor = float4(1, 1, 1, 1);
+		float4 Ks = CalculateSpecularCoefficient(worldPos, incidentLightRay, normal, specularPower);
+		specularColor = specularCoef * Ks * lightSpecularColor;
+	}
+
+	// ambient
+	float4 ambientColor = float4(0.5, 0.5, 0.5, 1.0);
+	ambientColor = albedo * ambientColor;
+
+	return ambientColor + diffuseColor + specularColor;
+}
 
 [shader("raygeneration")]
 void SampleRaygen()
@@ -93,18 +140,40 @@ void SampleMissShadow(inout SampleShadowData shadowData)
 void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attribs)
 {
 	float3 baryCoords = float3(1.0 - attribs.barycentrics.x - attribs.barycentrics.y, attribs.barycentrics.x, attribs.barycentrics.y);
-	rayData.color = float4(baryCoords.xyz, 1.0);
+	float4 debugColor = float4(baryCoords.xyz, 1.0);
+	float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
+
+	// read vertex attributes
+
+	uint indexOffset = PrimitiveIndex() * 3 * 4;
+	uint3 indices = g_IndexBuffer.Load3(indexOffset);
+	#if (0)
+	Vertex vertices[3];
+	vertices[0] = g_VertexBuffer.Load(indices[0]);
+	vertices[1] = g_VertexBuffer.Load(indices[1]);
+	vertices[2] = g_VertexBuffer.Load(indices[2]);
+	float3 normal = vertices[0].norm;
+	#else
+	// read from byte address buffer
+	// todo: fix structured buffer support
+	uint vertexStride = 24;
+	uint vertexNormOfs = 12;
+	float3 normal;
+	uint vertexOfs = indices[0] * vertexStride + vertexNormOfs;
+	normal.x = asfloat(g_VertexBuffer.Load(vertexOfs + 0));
+	normal.y = asfloat(g_VertexBuffer.Load(vertexOfs + 4));
+	normal.z = asfloat(g_VertexBuffer.Load(vertexOfs + 8));
+	#endif
 
 	// simple shadow test
-	#if (1)
-
+	
 	SampleShadowData shadowData;
 	shadowData.occluded = true;
 
 	RayDesc ray;
 	ray.TMin = 0.001;
 	ray.TMax = 1.0e+4;
-	ray.Origin = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();;
+	ray.Origin = hitWorldPos;
 	ray.Direction = g_SceneCB.lightDirection.xyz;
 
 	uint instanceInclusionMask = 0xff;
@@ -114,17 +183,20 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	TraceRay(g_SceneStructure,
 		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
 		RAY_FLAG_FORCE_OPAQUE | // skip any hit shaders
-		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, // skip closets hit shaders (only miss shader writes to payload)
+		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, // skip closets hit shaders (only miss shader writes to shadow payload)
 		instanceInclusionMask,
 		rayContributionToHitGroupIndex,
 		multiplierForGeometryContributionToShaderIndex,
 		missShaderIndex,
 		ray, shadowData);
 
-	if (shadowData.occluded)
-	{
-		rayData.color.xyz *= 0.5;
-	}
+	// calculate lighting color
 
-	#endif
+	float4 albedo = debugColor;
+	float diffuseCoef = 0.9;
+	float specularCoef = 0.5;
+	float specularPower = 50.0;
+	float4 lightColor = CalculatePhongLighting(hitWorldPos, normal, albedo, shadowData.occluded, diffuseCoef, specularCoef, specularPower);
+
+	rayData.color = lightColor;
 }

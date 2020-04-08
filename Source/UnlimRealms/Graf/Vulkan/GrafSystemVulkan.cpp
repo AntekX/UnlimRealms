@@ -84,11 +84,15 @@ namespace UnlimRealms
 	// binding offsets per descriptor register type
 	// spir-v bytecode compiled from HLSL must use "-fvk-<b,s,t,u>-shift N M" command to apply offsets to corresponding register types (b,s,t,u)
 	static const ur_uint VulkanBindingsPerRegisterType = 256;
-	static const ur_uint VulkanBindingOffsetBuffer = 0;
-	static const ur_uint VulkanBindingOffsetSampler = VulkanBindingOffsetBuffer + VulkanBindingsPerRegisterType;
-	static const ur_uint VulkanBindingOffsetTexture = VulkanBindingOffsetSampler + VulkanBindingsPerRegisterType;
-	static const ur_uint VulkanBindingOffsetRWResource = VulkanBindingOffsetTexture + VulkanBindingsPerRegisterType;
-	static const ur_uint VulkanBindingOffsetAccelerationStructure = VulkanBindingOffsetTexture;
+	static const ur_uint VulkanBindingOffsetConstantBuffer = 0;
+	static const ur_uint VulkanBindingOffsetSampler = VulkanBindingOffsetConstantBuffer + VulkanBindingsPerRegisterType;
+	static const ur_uint VulkanBindingOffsetReadOnlyResource = VulkanBindingOffsetSampler + VulkanBindingsPerRegisterType;
+	static const ur_uint VulkanBindingOffsetReadWriteResource = VulkanBindingOffsetReadOnlyResource + VulkanBindingsPerRegisterType;
+	static const ur_uint VulkanBindingOffsetTexture = VulkanBindingOffsetReadOnlyResource;
+	static const ur_uint VulkanBindingOffsetBuffer = VulkanBindingOffsetReadOnlyResource;
+	static const ur_uint VulkanBindingOffsetRWTexture = VulkanBindingOffsetReadWriteResource;
+	static const ur_uint VulkanBindingOffsetRWBuffer = VulkanBindingOffsetReadWriteResource;
+	static const ur_uint VulkanBindingOffsetAccelerationStructure = VulkanBindingOffsetReadOnlyResource;
 
 	#if defined(UR_GRAF_VULKAN_DEBUG_LAYER)
 	static const char* VulkanLayers[] = {
@@ -3477,7 +3481,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafDescriptorTableVulkan::SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
+	Result GrafDescriptorTableVulkan::SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
 	{
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
 
@@ -3490,7 +3494,7 @@ namespace UnlimRealms
 		vkWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		vkWriteDescriptorSet.pNext = ur_null;
 		vkWriteDescriptorSet.dstSet = this->vkDescriptorSet;
-		vkWriteDescriptorSet.dstBinding = bindingIdx + GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(GrafDescriptorType::RWBuffer);
+		vkWriteDescriptorSet.dstBinding = bindingIdx + GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(GrafDescriptorType::Buffer);
 		vkWriteDescriptorSet.dstArrayElement = 0;
 		vkWriteDescriptorSet.descriptorCount = 1;
 		vkWriteDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -3522,6 +3526,32 @@ namespace UnlimRealms
 		vkWriteDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 		vkWriteDescriptorSet.pImageInfo = &vkDescriptorImageInfo;
 		vkWriteDescriptorSet.pBufferInfo = ur_null;
+		vkWriteDescriptorSet.pTexelBufferView = ur_null;
+
+		vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, ur_null);
+
+		return Result(Success);
+	}
+
+	Result GrafDescriptorTableVulkan::SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
+	{
+		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
+
+		VkDescriptorBufferInfo vkDescriptorBufferInfo = {};
+		vkDescriptorBufferInfo.buffer = static_cast<GrafBufferVulkan*>(buffer)->GetVkBuffer();
+		vkDescriptorBufferInfo.offset = (VkDeviceSize)0;
+		vkDescriptorBufferInfo.range = VK_WHOLE_SIZE;
+
+		VkWriteDescriptorSet vkWriteDescriptorSet = {};
+		vkWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		vkWriteDescriptorSet.pNext = ur_null;
+		vkWriteDescriptorSet.dstSet = this->vkDescriptorSet;
+		vkWriteDescriptorSet.dstBinding = bindingIdx + GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(GrafDescriptorType::RWBuffer);
+		vkWriteDescriptorSet.dstArrayElement = 0;
+		vkWriteDescriptorSet.descriptorCount = 1;
+		vkWriteDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		vkWriteDescriptorSet.pImageInfo = ur_null;
+		vkWriteDescriptorSet.pBufferInfo = &vkDescriptorBufferInfo;
 		vkWriteDescriptorSet.pTexelBufferView = ur_null;
 
 		vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, ur_null);
@@ -4301,6 +4331,8 @@ namespace UnlimRealms
 			vkUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 		if (usage & (ur_uint)GrafBufferUsageFlag::ConstantBuffer)
 			vkUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		if (usage & (ur_uint)GrafBufferUsageFlag::StorageBuffer)
+			vkUsage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 		#if defined(VK_ENABLE_BETA_EXTENSIONS)
 		if (usage & (ur_uint)GrafBufferUsageFlag::ShaderDeviceAddress)
 			vkUsage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
@@ -4364,8 +4396,9 @@ namespace UnlimRealms
 		case GrafDescriptorType::ConstantBuffer: vkDescriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; break;
 		case GrafDescriptorType::Sampler: vkDescriptorType = VK_DESCRIPTOR_TYPE_SAMPLER; break;
 		case GrafDescriptorType::Texture: vkDescriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE; break;
-		case GrafDescriptorType::RWBuffer: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
+		case GrafDescriptorType::Buffer: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
 		case GrafDescriptorType::RWTexture: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; break;
+		case GrafDescriptorType::RWBuffer: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
 		#if defined(VK_ENABLE_BETA_EXTENSIONS)
 		case GrafDescriptorType::AccelerationStructure: vkDescriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR; break;
 		#endif
@@ -4374,11 +4407,12 @@ namespace UnlimRealms
 	}
 
 	static const ur_uint32 GrafToVkDescriptorBindingOffsetLUT[(ur_uint)GrafDescriptorType::Count] = {
-		VulkanBindingOffsetBuffer,
+		VulkanBindingOffsetConstantBuffer,
 		VulkanBindingOffsetSampler,
 		VulkanBindingOffsetTexture,
-		VulkanBindingOffsetRWResource,
-		VulkanBindingOffsetRWResource,
+		VulkanBindingOffsetBuffer,
+		VulkanBindingOffsetRWTexture,
+		VulkanBindingOffsetRWBuffer,
 		VulkanBindingOffsetAccelerationStructure
 	};
 

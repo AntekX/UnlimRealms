@@ -634,12 +634,17 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafDescriptorTable::SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
+	Result GrafDescriptorTable::SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
 	{
 		return Result(NotImplemented);
 	}
 
 	Result GrafDescriptorTable::SetRWImage(ur_uint bindingIdx, GrafImage* image)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafDescriptorTable::SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
 	{
 		return Result(NotImplemented);
 	}

@@ -204,8 +204,9 @@ namespace UnlimRealms
 		VertexBuffer = (1 << 2),
 		IndexBuffer = (1 << 3),
 		ConstantBuffer = (1 << 4),
-		ShaderDeviceAddress = (1 << 5),
-		RayTracing = (1 << 6)
+		StorageBuffer = (1 << 5),
+		ShaderDeviceAddress = (1 << 6),
+		RayTracing = (1 << 7)
 	};
 	typedef ur_uint GrafBufferUsageFlags;
 
@@ -417,10 +418,10 @@ namespace UnlimRealms
 	enum class GrafDescriptorRegisterType
 	{
 		Undefined = -1,
-		Buffer,
-		Sampler,
-		Texture,
-		RWResource,
+		ConstantBuffer,		// b
+		Sampler,			// s
+		ReadOnlyResource,	// t
+		ReadWriteResource,	// u
 		Count
 	};
 
@@ -428,12 +429,13 @@ namespace UnlimRealms
 	enum class GrafDescriptorType
 	{
 		Undefined = -1,
-		ConstantBuffer,	// register type: Buffer
+		ConstantBuffer,	// register type: ConstantBuffer
 		Sampler,		// register type: Sampler
-		Texture,		// register type: Texture
-		RWBuffer,		// register type: RWResource
-		RWTexture,		// register type: RWResource
-		AccelerationStructure, // register type: Texture
+		Texture,		// register type: ReadOnlyResource
+		Buffer,			// register type: ReadOnlyResource
+		RWTexture,		// register type: ReadWriteResource
+		RWBuffer,		// register type: ReadWriteResource
+		AccelerationStructure, // register type: ReadOnlyResource
 		Count
 	};
 
@@ -1111,9 +1113,11 @@ namespace UnlimRealms
 
 		virtual Result SetImage(ur_uint bindingIdx, GrafImage* image);
 
-		virtual Result SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer);
+		virtual Result SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer);
 
 		virtual Result SetRWImage(ur_uint bindingIdx, GrafImage* image);
+
+		virtual Result SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer);
 
 		virtual Result SetAccelerationStructure(ur_uint bindingIdx, GrafAccelerationStructure* accelerationStructure);
 
