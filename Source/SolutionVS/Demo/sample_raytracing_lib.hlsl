@@ -1,4 +1,8 @@
 
+#define RAYTRACING_TEST
+#include "Atmosphere/AtmosphericScattering.hlsli"
+#undef RAYTRACING_TEST
+
 struct SceneConstants
 {
 	float4x4 viewProjInv;
@@ -6,6 +10,16 @@ struct SceneConstants
 	float4 viewportSize; // w, h, 1/w, 1/h
 	float4 clearColor;
 	float4 lightDirection;
+};
+
+static const AtmosphereDesc g_AtmoDesc = {
+	1075.0,
+	1200.0,
+	0.160,
+	-0.980,
+	0.000050,
+	0.000050,
+	2.718
 };
 
 struct Vertex
@@ -40,7 +54,7 @@ float CalculateDiffuseCoefficient(in float3 worldPos, in float3 incidentLightRay
 	return fNDotL;
 }
 
-float4 CalculateSpecularCoefficient(in float3 worldPos, in float3 incidentLightRay, in float3 normal, in float specularPower)
+float CalculateSpecularCoefficient(in float3 worldPos, in float3 incidentLightRay, in float3 normal, in float specularPower)
 {
 	float3 reflectedLightRay = normalize(reflect(incidentLightRay, normal));
 	return pow(saturate(dot(reflectedLightRay, normalize(-WorldRayDirection()))), specularPower);
@@ -52,22 +66,28 @@ float3 FresnelReflectanceSchlick(in float3 I, in float3 N, in float3 f0)
 	return f0 + (1 - f0)*pow(1 - cosi, 5);
 }
 
-float4 CalculatePhongLighting(in float3 worldPos, in float3 normal, in float4 albedo, in float shadowFactor, in float diffuseCoef = 1.0, in float specularCoef = 1.0, in float specularPower = 50)
+float3 CalculatePhongLighting(in float3 worldPos, in float3 normal, in float3 albedo, in float shadowFactor, in float diffuseCoef = 1.0, in float specularCoef = 1.0, in float specularPower = 50)
 {
-	float3 incidentLightRay = -g_SceneCB.lightDirection.xyz;
+	float3 incidentLightRay = LightDirection;//-g_SceneCB.lightDirection.xyz;
 
 	// diffuse
-	float4 lightDiffuseColor = float4(1.0, 1.0, 1.0, 1.0);
+	float3 lightDiffuseColor = LightIntensity * 0.05;
 	float Kd = CalculateDiffuseCoefficient(worldPos, incidentLightRay, normal);
-	float4 diffuseColor = diffuseCoef * Kd * lightDiffuseColor * albedo * shadowFactor;
+	float3 diffuseColor = diffuseCoef * Kd * lightDiffuseColor * albedo * shadowFactor;
+	
+	// atmospheric scattering
+	float3 atmoSurfOfs = float3(0.0, g_AtmoDesc.InnerRadius, 0.0);
+	float3 atmoWorldPos = worldPos + atmoSurfOfs;
+	float3 atmoCameraPos = g_SceneCB.cameraPos.xyz + atmoSurfOfs;
+	diffuseColor = AtmosphericScatteringSurface(g_AtmoDesc, diffuseColor, atmoWorldPos, atmoCameraPos).xyz;
 
 	// specular
-	float4 lightSpecularColor = float4(1, 1, 1, 1);
-	float4 Ks = CalculateSpecularCoefficient(worldPos, incidentLightRay, normal, specularPower);
-	float4 specularColor = specularCoef * Ks * lightSpecularColor * shadowFactor;
+	float3 lightSpecularColor = lightDiffuseColor;
+	float Ks = CalculateSpecularCoefficient(worldPos, incidentLightRay, normal, specularPower);
+	float3 specularColor = specularCoef * Ks * lightSpecularColor * shadowFactor;
 
 	// ambient
-	float4 ambientColor = float4(0.4, 0.4, 0.4, 1.0);
+	float3 ambientColor = g_SceneCB.clearColor.xyz * 0.33;
 	ambientColor = albedo * ambientColor;
 
 	return ambientColor + diffuseColor + specularColor;
@@ -127,12 +147,13 @@ void SampleRaygen()
 [shader("miss")]
 void SampleMiss(inout SampleRayData rayData)
 {
-	//rayData.color.xyz = float3(max(rayData.clipPos.xy, 0.0), 0.0);
-	//rayData.color.w = saturate(max(rayData.color.x, rayData.color.y));
-	
-	// TODO: calculate atmosphere color here
-	rayData.color.xyz = g_SceneCB.clearColor.xyz;
-	rayData.color.w = 1.0;
+	//rayData.color.xyz = g_SceneCB.clearColor.xyz;
+	//rayData.color.w = 1.0;
+
+	// calculate sky color
+	float3 worldFrom = WorldRayOrigin() + float3(0.0, g_AtmoDesc.InnerRadius*0.98, 0.0);
+	float3 worldTo = worldFrom + WorldRayDirection();
+	rayData.color = AtmosphericScatteringSky(g_AtmoDesc, worldTo, worldFrom);
 }
 
 [shader("miss")]
@@ -181,7 +202,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		ray.TMin = 0.001;
 		ray.TMax = 1.0e+4;
 		ray.Origin = hitWorldPos;
-		ray.Direction = g_SceneCB.lightDirection.xyz;
+		ray.Direction = -LightDirection;// g_SceneCB.lightDirection.xyz;
 
 		uint instanceInclusionMask = 0xff;
 		uint rayContributionToHitGroupIndex = 0;
@@ -202,7 +223,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 	// trace reflection data
 	
-	float4 reflectionColor = 0.0;
+	float3 reflectionColor = 0.0;
 	if (rayData.recursionDepth < RecursionDepthMax)
 	{
 		SampleRayData reflectionData;
@@ -227,19 +248,19 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 			missShaderIndex,
 			ray, reflectionData);
 		
-		reflectionColor = reflectionData.color;
+		reflectionColor = reflectionData.color.xyz;
 	}
 
 	// calculate lighting color
 
-	float4 albedo = debugColor;
-	float diffuseCoef = 0.9;
+	float3 albedo = debugColor.xyz;
+	float diffuseCoef = 1.0;
 	float specularCoef = 0.5;
 	float specularPower = 50.0;
-	float reflectanceCoef = 0.25;
-	float4 lightColor = CalculatePhongLighting(hitWorldPos, normal, albedo, shadowFactor, diffuseCoef, specularCoef, specularPower);
+	float reflectanceCoef = 0.5;
+	float3 lightColor = CalculatePhongLighting(hitWorldPos, normal, albedo, shadowFactor, diffuseCoef, specularCoef, specularPower);
 	float3 fresnelR = FresnelReflectanceSchlick(WorldRayDirection(), normal, albedo.xyz);
-	lightColor += reflectanceCoef * float4(fresnelR, 1.0) * reflectionColor;
+	lightColor.xyz += reflectionColor * fresnelR * reflectanceCoef;
 
-	rayData.color = lightColor;
+	rayData.color = float4(lightColor.xyz, 1.0);
 }

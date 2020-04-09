@@ -16,7 +16,7 @@ echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
 
 set "SHADER_PATH_SRC=..\Source\SolutionVS\Demo"
 set "SHADER_NAME=sample_raytracing"
-dxc -spirv -T lib_6_3 %SHADER_REGISTER_BINDING% %SHADER_PATH_SRC%\%SHADER_NAME%_lib.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_lib.spv
+dxc -spirv -T lib_6_3 %SHADER_REGISTER_BINDING% %SHADER_PATH_SRC%\%SHADER_NAME%_lib.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_lib.spv -I ..\Source\UnlimRealms -I ..\Source\UnlimRealms\ShaderLib
 echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
 
 set "SHADER_PATH_SRC=..\Source\UnlimRealms\ImguiRender"

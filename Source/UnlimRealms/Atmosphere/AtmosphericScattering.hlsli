@@ -25,13 +25,20 @@ struct AtmosphereDesc
 };
 
 // todo: make sun light params configurable
+#if defined(RAYTRACING_TEST)
+//static const float3 LightDirection = float3(-0.577, -0.577, -0.577);
+static const float3 LightDirection = float3(-0.8165, -0.40825, -0.40825);
+//static const float3 LightDirection = float3(-0.9045, -0.3015, -0.3015);
+#else
 static const float3 LightDirection = float3(1.0, 0.0, 0.0);
-static const float3 LightIntensity = float3(1.0, 1.0, 1.0) * 200.0;
+#endif
+static const float3 LightIntensity = float3(200.0, 200.0, 200.0);
 static const float3 LightWaveLength = float3(0.650, 0.570, 0.475);
-static const float3 LightWaveLengthScatterConst = 1.0 / pow(LightWaveLength, 4.0); // precomputed constant from wavelength
+static const float3 LightWaveLengthScatterConst = float3(5.602, 9.473, 19.644); // precomputed constant from wavelength (1.0 / pow(LightWaveLength, 4.0))
 static const int    IntergrationSteps = 8;
 
 // Earth related physically based parameters for reference
+#if (0)
 static const float  EarthRadius = 6371.0e+3;
 static const float  EarthAtmosphereHeight = 160.0e+3;
 static const float  EarthHeightRayleigh = 8.0e+3;
@@ -42,6 +49,7 @@ static const float3 ScatterRayleigh = EarthScatterRayleigh;
 static const float3 ScatterMie = EarthScatterMie;
 static const float3 ExtinctionRayleigh = ScatterRayleigh;
 static const float3 ExtinctionMie = ScatterMie / 0.9;
+#endif
 
 
 float ScaledHeight(const AtmosphereDesc a, const float3 p)
