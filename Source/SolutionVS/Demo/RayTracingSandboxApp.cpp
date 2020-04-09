@@ -360,8 +360,8 @@ int RayTracingSandboxApp::Run()
 			cmdListBuildAccelStructBL->BuildAccelerationStructure(this->accelerationStructureBL.get(), &sampleGeometryDataBL, 1);
 			cmdListBuildAccelStructBL->End();
 			grafDevice->Record(cmdListBuildAccelStructBL);
-			grafDevice->Submit();
-			grafDevice->WaitIdle();
+			//grafDevice->Submit();
+			//grafDevice->WaitIdle();
 
 			// initiaize top level acceleration structure container
 
@@ -424,8 +424,8 @@ int RayTracingSandboxApp::Run()
 			cmdListBuildAccelStructTL->BuildAccelerationStructure(this->accelerationStructureTL.get(), &sampleGeometryDataTL, 1);
 			cmdListBuildAccelStructTL->End();
 			grafDevice->Record(cmdListBuildAccelStructTL);
-			grafDevice->Submit();
-			grafDevice->WaitIdle();
+			//grafDevice->Submit();
+			//grafDevice->WaitIdle();
 
 			// shaders
 

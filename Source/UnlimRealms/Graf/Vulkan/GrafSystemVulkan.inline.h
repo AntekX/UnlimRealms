@@ -85,6 +85,11 @@ namespace UnlimRealms
 		return this->vkBuffer;
 	}
 
+	inline void GrafBufferVulkan::SetState(GrafBufferState& state)
+	{
+		this->bufferState = state;
+	}
+
 	inline VkSampler GrafSamplerVulkan::GetVkSampler() const
 	{
 		return this->vkSampler;

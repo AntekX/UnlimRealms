@@ -180,7 +180,9 @@ namespace UnlimRealms
 		DepthStencilRead,
 		ShaderRead,
 		ShaderReadWrite,
+		ComputeRead,
 		ComputeReadWrite,
+		RayTracingRead,
 		RayTracingReadWrite
 	};
 
@@ -209,6 +211,26 @@ namespace UnlimRealms
 		RayTracing = (1 << 7)
 	};
 	typedef ur_uint GrafBufferUsageFlags;
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum class UR_DECL GrafBufferState
+	{
+		Current = -1,
+		Undefined = 0,
+		TransferSrc,
+		TransferDst,
+		VertexBuffer,
+		IndexBuffer,
+		ConstantBuffer,
+		ShaderRead,
+		ShaderReadWrite,
+		ComputeConstantBuffer,
+		ComputeRead,
+		ComputeReadWrite,
+		RayTracingConstantBuffer,
+		RayTracingRead,
+		RayTracingReadWrite
+	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GrafBufferDesc
@@ -787,7 +809,7 @@ namespace UnlimRealms
 
 		virtual Result Wait(ur_uint64 timeout = ur_uint64(-1));
 
-		virtual Result BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferUsageFlags srcUsage, GrafBufferUsageFlags dstUsage);
+		virtual Result BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState);
 
 		virtual Result ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState);
 
@@ -949,11 +971,14 @@ namespace UnlimRealms
 
 		inline const GrafBufferDesc& GetDesc() const;
 
+		inline const GrafBufferState& GetState() const;
+
 		inline ur_uint64 GetDeviceAddress() const;
 
 	protected:
 
 		GrafBufferDesc bufferDesc;
+		GrafBufferState bufferState;
 		ur_uint64 bufferDeviceAddress;
 	};
 

@@ -267,7 +267,7 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafCommandList::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferUsageFlags srcUsage, GrafBufferUsageFlags dstUsage)
+	Result GrafCommandList::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState)
 	{
 		return Result(NotImplemented);
 	}
@@ -491,6 +491,7 @@ namespace UnlimRealms
 	GrafBuffer::GrafBuffer(GrafSystem &grafSystem) :
 		GrafDeviceEntity(grafSystem)
 	{
+		this->bufferState = GrafBufferState::Undefined;
 	}
 
 	GrafBuffer::~GrafBuffer()

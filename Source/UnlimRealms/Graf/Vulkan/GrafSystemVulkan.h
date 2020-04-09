@@ -165,7 +165,7 @@ namespace UnlimRealms
 
 		virtual Result Wait(ur_uint64 timeout = ur_uint64(-1));
 
-		virtual Result BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferUsageFlags srcUsage, GrafBufferUsageFlags dstUsage);
+		virtual Result BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState);
 
 		virtual Result ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState);
 
@@ -357,6 +357,9 @@ namespace UnlimRealms
 	private:
 
 		Result Deinitialize();
+
+		friend class GrafCommandListVulkan;
+		inline void SetState(GrafBufferState& state);
 
 		VkBuffer vkBuffer;
 		VkDeviceMemory vkDeviceMemory;

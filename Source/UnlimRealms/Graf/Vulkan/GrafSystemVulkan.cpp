@@ -995,22 +995,147 @@ namespace UnlimRealms
 		return Result(vkRes == VK_SUCCESS ? Success : TimeOut);
 	}
 
-	Result GrafCommandListVulkan::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferUsageFlags srcUsage, GrafBufferUsageFlags dstUsage)
+	Result GrafCommandListVulkan::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState)
 	{
-		// TODO:
+		if (ur_null == grafBuffer)
+			return Result(InvalidArgs);
 
-		// note: example of transfering a vertex buffer access mask from TransferSrc to VertexBuffer state
+		if (grafBuffer->GetState() == dstState)
+			return Result(Success);
+
+		srcState = (GrafBufferState::Current == srcState ? grafBuffer->GetState() : srcState);
+
 		VkBufferMemoryBarrier vkBufferBarrier = {};
 		vkBufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-		vkBufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		vkBufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-		vkBufferBarrier.srcQueueFamilyIndex = 0;
-		vkBufferBarrier.dstQueueFamilyIndex = 0;
+		vkBufferBarrier.srcAccessMask = 0;
+		vkBufferBarrier.dstAccessMask = 0;
+		vkBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		vkBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		vkBufferBarrier.buffer = static_cast<GrafBufferVulkan*>(grafBuffer)->GetVkBuffer();
 		vkBufferBarrier.offset = 0;
 		vkBufferBarrier.size = VK_WHOLE_SIZE;
-		vkCmdPipelineBarrier(this->vkCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0,
-			0, ur_null, 1, &vkBufferBarrier, 0, ur_null);
+		VkPipelineStageFlags vkStageSrc = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		VkPipelineStageFlags vkStageDst = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+		switch (srcState)
+		{
+		case GrafBufferState::TransferSrc:
+			vkBufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
+		case GrafBufferState::TransferDst:
+			vkBufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
+		case GrafBufferState::VertexBuffer:
+			vkBufferBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+			break;
+		case GrafBufferState::IndexBuffer:
+			vkBufferBarrier.srcAccessMask = VK_ACCESS_INDEX_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+			break;
+		case GrafBufferState::ConstantBuffer:
+			vkBufferBarrier.srcAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; // wait last graphics shader stage
+			break;
+		case GrafBufferState::ShaderRead:
+			vkBufferBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; // wait last graphics shader stage
+			break;
+		case GrafBufferState::ShaderReadWrite:
+			vkBufferBarrier.srcAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageSrc = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; // wait last graphics shader stage
+			break;
+		case GrafBufferState::ComputeConstantBuffer:
+			vkBufferBarrier.srcAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			break;
+		case GrafBufferState::ComputeRead:
+			vkBufferBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			break;
+		case GrafBufferState::ComputeReadWrite:
+			vkBufferBarrier.srcAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageSrc = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			break;
+		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		case GrafBufferState::RayTracingConstantBuffer:
+			vkBufferBarrier.srcAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+			break;
+		case GrafBufferState::RayTracingRead:
+			vkBufferBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+			break;
+		case GrafBufferState::RayTracingReadWrite:
+			vkBufferBarrier.srcAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageSrc = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+			break;
+		#endif
+		};
+
+		switch (dstState)
+		{
+		case GrafBufferState::TransferSrc:
+			vkBufferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
+		case GrafBufferState::TransferDst:
+			vkBufferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
+		case GrafBufferState::VertexBuffer:
+			vkBufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+			break;
+		case GrafBufferState::IndexBuffer:
+			vkBufferBarrier.dstAccessMask = VK_ACCESS_INDEX_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+			break;
+		case GrafBufferState::ConstantBuffer:
+			vkBufferBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; // must be ready before first graphics shader stage
+			break;
+		case GrafBufferState::ShaderRead:
+			vkBufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; // must be ready before first graphics shader stage
+			break;
+		case GrafBufferState::ShaderReadWrite:
+			vkBufferBarrier.dstAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageDst = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; // must be ready before first graphics shader stage
+			break;
+		case GrafBufferState::ComputeConstantBuffer:
+			vkBufferBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			break;
+		case GrafBufferState::ComputeRead:
+			vkBufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			break;
+		case GrafBufferState::ComputeReadWrite:
+			vkBufferBarrier.dstAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageDst = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			break;
+		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		case GrafBufferState::RayTracingConstantBuffer:
+			vkBufferBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+			break;
+		case GrafBufferState::RayTracingRead:
+			vkBufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+			break;
+		case GrafBufferState::RayTracingReadWrite:
+			vkBufferBarrier.dstAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			vkStageDst = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+			break;
+		#endif
+		};
+
+		vkCmdPipelineBarrier(this->vkCommandBuffer, vkStageSrc, vkStageDst, VkDependencyFlags(0), 0, ur_null, 1, &vkBufferBarrier, 0, ur_null);
+
+		static_cast<GrafBufferVulkan*>(grafBuffer)->SetState(dstState);
 
 		return Result(NotImplemented);
 	}
@@ -1072,11 +1197,19 @@ namespace UnlimRealms
 			vkImageBarrier.srcAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 			vkStageSrc = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; // wait last graphics shader stage
 			break;
+		case GrafImageState::ComputeRead:
+			vkImageBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			break;
 		case GrafImageState::ComputeReadWrite:
 			vkImageBarrier.srcAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 			vkStageSrc = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 			break;
 		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		case GrafImageState::RayTracingRead:
+			vkImageBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+			break;
 		case GrafImageState::RayTracingReadWrite:
 			vkImageBarrier.srcAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 			vkStageSrc = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
@@ -1114,11 +1247,19 @@ namespace UnlimRealms
 			vkImageBarrier.dstAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 			vkStageDst = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; // must be ready before first graphics shader stage
 			break;
+		case GrafImageState::ComputeRead:
+			vkImageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			break;
 		case GrafImageState::ComputeReadWrite:
 			vkImageBarrier.dstAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 			vkStageDst = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 			break;
 		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		case GrafImageState::RayTracingRead:
+			vkImageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+			break;
 		case GrafImageState::RayTracingReadWrite:
 			vkImageBarrier.dstAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 			vkStageDst = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
