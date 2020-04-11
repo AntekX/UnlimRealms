@@ -5,6 +5,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#include "LightingCommon.hlsli"
 #include "../Atmosphere/AtmosphericScattering.hlsli"
 
 cbuffer Common : register(b0)
@@ -12,6 +13,7 @@ cbuffer Common : register(b0)
 	float4x4 ViewProj;
 	float4 CameraPos;
 	AtmosphereDesc Atmosphere;
+	LightDesc Light;
 };
 
 struct VS_INPUT

@@ -9,5 +9,5 @@
 
 float4 main(PS_INPUT input) : SV_TARGET
 {
-    return AtmosphericScatteringSky(Atmosphere, input.wpos.xyz, CameraPos.xyz);
+	return 0;// AtmosphericScatteringSky(Atmosphere, input.wpos.xyz, CameraPos.xyz);
 }

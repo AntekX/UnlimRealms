@@ -5,14 +5,16 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#include "LightingCommon.hlsli"
 #include "AtmosphericScattering.hlsli"
 #include "../GenericRender/Generic.hlsli"
 
-cbuffer AtmosphereConstants : register(b1)
+cbuffer LightAndAtmosphereConstants : register(b1)
 {
 	float4x4 CameraViewProj;
 	float3 CameraPos;
 	AtmosphereDesc Atmosphere;
+	LightDesc Light;
 };
 
 cbuffer LightShaftsConstants : register(b2)
@@ -32,8 +34,7 @@ Texture2D HDRTexture	: register(t0);
 float4 LightShaftsScreenSpace(const float2 screenUV)
 {
 	const int NUM_SAMPLES = 50;
-	const float3 LightDirection = float3(1.0, 0.0, 0.0);
-	const float3 LightPos = (-LightDirection) * 1e+5;
+	const float3 LightPos = (-Light.Direction) * 1e+5;
 
 	float4 ScreenLightPos = mul(CameraViewProj, float4(LightPos, 1.0));
 	ScreenLightPos.xyz /= ScreenLightPos.w;

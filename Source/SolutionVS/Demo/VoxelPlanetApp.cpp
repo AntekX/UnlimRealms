@@ -273,6 +273,14 @@ int VoxelPlanetApp::Run()
 		atmosphere->Init(desc, (hdrRender ? hdrRender->GetRenderPass() : grafPassColorDepth.get()));
 	}
 
+	// virtual star light source
+	LightDesc lightDesc = {
+		1.0f, 1.0f, 1.0f,	// Color
+		200.0f,				// Intensity
+		1.0f, 0.0f, 0.0f,	// Direction
+		0.0f, 0.0f, 0.0f	// Position
+	};
+
 	// main application camera
 	Camera camera(realm);
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::Free);
@@ -394,13 +402,13 @@ int VoxelPlanetApp::Run()
 					if (isosurface != ur_null)
 					{
 						updateFrameJob->WaitProgress(UpdateStage_IsosurfaceReady);
-						isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
+						isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get(), &lightDesc);
 					}
 
 					// draw atmosphere
 					if (atmosphere != ur_null)
 					{
-						atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition());
+						atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), &lightDesc);
 					}
 
 					hdrRender->EndRender(*grafCmdListCrnt);
@@ -408,7 +416,7 @@ int VoxelPlanetApp::Run()
 					// atmospheric post effects
 					if (atmosphere != ur_null)
 					{
-						atmosphere->RenderPostEffects(*grafCmdListCrnt, *hdrRender->GetHDRRenderTarget(), camera.GetViewProj(), camera.GetPosition());
+						atmosphere->RenderPostEffects(*grafCmdListCrnt, *hdrRender->GetHDRRenderTarget(), camera.GetViewProj(), camera.GetPosition(), &lightDesc);
 					}
 
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);

@@ -10,6 +10,7 @@
 #include "Realm/Realm.h"
 #include "Gfx/GfxSystem.h"
 #include "GenericRender/GenericRender.h"
+#include "ShaderLib/LightingCommon.h"
 
 namespace UnlimRealms
 {
@@ -21,7 +22,7 @@ namespace UnlimRealms
 	{
 	public:
 
-		struct UR_DECL Desc
+		struct UR_DECL alignas(16) Desc
 		{
 			ur_float InnerRadius;
 			ur_float OuterRadius;
@@ -34,7 +35,7 @@ namespace UnlimRealms
 			static const Desc Invisible;
 		};
 
-		struct UR_DECL LightShaftsDesc
+		struct UR_DECL alignas(16) LightShaftsDesc
 		{
 			float Density;
 			float DensityMax;
@@ -50,17 +51,17 @@ namespace UnlimRealms
 
 		Result Init(const Desc &desc);
 
-		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
+		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light);
 
 		Result RenderPostEffects(GfxContext &gfxContext, GfxRenderTarget &renderTarget,
-			const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
+			const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light);
 
 		Result Init(const Desc& desc, GrafRenderPass* grafRenderPass);
 
-		Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
+		Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light);
 
 		Result RenderPostEffects(GrafCommandList &grafCmdList, GrafRenderTarget &renderTarget,
-			const ur_float4x4 &viewProj, const ur_float3 &cameraPos);
+			const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light);
 
 		void ShowImgui();
 
@@ -137,6 +138,7 @@ namespace UnlimRealms
 			ur_float4x4 ViewProj;
 			ur_float4 CameraPos;
 			Desc Params;
+			LightDesc Light;
 		};
 
 		struct alignas(16) LightShaftsCB : public LightShaftsDesc

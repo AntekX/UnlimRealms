@@ -390,9 +390,9 @@ namespace UnlimRealms
 
 		Result Update();
 
-		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere);
+		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere, const LightDesc* light);
 
-		Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere);
+		Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere, const LightDesc* light);
 
 		void ShowImgui();
 
@@ -442,6 +442,7 @@ namespace UnlimRealms
 			ur_float4x4 ViewProj;
 			ur_float4 CameraPos;
 			Atmosphere::Desc AtmoParams;
+			LightDesc LightParams;
 		};
 
 		struct Vertex

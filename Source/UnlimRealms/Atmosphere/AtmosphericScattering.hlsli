@@ -11,6 +11,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "Math.hlsli"
+#include "LightingCommon.hlsli"
 
 // Configurable parameters
 struct AtmosphereDesc
@@ -22,17 +23,10 @@ struct AtmosphereDesc
 	float Km;
 	float Kr;
 	float D;
+	float __padding;
 };
 
-// todo: make sun light params configurable
-#if defined(RAYTRACING_TEST)
-//static const float3 LightDirection = float3(-0.577, -0.577, -0.577);
-static const float3 LightDirection = float3(-0.8165, -0.40825, -0.40825);
-//static const float3 LightDirection = float3(-0.9045, -0.3015, -0.3015);
-#else
-static const float3 LightDirection = float3(1.0, 0.0, 0.0);
-#endif
-static const float3 LightIntensity = float3(200.0, 200.0, 200.0);
+// scattering constants
 static const float3 LightWaveLength = float3(0.650, 0.570, 0.475);
 static const float3 LightWaveLengthScatterConst = float3(5.602, 9.473, 19.644); // precomputed constant from wavelength (1.0 / pow(LightWaveLength, 4.0))
 static const int    IntergrationSteps = 8;
@@ -106,7 +100,7 @@ float3 AtmosphericTransmittance(const AtmosphereDesc a, const float3 Pa, const f
 	return transmittance;
 }
 
-float3 AtmosphericSingleScattering(const AtmosphereDesc a, const float3 vpos, const float3 cameraPos)
+float3 AtmosphericSingleScattering(const AtmosphereDesc a, const LightDesc light, const float3 vpos, const float3 cameraPos)
 {
 	float3 totalInscatteringMie = 0.0;
 	float3 totalInscatteringRayleigh = 0.0;
@@ -123,7 +117,7 @@ float3 AtmosphericSingleScattering(const AtmosphereDesc a, const float3 vpos, co
 	float3 P = Pa + stepVec * 0.5;
 	[unroll] for (int step = 0; step < IntergrationSteps; ++step)
 	{
-		float3 Pc = P - IntersectSphere(P, -LightDirection, aPos, a.OuterRadius).y * LightDirection;
+		float3 Pc = P - IntersectSphere(P, -light.Direction, aPos, a.OuterRadius).y * light.Direction;
 		float3 transmittance = AtmosphericTransmittance(a, Pa, P) * AtmosphericTransmittance(a, P, Pc);
 		float h = ScaledHeight(a, P);
 		float3 crntInscatteringMie = DensityMie(a, h) * transmittance;
@@ -133,25 +127,25 @@ float3 AtmosphericSingleScattering(const AtmosphereDesc a, const float3 vpos, co
 		P += stepVec;
 	}
 
-	float dirToCameraCos = dot(dir, LightDirection);
+	float dirToCameraCos = dot(dir, light.Direction);
 	totalInscatteringMie *= PhaseMie(a, dirToCameraCos) * a.Km;//ScatterMie / (Pi * 4.0);
 	totalInscatteringRayleigh *= PhaseRayleigh(a, dirToCameraCos) * a.Kr * LightWaveLengthScatterConst;//ScatterRayleigh / (Pi * 4.0);
 	
-	return LightIntensity * (totalInscatteringMie + totalInscatteringRayleigh);
+	return (light.Color * light.Intensity) * (totalInscatteringMie + totalInscatteringRayleigh);
 }
 
-float4 AtmosphericScatteringSky(const AtmosphereDesc a, const float3 vpos, const float3 cameraPos)
+float4 AtmosphericScatteringSky(const AtmosphereDesc a, const LightDesc light, const float3 vpos, const float3 cameraPos)
 {
-	float3 light = AtmosphericSingleScattering(a, vpos, cameraPos);
-	float alpha = max(max(light.r, light.g), light.b);
-	float4 result = float4(light.rgb, min(alpha, 1.0));
+	float3 lightResult = AtmosphericSingleScattering(a, light, vpos, cameraPos);
+	float alpha = max(max(lightResult.r, lightResult.g), lightResult.b);
+	float4 result = float4(lightResult.rgb, min(alpha, 1.0));
 #if defined(SIMPLE_TONEMAPPING) // temp: inplace tonemapping till properly supported in GRAF rendering branch
 	result.rgb /= (1.0 + result.rgb);
 #endif
 	return result;
 }
 
-float4 AtmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, float3 vpos, float3 cameraPos)
+float4 AtmosphericScatteringSurface(const AtmosphereDesc a, const LightDesc light, float3 surfLight, float3 vpos, float3 cameraPos)
 {
 	float3 totalInscatteringRayleigh = 0.0;
 
@@ -168,7 +162,7 @@ float4 AtmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, fl
 	float3 P = Pa + stepVec * 0.5;
 	[unroll] for (int step = 0; step < IntergrationSteps; ++step)
 	{
-		float3 Pc = P - IntersectSphere(P, -LightDirection, aPos, a.OuterRadius).y * LightDirection;
+		float3 Pc = P - IntersectSphere(P, -light.Direction, aPos, a.OuterRadius).y * light.Direction;
 		transmittance = AtmosphericTransmittance(a, Pa, P) * AtmosphericTransmittance(a, P, Pc);
 		float h = ScaledHeight(a, P);
 		float3 crntInscatteringRayleigh = DensityRayleigh(a, h) * transmittance;
@@ -178,11 +172,11 @@ float4 AtmosphericScatteringSurface(const AtmosphereDesc a, float3 surfLight, fl
 
 	// real light intensity leads to super dense (foggy) atmospere look due to the planetoid small size
 	// multiplying it here by a factor to get more pleasant surface rendering
-	float3 lightIntensity = LightIntensity * 0.15;
+	float3 lightIntensity = (light.Color * light.Intensity) * 0.15;
 	float3 scatteredLight = lightIntensity * totalInscatteringRayleigh * a.Kr * LightWaveLengthScatterConst;
-	float3 light = scatteredLight + surfLight * transmittance;
+	float3 lightResult = scatteredLight + surfLight * transmittance;
 
-	float4 result = float4(light.rgb, 1.0);
+	float4 result = float4(lightResult.rgb, 1.0);
 #if defined(SIMPLE_TONEMAPPING)
 	result.rgb /= (1.0 + result.rgb);
 #endif

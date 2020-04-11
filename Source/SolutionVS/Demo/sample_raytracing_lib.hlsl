@@ -1,7 +1,6 @@
 
-#define RAYTRACING_TEST
+#include "LightingCommon.hlsli"
 #include "Atmosphere/AtmosphericScattering.hlsli"
-#undef RAYTRACING_TEST
 
 struct SceneConstants
 {
@@ -9,17 +8,8 @@ struct SceneConstants
 	float4 cameraPos;
 	float4 viewportSize; // w, h, 1/w, 1/h
 	float4 clearColor;
-	float4 lightDirection;
-};
-
-static const AtmosphereDesc g_AtmoDesc = {
-	1075.0,
-	1200.0,
-	0.160,
-	-0.980,
-	0.000050,
-	0.000050,
-	2.718
+	AtmosphereDesc atmoDesc;
+	LightDesc lightDesc;
 };
 
 struct Vertex
@@ -68,18 +58,19 @@ float3 FresnelReflectanceSchlick(in float3 I, in float3 N, in float3 f0)
 
 float3 CalculatePhongLighting(in float3 worldPos, in float3 normal, in float3 albedo, in float shadowFactor, in float diffuseCoef = 1.0, in float specularCoef = 1.0, in float specularPower = 50)
 {
-	float3 incidentLightRay = LightDirection;//-g_SceneCB.lightDirection.xyz;
+	LightDesc light = g_SceneCB.lightDesc;
+	float3 incidentLightRay = light.Direction.xyz;
 
 	// diffuse
-	float3 lightDiffuseColor = LightIntensity * 0.05;
+	float3 lightDiffuseColor = (light.Color * light.Intensity) * 0.05;
 	float Kd = CalculateDiffuseCoefficient(worldPos, incidentLightRay, normal);
 	float3 diffuseColor = diffuseCoef * Kd * lightDiffuseColor * albedo * shadowFactor;
 	
 	// atmospheric scattering
-	float3 atmoSurfOfs = float3(0.0, g_AtmoDesc.InnerRadius, 0.0);
+	float3 atmoSurfOfs = float3(0.0, g_SceneCB.atmoDesc.InnerRadius, 0.0);
 	float3 atmoWorldPos = worldPos + atmoSurfOfs;
 	float3 atmoCameraPos = g_SceneCB.cameraPos.xyz + atmoSurfOfs;
-	diffuseColor = AtmosphericScatteringSurface(g_AtmoDesc, diffuseColor, atmoWorldPos, atmoCameraPos).xyz;
+	diffuseColor = AtmosphericScatteringSurface(g_SceneCB.atmoDesc, light, diffuseColor, atmoWorldPos, atmoCameraPos).xyz;
 
 	// specular
 	float3 lightSpecularColor = lightDiffuseColor;
@@ -138,7 +129,7 @@ void SampleRaygen()
 		ray, rayData);
 
 	// write ray result
-	float4 targetValue = 0.0;
+	float4 targetValue = float4(0.0, 0.0, 0.0, 1.0);
 	targetValue.xyz = lerp(targetValue.xyz, rayData.color.xyz, rayData.color.w);
 	targetValue.w = saturate(targetValue.w + rayData.color.w);
 	g_TargetTexture[dispatchIdx.xy] = targetValue;
@@ -151,9 +142,10 @@ void SampleMiss(inout SampleRayData rayData)
 	//rayData.color.w = 1.0;
 
 	// calculate sky color
-	float3 worldFrom = WorldRayOrigin() + float3(0.0, g_AtmoDesc.InnerRadius*0.98, 0.0);
+	LightDesc light = g_SceneCB.lightDesc;
+	float3 worldFrom = WorldRayOrigin() + float3(0.0, g_SceneCB.atmoDesc.InnerRadius * 0.98, 0.0);
 	float3 worldTo = worldFrom + WorldRayDirection();
-	rayData.color = AtmosphericScatteringSky(g_AtmoDesc, worldTo, worldFrom);
+	rayData.color = AtmosphericScatteringSky(g_SceneCB.atmoDesc, light, worldTo, worldFrom);
 }
 
 [shader("miss")]
@@ -195,6 +187,8 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 	float shadowFactor = 1.0;
 	{
+		LightDesc light = g_SceneCB.lightDesc;
+
 		SampleShadowData shadowData;
 		shadowData.occluded = true;
 
@@ -202,7 +196,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		ray.TMin = 0.001;
 		ray.TMax = 1.0e+4;
 		ray.Origin = hitWorldPos;
-		ray.Direction = -LightDirection;// g_SceneCB.lightDirection.xyz;
+		ray.Direction = -light.Direction;
 
 		uint instanceInclusionMask = 0xff;
 		uint rayContributionToHitGroupIndex = 0;

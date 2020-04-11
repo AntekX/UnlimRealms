@@ -324,6 +324,12 @@
     <ClInclude Include="..\..\3rdParty\VulkanMemoryAllocator\vk_mem_alloc.h">
       <Filter>3rdParty\VulkanMemoryAllocator</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\ShaderLib\LightingConstants.h">
+      <Filter>ShaderLib</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\ShaderLib\LightingCommon.h">
+      <Filter>ShaderLib</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -847,6 +853,9 @@
     </None>
     <None Include="..\..\UnlimRealms\Terrain\Terrain.hlsli">
       <Filter>Terrain</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\ShaderLib\CommonTypes.hlsli">
+      <Filter>ShaderLib</Filter>
     </None>
   </ItemGroup>
 </Project>

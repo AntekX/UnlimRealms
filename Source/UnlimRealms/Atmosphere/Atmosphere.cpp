@@ -50,6 +50,13 @@ namespace UnlimRealms
 		0.250f,		// Exposure
 	};
 
+	static const LightDesc LightDescDefault = {
+		{ 1.0f, 1.0f, 1.0f },	// Color
+		200.0f,					// Intensity
+		{ 1.0f, 0.0f, 0.0f },	// Direction
+		{ 0.0f, 0.0f, 0.0f },	// Position
+	};
+
 	Atmosphere::Atmosphere(Realm &realm) :
 		RealmEntity(realm)
 	{
@@ -661,7 +668,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result Atmosphere::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
+	Result Atmosphere::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light)
 	{
 	#if defined(UR_GRAF)
 		return Result(NotImplemented);
@@ -675,6 +682,7 @@ namespace UnlimRealms
 		cb.ViewProj = viewProj;
 		cb.CameraPos = cameraPos;
 		cb.Params = this->desc;
+		cb.Light = (light != ur_null ? *light : LightDescDefault);
 		GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
 		gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 		gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);
@@ -693,7 +701,7 @@ namespace UnlimRealms
 	}
 
 	Result Atmosphere::RenderPostEffects(GfxContext &gfxContext, GfxRenderTarget &renderTarget,
-		const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
+		const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light)
 	{
 	#if defined(UR_GRAF)
 		return Result(NotImplemented);
@@ -749,7 +757,7 @@ namespace UnlimRealms
 	#endif
 	}
 
-	Result Atmosphere::Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
+	Result Atmosphere::Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light)
 	{
 	#if !defined(UR_GRAF)
 		return Result(NotImplemented);
@@ -764,6 +772,7 @@ namespace UnlimRealms
 		cbData.ViewProj = viewProj;
 		cbData.CameraPos = cameraPos;
 		cbData.Params = this->desc;
+		cbData.Light = (light != ur_null ? *light : LightDescDefault);
 		GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 		Allocation dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(CommonCB));
 		dynamicCB->Write((ur_byte*)&cbData, sizeof(cbData), 0, dynamicCBAlloc.Offset);
@@ -788,7 +797,7 @@ namespace UnlimRealms
 	}
 
 	Result Atmosphere::RenderPostEffects(GrafCommandList &grafCmdList, GrafRenderTarget &renderTarget,
-		const ur_float4x4 &viewProj, const ur_float3 &cameraPos)
+		const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light)
 	{
 	#if !defined(UR_GRAF)
 		return Result(NotImplemented);
@@ -874,6 +883,7 @@ namespace UnlimRealms
 		cbData.ViewProj = viewProj;
 		cbData.CameraPos = cameraPos;
 		cbData.Params = this->desc;
+		cbData.Light = (light != ur_null ? *light : LightDescDefault);
 		Allocation commonCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(CommonCB));
 		dynamicCB->Write((ur_byte*)&cbData, sizeof(cbData), 0, commonCBAlloc.Offset);
 		Allocation lightShaftsCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(LightShaftsCB));

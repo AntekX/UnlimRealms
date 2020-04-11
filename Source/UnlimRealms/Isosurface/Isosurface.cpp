@@ -22,6 +22,14 @@ namespace UnlimRealms
 {
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	static const LightDesc LightDescDefault = {
+		{ 1.0f, 1.0f, 1.0f },	// Color
+		200.0f,					// Intensity
+		{ 1.0f, 0.0f, 0.0f },	// Direction
+		{ 0.0f, 0.0f, 0.0f },	// Position
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Isosurface::AdaptiveVolume
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2228,7 +2236,7 @@ namespace UnlimRealms
 
 	#endif
 
-	Result Isosurface::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere)
+	Result Isosurface::Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere, const LightDesc* light)
 	{
 	#if !defined(UR_GRAF)
 		Result res(Success);
@@ -2260,6 +2268,7 @@ namespace UnlimRealms
 			cb.ViewProj = viewProj;
 			cb.CameraPos = cameraPos;
 			cb.AtmoParams = (atmosphere != ur_null ? atmosphere->GetDesc() : Atmosphere::Desc::Invisible);
+			cb.LightParams = (light != ur_null ? *light : LightDescDefault);
 			GfxResourceData cbResData = { &cb, sizeof(CommonCB), 0 };
 			gfxContext.UpdateBuffer(this->gfxObjects.CB.get(), GfxGPUAccess::WriteDiscard, &cbResData, 0, cbResData.RowPitch);
 			gfxContext.SetConstantBuffer(this->gfxObjects.CB.get(), 0);
@@ -2280,7 +2289,7 @@ namespace UnlimRealms
 	#endif
 	}
 
-	Result Isosurface::Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere)
+	Result Isosurface::Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere, const LightDesc* light)
 	{
 	#if defined(UR_GRAF)
 		if (ur_null == this->grafRenderer || ur_null == this->grafObjects.pipelineSolid)
@@ -2297,6 +2306,7 @@ namespace UnlimRealms
 			cbData.ViewProj = viewProj;
 			cbData.CameraPos = cameraPos;
 			cbData.AtmoParams = (atmosphere != ur_null ? atmosphere->GetDesc() : Atmosphere::Desc::Invisible);
+			cbData.LightParams = (light != ur_null ? *light : LightDescDefault);
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 			Allocation dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(CommonCB));
 			dynamicCB->Write((ur_byte*)&cbData, sizeof(cbData), 0, dynamicCBAlloc.Offset);

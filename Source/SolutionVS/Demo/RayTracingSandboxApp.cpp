@@ -15,6 +15,7 @@
 #include "GenericRender/GenericRender.h"
 #include "Camera/CameraControl.h"
 #include "HDRRender/HDRRender.h"
+#include "Atmosphere/Atmosphere.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
@@ -202,6 +203,28 @@ int RayTracingSandboxApp::Run()
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
 	camera.SetPosition(ur_float3(0.0f, 0.0f, -10.0f));
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
+
+	// light source params
+	LightDesc sunLight = {
+		1.0f, 1.0f, 1.0f, // Color
+		200.0f, // Intensity
+		-0.8165f,-0.40825f,-0.40825f, // Direction
+		0.0f, 0.0f, 0.0f // Position
+	};
+	LightingDesc lightingDesc = {};
+	lightingDesc.LightSourceCount = 1;
+	lightingDesc.LightSources[0] = sunLight;
+
+	// atmosphere params
+	Atmosphere::Desc atmosphereDesc = {
+		1075.0f,
+		1200.0f,
+		0.160f,
+		-0.980f,
+		0.000050f,
+		0.000050f,
+		2.718f,
+	};
 
 	// HDR rendering manager
 	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
@@ -513,7 +536,8 @@ int RayTracingSandboxApp::Run()
 			this->hitShaderTable = { this->shaderHandlesBuffer.get(), 3 * shaderGroupHandleSize, 1 * shaderGroupHandleSize, shaderGroupHandleSize };
 		}
 
-		void Render(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4 &clearColor, Camera& camera)
+		void Render(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4 &clearColor, Camera& camera,
+			const LightingDesc& lightingDesc, const Atmosphere::Desc& atmosphereDesc)
 		{
 			if (ur_null == this->grafRenderer)
 				return;
@@ -524,7 +548,8 @@ int RayTracingSandboxApp::Run()
 				ur_float4 cameraPos;
 				ur_float4 viewportSize;
 				ur_float4 clearColor;
-				ur_float4 lightDirection;
+				Atmosphere::Desc atmoDesc;
+				LightDesc lightDesc;
 			} cb;
 			ur_uint3 targetSize = grafTargetImage->GetDesc().Size;
 			cb.viewProjInv = camera.GetViewProjInv();
@@ -534,7 +559,8 @@ int RayTracingSandboxApp::Run()
 			cb.viewportSize.z = 1.0f / cb.viewportSize.x;
 			cb.viewportSize.w = 1.0f / cb.viewportSize.y;
 			cb.clearColor = clearColor;
-			cb.lightDirection = ur_float3::Normalize(ur_float3(1.0f, 1.0f, 1.0f));
+			cb.atmoDesc = atmosphereDesc;
+			cb.lightDesc = lightingDesc.LightSources[0];
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 			Allocation dynamicCBAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
 			dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
@@ -564,6 +590,12 @@ int RayTracingSandboxApp::Run()
 			rayTracingScene->Initialize();
 		};
 	}
+
+	// light source animation
+	ur_float lightCycleTime = 60.0f;
+	ur_float lightCrntCycleFactor = 0.0f;
+	ur_bool lightAnimationEnabled = true;
+	float lightAnimationElapsedTime = 0.0f;
 
 	// Main message loop:
 	ClockTime timer = Clock::now();
@@ -612,6 +644,23 @@ int RayTracingSandboxApp::Run()
 			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f;  // to seconds
 
 			ctx.progress = 1;
+
+			// upadte light source(s)
+
+			if (lightAnimationEnabled) lightAnimationElapsedTime += elapsedTime;
+			else lightAnimationElapsedTime = lightCrntCycleFactor * lightCycleTime;
+			float crntTimeFactor = (lightAnimationEnabled ? (lightAnimationElapsedTime / lightCycleTime) : lightCrntCycleFactor);
+			float modY;
+			lightCrntCycleFactor = std::modf(crntTimeFactor, &modY);
+			ur_float3 sunDir;
+			sunDir.x = -cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
+			sunDir.z = -sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
+			sunDir.y = -powf(fabs(sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor)), 2.0f) * 0.5f - 0.05f;
+			sunDir.Normalize();
+			LightDesc& sunLight = lightingDesc.LightSources[0];
+			memcpy(sunLight.Direction, &sunDir, sizeof(sunDir));
+
+			ctx.progress = 2;
 		});
 
 		// draw frame
@@ -656,6 +705,8 @@ int RayTracingSandboxApp::Run()
 				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
 				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), rtClearValue);
 
+				updateFrameJob->Wait();
+
 				if (hdrRender != ur_null)
 				{
 					// HDR & depth render pass
@@ -670,7 +721,8 @@ int RayTracingSandboxApp::Run()
 
 					if (rayTracingScene != ur_null)
 					{
-						rayTracingScene->Render(grafCmdListCrnt, hdrRender->GetHDRRenderTarget()->GetImage(0), (ur_float4&)rtClearValue.f32, camera);
+						rayTracingScene->Render(grafCmdListCrnt, hdrRender->GetHDRRenderTarget()->GetImage(0), (ur_float4&)rtClearValue.f32, camera,
+							lightingDesc, atmosphereDesc);
 					}
 
 					// resolve hdr result
@@ -700,6 +752,15 @@ int RayTracingSandboxApp::Run()
 						if (hdrRender != ur_null)
 						{
 							hdrRender->ShowImgui();
+						}
+						ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+						if (ImGui::CollapsingHeader("Lighting"))
+						{
+							ImGui::Checkbox("AnimationEnabled", &lightAnimationEnabled);
+							ImGui::InputFloat("CycleTime", &lightCycleTime);
+							ImGui::DragFloat("CrntCycleFactor", &lightCrntCycleFactor, 0.01f, 0.0f, 1.0f);
+							ImGui::ColorEdit3("Color", lightingDesc.LightSources[0].Color);
+							ImGui::InputFloat("Intensity", &lightingDesc.LightSources[0].Intensity);
 						}
 
 						imguiRender->Render(*grafCmdListCrnt);
