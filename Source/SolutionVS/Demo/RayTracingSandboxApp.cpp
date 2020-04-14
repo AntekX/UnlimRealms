@@ -310,22 +310,22 @@ int RayTracingSandboxApp::Run()
 
 				// build bottom level acceleration structure for sample geometry
 
-				GrafAccelerationStructureTrianglesData sampleTrianglesData = {};
-				sampleTrianglesData.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
-				sampleTrianglesData.VertexStride = vertexStride;
-				sampleTrianglesData.VerticesDeviceAddress = this->vertexBuffer->GetDeviceAddress();
-				sampleTrianglesData.IndexType = indexType;
-				sampleTrianglesData.IndicesDeviceAddress = this->indexBuffer->GetDeviceAddress();
+				GrafAccelerationStructureTrianglesData trianglesData = {};
+				trianglesData.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
+				trianglesData.VertexStride = vertexStride;
+				trianglesData.VerticesDeviceAddress = this->vertexBuffer->GetDeviceAddress();
+				trianglesData.IndexType = indexType;
+				trianglesData.IndicesDeviceAddress = this->indexBuffer->GetDeviceAddress();
 
-				GrafAccelerationStructureGeometryData sampleGeometryDataBL = {};
-				sampleGeometryDataBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
-				sampleGeometryDataBL.GeometryFlags = ur_uint(GrafAccelerationStructureGeometryFlag::Opaque);
-				sampleGeometryDataBL.TrianglesData = &sampleTrianglesData;
-				sampleGeometryDataBL.PrimitiveCount = ur_uint32(indicesCount / 3);
+				GrafAccelerationStructureGeometryData geometryDataBL = {};
+				geometryDataBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
+				geometryDataBL.GeometryFlags = ur_uint(GrafAccelerationStructureGeometryFlag::Opaque);
+				geometryDataBL.TrianglesData = &trianglesData;
+				geometryDataBL.PrimitiveCount = ur_uint32(indicesCount / 3);
 
 				GrafCommandList* cmdListBuildAccelStructBL = grafRenderer->GetTransientCommandList();
 				cmdListBuildAccelStructBL->Begin();
-				cmdListBuildAccelStructBL->BuildAccelerationStructure(this->accelerationStructureBL.get(), &sampleGeometryDataBL, 1);
+				cmdListBuildAccelStructBL->BuildAccelerationStructure(this->accelerationStructureBL.get(), &geometryDataBL, 1);
 				cmdListBuildAccelStructBL->End();
 				grafDevice->Record(cmdListBuildAccelStructBL);
 				//grafDevice->Submit();
@@ -453,34 +453,41 @@ int RayTracingSandboxApp::Run()
 
 			// build top level acceleration structure
 
-			GrafAccelerationStructureInstance sampleInstances[] = {
+			std::vector<GrafAccelerationStructureInstance> sampleInstances;
+			GrafAccelerationStructureInstance planeInstance =
+			{
 				{
-					{
-						1.0f, 0.0f, 0.0f, 0.0f,
-						0.0f, 1.0f, 0.0f, 0.0f,
-						0.0f, 0.0f, 1.0f, 0.0f
-					},
-					0, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-					this->planeMesh->accelerationStructureBL->GetDeviceAddress()
+					1.0f, 0.0f, 0.0f, 0.0f,
+					0.0f, 1.0f, 0.0f, 0.0f,
+					0.0f, 0.0f, 1.0f, 0.0f
 				},
+				0, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+				this->planeMesh->accelerationStructureBL->GetDeviceAddress()
+			};
+			sampleInstances.emplace_back(planeInstance);
+			ur_size cubeCount = 7;
+			for (ur_size i = 0; i < cubeCount; ++i)
+			{
+				GrafAccelerationStructureInstance cubeInstance =
 				{
 					{
-						1.0f, 0.0f, 0.0f, 0.0f,
+						1.0f, 0.0f, 0.0f, 5.0f * cosf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f),
 						0.0f, 1.0f, 0.0f, 0.0f,
-						0.0f, 0.0f, 1.0f, 0.0f
+						0.0f, 0.0f, 1.0f, 5.0f * sinf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f)
 					},
 					0, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
 					this->cubeMesh->accelerationStructureBL->GetDeviceAddress()
-				}
-			};
+				};
+				sampleInstances.emplace_back(cubeInstance);
+			}
 
 			GrafBuffer::InitParams sampleInstanceParams;
 			sampleInstanceParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			sampleInstanceParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-			sampleInstanceParams.BufferDesc.SizeInBytes = sizeof(sampleInstances);
+			sampleInstanceParams.BufferDesc.SizeInBytes = sampleInstances.size() * sizeof(GrafAccelerationStructureInstance);
 			grafSystem->CreateBuffer(this->instanceBuffer);
 			this->instanceBuffer->Initialize(grafDevice, sampleInstanceParams);
-			this->instanceBuffer->Write((ur_byte*)sampleInstances);
+			this->instanceBuffer->Write((const ur_byte*)sampleInstances.data());
 
 			GrafAccelerationStructureInstancesData sampleInstancesData = {};
 			sampleInstancesData.IsPointersArray = false;;
@@ -490,7 +497,7 @@ int RayTracingSandboxApp::Run()
 			sampleGeometryDataTL.GeometryType = GrafAccelerationStructureGeometryType::Instances;
 			sampleGeometryDataTL.GeometryFlags = ur_uint(GrafAccelerationStructureGeometryFlag::Opaque);
 			sampleGeometryDataTL.InstancesData = &sampleInstancesData;
-			sampleGeometryDataTL.PrimitiveCount = ur_array_size(sampleInstances);
+			sampleGeometryDataTL.PrimitiveCount = ur_uint32(sampleInstances.size());
 
 			GrafCommandList* cmdListBuildAccelStructTL = grafRenderer->GetTransientCommandList();
 			cmdListBuildAccelStructTL->Begin();
