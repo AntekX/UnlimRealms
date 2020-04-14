@@ -25,6 +25,8 @@ RaytracingAccelerationStructure g_SceneStructure : register(t0);
 //StructuredBuffer<Vertex> g_VertexBuffer: register(t1); // todo: load does not work as expected
 ByteAddressBuffer g_VertexBuffer: register(t1);
 ByteAddressBuffer g_IndexBuffer: register(t2);
+ByteAddressBuffer g_VertexBuffer1: register(t3);
+ByteAddressBuffer g_IndexBuffer1: register(t4);
 RWTexture2D<float4> g_TargetTexture : register(u0);
 
 typedef BuiltInTriangleIntersectionAttributes SampleHitAttributes;
@@ -163,25 +165,29 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 	// read vertex attributes
 
+	uint instanceIdx = InstanceIndex();
 	uint indexOffset = PrimitiveIndex() * 3 * 4;
-	uint3 indices = g_IndexBuffer.Load3(indexOffset);
-	#if (0)
-	// todo: fix structured buffer support
-	Vertex vertices[3];
-	vertices[0] = g_VertexBuffer.Load(indices[0]);
-	vertices[1] = g_VertexBuffer.Load(indices[1]);
-	vertices[2] = g_VertexBuffer.Load(indices[2]);
-	float3 normal = vertices[0].norm;
-	#else
-	// read vertex data from from byte buffer
-	uint vertexStride = 24;
-	uint vertexNormOfs = 12;
 	float3 normal;
-	uint vertexOfs = indices[0] * vertexStride + vertexNormOfs;
-	normal.x = asfloat(g_VertexBuffer.Load(vertexOfs + 0));
-	normal.y = asfloat(g_VertexBuffer.Load(vertexOfs + 4));
-	normal.z = asfloat(g_VertexBuffer.Load(vertexOfs + 8));
-	#endif
+	[branch] if (instanceIdx < 1)
+	{
+		uint3 indices = g_IndexBuffer.Load3(indexOffset);
+		uint vertexStride = 24;
+		uint vertexNormOfs = 12;
+		uint vertexOfs = indices[0] * vertexStride + vertexNormOfs;
+		normal.x = asfloat(g_VertexBuffer.Load(vertexOfs + 0));
+		normal.y = asfloat(g_VertexBuffer.Load(vertexOfs + 4));
+		normal.z = asfloat(g_VertexBuffer.Load(vertexOfs + 8));
+	}
+	else
+	{
+		uint3 indices = g_IndexBuffer1.Load3(indexOffset);
+		uint vertexStride = 24;
+		uint vertexNormOfs = 12;
+		uint vertexOfs = indices[0] * vertexStride + vertexNormOfs;
+		normal.x = asfloat(g_VertexBuffer1.Load(vertexOfs + 0));
+		normal.y = asfloat(g_VertexBuffer1.Load(vertexOfs + 4));
+		normal.z = asfloat(g_VertexBuffer1.Load(vertexOfs + 8));
+	}
 
 	// trace shadow data
 

@@ -473,7 +473,7 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafImage::Write(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+	Result GrafImage::Write(const ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 	{
 		return Result(NotImplemented);
 	}
@@ -506,7 +506,7 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafBuffer::Write(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+	Result GrafBuffer::Write(const ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 	{
 		return Result(NotImplemented);
 	}

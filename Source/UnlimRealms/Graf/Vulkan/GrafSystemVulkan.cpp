@@ -2560,7 +2560,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafImageVulkan::Write(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+	Result GrafImageVulkan::Write(const ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 	{
 		if (0 == dataSize)
 			dataSize = this->vkDeviceMemorySize; // entire allocation range
@@ -2912,7 +2912,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafBufferVulkan::Write(ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
+	Result GrafBufferVulkan::Write(const ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 	{
 		if (0 == dataSize)
 			dataSize = this->GetDesc().SizeInBytes; // entire allocation range
