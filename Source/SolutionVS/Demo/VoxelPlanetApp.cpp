@@ -274,13 +274,12 @@ int VoxelPlanetApp::Run()
 	}
 
 	// virtual star light source
-	LightDesc lightDesc = {
-		1.0f, 1.0f, 1.0f,	// Color
-		200.0f,				// Intensity
-		1.0f, 0.0f, 0.0f,	// Direction
-		0.0f, 0.0f, 0.0f	// Position
-	};
-
+	LightDesc lightDesc = {};
+	lightDesc.Color = { 1.0f, 1.0f, 1.0f };
+	lightDesc.Intensity = 200.0f;
+	lightDesc.Direction = { 1.0f, 0.0f, 0.0f };
+	lightDesc.Position = { 0.0f, 0.0f, 0.0f };
+	
 	// main application camera
 	Camera camera(realm);
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::Free);

@@ -205,15 +205,18 @@ int RayTracingSandboxApp::Run()
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
 
 	// light source params
-	LightDesc sunLight = {
-		1.0f, 1.0f, 1.0f, // Color
-		200.0f, // Intensity
-		-0.8165f,-0.40825f,-0.40825f, // Direction
-		0.0f, 0.0f, 0.0f // Position
-	};
+	LightDesc sunLight = {};
+	sunLight.Color = { 1.0f, 1.0f, 1.0f };
+	sunLight.Intensity = 200.0f;
+	sunLight.Direction = { -0.8165f,-0.40825f,-0.40825f };
+	LightDesc sunLight2 = {};
+	sunLight2.Color = { 1.0f, 0.1f, 0.0f };
+	sunLight2.Intensity = 200.0f;
+	sunLight2.Direction = { 0.8018f,-0.26726f,-0.5345f };
 	LightingDesc lightingDesc = {};
-	lightingDesc.LightSourceCount = 1;
+	lightingDesc.LightSourceCount = 2;
 	lightingDesc.LightSources[0] = sunLight;
+	lightingDesc.LightSources[1] = sunLight2;
 
 	// atmosphere params
 	Atmosphere::Desc atmosphereDesc = {
@@ -606,7 +609,7 @@ int RayTracingSandboxApp::Run()
 				ur_float4 viewportSize;
 				ur_float4 clearColor;
 				Atmosphere::Desc atmoDesc;
-				LightDesc lightDesc;
+				LightingDesc lightingDesc;
 			} cb;
 			ur_uint3 targetSize = grafTargetImage->GetDesc().Size;
 			cb.viewProjInv = camera.GetViewProjInv();
@@ -617,7 +620,7 @@ int RayTracingSandboxApp::Run()
 			cb.viewportSize.w = 1.0f / cb.viewportSize.y;
 			cb.clearColor = clearColor;
 			cb.atmoDesc = atmosphereDesc;
-			cb.lightDesc = lightingDesc.LightSources[0];
+			cb.lightingDesc = lightingDesc;
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 			Allocation dynamicCBAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
 			dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
@@ -717,7 +720,7 @@ int RayTracingSandboxApp::Run()
 			sunDir.y = -powf(fabs(sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor)), 2.0f) * 0.5f - 0.05f;
 			sunDir.Normalize();
 			LightDesc& sunLight = lightingDesc.LightSources[0];
-			memcpy(sunLight.Direction, &sunDir, sizeof(sunDir));
+			sunLight.Direction = sunDir;
 
 			ctx.progress = 2;
 		});
@@ -818,7 +821,7 @@ int RayTracingSandboxApp::Run()
 							ImGui::Checkbox("AnimationEnabled", &lightAnimationEnabled);
 							ImGui::InputFloat("CycleTime", &lightCycleTime);
 							ImGui::DragFloat("CrntCycleFactor", &lightCrntCycleFactor, 0.01f, 0.0f, 1.0f);
-							ImGui::ColorEdit3("Color", lightingDesc.LightSources[0].Color);
+							ImGui::ColorEdit3("Color", &lightingDesc.LightSources[0].Color.x);
 							ImGui::InputFloat("Intensity", &lightingDesc.LightSources[0].Intensity);
 						}
 

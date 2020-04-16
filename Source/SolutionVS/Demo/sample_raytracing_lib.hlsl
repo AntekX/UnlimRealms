@@ -9,7 +9,7 @@ struct SceneConstants
 	float4 viewportSize; // w, h, 1/w, 1/h
 	float4 clearColor;
 	AtmosphereDesc atmoDesc;
-	LightDesc lightDesc;
+	LightingDesc lightingDesc;
 };
 
 struct Vertex
@@ -58,9 +58,8 @@ float3 FresnelReflectanceSchlick(in float3 I, in float3 N, in float3 f0)
 	return f0 + (1 - f0)*pow(1 - cosi, 5);
 }
 
-float3 CalculatePhongLighting(in float3 worldPos, in float3 normal, in float3 albedo, in float shadowFactor, in float diffuseCoef = 1.0, in float specularCoef = 1.0, in float specularPower = 50)
+float3 CalculatePhongLighting(LightDesc light, in float3 worldPos, in float3 normal, in float3 albedo, in float shadowFactor, in float diffuseCoef = 1.0, in float specularCoef = 1.0, in float specularPower = 50)
 {
-	LightDesc light = g_SceneCB.lightDesc;
 	float3 incidentLightRay = light.Direction.xyz;
 
 	// diffuse
@@ -84,6 +83,17 @@ float3 CalculatePhongLighting(in float3 worldPos, in float3 normal, in float3 al
 	ambientColor = albedo * ambientColor;
 
 	return ambientColor + diffuseColor + specularColor;
+}
+
+float3 CalculatePhongLighting(in float3 worldPos, in float3 normal, in float3 albedo, in float shadowFactor, in float diffuseCoef = 1.0, in float specularCoef = 1.0, in float specularPower = 50)
+{
+	float3 radianceResult = 0.0;
+	for (uint ilight = 0; ilight < g_SceneCB.lightingDesc.LightSourceCount; ++ilight)
+	{
+		LightDesc light = g_SceneCB.lightingDesc.LightSources[ilight];
+		radianceResult += CalculatePhongLighting(light, worldPos, normal, albedo, shadowFactor, diffuseCoef, specularCoef, specularPower);
+	}
+	return radianceResult;
 }
 
 [shader("raygeneration")]
@@ -143,11 +153,17 @@ void SampleMiss(inout SampleRayData rayData)
 	//rayData.color.xyz = g_SceneCB.clearColor.xyz;
 	//rayData.color.w = 1.0;
 
-	// calculate sky color
-	LightDesc light = g_SceneCB.lightDesc;
-	float3 worldFrom = WorldRayOrigin() + float3(0.0, g_SceneCB.atmoDesc.InnerRadius * 0.98, 0.0);
-	float3 worldTo = worldFrom + WorldRayDirection();
-	rayData.color = AtmosphericScatteringSky(g_SceneCB.atmoDesc, light, worldTo, worldFrom);
+	// calculate atmosphere light
+
+	rayData.color = 0.0;
+	for (uint ilight = 0; ilight < g_SceneCB.lightingDesc.LightSourceCount; ++ilight)
+	{
+		LightDesc light = g_SceneCB.lightingDesc.LightSources[ilight];
+		float3 worldFrom = WorldRayOrigin() + float3(0.0, g_SceneCB.atmoDesc.InnerRadius * 0.98, 0.0);
+		float3 worldTo = worldFrom + WorldRayDirection();
+		rayData.color += AtmosphericScatteringSky(g_SceneCB.atmoDesc, light, worldTo, worldFrom);
+	}
+	rayData.color.w = min(1.0, rayData.color.w);
 }
 
 [shader("miss")]
@@ -192,8 +208,9 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	// trace shadow data
 
 	float shadowFactor = 1.0;
+	for (uint ilight = 0; ilight < g_SceneCB.lightingDesc.LightSourceCount; ++ilight)
 	{
-		LightDesc light = g_SceneCB.lightDesc;
+		LightDesc light = g_SceneCB.lightingDesc.LightSources[ilight];
 
 		SampleShadowData shadowData;
 		shadowData.occluded = true;
@@ -218,7 +235,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 			missShaderIndex,
 			ray, shadowData);
 
-		shadowFactor = (shadowData.occluded ? 0.0 : 1.0);
+		shadowFactor *= (shadowData.occluded ? 0.25 : 1.0);
 	}
 
 	// trace reflection data
