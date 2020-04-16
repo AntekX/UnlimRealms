@@ -340,8 +340,19 @@ int RayTracingSandboxApp::Run()
 		GrafStridedBufferRegionDesc rayGenShaderTable;
 		GrafStridedBufferRegionDesc missShaderTable;
 		GrafStridedBufferRegionDesc hitShaderTable;
+		
+		ur_size sampleInstanceCount;
+		ur_bool animationEnabled;
+		ur_float animationCycleTime;
+		ur_float animationElapsedTime;
 
-		RayTracingScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null) {}
+		RayTracingScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
+		{
+			this->sampleInstanceCount = 7;
+			this->animationEnabled = true;
+			this->animationCycleTime = 30.0f;
+			this->animationElapsedTime = 0.0f;
+		}
 		~RayTracingScene()
 		{
 			if (ur_null == grafRenderer)
@@ -376,14 +387,16 @@ int RayTracingSandboxApp::Run()
 			GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
 			const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 
+			const ur_size VertexCountMax = 1024;
+			const ur_size IndexCountMax = 2048;
+			const ur_size InstanceCountMax = 128;
+
 			struct VertexSample
 			{
 				ur_float3 pos;
 				ur_float3 norm;
 			};
 			typedef ur_uint32 IndexSample;
-			const ur_size VertexCountMax = 1024;
-			const ur_size IndexCountMax = 2048;
 
 			// initialize common vertex attributes buffer
 
@@ -448,17 +461,8 @@ int RayTracingSandboxApp::Run()
 			// initiaize top level acceleration structure container
 
 			GrafAccelerationStructureGeometryDesc accelStructGeomDescTL = {};
-			#if (1)
-			accelStructGeomDescTL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
-			accelStructGeomDescTL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
-			accelStructGeomDescTL.IndexType = GrafIndexType::UINT32;
-			accelStructGeomDescTL.PrimitiveCountMax = ur_array_size(cubeIndices) / 3 + ur_array_size(planeIndices) / 3;
-			accelStructGeomDescTL.VertexCountMax = ur_array_size(cubeVertices) + ur_array_size(planeVertices);
-			accelStructGeomDescTL.TransformsEnabled = false;
-			#else
 			accelStructGeomDescTL.GeometryType = GrafAccelerationStructureGeometryType::Instances;
-			accelStructGeomDescTL.PrimitiveCountMax = 1;
-			#endif
+			accelStructGeomDescTL.PrimitiveCountMax = InstanceCountMax;
 
 			GrafAccelerationStructure::InitParams accelStructParamsTL = {};
 			accelStructParamsTL.StructureType = GrafAccelerationStructureType::TopLevel;
@@ -469,67 +473,19 @@ int RayTracingSandboxApp::Run()
 			grafSystem->CreateAccelerationStructure(this->accelerationStructureTL);
 			this->accelerationStructureTL->Initialize(grafDevice, accelStructParamsTL);
 
-			// build top level acceleration structure
-
-			enum MeshID : ur_uint32
-			{
-				MeshID_Plane = 0,
-				MeshID_Cube,
-			};
-
-			std::vector<GrafAccelerationStructureInstance> sampleInstances;
-			GrafAccelerationStructureInstance planeInstance =
-			{
-				{
-					1.0f, 0.0f, 0.0f, 0.0f,
-					0.0f, 1.0f, 0.0f, 0.0f,
-					0.0f, 0.0f, 1.0f, 0.0f
-				},
-				MeshID_Plane, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-				this->planeMesh->accelerationStructureBL->GetDeviceAddress()
-			};
-			sampleInstances.emplace_back(planeInstance);
-			ur_size cubeCount = 7;
-			for (ur_size i = 0; i < cubeCount; ++i)
-			{
-				GrafAccelerationStructureInstance cubeInstance =
-				{
-					{
-						1.0f, 0.0f, 0.0f, 5.0f * cosf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f),
-						0.0f, 1.0f, 0.0f, 0.0f,
-						0.0f, 0.0f, 1.0f, 5.0f * sinf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f)
-					},
-					MeshID_Cube, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-					this->cubeMesh->accelerationStructureBL->GetDeviceAddress()
-				};
-				sampleInstances.emplace_back(cubeInstance);
-			}
+			// initialize common instance buffer for TLAS
 
 			GrafBuffer::InitParams sampleInstanceParams;
 			sampleInstanceParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			sampleInstanceParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-			sampleInstanceParams.BufferDesc.SizeInBytes = sampleInstances.size() * sizeof(GrafAccelerationStructureInstance);
+			sampleInstanceParams.BufferDesc.SizeInBytes = InstanceCountMax * sizeof(GrafAccelerationStructureInstance);
+
 			grafSystem->CreateBuffer(this->instanceBuffer);
 			this->instanceBuffer->Initialize(grafDevice, sampleInstanceParams);
-			this->instanceBuffer->Write((const ur_byte*)sampleInstances.data());
 
-			GrafAccelerationStructureInstancesData sampleInstancesData = {};
-			sampleInstancesData.IsPointersArray = false;;
-			sampleInstancesData.DeviceAddress = this->instanceBuffer->GetDeviceAddress();
+			// build TLAS
 
-			GrafAccelerationStructureGeometryData sampleGeometryDataTL = {};
-			sampleGeometryDataTL.GeometryType = GrafAccelerationStructureGeometryType::Instances;
-			sampleGeometryDataTL.GeometryFlags = ur_uint(GrafAccelerationStructureGeometryFlag::Opaque);
-			sampleGeometryDataTL.InstancesData = &sampleInstancesData;
-			sampleGeometryDataTL.PrimitiveCount = ur_uint32(sampleInstances.size());
-
-			GrafCommandList* cmdListBuildAccelStructTL = grafRenderer->GetTransientCommandList();
-			cmdListBuildAccelStructTL->Begin();
-			cmdListBuildAccelStructTL->BuildAccelerationStructure(this->accelerationStructureTL.get(), &sampleGeometryDataTL, 1);
-			cmdListBuildAccelStructTL->End();
-			grafDevice->Record(cmdListBuildAccelStructTL);
-			//grafDevice->Submit();
-			//grafDevice->WaitIdle();
+			this->BuildTopLevelAccelerationStructure();
 
 			// shaders
 
@@ -617,6 +573,94 @@ int RayTracingSandboxApp::Run()
 			this->hitShaderTable = { this->shaderHandlesBuffer.get(), 3 * shaderGroupHandleSize, 1 * shaderGroupHandleSize, shaderGroupHandleSize };
 		}
 
+		void BuildTopLevelAccelerationStructure(ur_float elapsedSeconds = 0.0f)
+		{
+			this->grafRenderer = this->GetRealm().GetComponent<GrafRenderer>();
+			if (ur_null == grafRenderer)
+				return;
+
+			GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
+			GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
+
+			if (this->animationEnabled) this->animationElapsedTime += elapsedSeconds;
+			ur_float crntTimeFactor = (this->animationElapsedTime / this->animationCycleTime);
+			ur_float modY;
+			ur_float crntCycleFactor = std::modf(crntTimeFactor, &modY);
+			ur_float animAngle = (MathConst<ur_float>::Pi * 2.0f) * crntCycleFactor;
+
+			// update instances
+
+			enum MeshID : ur_uint32
+			{
+				MeshID_Plane = 0,
+				MeshID_Cube,
+			};
+
+			std::vector<GrafAccelerationStructureInstance> sampleInstances;
+			GrafAccelerationStructureInstance planeInstance =
+			{
+				{
+					1.0f, 0.0f, 0.0f, 0.0f,
+					0.0f, 1.0f, 0.0f, 0.0f,
+					0.0f, 0.0f, 1.0f, 0.0f
+				},
+				MeshID_Plane, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+				this->planeMesh->accelerationStructureBL->GetDeviceAddress()
+			};
+			sampleInstances.emplace_back(planeInstance);
+			ur_size cubeCount = this->sampleInstanceCount;
+			for (ur_size i = 0; i < cubeCount; ++i)
+			{
+				GrafAccelerationStructureInstance cubeInstance =
+				{
+					{
+						1.0f, 0.0f, 0.0f, 5.0f * cosf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
+						0.0f, 1.0f, 0.0f, 0.0f + cosf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
+						0.0f, 0.0f, 1.0f, 5.0f * sinf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f + animAngle)
+					},
+					MeshID_Cube, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+					this->cubeMesh->accelerationStructureBL->GetDeviceAddress()
+				};
+				sampleInstances.emplace_back(cubeInstance);
+			}
+
+			// write to upload buffer
+
+			ur_size updateSize = sampleInstances.size() * sizeof(GrafAccelerationStructureInstance);
+			if (updateSize > this->instanceBuffer->GetDesc().SizeInBytes)
+				return; // too many instances
+
+			Allocation uploadAllocation = grafRenderer->GetDynamicUploadBufferAllocation(updateSize);
+			GrafBuffer* uploadBuffer = grafRenderer->GetDynamicUploadBuffer();
+			uploadBuffer->Write((const ur_byte*)sampleInstances.data(), uploadAllocation.Size, 0, uploadAllocation.Offset);
+
+			// build TLAS on device
+
+			GrafAccelerationStructureInstancesData sampleInstancesData = {};
+			sampleInstancesData.IsPointersArray = false;
+			sampleInstancesData.DeviceAddress = this->instanceBuffer->GetDeviceAddress();
+
+			GrafAccelerationStructureGeometryData sampleGeometryDataTL = {};
+			sampleGeometryDataTL.GeometryType = GrafAccelerationStructureGeometryType::Instances;
+			sampleGeometryDataTL.GeometryFlags = ur_uint(GrafAccelerationStructureGeometryFlag::Opaque);
+			sampleGeometryDataTL.InstancesData = &sampleInstancesData;
+			sampleGeometryDataTL.PrimitiveCount = ur_uint32(sampleInstances.size());
+
+			GrafCommandList* cmdListBuildAccelStructTL = grafRenderer->GetTransientCommandList();
+			cmdListBuildAccelStructTL->Begin();
+			cmdListBuildAccelStructTL->Copy(uploadBuffer, this->instanceBuffer.get(), updateSize, uploadAllocation.Offset, 0);
+			cmdListBuildAccelStructTL->BuildAccelerationStructure(this->accelerationStructureTL.get(), &sampleGeometryDataTL, 1);
+			cmdListBuildAccelStructTL->End();
+			grafDevice->Record(cmdListBuildAccelStructTL);
+			//grafDevice->Submit();
+			//grafDevice->WaitIdle();
+		}
+
+		void Update(ur_float elapsedSeconds)
+		{
+			this->BuildTopLevelAccelerationStructure(elapsedSeconds);
+		}
+
 		void Render(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4 &clearColor, Camera& camera,
 			const LightingDesc& lightingDesc, const Atmosphere::Desc& atmosphereDesc)
 		{
@@ -658,6 +702,19 @@ int RayTracingSandboxApp::Run()
 			grafCmdList->BindRayTracingDescriptorTable(descriptorTable, this->pipelineState.get());
 			grafCmdList->DispatchRays(targetSize.x, targetSize.y, 1, &this->rayGenShaderTable, &this->missShaderTable, &this->hitShaderTable, ur_null);
 		}
+
+		void ShowImgui()
+		{
+			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+			if (ImGui::CollapsingHeader("RayTracingScene"))
+			{
+				int instanceCount = (int)this->sampleInstanceCount;
+				ImGui::InputInt("InstanceCount", &instanceCount);
+				this->sampleInstanceCount = (ur_size)std::max(0, instanceCount);
+				ImGui::Checkbox("InstancesAnimationEnabled", &this->animationEnabled);
+				ImGui::InputFloat("InstancesCycleTime", &this->animationCycleTime);
+			}
+		}
 	};
 	std::unique_ptr<RayTracingScene> rayTracingScene;
 	if (grafRenderer != ur_null)
@@ -676,7 +733,7 @@ int RayTracingSandboxApp::Run()
 	ur_float lightCycleTime = 60.0f;
 	ur_float lightCrntCycleFactor = 0.0f;
 	ur_bool lightAnimationEnabled = true;
-	float lightAnimationElapsedTime = 0.0f;
+	ur_float lightAnimationElapsedTime = 0.0f;
 
 	// Main message loop:
 	ClockTime timer = Clock::now();
@@ -730,8 +787,8 @@ int RayTracingSandboxApp::Run()
 
 			if (lightAnimationEnabled) lightAnimationElapsedTime += elapsedTime;
 			else lightAnimationElapsedTime = lightCrntCycleFactor * lightCycleTime;
-			float crntTimeFactor = (lightAnimationEnabled ? (lightAnimationElapsedTime / lightCycleTime) : lightCrntCycleFactor);
-			float modY;
+			ur_float crntTimeFactor = (lightAnimationEnabled ? (lightAnimationElapsedTime / lightCycleTime) : lightCrntCycleFactor);
+			ur_float modY;
 			lightCrntCycleFactor = std::modf(crntTimeFactor, &modY);
 			ur_float3 sunDir;
 			sunDir.x = -cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
@@ -742,6 +799,15 @@ int RayTracingSandboxApp::Run()
 			sunLight.Direction = sunDir;
 
 			ctx.progress = 2;
+
+			// update ray tracing scene
+
+			if (rayTracingScene != ur_null)
+			{
+				rayTracingScene->Update(elapsedTime);
+			}
+
+			ctx.progress = 3;
 		});
 
 		// draw frame
@@ -842,6 +908,10 @@ int RayTracingSandboxApp::Run()
 							ImGui::DragFloat("CrntCycleFactor", &lightCrntCycleFactor, 0.01f, 0.0f, 1.0f);
 							ImGui::ColorEdit3("Color", &lightingDesc.LightSources[0].Color.x);
 							ImGui::InputFloat("Intensity", &lightingDesc.LightSources[0].Intensity);
+						}
+						if (rayTracingScene != ur_null)
+						{
+							rayTracingScene->ShowImgui();
 						}
 
 						imguiRender->Render(*grafCmdListCrnt);
