@@ -11,6 +11,7 @@ namespace UnlimRealms
 {
 
 	LinearAllocator::LinearAllocator() :
+		isCircular(false),
 		size(0),
 		alignment(1),
 		offset(0)
@@ -21,8 +22,9 @@ namespace UnlimRealms
 	{
 	}
 
-	void LinearAllocator::Init(ur_size size, ur_size alignment)
+	void LinearAllocator::Init(ur_size size, ur_size alignment, ur_bool isCircular)
 	{
+		this->isCircular = isCircular;
 		this->alignment = alignment;
 		this->Resize(size);
 	}
@@ -42,6 +44,8 @@ namespace UnlimRealms
 
 		if (this->offset + allocSize > this->size)
 		{
+			if (!this->isCircular)
+				return alloc;
 			this->offset = 0;
 		}
 

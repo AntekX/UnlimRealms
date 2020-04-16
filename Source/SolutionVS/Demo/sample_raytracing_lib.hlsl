@@ -18,15 +18,24 @@ struct Vertex
 	float3 norm;
 };
 
-static const uint RecursionDepthMax = 1;
+struct MeshInfo
+{
+	uint vertexBufferOfs;
+	uint indexBufferOfs;
+};
+
+static const MeshInfo g_MeshInfo[] = {
+	{ 0, 0 },
+	{ 96, 24 }
+};
+
+static const uint RecursionDepthMax = 2;
 
 ConstantBuffer<SceneConstants> g_SceneCB : register(b0);
 RaytracingAccelerationStructure g_SceneStructure : register(t0);
 //StructuredBuffer<Vertex> g_VertexBuffer: register(t1); // todo: load does not work as expected
 ByteAddressBuffer g_VertexBuffer: register(t1);
 ByteAddressBuffer g_IndexBuffer: register(t2);
-ByteAddressBuffer g_VertexBuffer1: register(t3);
-ByteAddressBuffer g_IndexBuffer1: register(t4);
 RWTexture2D<float4> g_TargetTexture : register(u0);
 
 typedef BuiltInTriangleIntersectionAttributes SampleHitAttributes;
@@ -181,29 +190,17 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 	// read vertex attributes
 
-	uint instanceIdx = InstanceIndex();
-	uint indexOffset = PrimitiveIndex() * 3 * 4;
+	uint meshID = InstanceID();
+	MeshInfo meshInfo = g_MeshInfo[meshID];
+	uint indexOffset = meshInfo.indexBufferOfs + PrimitiveIndex() * 3 * 4;
+	uint3 indices = g_IndexBuffer.Load3(indexOffset);
+	uint vertexStride = 24;
+	uint vertexNormOfs = 12;
+	uint vertexOfs = meshInfo.vertexBufferOfs + indices[0] * vertexStride + vertexNormOfs;
 	float3 normal;
-	[branch] if (instanceIdx < 1)
-	{
-		uint3 indices = g_IndexBuffer.Load3(indexOffset);
-		uint vertexStride = 24;
-		uint vertexNormOfs = 12;
-		uint vertexOfs = indices[0] * vertexStride + vertexNormOfs;
-		normal.x = asfloat(g_VertexBuffer.Load(vertexOfs + 0));
-		normal.y = asfloat(g_VertexBuffer.Load(vertexOfs + 4));
-		normal.z = asfloat(g_VertexBuffer.Load(vertexOfs + 8));
-	}
-	else
-	{
-		uint3 indices = g_IndexBuffer1.Load3(indexOffset);
-		uint vertexStride = 24;
-		uint vertexNormOfs = 12;
-		uint vertexOfs = indices[0] * vertexStride + vertexNormOfs;
-		normal.x = asfloat(g_VertexBuffer1.Load(vertexOfs + 0));
-		normal.y = asfloat(g_VertexBuffer1.Load(vertexOfs + 4));
-		normal.z = asfloat(g_VertexBuffer1.Load(vertexOfs + 8));
-	}
+	normal.x = asfloat(g_VertexBuffer.Load(vertexOfs + 0));
+	normal.y = asfloat(g_VertexBuffer.Load(vertexOfs + 4));
+	normal.z = asfloat(g_VertexBuffer.Load(vertexOfs + 8));
 
 	// trace shadow data
 

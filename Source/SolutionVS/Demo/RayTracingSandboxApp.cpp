@@ -251,46 +251,30 @@ int RayTracingSandboxApp::Run()
 		class Mesh : public GrafEntity
 		{
 		public:
-			
-			std::unique_ptr<GrafBuffer> vertexBuffer;
-			std::unique_ptr<GrafBuffer> indexBuffer;
+
+			Allocation vertexBufferRegion;
+			Allocation indexBufferRegion;
 			std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
 
 			Mesh(GrafSystem &grafSystem) : GrafEntity(grafSystem) {}
 			~Mesh() {}
 
 			void Initialize(GrafRenderer* grafRenderer,
-				const ur_byte* vertices, ur_size vertexBufferSize, ur_size vertexStride,
-				const ur_byte* indices, ur_size indexBufferSize, GrafIndexType indexType)
+				GrafBuffer* vertexBuffer, LinearAllocator& vbAllocator, const ur_byte* vertices, ur_size verticesCount, ur_size vertexStride,
+				GrafBuffer* indexBuffer, LinearAllocator& ibAllocator, const ur_byte* indices, ur_size indicesCount, GrafIndexType indexType)
 			{
 				GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
 				GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
 
-				ur_size verticesCount = (vertexBufferSize / vertexStride);
-				ur_size indexStride = (GrafIndexType::UINT16 == indexType ? 2 : 4);
-				ur_size indicesCount = (indexBufferSize / indexStride);
+				// allocate regions in shared mesh buffers and write
 
-				// initialize vertex buffer
+				this->vertexBufferRegion = vbAllocator.Allocate(verticesCount * vertexStride);
+				this->indexBufferRegion = ibAllocator.Allocate(indicesCount * (GrafIndexType::UINT16 == indexType ? 2 : 4));
+				if (0 == this->vertexBufferRegion.Size || 0 == this->indexBufferRegion.Size)
+					return; // exceeeds reserved size
 
-				GrafBuffer::InitParams VBParams;
-				VBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
-				VBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-				VBParams.BufferDesc.SizeInBytes = vertexBufferSize;
-
-				grafSystem->CreateBuffer(this->vertexBuffer);
-				this->vertexBuffer->Initialize(grafDevice, VBParams);
-				this->vertexBuffer->Write(vertices);
-
-				// initialize index buffer
-
-				GrafBuffer::InitParams IBParams;
-				IBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
-				IBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-				IBParams.BufferDesc.SizeInBytes = indexBufferSize;
-
-				grafSystem->CreateBuffer(this->indexBuffer);
-				this->indexBuffer->Initialize(grafDevice, IBParams);
-				this->indexBuffer->Write(indices);
+				vertexBuffer->Write(vertices, this->vertexBufferRegion.Size, 0, this->vertexBufferRegion.Offset);
+				indexBuffer->Write(indices, this->indexBufferRegion.Size, 0, this->indexBufferRegion.Offset);
 
 				// initiaize bottom level acceleration structure container
 
@@ -316,9 +300,9 @@ int RayTracingSandboxApp::Run()
 				GrafAccelerationStructureTrianglesData trianglesData = {};
 				trianglesData.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
 				trianglesData.VertexStride = vertexStride;
-				trianglesData.VerticesDeviceAddress = this->vertexBuffer->GetDeviceAddress();
+				trianglesData.VerticesDeviceAddress = vertexBuffer->GetDeviceAddress() + this->vertexBufferRegion.Offset;
 				trianglesData.IndexType = indexType;
-				trianglesData.IndicesDeviceAddress = this->indexBuffer->GetDeviceAddress();
+				trianglesData.IndicesDeviceAddress = indexBuffer->GetDeviceAddress() + this->indexBufferRegion.Offset;
 
 				GrafAccelerationStructureGeometryData geometryDataBL = {};
 				geometryDataBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
@@ -339,6 +323,10 @@ int RayTracingSandboxApp::Run()
 		GrafRenderer* grafRenderer;
 		std::unique_ptr<Mesh> cubeMesh;
 		std::unique_ptr<Mesh> planeMesh;
+		LinearAllocator vertexBufferAllocator;
+		LinearAllocator indexBufferAllocator;
+		std::unique_ptr<GrafBuffer> vertexBuffer;
+		std::unique_ptr<GrafBuffer> indexBuffer;
 		std::unique_ptr<GrafBuffer> instanceBuffer;
 		std::unique_ptr<GrafAccelerationStructure> accelerationStructureTL;
 		std::unique_ptr<GrafDescriptorTableLayout> bindingTableLayout;
@@ -361,6 +349,8 @@ int RayTracingSandboxApp::Run()
 
 			grafRenderer->SafeDelete(cubeMesh.release());
 			grafRenderer->SafeDelete(planeMesh.release());
+			grafRenderer->SafeDelete(vertexBuffer.release());
+			grafRenderer->SafeDelete(indexBuffer.release());
 			grafRenderer->SafeDelete(instanceBuffer.release());
 			grafRenderer->SafeDelete(accelerationStructureTL.release());
 			grafRenderer->SafeDelete(bindingTableLayout.release());
@@ -386,14 +376,53 @@ int RayTracingSandboxApp::Run()
 			GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
 			const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 
-			// sample cube mesh
-
 			struct VertexSample
 			{
 				ur_float3 pos;
 				ur_float3 norm;
 			};
 			typedef ur_uint32 IndexSample;
+			const ur_size VertexCountMax = 1024;
+			const ur_size IndexCountMax = 2048;
+
+			// initialize common vertex attributes buffer
+
+			GrafBuffer::InitParams VBParams;
+			VBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
+			VBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			VBParams.BufferDesc.SizeInBytes = VertexCountMax * sizeof(VertexSample);
+
+			grafSystem->CreateBuffer(this->vertexBuffer);
+			this->vertexBuffer->Initialize(grafDevice, VBParams);
+			this->vertexBufferAllocator.Init(VBParams.BufferDesc.SizeInBytes);
+
+			// initialize common index buffer
+
+			GrafBuffer::InitParams IBParams;
+			IBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
+			IBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			IBParams.BufferDesc.SizeInBytes = IndexCountMax * sizeof(IndexSample);
+
+			grafSystem->CreateBuffer(this->indexBuffer);
+			this->indexBuffer->Initialize(grafDevice, IBParams);
+			this->indexBufferAllocator.Init(IBParams.BufferDesc.SizeInBytes);
+
+			// sample plane mesh
+
+			VertexSample planeVertices[] = {
+				{ {-10.0f,-2.0f,-10.0f }, { 0.0f, 1.0f, 0.0f } }, { { 10.0f,-2.0f,-10.0f}, { 0.0f, 1.0f, 0.0f } }, { {-10.0f,-2.0f, 10.0f}, { 0.0f, 1.0f, 0.0f } }, { { 10.0f,-2.0f, 10.0f}, { 0.0f, 1.0f, 0.0f } },
+			};
+			IndexSample planeIndices[] = {
+				2, 3, 1, 1, 0, 2,
+			};
+
+			this->planeMesh.reset(new Mesh(*grafSystem));
+			this->planeMesh->Initialize(this->grafRenderer,
+				this->vertexBuffer.get(), this->vertexBufferAllocator, (const ur_byte*)planeVertices, ur_array_size(planeVertices), sizeof(VertexSample),
+				this->indexBuffer.get(), this->indexBufferAllocator, (const ur_byte*)planeIndices, ur_array_size(planeIndices), GrafIndexType::UINT32);
+
+			// sample cube mesh
+
 			const VertexSample cubeVertices[] = {
 				{ {-1.0f,-1.0f,-1.0f }, { 0.0f, 0.0f,-1.0f } }, { { 1.0f,-1.0f,-1.0f }, { 0.0f, 0.0f,-1.0f } }, { {-1.0f, 1.0f,-1.0f }, { 0.0f, 0.0f,-1.0f } }, { { 1.0f, 1.0f,-1.0f }, { 0.0f, 0.0f,-1.0f } },
 				{ {-1.0f,-1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } }, { { 1.0f,-1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } }, { {-1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } }, { { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } },
@@ -413,22 +442,8 @@ int RayTracingSandboxApp::Run()
 
 			this->cubeMesh.reset(new Mesh(*grafSystem));
 			this->cubeMesh->Initialize(this->grafRenderer,
-				(const ur_byte*)cubeVertices, sizeof(cubeVertices), sizeof(VertexSample),
-				(const ur_byte*)cubeIndices, sizeof(cubeIndices), GrafIndexType::UINT32);
-
-			// sample plane mesh
-
-			VertexSample planeVertices[] = {
-				{ {-10.0f,-2.0f,-10.0f }, { 0.0f, 1.0f, 0.0f } }, { { 10.0f,-2.0f,-10.0f}, { 0.0f, 1.0f, 0.0f } }, { {-10.0f,-2.0f, 10.0f}, { 0.0f, 1.0f, 0.0f } }, { { 10.0f,-2.0f, 10.0f}, { 0.0f, 1.0f, 0.0f } },
-			};
-			IndexSample planeIndices[] = {
-				2, 3, 1, 1, 0, 2,
-			};
-
-			this->planeMesh.reset(new Mesh(*grafSystem));
-			this->planeMesh->Initialize(this->grafRenderer,
-				(const ur_byte*)planeVertices, sizeof(planeVertices), sizeof(VertexSample),
-				(const ur_byte*)planeIndices, sizeof(planeIndices), GrafIndexType::UINT32);
+				this->vertexBuffer.get(), this->vertexBufferAllocator, (const ur_byte*)cubeVertices, ur_array_size(cubeVertices), sizeof(VertexSample),
+				this->indexBuffer.get(), this->indexBufferAllocator, (const ur_byte*)cubeIndices, ur_array_size(cubeIndices), GrafIndexType::UINT32);
 
 			// initiaize top level acceleration structure container
 
@@ -456,6 +471,12 @@ int RayTracingSandboxApp::Run()
 
 			// build top level acceleration structure
 
+			enum MeshID : ur_uint32
+			{
+				MeshID_Plane = 0,
+				MeshID_Cube,
+			};
+
 			std::vector<GrafAccelerationStructureInstance> sampleInstances;
 			GrafAccelerationStructureInstance planeInstance =
 			{
@@ -464,7 +485,7 @@ int RayTracingSandboxApp::Run()
 					0.0f, 1.0f, 0.0f, 0.0f,
 					0.0f, 0.0f, 1.0f, 0.0f
 				},
-				0, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+				MeshID_Plane, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
 				this->planeMesh->accelerationStructureBL->GetDeviceAddress()
 			};
 			sampleInstances.emplace_back(planeInstance);
@@ -478,7 +499,7 @@ int RayTracingSandboxApp::Run()
 						0.0f, 1.0f, 0.0f, 0.0f,
 						0.0f, 0.0f, 1.0f, 5.0f * sinf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f)
 					},
-					0, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+					MeshID_Cube, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
 					this->cubeMesh->accelerationStructureBL->GetDeviceAddress()
 				};
 				sampleInstances.emplace_back(cubeInstance);
@@ -628,10 +649,8 @@ int RayTracingSandboxApp::Run()
 			GrafDescriptorTable* descriptorTable = this->bindingTables[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
 			descriptorTable->SetAccelerationStructure(0, this->accelerationStructureTL.get());
-			descriptorTable->SetBuffer(1, this->planeMesh->vertexBuffer.get());
-			descriptorTable->SetBuffer(2, this->planeMesh->indexBuffer.get());
-			descriptorTable->SetBuffer(3, this->cubeMesh->vertexBuffer.get());
-			descriptorTable->SetBuffer(4, this->cubeMesh->indexBuffer.get());
+			descriptorTable->SetBuffer(1, this->vertexBuffer.get());
+			descriptorTable->SetBuffer(2, this->indexBuffer.get());
 			descriptorTable->SetRWImage(0, grafTargetImage);
 
 			grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);

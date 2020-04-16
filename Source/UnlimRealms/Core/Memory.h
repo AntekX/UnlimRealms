@@ -30,7 +30,7 @@ namespace UnlimRealms
 
 		~LinearAllocator();
 
-		void Init(ur_size size, ur_size alignment = 1);
+		void Init(ur_size size, ur_size alignment = 1, ur_bool isCircular = false);
 
 		void Resize(ur_size size);
 
@@ -44,6 +44,7 @@ namespace UnlimRealms
 
 	private:
 
+		ur_bool isCircular;
 		ur_size size;
 		ur_size alignment;
 		ur_size offset;
