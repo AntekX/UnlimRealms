@@ -415,7 +415,7 @@ namespace UnlimRealms
 			return 0;
 		}
 
-		void Normalize()
+		TVector3<T>& Normalize()
 		{
 			T l = this->Length();
 			if (l > 0)
@@ -424,6 +424,7 @@ namespace UnlimRealms
 				this->y /= l;
 				this->z /= l;
 			}
+			return *this;
 		}
 
 		static TVector3<T> Normalize(const TVector3<T> &v)

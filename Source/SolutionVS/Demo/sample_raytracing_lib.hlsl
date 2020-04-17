@@ -88,7 +88,7 @@ float3 CalculatePhongLighting(LightDesc light, in float3 worldPos, in float3 nor
 	float3 specularColor = specularCoef * Ks * lightSpecularColor * shadowFactor;
 
 	// ambient
-	float3 ambientColor = g_SceneCB.clearColor.xyz * 0.33;
+	float3 ambientColor = g_SceneCB.clearColor.xyz * 0.16;
 	ambientColor = albedo * ambientColor;
 
 	return ambientColor + diffuseColor + specularColor;
@@ -232,7 +232,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 			missShaderIndex,
 			ray, shadowData);
 
-		shadowFactor *= (shadowData.occluded ? 0.25 : 1.0);
+		shadowFactor *= (shadowData.occluded ? 0.15 : 1.0);
 	}
 
 	// trace reflection data
@@ -267,7 +267,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 	// calculate lighting color
 
-	float3 albedo = debugColor.xyz;
+	float3 albedo = 0.75;// debugColor.xyz;
 	float diffuseCoef = 1.0;
 	float specularCoef = 0.5;
 	float specularPower = 50.0;

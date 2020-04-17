@@ -31,6 +31,8 @@ namespace UnlimRealms
 
 		void SetFrame(const ur_float3 &right, const ur_float3 &up, const ur_float3 &ahead);
 
+		void SetLookAt(const ur_float3 &lookAtPoint, const ur_float3 &worldUp);
+
 		void SetPosition(const ur_float3 &pos);
 
 		void Move(const ur_float3 &deltaPos);

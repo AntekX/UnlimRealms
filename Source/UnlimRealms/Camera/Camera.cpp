@@ -64,6 +64,15 @@ namespace UnlimRealms
 		this->viewChanged = true;
 	}
 
+	void Camera::SetLookAt(const ur_float3 &lookAtPoint, const ur_float3 &worldUp)
+	{
+		const ur_float3& pos = (const ur_float3&)this->frame.r[3];
+		ur_float3 ahead = (lookAtPoint - pos).Normalize();
+		this->frame.r[2] = ahead;
+		this->frame.r[0] = ur_float3::Cross(worldUp, ahead).Normalize();
+		this->frame.r[1] = ur_float3::Cross(ahead, this->frame.r[0]);
+	}
+
 	void Camera::SetPosition(const ur_float3 &pos)
 	{
 		this->frame.r[3] = pos;
