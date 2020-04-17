@@ -904,8 +904,6 @@ int RayTracingSandboxApp::Run()
 						ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
 						if (ImGui::CollapsingHeader("Lighting"))
 						{
-							ImGui::Text("Camera Pos: %.3f, %.3f, %.3f", camera.GetPosition().x, camera.GetPosition().y, camera.GetPosition().z);
-							ImGui::Text("Camera Dir: %.3f, %.3f, %.3f", camera.GetDirection().x, camera.GetDirection().y, camera.GetDirection().z);
 							ImGui::Checkbox("AnimationEnabled", &lightAnimationEnabled);
 							ImGui::InputFloat("CycleTime", &lightCycleTime);
 							ImGui::DragFloat("CrntCycleFactor", &lightCrntCycleFactor, 0.01f, 0.0f, 1.0f);
