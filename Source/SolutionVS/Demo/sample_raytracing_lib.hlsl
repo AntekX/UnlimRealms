@@ -25,8 +25,9 @@ struct MeshInfo
 };
 
 static const MeshInfo g_MeshInfo[] = {
-	{ 0, 0 },
-	{ 96, 24 }
+	{ 0, 0 },		// plane mesh
+	{ 96, 24 },		// cube mesh
+	{ 672, 168 }	// custom mesh
 };
 
 static const uint RecursionDepthMax = 2;

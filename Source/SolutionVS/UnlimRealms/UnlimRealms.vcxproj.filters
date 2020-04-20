@@ -327,6 +327,9 @@
     <ClInclude Include="..\..\UnlimRealms\ShaderLib\LightingCommon.h">
       <Filter>ShaderLib</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\3rdParty\TinyObjLoader\tiny_obj_loader.h">
+      <Filter>3rdParty\TinyObjLoader</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -765,6 +768,9 @@
     </Filter>
     <Filter Include="3rdParty\VulkanMemoryAllocator">
       <UniqueIdentifier>{39c5ecb3-0375-4fe3-84cc-b10897eb37c5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3rdParty\TinyObjLoader">
+      <UniqueIdentifier>{a1e2dd6b-336e-4adf-8187-c50c4ed725cb}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

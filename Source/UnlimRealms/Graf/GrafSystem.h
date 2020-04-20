@@ -1263,11 +1263,44 @@ namespace UnlimRealms
 			std::vector<std::unique_ptr<GrafBuffer>> MipBuffers;
 		};
 
-		static Result LoadImageFromFile(GrafDevice& grafDevice, const std::string& resName, ImageData& outputImageData);
+		enum class MeshVertexElementFlag : ur_uint
+		{
+			Position = (1 << 0),
+			Normal = (1 << 1),
+			Color = (1 << 2),
+			TexCoord = (1 << 3),
+			All = ~ur_uint(0)
+		};
+		typedef ur_uint MeshVertexElementFlags;
+		typedef MeshVertexElementFlag MeshVertexElementType;
+
+		struct MeshVertexElementDesc
+		{
+			MeshVertexElementType Type;
+			GrafFormat Format;
+		};
+
+		struct MeshData
+		{
+			std::vector<MeshVertexElementDesc> VertexElements;
+			MeshVertexElementFlags VertexElementFlags;
+			GrafIndexType IndexType;
+			std::vector<ur_byte> Vertices;
+			std::vector<ur_byte> Indices;
+		};
+
+		struct ModelData
+		{
+			std::vector<MeshData> Meshes;
+		};
 
 		static Result CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader);
 
 		static Result CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, const std::string& entryPoint, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader);
+
+		static Result LoadImageFromFile(GrafDevice& grafDevice, const std::string& resName, ImageData& outputImageData);
+
+		static Result LoadModelFromFile(GrafDevice& grafDevice, const std::string& resName, ModelData& modelData, MeshVertexElementFlags vertexMask = (ur_uint)MeshVertexElementFlag::All);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

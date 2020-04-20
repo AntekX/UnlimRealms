@@ -9,6 +9,8 @@
 #include "Sys/Log.h"
 #include "Sys/Storage.h"
 #include "3rdParty/ResIL/include/IL/il.h"
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "3rdParty/TinyObjLoader/tiny_obj_loader.h"
 
 namespace UnlimRealms
 {
@@ -762,6 +764,54 @@ namespace UnlimRealms
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	Result GrafUtils::CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader)
+	{
+		return  GrafUtils::CreateShaderFromFile(grafDevice, resName, GrafShader::DefaultEntryPoint, shaderType, grafShader);
+	}
+
+	Result GrafUtils::CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, const std::string& entryPoint, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader)
+	{
+		Realm& realm = grafDevice.GetRealm();
+		GrafSystem& grafSystem = grafDevice.GetGrafSystem();
+
+		// load
+
+		std::unique_ptr<ur_byte[]> shaderBuffer;
+		ur_size shaderBufferSize = 0;
+		{
+			std::unique_ptr<File> file;
+			Result res = realm.GetStorage().Open(file, resName, ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
+			if (Succeeded(res))
+			{
+				shaderBufferSize = file->GetSize();
+				shaderBuffer.reset(new ur_byte[shaderBufferSize]);
+				res &= file->Read(shaderBufferSize, shaderBuffer.get());
+			}
+			if (Failed(res))
+			{
+				return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to load shader " + resName);
+			}
+		}
+
+		// initialize graf shader object
+
+		Result grafRes = grafSystem.CreateShader(grafShader);
+		if (Failed(grafRes))
+		{
+			return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to create shader " + resName);
+		}
+
+		grafRes = grafShader->Initialize(&grafDevice, { shaderType, shaderBuffer.get(), shaderBufferSize, entryPoint.c_str() });
+		if (Failed(grafRes))
+		{
+			return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to create shader " + resName);
+		}
+
+		return Result(Success);
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	Result GrafUtils::LoadImageFromFile(GrafDevice& grafDevice, const std::string& resName, ImageData& outputImageData)
 	{
 		Realm& realm = grafDevice.GetRealm();
@@ -874,47 +924,153 @@ namespace UnlimRealms
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Result GrafUtils::CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader)
-	{
-		return  GrafUtils::CreateShaderFromFile(grafDevice, resName, GrafShader::DefaultEntryPoint, shaderType, grafShader);
-	}
-
-	Result GrafUtils::CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, const std::string& entryPoint, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader)
+	Result GrafUtils::LoadModelFromFile(GrafDevice& grafDevice, const std::string& resName, ModelData& modelData, MeshVertexElementFlags vertexMask)
 	{
 		Realm& realm = grafDevice.GetRealm();
 		GrafSystem& grafSystem = grafDevice.GetGrafSystem();
 
-		// load
+		ur_size delimPos = resName.rfind("/");
+		if (std::string::npos == delimPos) delimPos = resName.rfind("\\");
+		std::string resPath = resName.substr(0, delimPos);
 
-		std::unique_ptr<ur_byte[]> shaderBuffer;
-		ur_size shaderBufferSize = 0;
+		tinyobj::attrib_t attribs;
+		std::vector<tinyobj::shape_t> shapes;
+		std::vector<tinyobj::material_t> materials;
+		std::string warnStr;
+		std::string errorStr;
+
+		ur_bool loadRes = tinyobj::LoadObj(&attribs, &shapes, &materials, &warnStr, &errorStr, resName.c_str(), resPath.c_str());
+		//if (!warnStr.empty())
+		//	LogResult(Failure, realm.GetLog(), Log::Warning, "CreateModelFromFile: failed while loading " + resName + ", " + warnStr);
+		if (!errorStr.empty())
+			LogResult(Failure, realm.GetLog(), Log::Error, "CreateModelFromFile: failed while loading " + resName + ", " + errorStr);
+		if (!loadRes)
+			return Result(Failure);
+
+		std::vector<MeshVertexElementDesc> modelVertexElements;
+		MeshVertexElementFlags usedVertexElementFlags = 0;
+		ur_size vertexStride = 0;
+		ur_size vertexPositionOfs = 0;
+		if (!attribs.vertices.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Position)))
 		{
-			std::unique_ptr<File> file;
-			Result res = realm.GetStorage().Open(file, resName, ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
-			if (Succeeded(res))
-			{
-				shaderBufferSize = file->GetSize();
-				shaderBuffer.reset(new ur_byte[shaderBufferSize]);
-				res &= file->Read(shaderBufferSize, shaderBuffer.get());
-			}
-			if (Failed(res))
-			{
-				return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to load shader " + resName);
-			}
+			usedVertexElementFlags |= ur_uint(MeshVertexElementFlag::Position);
+			MeshVertexElementDesc vertexElement = { MeshVertexElementType::Position, GrafFormat::R32G32B32_SFLOAT };
+			modelVertexElements.emplace_back(vertexElement);
+			vertexPositionOfs = vertexStride;
+			vertexStride += 12;
+		}
+		ur_size vertexNormalOfs = 0;
+		if (!attribs.normals.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Normal)))
+		{
+			usedVertexElementFlags |= ur_uint(MeshVertexElementFlag::Normal);
+			MeshVertexElementDesc vertexElement = { MeshVertexElementType::Normal, GrafFormat::R32G32B32_SFLOAT };
+			modelVertexElements.emplace_back(vertexElement);
+			vertexNormalOfs = vertexStride;
+			vertexStride += 12;
+		}
+		ur_size vertexColorOfs = 0;
+		if (!attribs.colors.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Color)))
+		{
+			usedVertexElementFlags |= ur_uint(MeshVertexElementFlag::Color);
+			MeshVertexElementDesc vertexElement = { MeshVertexElementType::Color, GrafFormat::R32G32B32_SFLOAT };
+			modelVertexElements.emplace_back(vertexElement);
+			vertexColorOfs = vertexStride;
+			vertexStride += 12;
+		}
+		ur_size vertexTexcoordOfs = 0;
+		if (!attribs.texcoords.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::TexCoord)))
+		{
+			usedVertexElementFlags |= ur_uint(MeshVertexElementFlag::TexCoord);
+			MeshVertexElementDesc vertexElement = { MeshVertexElementType::TexCoord, GrafFormat::R32G32_SFLOAT };
+			modelVertexElements.emplace_back(vertexElement);
+			vertexTexcoordOfs = vertexStride;
+			vertexStride += 8;
 		}
 
-		// initialize graf shader object
+		// TODO: optimize shared attributes usage, pack indices
+		// currectly all primtives vertices are unique to simplify loading logic
 
-		Result grafRes = grafSystem.CreateShader(grafShader);
-		if (Failed(grafRes))
+		for (ur_size ishape = 0; ishape < shapes.size(); ++ishape)
 		{
-			return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to create shader " + resName);
-		}
+			const tinyobj::shape_t& shape = shapes[ishape];
+			if (shape.mesh.indices.empty())
+				continue; // mesh shapes accepted only
 
-		grafRes = grafShader->Initialize(&grafDevice, { shaderType, shaderBuffer.get(), shaderBufferSize, entryPoint.c_str() });
-		if (Failed(grafRes))
-		{
-			return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to create shader " + resName);
+			modelData.Meshes.emplace_back(MeshData());
+			MeshData& meshData = modelData.Meshes.back();
+			meshData.VertexElements = modelVertexElements; // all meshes share model's vertex format
+			meshData.VertexElementFlags = usedVertexElementFlags;
+			meshData.IndexType = GrafIndexType::UINT32;
+
+			ur_size indicesCount = shape.mesh.indices.size();
+			meshData.Vertices.resize(indicesCount * vertexStride);
+			meshData.Indices.resize(indicesCount * sizeof(ur_uint32));
+			
+			ur_uint32* indexPtr = (ur_uint32*)meshData.Indices.data();
+			for (ur_size ii = 0; ii < indicesCount; ++ii)
+			{
+				*indexPtr++ = (ur_uint32)ii;
+			}
+
+			if (!attribs.vertices.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Position)))
+			{
+				ur_byte* vertexElementPtr = (meshData.Vertices.data() + vertexPositionOfs);
+				ur_float* typedElementPtr;
+				ur_size attribIdx;
+				for (ur_size ii = 0; ii < indicesCount; ++ii)
+				{
+					attribIdx = shape.mesh.indices[ii].vertex_index * 3;
+					typedElementPtr = (ur_float*)vertexElementPtr;
+					typedElementPtr[0] = attribs.vertices[attribIdx + 0];
+					typedElementPtr[1] = attribs.vertices[attribIdx + 1];
+					typedElementPtr[2] = attribs.vertices[attribIdx + 2];
+					vertexElementPtr += vertexStride;
+				}
+			}
+			if (!attribs.normals.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Normal)))
+			{
+				ur_byte* vertexElementPtr = (meshData.Vertices.data() + vertexNormalOfs);
+				ur_float* typedElementPtr;
+				ur_size attribIdx;
+				for (ur_size ii = 0; ii < indicesCount; ++ii)
+				{
+					attribIdx = shape.mesh.indices[ii].normal_index * 3;
+					typedElementPtr = (ur_float*)vertexElementPtr;
+					typedElementPtr[0] = attribs.normals[attribIdx + 0];
+					typedElementPtr[1] = attribs.normals[attribIdx + 1];
+					typedElementPtr[2] = attribs.normals[attribIdx + 2];
+					vertexElementPtr += vertexStride;
+				}
+			}
+			if (!attribs.vertices.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Color)))
+			{
+				ur_byte* vertexElementPtr = (meshData.Vertices.data() + vertexColorOfs);
+				ur_float* typedElementPtr;
+				ur_size attribIdx;
+				for (ur_size ii = 0; ii < indicesCount; ++ii)
+				{
+					attribIdx = shape.mesh.indices[ii].vertex_index * 3;
+					typedElementPtr = (ur_float*)vertexElementPtr;
+					typedElementPtr[0] = attribs.colors[attribIdx + 0];
+					typedElementPtr[1] = attribs.colors[attribIdx + 1];
+					typedElementPtr[2] = attribs.colors[attribIdx + 2];
+					vertexElementPtr += vertexStride;
+				}
+			}
+			if (!attribs.normals.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::TexCoord)))
+			{
+				ur_byte* vertexElementPtr = (meshData.Vertices.data() + vertexTexcoordOfs);
+				ur_float* typedElementPtr;
+				ur_size attribIdx;
+				for (ur_size ii = 0; ii < indicesCount; ++ii)
+				{
+					attribIdx = shape.mesh.indices[ii].texcoord_index * 2;
+					typedElementPtr = (ur_float*)vertexElementPtr;
+					typedElementPtr[0] = attribs.texcoords[attribIdx + 0];
+					typedElementPtr[1] = attribs.texcoords[attribIdx + 1];
+					vertexElementPtr += vertexStride;
+				}
+			}
 		}
 
 		return Result(Success);

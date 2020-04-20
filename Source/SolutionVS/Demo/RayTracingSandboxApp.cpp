@@ -324,6 +324,7 @@ int RayTracingSandboxApp::Run()
 		GrafRenderer* grafRenderer;
 		std::unique_ptr<Mesh> cubeMesh;
 		std::unique_ptr<Mesh> planeMesh;
+		std::unique_ptr<Mesh> customMesh;
 		LinearAllocator vertexBufferAllocator;
 		LinearAllocator indexBufferAllocator;
 		std::unique_ptr<GrafBuffer> vertexBuffer;
@@ -361,6 +362,7 @@ int RayTracingSandboxApp::Run()
 
 			grafRenderer->SafeDelete(cubeMesh.release());
 			grafRenderer->SafeDelete(planeMesh.release());
+			grafRenderer->SafeDelete(customMesh.release());
 			grafRenderer->SafeDelete(vertexBuffer.release());
 			grafRenderer->SafeDelete(indexBuffer.release());
 			grafRenderer->SafeDelete(instanceBuffer.release());
@@ -388,8 +390,8 @@ int RayTracingSandboxApp::Run()
 			GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
 			const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 
-			const ur_size VertexCountMax = 1024;
-			const ur_size IndexCountMax = 2048;
+			const ur_size VertexCountMax = 16384;
+			const ur_size IndexCountMax = 32768;
 			const ur_size InstanceCountMax = 128;
 
 			struct VertexSample
@@ -458,6 +460,23 @@ int RayTracingSandboxApp::Run()
 			this->cubeMesh->Initialize(this->grafRenderer,
 				this->vertexBuffer.get(), this->vertexBufferAllocator, (const ur_byte*)cubeVertices, ur_array_size(cubeVertices), sizeof(VertexSample),
 				this->indexBuffer.get(), this->indexBufferAllocator, (const ur_byte*)cubeIndices, ur_array_size(cubeIndices), GrafIndexType::UINT32);
+
+			// load custom mesh
+
+			GrafUtils::ModelData modelData;
+			GrafUtils::MeshVertexElementFlags vertexMask = (ur_uint(GrafUtils::MeshVertexElementFlag::Position) | ur_uint(GrafUtils::MeshVertexElementFlag::Normal)); // load only subset of attributes
+			std::string modelResName = "../Res/Models/wuson.obj";
+			if (GrafUtils::LoadModelFromFile(*grafDevice, modelResName, modelData, vertexMask) == Success && modelData.Meshes.size() > 0)
+			{
+				const GrafUtils::MeshData& meshData = modelData.Meshes[0];
+				if (meshData.VertexElementFlags & vertexMask) // make sure all masked attributes available in the mesh
+				{
+					this->customMesh.reset(new Mesh(*grafSystem));
+					this->customMesh->Initialize(this->grafRenderer,
+						this->vertexBuffer.get(), this->vertexBufferAllocator, meshData.Vertices.data(), meshData.Vertices.size() / sizeof(VertexSample), sizeof(VertexSample),
+						this->indexBuffer.get(), this->indexBufferAllocator, meshData.Indices.data(), meshData.Indices.size() / sizeof(ur_uint32), GrafIndexType::UINT32);
+				}
+			}
 
 			// initiaize top level acceleration structure container
 
@@ -595,6 +614,7 @@ int RayTracingSandboxApp::Run()
 			{
 				MeshID_Plane = 0,
 				MeshID_Cube,
+				MeshID_Custom,
 			};
 
 			std::vector<GrafAccelerationStructureInstance> sampleInstances;
@@ -623,6 +643,20 @@ int RayTracingSandboxApp::Run()
 					this->cubeMesh->accelerationStructureBL->GetDeviceAddress()
 				};
 				sampleInstances.emplace_back(cubeInstance);
+			}
+			if (this->customMesh.get())
+			{
+				GrafAccelerationStructureInstance meshInstance =
+				{
+					{
+						2.0f, 0.0f, 0.0f, 0.0f,
+						0.0f, 2.0f, 0.0f,-2.0f,
+						0.0f, 0.0f, 2.0f, 0.0f
+					},
+					MeshID_Custom, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+					this->customMesh->accelerationStructureBL->GetDeviceAddress()
+				};
+				sampleInstances.emplace_back(meshInstance);
 			}
 
 			// write to upload buffer
