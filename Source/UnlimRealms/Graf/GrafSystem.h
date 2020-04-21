@@ -1280,6 +1280,36 @@ namespace UnlimRealms
 			GrafFormat Format;
 		};
 
+		struct MeshMaterialDesc
+		{
+			ur_float3 BaseColor;
+			ur_float3 EmissiveColor;
+			ur_float Roughness;
+			ur_float Metallic;
+			ur_float Reflectance;
+			ur_float ClearCoat;
+			ur_float ClearCoatRoughness;
+			ur_float Anisotropy;
+			ur_float3 AnisotropyDirection;
+			ur_float3 SheenColor;
+
+			std::string ColorTexName;
+			std::string NormalTexName;
+			std::string DisplacementTexName;
+			std::string RoughnessTexName;
+			std::string MetallicTexName;
+			std::string EmissiveTexName;
+
+			static const MeshMaterialDesc Default;
+		};
+
+		struct MeshSurfaceData
+		{
+			ur_uint PrimtivesOffset; // offset in indices if available, otherwise in vertices
+			ur_uint PrimtivesCount; // number of triangles
+			ur_uint MaterialID;
+		};
+
 		struct MeshData
 		{
 			std::vector<MeshVertexElementDesc> VertexElements;
@@ -1287,11 +1317,13 @@ namespace UnlimRealms
 			GrafIndexType IndexType;
 			std::vector<ur_byte> Vertices;
 			std::vector<ur_byte> Indices;
+			std::vector<MeshMaterialDesc> Materials;
+			std::vector<MeshSurfaceData> Surfaces;
 		};
 
 		struct ModelData
 		{
-			std::vector<MeshData> Meshes;
+			std::vector<std::unique_ptr<MeshData>> Meshes;
 		};
 
 		static Result CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader);

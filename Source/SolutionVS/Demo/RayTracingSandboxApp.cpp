@@ -390,8 +390,8 @@ int RayTracingSandboxApp::Run()
 			GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
 			const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 
-			const ur_size VertexCountMax = 16384;
-			const ur_size IndexCountMax = 32768;
+			const ur_size VertexCountMax = (1 << 20);
+			const ur_size IndexCountMax = (1 << 20);
 			const ur_size InstanceCountMax = 128;
 
 			struct VertexSample
@@ -465,10 +465,14 @@ int RayTracingSandboxApp::Run()
 
 			GrafUtils::ModelData modelData;
 			GrafUtils::MeshVertexElementFlags vertexMask = (ur_uint(GrafUtils::MeshVertexElementFlag::Position) | ur_uint(GrafUtils::MeshVertexElementFlag::Normal)); // load only subset of attributes
-			std::string modelResName = "../Res/Models/wuson.obj";
-			if (GrafUtils::LoadModelFromFile(*grafDevice, modelResName, modelData, vertexMask) == Success && modelData.Meshes.size() > 0)
+			std::string modelResName[] = {
+				"../Res/Models/sphere.obj",
+				"../Res/Models/wuson.obj",
+				"../Res/Models/Medieval_building.obj",
+			};
+			if (GrafUtils::LoadModelFromFile(*grafDevice, modelResName[2], modelData, vertexMask) == Success && modelData.Meshes.size() > 0)
 			{
-				const GrafUtils::MeshData& meshData = modelData.Meshes[0];
+				const GrafUtils::MeshData& meshData = *modelData.Meshes[0];
 				if (meshData.VertexElementFlags & vertexMask) // make sure all masked attributes available in the mesh
 				{
 					this->customMesh.reset(new Mesh(*grafSystem));
@@ -632,12 +636,14 @@ int RayTracingSandboxApp::Run()
 			ur_size cubeCount = this->sampleInstanceCount;
 			for (ur_size i = 0; i < cubeCount; ++i)
 			{
+				ur_float radius = 7.0f;
+				ur_float height = 0.0f;
 				GrafAccelerationStructureInstance cubeInstance =
 				{
 					{
-						1.0f, 0.0f, 0.0f, 5.0f * cosf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
-						0.0f, 1.0f, 0.0f, 0.0f + cosf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
-						0.0f, 0.0f, 1.0f, 5.0f * sinf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f + animAngle)
+						1.0f, 0.0f, 0.0f, radius * cosf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
+						0.0f, 1.0f, 0.0f, height + cosf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
+						0.0f, 0.0f, 1.0f, radius * sinf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f + animAngle)
 					},
 					MeshID_Cube, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
 					this->cubeMesh->accelerationStructureBL->GetDeviceAddress()

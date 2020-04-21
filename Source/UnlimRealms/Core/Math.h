@@ -347,6 +347,14 @@ namespace UnlimRealms
 			return (this->x != v.x || this->y != v.y || this->z != v.z);
 		}
 
+		TVector3<T>& operator= (const T* v)
+		{
+			this->x = v[0];
+			this->y = v[1];
+			this->z = v[2];
+			return *this;
+		}
+
 		T& operator [] (const ur_uint idx)
 		{
 			return *(&this->x + idx);

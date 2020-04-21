@@ -17,8 +17,8 @@ namespace UnlimRealms
 	const GrafRenderer::InitParams GrafRenderer::InitParams::Default = {
 		GrafRenderer::InitParams::RecommendedDeviceId,
 		GrafCanvas::InitParams::Default,
-		20 * (1 << 20), // DynamicUploadBufferSize
-		20 * (1 << 20), // DynamicConstantBufferSize
+		64 * (1 << 20), // DynamicUploadBufferSize
+		16 * (1 << 20), // DynamicConstantBufferSize
 	};
 
 	const ur_uint GrafRenderer::InitParams::RecommendedDeviceId = ur_uint(-1);

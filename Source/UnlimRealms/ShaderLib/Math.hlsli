@@ -7,13 +7,49 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef MATH_HLSLI
+#define MATH_HLSLI
+
 static const float Pi = 3.14159;
 static const float TwoPi = 6.28319;
 static const float FourPi = 12.5664;
 static const float HalfPi = 1.57080;
 static const float OneOverPi = 0.31831;
 static const float Exponent = 0.31831;
+static const float3 WorldUp = float3(0.0, 1.0, 0.0);
 
+//------------------------------------------------------------------------------
+// Scalar operations
+//------------------------------------------------------------------------------
+
+float pow2(float x)
+{
+	float x2 = x * x;
+	return x2;
+}
+
+float pow3(float x)
+{
+	float x2 = x * x;
+	return x2 * x;
+}
+
+float pow4(float x)
+{
+	float x2 = x * x;
+	return x2 * x2;
+}
+
+float pow5(float x)
+{
+	float x2 = x * x;
+	return x2 * x2 * x;
+}
+
+float max3(const float3 v)
+{
+	return max(v.x, max(v.y, v.z));
+}
 
 // Ray-Spehere intersection
 // returns distances to intersection points
@@ -39,3 +75,5 @@ float2 IntersectSphere(const float3 rayOrigin, const float3 rayDir, const float3
 
 	return float2(near, far);
 }
+
+#endif

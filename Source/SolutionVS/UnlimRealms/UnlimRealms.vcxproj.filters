@@ -863,5 +863,8 @@
     <None Include="..\..\UnlimRealms\ShaderLib\LightingCommon.hlsli">
       <Filter>ShaderLib</Filter>
     </None>
+    <None Include="..\..\UnlimRealms\ShaderLib\Lighting.hlsli">
+      <Filter>ShaderLib</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -924,6 +924,19 @@ namespace UnlimRealms
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	const GrafUtils::MeshMaterialDesc GrafUtils::MeshMaterialDesc::Default = {
+		{ 1.0f, 1.0f, 1.0f }, // BaseColor
+		{ 0.0f, 0.0f, 0.0f }, // EmissiveColor
+		1.0f, // Roughness
+		0.0f, // Metallic
+		0.5f, // Reflectance
+		0.0f, // ClearCoat
+		0.0f, // ClearCoatRoughness
+		0.0f, // Anisotropy
+		{ 1.0f, 0.0f, 0.0f }, // AnisotropyDirection
+		{ 1.0f, 1.0f, 1.0f }, // SheenColor
+	};
+
 	Result GrafUtils::LoadModelFromFile(GrafDevice& grafDevice, const std::string& resName, ModelData& modelData, MeshVertexElementFlags vertexMask)
 	{
 		Realm& realm = grafDevice.GetRealm();
@@ -987,8 +1000,61 @@ namespace UnlimRealms
 			vertexStride += 8;
 		}
 
+		// here we assume that all mesh shapes describe one mesh
+		// note: shape name parameter cane be used to group shapes into different meshes (e.g. LoDs)
+		modelData.Meshes.emplace_back(new MeshData());
+		MeshData& meshData = *modelData.Meshes.back();
+		meshData.VertexElements = modelVertexElements; // all meshes share model's vertex format
+		meshData.VertexElementFlags = usedVertexElementFlags;
+		meshData.IndexType = GrafIndexType::UINT32;
+		ur_size indexStride = sizeof(ur_uint32);
+
+		// init materials
+		meshData.Materials.resize(materials.size() + 1);
+		meshData.Materials.back() = MeshMaterialDesc::Default;
+		ur_size defaultMaterialID = meshData.Materials.size() - 1;
+		for (ur_size im = 0; im < materials.size(); ++im)
+		{
+			const tinyobj::material_t& srcMat = materials[im];
+			MeshMaterialDesc& dstMat = meshData.Materials[im];
+			dstMat = MeshMaterialDesc::Default;
+			dstMat.BaseColor.x = (ur_float)srcMat.diffuse[0];
+			dstMat.BaseColor.y = (ur_float)srcMat.diffuse[1];
+			dstMat.BaseColor.z = (ur_float)srcMat.diffuse[2];
+			dstMat.EmissiveColor.x = (ur_float)srcMat.emission[0];
+			dstMat.EmissiveColor.y = (ur_float)srcMat.emission[1];
+			dstMat.EmissiveColor.z = (ur_float)srcMat.emission[2];
+			dstMat.Roughness = (ur_float)srcMat.roughness;
+			dstMat.Metallic = (ur_float)srcMat.metallic;
+			dstMat.Reflectance = (ur_float)std::max(std::max(srcMat.specular[0], srcMat.specular[1]), srcMat.specular[2]);
+			dstMat.ClearCoat = (ur_float)srcMat.clearcoat_thickness;
+			dstMat.ClearCoatRoughness = (ur_float)srcMat.clearcoat_roughness;
+			dstMat.Anisotropy = (ur_float)srcMat.anisotropy;
+			dstMat.AnisotropyDirection.x = (ur_float)std::cosf(srcMat.anisotropy_rotation);
+			dstMat.AnisotropyDirection.y = (ur_float)std::sinf(srcMat.anisotropy_rotation);
+			dstMat.SheenColor.x = (ur_float)srcMat.sheen;
+			dstMat.SheenColor.y = (ur_float)srcMat.sheen;
+			dstMat.SheenColor.z = (ur_float)srcMat.sheen;
+
+			dstMat.ColorTexName = srcMat.diffuse_texname;
+			dstMat.NormalTexName = srcMat.normal_texname;
+			dstMat.DisplacementTexName = srcMat.displacement_texname;
+			dstMat.RoughnessTexName = srcMat.roughness_texname;
+			dstMat.MetallicTexName = srcMat.metallic_texname;
+			dstMat.EmissiveTexName = srcMat.emissive_texname;
+		}
+
 		// TODO: optimize shared attributes usage, pack indices
 		// currectly all primtives vertices are unique to simplify loading logic
+		ur_size totalMeshIndicesCount = 0;
+		for (auto& shape : shapes)
+		{
+			totalMeshIndicesCount += shape.mesh.indices.size();
+		}
+		meshData.Indices.resize(totalMeshIndicesCount * indexStride);
+		meshData.Vertices.resize(totalMeshIndicesCount * vertexStride);
+		ur_size indicesOffset = 0;
+		ur_size verticesOffset = 0;
 
 		for (ur_size ishape = 0; ishape < shapes.size(); ++ishape)
 		{
@@ -996,25 +1062,25 @@ namespace UnlimRealms
 			if (shape.mesh.indices.empty())
 				continue; // mesh shapes accepted only
 
-			modelData.Meshes.emplace_back(MeshData());
-			MeshData& meshData = modelData.Meshes.back();
-			meshData.VertexElements = modelVertexElements; // all meshes share model's vertex format
-			meshData.VertexElementFlags = usedVertexElementFlags;
-			meshData.IndexType = GrafIndexType::UINT32;
+			meshData.Surfaces.emplace_back(MeshSurfaceData());
+			MeshSurfaceData& surfaceData = meshData.Surfaces.back();
+			ur_int shapeMaterialID = shape.mesh.material_ids[0];
+			surfaceData.MaterialID = (ur_uint)(shapeMaterialID >= 0 && shapeMaterialID < (ur_int)meshData.Materials.size() ? shapeMaterialID : defaultMaterialID); // consider all faces in one shape share the same material
+			surfaceData.PrimtivesOffset = (ur_uint)indicesOffset;
+			surfaceData.PrimtivesCount = (ur_uint)shape.mesh.indices.size() / 3;
 
+			ur_byte* indicesPtr = meshData.Indices.data() + indicesOffset * indexStride;
+			ur_uint32* typedIndexPtr = (ur_uint32*)indicesPtr;
 			ur_size indicesCount = shape.mesh.indices.size();
-			meshData.Vertices.resize(indicesCount * vertexStride);
-			meshData.Indices.resize(indicesCount * sizeof(ur_uint32));
-			
-			ur_uint32* indexPtr = (ur_uint32*)meshData.Indices.data();
 			for (ur_size ii = 0; ii < indicesCount; ++ii)
 			{
-				*indexPtr++ = (ur_uint32)ii;
+				*typedIndexPtr++ = ur_uint32(ii + indicesOffset);
 			}
 
+			ur_byte* verticesPtr = meshData.Vertices.data() + verticesOffset * vertexStride;
 			if (!attribs.vertices.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Position)))
 			{
-				ur_byte* vertexElementPtr = (meshData.Vertices.data() + vertexPositionOfs);
+				ur_byte* vertexElementPtr = (verticesPtr + vertexPositionOfs);
 				ur_float* typedElementPtr;
 				ur_size attribIdx;
 				for (ur_size ii = 0; ii < indicesCount; ++ii)
@@ -1029,7 +1095,7 @@ namespace UnlimRealms
 			}
 			if (!attribs.normals.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Normal)))
 			{
-				ur_byte* vertexElementPtr = (meshData.Vertices.data() + vertexNormalOfs);
+				ur_byte* vertexElementPtr = (verticesPtr + vertexNormalOfs);
 				ur_float* typedElementPtr;
 				ur_size attribIdx;
 				for (ur_size ii = 0; ii < indicesCount; ++ii)
@@ -1044,7 +1110,7 @@ namespace UnlimRealms
 			}
 			if (!attribs.vertices.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Color)))
 			{
-				ur_byte* vertexElementPtr = (meshData.Vertices.data() + vertexColorOfs);
+				ur_byte* vertexElementPtr = (verticesPtr + vertexColorOfs);
 				ur_float* typedElementPtr;
 				ur_size attribIdx;
 				for (ur_size ii = 0; ii < indicesCount; ++ii)
@@ -1059,7 +1125,7 @@ namespace UnlimRealms
 			}
 			if (!attribs.normals.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::TexCoord)))
 			{
-				ur_byte* vertexElementPtr = (meshData.Vertices.data() + vertexTexcoordOfs);
+				ur_byte* vertexElementPtr = (verticesPtr + vertexTexcoordOfs);
 				ur_float* typedElementPtr;
 				ur_size attribIdx;
 				for (ur_size ii = 0; ii < indicesCount; ++ii)
@@ -1071,6 +1137,9 @@ namespace UnlimRealms
 					vertexElementPtr += vertexStride;
 				}
 			}
+
+			indicesOffset += indicesCount;
+			verticesOffset += indicesCount;
 		}
 
 		return Result(Success);

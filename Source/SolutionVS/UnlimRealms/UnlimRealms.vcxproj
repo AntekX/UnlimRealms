@@ -278,6 +278,7 @@
     <ClInclude Include="..\..\UnlimRealms\RenderGraph\RenderGraph.h" />
     <ClInclude Include="..\..\UnlimRealms\Resources\Resources.h" />
     <None Include="..\..\UnlimRealms\ShaderLib\CommonTypes.hlsli" />
+    <None Include="..\..\UnlimRealms\ShaderLib\Lighting.hlsli" />
     <None Include="..\..\UnlimRealms\ShaderLib\LightingCommon.hlsli" />
     <ClInclude Include="..\..\UnlimRealms\ShaderLib\LightingCommon.h" />
     <ClInclude Include="..\..\UnlimRealms\Sys\Canvas.h" />
