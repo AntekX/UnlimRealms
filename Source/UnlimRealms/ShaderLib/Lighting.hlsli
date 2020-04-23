@@ -118,7 +118,7 @@ float V_SmithGGXCorrelated(float roughness, float NoV, float NoL)
 	// a2=0 => v = 1 / 4*NoL*NoV   => min=1/4, max=+inf
 	// a2=1 => v = 1 / 2*(NoL+NoV) => min=1/4, max=+inf
 	// clamp to the maximum value representable in mediump
-	return v;
+	return (isinf(v) ? 0.0 : v);
 }
 
 float V_SmithGGXCorrelated_Fast(float roughness, float NoV, float NoL)
@@ -428,7 +428,7 @@ struct LightingParams
 {
 	float3	worldPos;
 	float3	viewPos;
-	float3	viewDir;
+	float3	normal;
 	float	NoV;
 
 	float3	diffuseColor;
@@ -503,6 +503,8 @@ void getLightingParams(const MaterialInputs material, inout LightingParams light
 	// must be "unpremultiplied" if color is premultiplied by alpha
 	//unpremultiply(baseColor);
 	#endif
+
+	lightingParams.normal = material.normal;
 
 	if (material.isCloth)
 	{
@@ -692,5 +694,103 @@ float4 evaluateMaterial(const MaterialInputs material)
 }
 
 #endif // TEMP: WIP section
+
+
+float4 EvaluateDirectLighting(const float3 worldPos, const float3 viewPos, const MaterialInputs material, const LightDesc lightSource,
+	const float directOcclusion, const float reflectionOcclusion)
+{
+	LightingParams lightingParams;
+	lightingParams.worldPos = worldPos;
+	lightingParams.viewPos = viewPos;
+
+	getLightingParams(material, lightingParams);
+
+	// common
+
+	float3 lightDir = -lightSource.Direction; // dir towards light source
+	float3 viewDir = (viewPos - worldPos);
+	float dist = length(viewDir);
+	viewDir = viewDir / (dist + 1.0e-5);
+	float3 halfVec = normalize(viewDir + lightDir);
+	float NoV = saturate(dot(lightingParams.normal, viewDir));
+	float NoL = saturate(dot(lightingParams.normal, lightDir));
+	float NoH = saturate(dot(lightingParams.normal, halfVec));
+	float LoH = saturate(dot(lightDir, halfVec));
+
+	// diffuse term
+
+	float3 Fd = lightingParams.diffuseColor * diffuse(lightingParams.roughness, NoV, NoL, LoH);
+
+	// specular term
+
+	float3 Fr = 0.0;
+	if (material.hasAnisotropy)
+	{
+		float3 l = lightDir;
+		float3 t = lightingParams.anisotropicT;
+		float3 b = lightingParams.anisotropicB;
+		float3 v = viewDir;
+		float3 h = halfVec;
+
+		float ToV = dot(t, v);
+		float BoV = dot(b, v);
+		float ToL = dot(t, l);
+		float BoL = dot(b, l);
+		float ToH = dot(t, h);
+		float BoH = dot(b, h);
+
+		// Anisotropic parameters: at and ab are the roughness along the tangent and bitangent
+		// to simplify materials, we derive them from a single roughness parameter
+		// Kulla 2017, "Revisiting Physically Based Shading at Imageworks"
+		float at = max(lightingParams.roughness * (1.0 + lightingParams.anisotropy), MIN_ROUGHNESS);
+		float ab = max(lightingParams.roughness * (1.0 - lightingParams.anisotropy), MIN_ROUGHNESS);
+
+		// specular anisotropic BRDF
+		float D = distributionAnisotropic(at, ab, ToH, BoH, NoH);
+		float V = visibilityAnisotropic(lightingParams.roughness, at, ab, ToV, BoV, ToL, BoL, NoV, NoL);
+		float3 F = fresnel(lightingParams.f0, LoH);
+
+		Fr = (D * V) * F;
+	}
+	else
+	{
+		float D = distribution(lightingParams.roughness, NoH, halfVec);
+		float V = visibility(lightingParams.roughness, NoV, NoL);
+		float3 F = fresnel(lightingParams.f0, LoH);
+
+		Fr = (D * V) * F;
+	}
+
+	float lightAttenuation = 1.0; // todo
+	float3 lightSourceColor = lightSource.Color * lightSource.Intensity * lightAttenuation;
+	float4 lightingResult = float4(0.0, 0.0, 0.0, 1.0);
+	lightingResult.xyz = (Fd * directOcclusion + Fr * lightingParams.energyCompensation * reflectionOcclusion) * NoL * lightSourceColor;
+
+	return lightingResult;
+}
+
+float3 FresnelReflectance(const float3 worldPos, const float3 viewPos, const float3 reflectionDir, const MaterialInputs material)
+{
+	// TODO: pass precomputed LightingParams here instead of MaterialInputs
+
+	float3 lightDir = reflectionDir;
+	float3 viewDir = (viewPos - worldPos);
+	float dist = length(viewDir);
+	viewDir = viewDir / (dist + 1.0e-5);
+	float3 halfVec = normalize(viewDir + lightDir);
+	float NoV = saturate(dot(material.normal, viewDir));
+	float NoL = saturate(dot(material.normal, lightDir));
+	float NoH = saturate(dot(material.normal, halfVec));
+	float LoH = saturate(dot(lightDir, halfVec));
+
+	float reflectance = computeDielectricF0(material.reflectance);
+	float3 f0 = computeF0(material.baseColor, material.metallic, reflectance);
+
+	float D = distribution(material.roughness, NoH, halfVec);
+	float V = visibility(material.roughness, NoV, NoL);
+	float3 F = fresnel(f0, LoH);
+
+	return (D * V) * F;
+}
 
 #endif

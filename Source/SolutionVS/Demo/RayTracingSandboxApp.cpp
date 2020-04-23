@@ -234,7 +234,7 @@ int RayTracingSandboxApp::Run()
 	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
-		hdrParams.BloomThreshold = 4.0f;
+		hdrParams.BloomThreshold = 40.0f;
 		hdrRender->SetParams(hdrParams);
 		res = hdrRender->Init(canvasWidth, canvasHeight, grafImageRTDepth.get());
 		if (Failed(res))
@@ -454,8 +454,10 @@ int RayTracingSandboxApp::Run()
 
 			// sample plane mesh
 
+			ur_float ps = 100.0f;
+			ur_float ph = -2.0f;
 			VertexSample planeVertices[] = {
-				{ {-10.0f,-2.0f,-10.0f }, { 0.0f, 1.0f, 0.0f } }, { { 10.0f,-2.0f,-10.0f}, { 0.0f, 1.0f, 0.0f } }, { {-10.0f,-2.0f, 10.0f}, { 0.0f, 1.0f, 0.0f } }, { { 10.0f,-2.0f, 10.0f}, { 0.0f, 1.0f, 0.0f } },
+				{ {-ps, ph,-ps }, { 0.0f, 1.0f, 0.0f } }, { { ps, ph,-ps}, { 0.0f, 1.0f, 0.0f } }, { {-ps, ph, ps}, { 0.0f, 1.0f, 0.0f } }, { { ps, ph, ps}, { 0.0f, 1.0f, 0.0f } },
 			};
 			IndexSample planeIndices[] = {
 				2, 3, 1, 1, 0, 2,

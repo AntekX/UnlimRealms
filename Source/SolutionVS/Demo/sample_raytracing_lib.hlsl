@@ -45,6 +45,8 @@ struct SampleShadowData
 	bool occluded;
 };
 
+#define SAMPLE_LIGHTING 1
+
 float CalculateDiffuseCoefficient(in float3 worldPos, in float3 incidentLightRay, in float3 normal)
 {
 	float fNDotL = saturate(dot(-incidentLightRay, normal));
@@ -160,7 +162,7 @@ void SampleMiss(inout SampleRayData rayData)
 		LightDesc light = g_SceneCB.lightingDesc.LightSources[ilight];
 		float3 worldFrom = WorldRayOrigin() + float3(0.0, g_SceneCB.atmoDesc.InnerRadius * 0.98, 0.0);
 		float3 worldTo = worldFrom + WorldRayDirection();
-		rayData.color += AtmosphericScatteringSky(g_SceneCB.atmoDesc, light, worldTo, worldFrom);
+		rayData.color += AtmosphericScatteringSky(g_SceneCB.atmoDesc, light, worldTo, worldFrom) / 0.15; // temp: div 0.15, demultiply scattering magic factor
 	}
 	rayData.color.w = min(1.0, rayData.color.w);
 }
@@ -177,14 +179,6 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	float3 baryCoords = float3(1.0 - attribs.barycentrics.x - attribs.barycentrics.y, attribs.barycentrics.x, attribs.barycentrics.y);
 	float4 debugColor = float4(baryCoords.xyz, 1.0);
 	float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
-
-	// test material params
-
-	float3 albedo = 0.75;// debugColor.xyz;
-	float diffuseCoef = 1.0;
-	float specularCoef = 0.5;
-	float specularPower = 50.0;
-	float reflectanceCoef = 0.5;
 
 	// read vertex attributes
 
@@ -204,6 +198,38 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	normal.x = asfloat(g_VertexBuffer.Load(vertexOfs + 0));
 	normal.y = asfloat(g_VertexBuffer.Load(vertexOfs + 4));
 	normal.z = asfloat(g_VertexBuffer.Load(vertexOfs + 8));
+
+	// material params
+
+	float3 albedo = 0.75;// debugColor.xyz;
+	float diffuseCoef = 1.0;
+	float specularCoef = 0.5;
+	float specularPower = 50.0;
+	float reflectanceCoef = 0.5;
+
+	MaterialInputs material = (MaterialInputs)0;
+	initMaterial(material);
+	material.baseColor.xyz = 0.75;
+	material.normal = normal;
+	material.roughness = 1.0;
+	material.metallic = 0.0;
+	material.reflectance = 0.0;
+
+	// wood
+	#if (1)
+	material.baseColor.xyz = float3(0.53, 0.36, 0.24);
+	material.metallic = 0.0;
+	material.roughness = 0.7;
+	material.reflectance = 0.1;
+	#endif
+
+	// silver
+	#if (1)
+	material.baseColor.xyz = float3(0.98, 0.97, 0.96);
+	material.metallic = 1.0;
+	material.roughness = 0.0;
+	material.reflectance = 1.0;
+	#endif
 
 	// trace reflection data
 
@@ -268,15 +294,26 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 			ray, shadowData);
 
 		float shadowFactor = (shadowData.occluded ? 0.0 : 1.0);
+		float reflectionOcclusion = shadowFactor;
 
+		#if (SAMPLE_LIGHTING)
 		directLightColor += CalculatePhongLightingDirect(light, hitWorldPos, normal, albedo, shadowFactor, diffuseCoef, specularCoef, specularPower);
+		#else
+		directLightColor += EvaluateDirectLighting(hitWorldPos, WorldRayOrigin(), material, light, shadowFactor, reflectionOcclusion).xyz;
+		#endif
 	}
 
 	// final radiance
 
+	#if (SAMPLE_LIGHTING)
 	float3 lightColor = directLightColor + CalculatePhongLightingIndirect(hitWorldPos, normal, albedo, diffuseCoef);
 	float3 fresnelR = FresnelReflectanceSchlick(WorldRayDirection(), normal, albedo.xyz);
 	lightColor.xyz += reflectionColor * fresnelR * reflectanceCoef;
+	#else
+	float3 lightColor = directLightColor;
+	lightColor.xyz += reflectionColor * FresnelReflectance(hitWorldPos, WorldRayOrigin(), WorldRayDirection(), material);
+	lightColor.xyz += material.baseColor.xyz * g_SceneCB.clearColor.xyz * g_SceneCB.lightingDesc.LightSources[0].Intensity * 0.0; // temp ambient
+	#endif
 
 	rayData.color = float4(lightColor.xyz, 1.0);
 }
