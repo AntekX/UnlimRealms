@@ -1,7 +1,15 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+//	UnlimRealms
+//	Author: Anatole Kuzub
+//
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #ifndef LIGHTING_COMMON_HLSLI
 #define LIGHTING_COMMON_HLSLI
 
 #include "CommonTypes.hlsli"
+
+// structures are explicitly aligned to be used in/as constant buffers
 
 struct LightDesc
 {
@@ -17,47 +25,23 @@ struct LightDesc
 struct LightingDesc
 {
 	LightDesc LightSources[LIGHT_SOURCES_MAX];
-	CUINT(LightSourceCount);
-	CUINT3(__pad0);
+	CUINT	(LightSourceCount);
+	CUINT3	(__pad0);
 };
 
-struct MaterialDesc
+struct MeshMaterialDesc
 {
-	CFLOAT3	(BaseColor); // diffuse or specular color depending on the metallic
+	CFLOAT3	(BaseColor);
 	CFLOAT	(Roughness);
-	CFLOAT3	(Normal);
+	CFLOAT3	(EmissiveColor);
 	CFLOAT	(Metallic);
-	CFLOAT3	(Emissive);
-	CFLOAT	(Reflectance);
-	CFLOAT	(AmbientOcclusion);
-	CFLOAT3	(__pad0);
-
-	// second layer
-	CFLOAT3	(ClearCoatNormal);
-	CFLOAT	(ClearCoat);
-	CFLOAT	(ClearCoatRoughness);
-	CFLOAT3	(__pad1);
-
-	// cloth
 	CFLOAT3	(SheenColor);
-	CFLOAT	(__pad2);
-
-	#if (0)
-	// anisotropic specular
+	CFLOAT	(Reflectance);
 	CFLOAT3	(AnisotropyDirection);
 	CFLOAT	(Anisotropy);
-
-	// subsurface scattering
-	CFLOAT3	(SubsurfaceColor);
-	CFLOAT	(SubsurfacePower);
-	CFLOAT	(Thickness);
-	CFLOAT3	(__pad2);
-
-	// refraction
-	CFLOAT3 (Absorption); // use either Absorption or Transmission
-	CFLOAT	(Transmission);
-	CFLOAT	(IndexOfRefracttion); // usually used as constant = 1.5
-	#endif
+	CFLOAT	(ClearCoat);
+	CFLOAT	(ClearCoatRoughness);
+	CFLOAT2	(__pad0);
 };
 
 #endif

@@ -18,26 +18,21 @@ struct Vertex
 	float3 norm;
 };
 
-struct MeshInfo
+struct MeshDesc
 {
 	uint vertexBufferOfs;
 	uint indexBufferOfs;
 };
 
-static const MeshInfo g_MeshInfo[] = {
-	{ 0, 0 },		// plane mesh
-	{ 96, 24 },		// cube mesh
-	{ 672, 168 }	// custom mesh
-};
-
 static const uint RecursionDepthMax = 2;
 
-ConstantBuffer<SceneConstants> g_SceneCB : register(b0);
-RaytracingAccelerationStructure g_SceneStructure : register(t0);
+ConstantBuffer<SceneConstants> g_SceneCB			: register(b0);
+RaytracingAccelerationStructure g_SceneStructure	: register(t0);
 //StructuredBuffer<Vertex> g_VertexBuffer: register(t1); // todo: load does not work as expected
-ByteAddressBuffer g_VertexBuffer: register(t1);
-ByteAddressBuffer g_IndexBuffer: register(t2);
-RWTexture2D<float4> g_TargetTexture : register(u0);
+ByteAddressBuffer g_VertexBuffer					: register(t1);
+ByteAddressBuffer g_IndexBuffer						: register(t2);
+ByteAddressBuffer g_MeshBuffer						: register(t3);
+RWTexture2D<float4> g_TargetTexture					: register(u0);
 
 typedef BuiltInTriangleIntersectionAttributes SampleHitAttributes;
 struct SampleRayData
@@ -193,13 +188,18 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 	// read vertex attributes
 
+	const uint meshStride = 8; // sizeof MeshDesc
+	const uint vertexStride = 24; // arbitrary vertex format can be read from mesh buffer
+	const uint vertexNormOfs = 12;
+
 	uint meshID = InstanceID();
-	MeshInfo meshInfo = g_MeshInfo[meshID];
-	uint indexOffset = meshInfo.indexBufferOfs + PrimitiveIndex() * 3 * 4;
+	MeshDesc meshDesc;
+	meshDesc.vertexBufferOfs = g_MeshBuffer.Load(meshID * meshStride + 0);
+	meshDesc.indexBufferOfs = g_MeshBuffer.Load(meshID * meshStride + 4);
+	uint indexOffset = meshDesc.indexBufferOfs + PrimitiveIndex() * 3 * 4;
 	uint3 indices = g_IndexBuffer.Load3(indexOffset);
-	uint vertexStride = 24;
-	uint vertexNormOfs = 12;
-	uint vertexOfs = meshInfo.vertexBufferOfs + indices[0] * vertexStride + vertexNormOfs;
+	
+	uint vertexOfs = meshDesc.vertexBufferOfs + indices[0] * vertexStride + vertexNormOfs;
 	float3 normal;
 	normal.x = asfloat(g_VertexBuffer.Load(vertexOfs + 0));
 	normal.y = asfloat(g_VertexBuffer.Load(vertexOfs + 4));

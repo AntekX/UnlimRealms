@@ -249,18 +249,33 @@ int RayTracingSandboxApp::Run()
 	{
 	public:
 
+		struct VertexSample
+		{
+			ur_float3 pos;
+			ur_float3 norm;
+		};
+
+		typedef ur_uint32 IndexSample;
+
+		struct MeshDescSample
+		{
+			ur_uint32 vertexBufferOfs;
+			ur_uint32 indexBufferOfs;
+		};
+
 		class Mesh : public GrafEntity
 		{
 		public:
 
 			Allocation vertexBufferRegion;
 			Allocation indexBufferRegion;
+			Allocation meshBufferRegion;
 			std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
 
 			Mesh(GrafSystem &grafSystem) : GrafEntity(grafSystem) {}
 			~Mesh() {}
 
-			void Initialize(GrafRenderer* grafRenderer,
+			void Initialize(GrafRenderer* grafRenderer, GrafBuffer* meshBuffer, LinearAllocator& mbAllocator,
 				GrafBuffer* vertexBuffer, LinearAllocator& vbAllocator, const ur_byte* vertices, ur_size verticesCount, ur_size vertexStride,
 				GrafBuffer* indexBuffer, LinearAllocator& ibAllocator, const ur_byte* indices, ur_size indicesCount, GrafIndexType indexType)
 			{
@@ -269,11 +284,17 @@ int RayTracingSandboxApp::Run()
 
 				// allocate regions in shared mesh buffers and write
 
+				this->meshBufferRegion = mbAllocator.Allocate(sizeof(MeshDescSample));
 				this->vertexBufferRegion = vbAllocator.Allocate(verticesCount * vertexStride);
 				this->indexBufferRegion = ibAllocator.Allocate(indicesCount * (GrafIndexType::UINT16 == indexType ? 2 : 4));
 				if (0 == this->vertexBufferRegion.Size || 0 == this->indexBufferRegion.Size)
 					return; // exceeeds reserved size
 
+				MeshDescSample meshDesc = {};
+				meshDesc.vertexBufferOfs = (ur_uint32)this->vertexBufferRegion.Offset;
+				meshDesc.indexBufferOfs = (ur_uint32)this->indexBufferRegion.Offset;
+
+				meshBuffer->Write((ur_byte*)&meshDesc, this->meshBufferRegion.Size, 0, this->meshBufferRegion.Offset);
 				vertexBuffer->Write(vertices, this->vertexBufferRegion.Size, 0, this->vertexBufferRegion.Offset);
 				indexBuffer->Write(indices, this->indexBufferRegion.Size, 0, this->indexBufferRegion.Offset);
 
@@ -327,8 +348,10 @@ int RayTracingSandboxApp::Run()
 		std::unique_ptr<Mesh> customMesh;
 		LinearAllocator vertexBufferAllocator;
 		LinearAllocator indexBufferAllocator;
+		LinearAllocator meshBufferAllocator;
 		std::unique_ptr<GrafBuffer> vertexBuffer;
 		std::unique_ptr<GrafBuffer> indexBuffer;
+		std::unique_ptr<GrafBuffer> meshBuffer;
 		std::unique_ptr<GrafBuffer> instanceBuffer;
 		std::unique_ptr<GrafAccelerationStructure> accelerationStructureTL;
 		std::unique_ptr<GrafDescriptorTableLayout> bindingTableLayout;
@@ -365,6 +388,7 @@ int RayTracingSandboxApp::Run()
 			grafRenderer->SafeDelete(customMesh.release());
 			grafRenderer->SafeDelete(vertexBuffer.release());
 			grafRenderer->SafeDelete(indexBuffer.release());
+			grafRenderer->SafeDelete(meshBuffer.release());
 			grafRenderer->SafeDelete(instanceBuffer.release());
 			grafRenderer->SafeDelete(accelerationStructureTL.release());
 			grafRenderer->SafeDelete(bindingTableLayout.release());
@@ -392,14 +416,8 @@ int RayTracingSandboxApp::Run()
 
 			const ur_size VertexCountMax = (1 << 20);
 			const ur_size IndexCountMax = (1 << 20);
+			const ur_size MeshCountMax = (1 << 10);
 			const ur_size InstanceCountMax = 128;
-
-			struct VertexSample
-			{
-				ur_float3 pos;
-				ur_float3 norm;
-			};
-			typedef ur_uint32 IndexSample;
 
 			// initialize common vertex attributes buffer
 
@@ -423,6 +441,17 @@ int RayTracingSandboxApp::Run()
 			this->indexBuffer->Initialize(grafDevice, IBParams);
 			this->indexBufferAllocator.Init(IBParams.BufferDesc.SizeInBytes);
 
+			// initialize common mesh description buffer
+
+			GrafBuffer::InitParams MBParams;
+			MBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
+			MBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			MBParams.BufferDesc.SizeInBytes = MeshCountMax * sizeof(MeshDescSample);
+
+			grafSystem->CreateBuffer(this->meshBuffer);
+			this->meshBuffer->Initialize(grafDevice, MBParams);
+			this->meshBufferAllocator.Init(MBParams.BufferDesc.SizeInBytes);
+
 			// sample plane mesh
 
 			VertexSample planeVertices[] = {
@@ -433,7 +462,7 @@ int RayTracingSandboxApp::Run()
 			};
 
 			this->planeMesh.reset(new Mesh(*grafSystem));
-			this->planeMesh->Initialize(this->grafRenderer,
+			this->planeMesh->Initialize(this->grafRenderer, this->meshBuffer.get(), this->meshBufferAllocator,
 				this->vertexBuffer.get(), this->vertexBufferAllocator, (const ur_byte*)planeVertices, ur_array_size(planeVertices), sizeof(VertexSample),
 				this->indexBuffer.get(), this->indexBufferAllocator, (const ur_byte*)planeIndices, ur_array_size(planeIndices), GrafIndexType::UINT32);
 
@@ -457,7 +486,7 @@ int RayTracingSandboxApp::Run()
 			};
 
 			this->cubeMesh.reset(new Mesh(*grafSystem));
-			this->cubeMesh->Initialize(this->grafRenderer,
+			this->cubeMesh->Initialize(this->grafRenderer, this->meshBuffer.get(), this->meshBufferAllocator,
 				this->vertexBuffer.get(), this->vertexBufferAllocator, (const ur_byte*)cubeVertices, ur_array_size(cubeVertices), sizeof(VertexSample),
 				this->indexBuffer.get(), this->indexBufferAllocator, (const ur_byte*)cubeIndices, ur_array_size(cubeIndices), GrafIndexType::UINT32);
 
@@ -476,7 +505,7 @@ int RayTracingSandboxApp::Run()
 				if (meshData.VertexElementFlags & vertexMask) // make sure all masked attributes available in the mesh
 				{
 					this->customMesh.reset(new Mesh(*grafSystem));
-					this->customMesh->Initialize(this->grafRenderer,
+					this->customMesh->Initialize(this->grafRenderer, this->meshBuffer.get(), this->meshBufferAllocator,
 						this->vertexBuffer.get(), this->vertexBufferAllocator, meshData.Vertices.data(), meshData.Vertices.size() / sizeof(VertexSample), sizeof(VertexSample),
 						this->indexBuffer.get(), this->indexBufferAllocator, meshData.Indices.data(), meshData.Indices.size() / sizeof(ur_uint32), GrafIndexType::UINT32);
 				}
@@ -736,6 +765,7 @@ int RayTracingSandboxApp::Run()
 			descriptorTable->SetAccelerationStructure(0, this->accelerationStructureTL.get());
 			descriptorTable->SetBuffer(1, this->vertexBuffer.get());
 			descriptorTable->SetBuffer(2, this->indexBuffer.get());
+			descriptorTable->SetBuffer(3, this->meshBuffer.get());
 			descriptorTable->SetRWImage(0, grafTargetImage);
 
 			grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);
