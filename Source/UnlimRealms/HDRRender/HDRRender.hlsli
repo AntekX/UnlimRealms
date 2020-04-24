@@ -12,6 +12,7 @@ cbuffer Constants : register(b1)
 	float LumKey;
 	float LumWhite;
 	float BloomThreshold;
+	float BloomIntensity;
 };
 
 static const float Gamma = 2.2;

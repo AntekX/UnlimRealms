@@ -427,9 +427,10 @@ void initMaterial(inout MaterialInputs material)
 struct LightingParams
 {
 	float3	worldPos;
-	float3	viewPos;
 	float3	normal;
-	float	NoV;
+	float3	viewPos;
+	float3	viewDir;
+	float3	viewDist;
 
 	float3	diffuseColor;
 	float3	f0;
@@ -437,24 +438,31 @@ struct LightingParams
 	float	perceptualRoughness;
 	float	perceptualRoughnessUnclamped;
 	float	energyCompensation;
+
+	// cloth
+	bool	isCloth;
 	
 	// subsurface scattering
+	bool	hasSubsurfaceScattering;
 	float	subsurfacePower;
 	float3	subsurfaceColor;
 	float	thickness;
 
 	// refraction 
+	bool	hasRefraction;
 	float3	absorption;
 	float	transmission;
 	float	etaIR; // air -> material
 	float	etaRI; // material -> air
 
 	// coating layer
+	bool	hasClearCoat;
 	float	clearCoat;
 	float	clearCoatPerceptualRoughness;
 	float	clearCoatRoughness;
 
 	// anisotropic specular
+	bool	hasAnisotropy;
 	float	anisotropy;
 	float3	anisotropicT;
 	float3	anisotropicB;
@@ -494,7 +502,7 @@ void applyAlphaMask(inout float4 baseColor)
  * This function is also responsible for discarding the fragment when alpha
  * testing fails.
  */
-void getLightingParams(const MaterialInputs material, inout LightingParams lightingParams)
+void getLightingParams(const float3 worldPos, const float3 viewPos, const MaterialInputs material, inout LightingParams lightingParams)
 {
 	float4 baseColor = material.baseColor;
 	applyAlphaMask(baseColor);
@@ -504,9 +512,15 @@ void getLightingParams(const MaterialInputs material, inout LightingParams light
 	//unpremultiply(baseColor);
 	#endif
 
+	lightingParams.worldPos = worldPos;
 	lightingParams.normal = material.normal;
+	lightingParams.viewPos = viewPos;
+	lightingParams.viewDir = (lightingParams.viewPos - lightingParams.worldPos);
+	lightingParams.viewDist = length(lightingParams.viewDir);
+	lightingParams.viewDir /= (lightingParams.viewDist + 1.0e-5);
 
-	if (material.isCloth)
+	lightingParams.isCloth = material.isCloth;
+	if (lightingParams.isCloth)
 	{
 		lightingParams.diffuseColor = baseColor.rgb;
 		lightingParams.f0 = material.sheenColor;
@@ -542,7 +556,8 @@ void getLightingParams(const MaterialInputs material, inout LightingParams light
 		#endif
 	}
 
-	if (material.hasRefraction)
+	lightingParams.hasRefraction = material.hasRefraction;
+	if (lightingParams.hasRefraction)
 	{
 		// Air's Index of refraction is 1.000277 at STP but everybody uses 1.0
 		const float airIor = 1.0;
@@ -564,7 +579,8 @@ void getLightingParams(const MaterialInputs material, inout LightingParams light
 		lightingParams.thickness = max(0.0, material.thickness);
 	}
 
-	if (material.hasClearCoat)
+	lightingParams.hasClearCoat = material.hasClearCoat;
+	if (lightingParams.hasClearCoat)
 	{
 		lightingParams.clearCoat = material.clearCoat;
 
@@ -601,14 +617,16 @@ void getLightingParams(const MaterialInputs material, inout LightingParams light
 	// Remaps the roughness to a perceptually linear roughness (roughness^2)
 	lightingParams.roughness = perceptualRoughnessToRoughness(lightingParams.perceptualRoughness);
 
-	if (material.hasSubsurfaceScattering)
+	lightingParams.hasSubsurfaceScattering = material.hasSubsurfaceScattering;
+	if (lightingParams.hasSubsurfaceScattering)
 	{
 		lightingParams.subsurfacePower = material.subsurfacePower;
 		lightingParams.subsurfaceColor = material.subsurfaceColor;
 		lightingParams.thickness = saturate(material.thickness);
 	}
 
-	if (material.hasAnisotropy)
+	lightingParams.hasAnisotropy = material.hasAnisotropy;
+	if (lightingParams.hasAnisotropy)
 	{
 		float3 direction = material.anisotropyDirection;
 		lightingParams.anisotropy = material.anisotropy;
@@ -696,26 +714,16 @@ float4 evaluateMaterial(const MaterialInputs material)
 #endif // TEMP: WIP section
 
 
-float4 EvaluateDirectLighting(const float3 worldPos, const float3 viewPos, const MaterialInputs material, const LightDesc lightSource,
-	const float directOcclusion, const float reflectionOcclusion)
+float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lightSource, const float directOcclusion)
 {
-	LightingParams lightingParams;
-	lightingParams.worldPos = worldPos;
-	lightingParams.viewPos = viewPos;
-
-	getLightingParams(material, lightingParams);
-
-	// common
+	// common inputs
 
 	float3 lightDir = -lightSource.Direction; // dir towards light source
-	float3 viewDir = (viewPos - worldPos);
-	float dist = length(viewDir);
-	viewDir = viewDir / (dist + 1.0e-5);
-	float3 halfVec = normalize(viewDir + lightDir);
-	float NoV = saturate(dot(lightingParams.normal, viewDir));
+	float3 halfV = normalize(lightingParams.viewDir + lightDir);
+	float NoV = saturate(dot(lightingParams.normal, lightingParams.viewDir));
 	float NoL = saturate(dot(lightingParams.normal, lightDir));
-	float NoH = saturate(dot(lightingParams.normal, halfVec));
-	float LoH = saturate(dot(lightDir, halfVec));
+	float NoH = saturate(dot(lightingParams.normal, halfV));
+	float LoH = saturate(dot(lightDir, halfV));
 
 	// diffuse term
 
@@ -724,13 +732,13 @@ float4 EvaluateDirectLighting(const float3 worldPos, const float3 viewPos, const
 	// specular term
 
 	float3 Fr = 0.0;
-	if (material.hasAnisotropy)
+	if (lightingParams.hasAnisotropy)
 	{
 		float3 l = lightDir;
 		float3 t = lightingParams.anisotropicT;
 		float3 b = lightingParams.anisotropicB;
-		float3 v = viewDir;
-		float3 h = halfVec;
+		float3 v = lightingParams.viewDir;
+		float3 h = halfV;
 
 		float ToV = dot(t, v);
 		float BoV = dot(b, v);
@@ -754,7 +762,7 @@ float4 EvaluateDirectLighting(const float3 worldPos, const float3 viewPos, const
 	}
 	else
 	{
-		float D = distribution(lightingParams.roughness, NoH, halfVec);
+		float D = distribution(lightingParams.roughness, NoH, halfV);
 		float V = visibility(lightingParams.roughness, NoV, NoL);
 		float3 F = fresnel(lightingParams.f0, LoH);
 
@@ -764,33 +772,20 @@ float4 EvaluateDirectLighting(const float3 worldPos, const float3 viewPos, const
 	float lightAttenuation = 1.0; // todo
 	float3 lightSourceColor = lightSource.Color * lightSource.Intensity * lightAttenuation;
 	float4 lightingResult = float4(0.0, 0.0, 0.0, 1.0);
-	lightingResult.xyz = (Fd * directOcclusion + Fr * lightingParams.energyCompensation * reflectionOcclusion) * NoL * lightSourceColor;
+	lightingResult.xyz = (Fd + Fr * lightingParams.energyCompensation) * NoL * lightSourceColor * directOcclusion;
 
 	return lightingResult;
 }
 
-float3 FresnelReflectance(const float3 worldPos, const float3 viewPos, const float3 reflectionDir, const MaterialInputs material)
+float3 FresnelReflectance(LightingParams lightingParams)
 {
-	// TODO: pass precomputed LightingParams here instead of MaterialInputs
+	float3 reflectedDir = reflect(-lightingParams.viewDir, lightingParams.normal);
+	float3 halfV = normalize(lightingParams.viewDir + reflectedDir);
+	float VoH = saturate(dot(lightingParams.viewDir, halfV));
 
-	float3 lightDir = reflectionDir;
-	float3 viewDir = (viewPos - worldPos);
-	float dist = length(viewDir);
-	viewDir = viewDir / (dist + 1.0e-5);
-	float3 halfVec = normalize(viewDir + lightDir);
-	float NoV = saturate(dot(material.normal, viewDir));
-	float NoL = saturate(dot(material.normal, lightDir));
-	float NoH = saturate(dot(material.normal, halfVec));
-	float LoH = saturate(dot(lightDir, halfVec));
+	float3 F = fresnel(lightingParams.f0, VoH);
 
-	float reflectance = computeDielectricF0(material.reflectance);
-	float3 f0 = computeF0(material.baseColor, material.metallic, reflectance);
-
-	float D = distribution(material.roughness, NoH, halfVec);
-	float V = visibility(material.roughness, NoV, NoL);
-	float3 F = fresnel(f0, LoH);
-
-	return (D * V) * F;
+	return F;
 }
 
 #endif

@@ -26,6 +26,7 @@ namespace UnlimRealms
 			ur_float LumKey;
 			ur_float LumWhite;
 			ur_float BloomThreshold;
+			ur_float BloomIntensity;
 
 			static const Params Default;
 		};

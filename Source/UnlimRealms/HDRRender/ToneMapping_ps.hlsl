@@ -42,7 +42,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 
 	float4 hdrVal = HDRTexture.Sample(PointSampler, input.uv);
 	float4 lumData = LumTexture.Sample(PointSampler, input.uv);
-	float4 bloom = BloomTexture.Sample(LinearSampler, input.uv);
+	float4 bloom = BloomTexture.Sample(LinearSampler, input.uv) * BloomIntensity;
 	
 #if LIGHT_SHAFTS
 	// use max() fn to avoid overbloom (light shafts sample same bloom RT)

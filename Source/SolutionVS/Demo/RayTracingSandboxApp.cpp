@@ -202,6 +202,7 @@ int RayTracingSandboxApp::Run()
 	Camera camera(realm);
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
+	cameraControl.SetSpeed(4.0);
 	camera.SetPosition(ur_float3(9.541f, 5.412f,-12.604f));
 	camera.SetLookAt(cameraControl.GetTargetPoint(), cameraControl.GetWorldUp());
 
@@ -234,7 +235,8 @@ int RayTracingSandboxApp::Run()
 	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
-		hdrParams.BloomThreshold = 40.0f;
+		hdrParams.BloomThreshold = 1.0f;
+		hdrParams.BloomIntensity = 0.05f;
 		hdrRender->SetParams(hdrParams);
 		res = hdrRender->Init(canvasWidth, canvasHeight, grafImageRTDepth.get());
 		if (Failed(res))
@@ -340,12 +342,14 @@ int RayTracingSandboxApp::Run()
 				//grafDevice->Submit();
 				//grafDevice->WaitIdle();
 			}
+
+			inline ur_uint32 GetMeshID() const { return ur_uint32(this->meshBufferRegion.Offset / sizeof(MeshDescSample)); }
 		};
 
 		GrafRenderer* grafRenderer;
 		std::unique_ptr<Mesh> cubeMesh;
 		std::unique_ptr<Mesh> planeMesh;
-		std::unique_ptr<Mesh> customMesh;
+		std::vector<std::unique_ptr<Mesh>> customMeshes;
 		LinearAllocator vertexBufferAllocator;
 		LinearAllocator indexBufferAllocator;
 		LinearAllocator meshBufferAllocator;
@@ -385,7 +389,10 @@ int RayTracingSandboxApp::Run()
 
 			grafRenderer->SafeDelete(cubeMesh.release());
 			grafRenderer->SafeDelete(planeMesh.release());
-			grafRenderer->SafeDelete(customMesh.release());
+			for (auto& customMesh : this->customMeshes)
+			{
+				grafRenderer->SafeDelete(customMesh.release());
+			}
 			grafRenderer->SafeDelete(vertexBuffer.release());
 			grafRenderer->SafeDelete(indexBuffer.release());
 			grafRenderer->SafeDelete(meshBuffer.release());
@@ -492,24 +499,28 @@ int RayTracingSandboxApp::Run()
 				this->vertexBuffer.get(), this->vertexBufferAllocator, (const ur_byte*)cubeVertices, ur_array_size(cubeVertices), sizeof(VertexSample),
 				this->indexBuffer.get(), this->indexBufferAllocator, (const ur_byte*)cubeIndices, ur_array_size(cubeIndices), GrafIndexType::UINT32);
 
-			// load custom mesh
+			// load custom mesh(es)
 
-			GrafUtils::ModelData modelData;
 			GrafUtils::MeshVertexElementFlags vertexMask = (ur_uint(GrafUtils::MeshVertexElementFlag::Position) | ur_uint(GrafUtils::MeshVertexElementFlag::Normal)); // load only subset of attributes
 			std::string modelResName[] = {
 				"../Res/Models/sphere.obj",
 				"../Res/Models/wuson.obj",
 				"../Res/Models/Medieval_building.obj",
 			};
-			if (GrafUtils::LoadModelFromFile(*grafDevice, modelResName[2], modelData, vertexMask) == Success && modelData.Meshes.size() > 0)
+			for (ur_size ires = 0; ires < ur_array_size(modelResName); ++ires)
 			{
-				const GrafUtils::MeshData& meshData = *modelData.Meshes[0];
-				if (meshData.VertexElementFlags & vertexMask) // make sure all masked attributes available in the mesh
+				GrafUtils::ModelData modelData;
+				if (GrafUtils::LoadModelFromFile(*grafDevice, modelResName[ires], modelData, vertexMask) == Success && modelData.Meshes.size() > 0)
 				{
-					this->customMesh.reset(new Mesh(*grafSystem));
-					this->customMesh->Initialize(this->grafRenderer, this->meshBuffer.get(), this->meshBufferAllocator,
-						this->vertexBuffer.get(), this->vertexBufferAllocator, meshData.Vertices.data(), meshData.Vertices.size() / sizeof(VertexSample), sizeof(VertexSample),
-						this->indexBuffer.get(), this->indexBufferAllocator, meshData.Indices.data(), meshData.Indices.size() / sizeof(ur_uint32), GrafIndexType::UINT32);
+					const GrafUtils::MeshData& meshData = *modelData.Meshes[0];
+					if (meshData.VertexElementFlags & vertexMask) // make sure all masked attributes available in the mesh
+					{
+						std::unique_ptr<Mesh> mesh(new Mesh(*grafSystem));
+						mesh->Initialize(this->grafRenderer, this->meshBuffer.get(), this->meshBufferAllocator,
+							this->vertexBuffer.get(), this->vertexBufferAllocator, meshData.Vertices.data(), meshData.Vertices.size() / sizeof(VertexSample), sizeof(VertexSample),
+							this->indexBuffer.get(), this->indexBufferAllocator, meshData.Indices.data(), meshData.Indices.size() / sizeof(ur_uint32), GrafIndexType::UINT32);
+						this->customMeshes.emplace_back(std::move(mesh));
+					}
 				}
 			}
 
@@ -645,13 +656,6 @@ int RayTracingSandboxApp::Run()
 
 			// update instances
 
-			enum MeshID : ur_uint32
-			{
-				MeshID_Plane = 0,
-				MeshID_Cube,
-				MeshID_Custom,
-			};
-
 			std::vector<GrafAccelerationStructureInstance> sampleInstances;
 			GrafAccelerationStructureInstance planeInstance =
 			{
@@ -660,28 +664,28 @@ int RayTracingSandboxApp::Run()
 					0.0f, 1.0f, 0.0f, 0.0f,
 					0.0f, 0.0f, 1.0f, 0.0f
 				},
-				MeshID_Plane, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+				this->planeMesh->GetMeshID(), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
 				this->planeMesh->accelerationStructureBL->GetDeviceAddress()
 			};
 			sampleInstances.emplace_back(planeInstance);
-			ur_size cubeCount = this->sampleInstanceCount;
-			for (ur_size i = 0; i < cubeCount; ++i)
+			for (ur_size i = 0; i < this->sampleInstanceCount; ++i)
 			{
 				ur_float radius = 7.0f;
 				ur_float height = 0.0f;
-				GrafAccelerationStructureInstance cubeInstance =
+				GrafAccelerationStructureInstance meshInstance =
 				{
 					{
-						1.0f, 0.0f, 0.0f, radius * cosf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
-						0.0f, 1.0f, 0.0f, height + cosf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
-						0.0f, 0.0f, 1.0f, radius * sinf(ur_float(i) / cubeCount * MathConst<ur_float>::Pi * 2.0f + animAngle)
+						1.0f, 0.0f, 0.0f, radius * cosf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
+						0.0f, 1.0f, 0.0f, height + cosf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
+						0.0f, 0.0f, 1.0f, radius * sinf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle)
 					},
-					MeshID_Cube, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-					this->cubeMesh->accelerationStructureBL->GetDeviceAddress()
+					this->customMeshes[0]->GetMeshID(), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+					this->customMeshes[0]->accelerationStructureBL->GetDeviceAddress()
 				};
-				sampleInstances.emplace_back(cubeInstance);
+				sampleInstances.emplace_back(meshInstance);
 			}
-			if (this->customMesh.get())
+			Mesh* customMesh = (this->customMeshes.empty() ? ur_null : this->customMeshes[2].get());
+			if (customMesh != ur_null)
 			{
 				GrafAccelerationStructureInstance meshInstance =
 				{
@@ -690,8 +694,8 @@ int RayTracingSandboxApp::Run()
 						0.0f, 2.0f, 0.0f,-2.0f,
 						0.0f, 0.0f, 2.0f, 0.0f
 					},
-					MeshID_Custom, 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-					this->customMesh->accelerationStructureBL->GetDeviceAddress()
+					customMesh->GetMeshID(), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+					customMesh->accelerationStructureBL->GetDeviceAddress()
 				};
 				sampleInstances.emplace_back(meshInstance);
 			}

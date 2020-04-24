@@ -20,6 +20,7 @@ namespace UnlimRealms
 		0.36f,		// LumKey
 		1.0e+4f,	// LumWhite ("infinite" white)
 		1.0f,		// BloomThreshold
+		1.0f,		// BloomIntensity
 	};
 
 	const ur_uint BlurPasses = 8;
@@ -1094,7 +1095,8 @@ namespace UnlimRealms
 		{
 			ImGui::DragFloat("LumKey", &this->params.LumKey, 0.01f, 0.01f, 1.0f);
 			ImGui::InputFloat("LumWhite", &this->params.LumWhite);
-			ImGui::DragFloat("Bloom", &this->params.BloomThreshold, 0.01f, 0.01f, 100.0f);
+			ImGui::DragFloat("BloomThreshold", &this->params.BloomThreshold, 0.01f, 0.01f, 100.0f);
+			ImGui::DragFloat("BloomIntensity", &this->params.BloomIntensity, 0.01f, 0.00f, 1.0f);
 			const char* DebugListBoxItems = "None\0HDR\0Bloom\0LumFirst\0LumLast\0";
 			ImGui::Combo("DebugRT", (int*)&this->debugRT, DebugListBoxItems);
 		}

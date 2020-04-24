@@ -1044,6 +1044,32 @@ namespace UnlimRealms
 			dstMat.EmissiveTexName = srcMat.emissive_texname;
 		}
 
+		// precalculate per vertex smooth normals
+		ur_bool normalsSmoothingEnabled = false;
+		std::vector<ur_float3> smoothNormals;
+		if (!attribs.normals.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Normal)) && normalsSmoothingEnabled)
+		{
+			smoothNormals.resize(attribs.vertices.size() / 3);
+			memset(smoothNormals.data(), 0x00, smoothNormals.size() * sizeof(ur_float3));
+			for (ur_size ishape = 0; ishape < shapes.size(); ++ishape)
+			{
+				const tinyobj::shape_t& shape = shapes[ishape];
+				if (shape.mesh.indices.empty())
+					continue; // mesh shapes accepted only
+				ur_size nidx;
+				ur_size indicesCount = shape.mesh.indices.size();
+				for (ur_size ii = 0; ii < indicesCount; ++ii)
+				{
+					ur_float3& sn = smoothNormals[shape.mesh.indices[ii].vertex_index];
+					nidx = shape.mesh.indices[ii].normal_index * 3;
+					sn.x += attribs.normals[nidx + 0];
+					sn.y += attribs.normals[nidx + 1];
+					sn.z += attribs.normals[nidx + 2];
+					sn.Normalize();
+				}
+			}
+		}
+
 		// TODO: optimize shared attributes usage, pack indices
 		// currectly all primtives vertices are unique to simplify loading logic
 		ur_size totalMeshIndicesCount = 0;
@@ -1097,15 +1123,30 @@ namespace UnlimRealms
 			{
 				ur_byte* vertexElementPtr = (verticesPtr + vertexNormalOfs);
 				ur_float* typedElementPtr;
-				ur_size attribIdx;
-				for (ur_size ii = 0; ii < indicesCount; ++ii)
+				if (smoothNormals.empty())
 				{
-					attribIdx = shape.mesh.indices[ii].normal_index * 3;
-					typedElementPtr = (ur_float*)vertexElementPtr;
-					typedElementPtr[0] = attribs.normals[attribIdx + 0];
-					typedElementPtr[1] = attribs.normals[attribIdx + 1];
-					typedElementPtr[2] = attribs.normals[attribIdx + 2];
-					vertexElementPtr += vertexStride;
+					ur_size attribIdx;
+					for (ur_size ii = 0; ii < indicesCount; ++ii)
+					{
+						attribIdx = shape.mesh.indices[ii].normal_index * 3;
+						typedElementPtr = (ur_float*)vertexElementPtr;
+						typedElementPtr[0] = attribs.normals[attribIdx + 0];
+						typedElementPtr[1] = attribs.normals[attribIdx + 1];
+						typedElementPtr[2] = attribs.normals[attribIdx + 2];
+						vertexElementPtr += vertexStride;
+					}
+				}
+				else
+				{
+					for (ur_size ii = 0; ii < indicesCount; ++ii)
+					{
+						ur_float3& sn = smoothNormals[shape.mesh.indices[ii].vertex_index];
+						typedElementPtr = (ur_float*)vertexElementPtr;
+						typedElementPtr[0] = sn.x;
+						typedElementPtr[1] = sn.y;
+						typedElementPtr[2] = sn.z;
+						vertexElementPtr += vertexStride;
+					}
 				}
 			}
 			if (!attribs.vertices.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Color)))
