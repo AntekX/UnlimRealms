@@ -222,12 +222,12 @@ int RayTracingSandboxApp::Run()
 
 	// atmosphere params
 	Atmosphere::Desc atmosphereDesc = {
-		1075.0f,
-		1200.0f,
-		0.160f,
+		6371.0e+3f,
+		6381.0e+3f,
+		0.250f,
 		-0.980f,
-		0.000050f,
-		0.000050f,
+		2.0e-7f,
+		7.0e-7f,
 		2.718f,
 	};
 
@@ -461,7 +461,7 @@ int RayTracingSandboxApp::Run()
 
 			// sample plane mesh
 
-			ur_float ps = 100.0f;
+			ur_float ps = 1000.0f;
 			ur_float ph = -2.0f;
 			VertexSample planeVertices[] = {
 				{ {-ps, ph,-ps }, { 0.0f, 1.0f, 0.0f } }, { { ps, ph,-ps}, { 0.0f, 1.0f, 0.0f } }, { {-ps, ph, ps}, { 0.0f, 1.0f, 0.0f } }, { { ps, ph, ps}, { 0.0f, 1.0f, 0.0f } },
@@ -870,7 +870,7 @@ int RayTracingSandboxApp::Run()
 			ur_float3 sunDir;
 			sunDir.x = -cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
 			sunDir.z = -sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
-			sunDir.y = -powf(fabs(sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor)), 2.0f) * 0.5f - 0.05f;
+			sunDir.y = -powf(fabs(sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor)), 2.0f) * 0.6f - 0.05f;
 			sunDir.Normalize();
 			LightDesc& sunLight = lightingDesc.LightSources[0];
 			sunLight.Direction = sunDir;
@@ -985,6 +985,16 @@ int RayTracingSandboxApp::Run()
 							ImGui::DragFloat("CrntCycleFactor", &lightCrntCycleFactor, 0.01f, 0.0f, 1.0f);
 							ImGui::ColorEdit3("Color", &lightingDesc.LightSources[0].Color.x);
 							ImGui::InputFloat("Intensity", &lightingDesc.LightSources[0].Intensity);
+						}
+						if (ImGui::CollapsingHeader("Atmosphere"))
+						{
+							ImGui::InputFloat("InnerRadius", &atmosphereDesc.InnerRadius);
+							ImGui::InputFloat("OuterRadius", &atmosphereDesc.OuterRadius);
+							ImGui::DragFloat("ScaleDepth", &atmosphereDesc.ScaleDepth, 0.01f, 0.0f, 1.0f);
+							ImGui::InputFloat("Kr", &atmosphereDesc.Kr);
+							ImGui::InputFloat("Km", &atmosphereDesc.Km);
+							ImGui::DragFloat("G", &atmosphereDesc.G, 0.01f, -1.0f, 1.0f);
+							ImGui::InputFloat("D", &atmosphereDesc.D);
 						}
 						if (rayTracingScene != ur_null)
 						{

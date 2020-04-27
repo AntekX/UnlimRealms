@@ -6,7 +6,7 @@
 //  Resources:
 //	http://publications.lib.chalmers.se/records/fulltext/203057/203057.pdf
 //	http://www.vis.uni-stuttgart.de/~schafhts/HomePage/pubs/wscg07-schafhitzel.pdf
-//  http://http.developer.nvidia.com/GPUGems2/gpugems2_chapter16.html
+//  https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-16-accurate-atmospheric-scattering
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

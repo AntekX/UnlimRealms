@@ -99,11 +99,12 @@ float3 CalculatePhongLightingIndirect(in float3 worldPos, in float3 normal, in f
 
 float4 CalculateSkyLight(const float3 position, const float3 direction)
 {
+	float height = lerp(g_SceneCB.atmoDesc.InnerRadius, g_SceneCB.atmoDesc.OuterRadius, 0.05);
 	float4 color = 0.0;
 	for (uint ilight = 0; ilight < g_SceneCB.lightingDesc.LightSourceCount; ++ilight)
 	{
 		LightDesc light = g_SceneCB.lightingDesc.LightSources[ilight];
-		float3 worldFrom = position + float3(0.0, g_SceneCB.atmoDesc.InnerRadius /** 0.98*/, 0.0);
+		float3 worldFrom = position + float3(0.0, height, 0.0);
 		float3 worldTo = worldFrom + direction;
 		color += AtmosphericScatteringSky(g_SceneCB.atmoDesc, light, worldTo, worldFrom) / 0.05; // temp: divide to demultiply scattering magic factor
 	}
