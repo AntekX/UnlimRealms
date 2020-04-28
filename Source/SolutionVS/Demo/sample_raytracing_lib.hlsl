@@ -99,6 +99,7 @@ float3 CalculatePhongLightingIndirect(in float3 worldPos, in float3 normal, in f
 
 float4 CalculateSkyLight(const float3 position, const float3 direction)
 {
+	const float SkyLightIntensity = 20;
 	float height = lerp(g_SceneCB.atmoDesc.InnerRadius, g_SceneCB.atmoDesc.OuterRadius, 0.05);
 	float4 color = 0.0;
 	for (uint ilight = 0; ilight < g_SceneCB.lightingDesc.LightSourceCount; ++ilight)
@@ -106,7 +107,7 @@ float4 CalculateSkyLight(const float3 position, const float3 direction)
 		LightDesc light = g_SceneCB.lightingDesc.LightSources[ilight];
 		float3 worldFrom = position + float3(0.0, height, 0.0);
 		float3 worldTo = worldFrom + direction;
-		color += AtmosphericScatteringSky(g_SceneCB.atmoDesc, light, worldTo, worldFrom) / 0.05; // temp: divide to demultiply scattering magic factor
+		color += AtmosphericScatteringSky(g_SceneCB.atmoDesc, light, worldTo, worldFrom) * SkyLightIntensity;
 	}
 	color.w = min(1.0, color.w);
 	return color;
@@ -234,14 +235,15 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 	// mirror
 	#if (1)
-	material.baseColor.xyz = float3(0.25, 0.24, 0.22);
-	material.metallic = 0.0;
+	//material.baseColor.xyz = float3(0.25, 0.24, 0.22);
+	material.baseColor.xyz = float3(0.98, 0.84, 0.72);
+	material.metallic = 1.0;
 	material.roughness = 0.2;
-	material.reflectance = 0.8;
+	material.reflectance = 1.0;
 	#endif
 
 	// copper
-	#if (1)
+	#if (0)
 	material.baseColor.xyz = float3(0.98, 0.84, 0.72);
 	material.metallic = 1.0;
 	material.roughness = 0.4;
@@ -334,6 +336,8 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		#if (SAMPLE_LIGHTING)
 		directLightColor += CalculatePhongLightingDirect(light, hitWorldPos, normal, albedo, shadowFactor, diffuseCoef, specularCoef, specularPower);
 		#else
+		//light.Color.xyz = CalculateSkyLight(hitWorldPos, -light.Direction).xyz;
+		//light.Intensity = 0.1;
 		directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor).xyz;
 		#endif
 	}
