@@ -11,13 +11,14 @@ cbuffer Constants : register(b1)
 	float BlurDirection;
 	float LumKey;
 	float LumWhite;
+	float LumAdaptationMin;
+	float LumAdaptationMax;
 	float BloomThreshold;
 	float BloomIntensity;
 };
 
 static const float Gamma = 2.2;
 static const float GammaRcp = 1.0 / Gamma;
-static const float LumAdaptationMin = 1;
 static const float Eps = 1.0e-4;
 static const bool LogLuminance = false;
 

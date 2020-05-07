@@ -25,6 +25,8 @@ namespace UnlimRealms
 		{
 			ur_float LumKey;
 			ur_float LumWhite;
+			ur_float LumAdaptationMin;
+			ur_float LumAdaptationMax;
 			ur_float BloomThreshold;
 			ur_float BloomIntensity;
 

@@ -24,7 +24,7 @@ struct MeshDesc
 	uint indexBufferOfs;
 };
 
-static const uint RecursionDepthMax = 4;
+static const uint RecursionDepthMax = 8;
 
 ConstantBuffer<SceneConstants> g_SceneCB			: register(b0);
 RaytracingAccelerationStructure g_SceneStructure	: register(t0);
@@ -291,7 +291,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	else
 	{
 		// fallback to env color reflection
-		reflectionColor = CalculateSkyLight(hitWorldPos, reflectionDir).xyz;
+		reflectionColor = CalculateSkyLight(hitWorldPos, float3(reflectionDir.x, abs(reflectionDir.y), reflectionDir.z)).xyz;
 	}
 
 	// pre-calculate lighting paramns for given material and ray
@@ -336,8 +336,11 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		#if (SAMPLE_LIGHTING)
 		directLightColor += CalculatePhongLightingDirect(light, hitWorldPos, normal, albedo, shadowFactor, diffuseCoef, specularCoef, specularPower);
 		#else
-		//light.Color.xyz = CalculateSkyLight(hitWorldPos, -light.Direction).xyz;
-		//light.Intensity = 0.1;
+		#if (1)
+		// calculate incoming sun light with respect to atmospheric scattering
+		light.Color.xyz = CalculateSkyLight(hitWorldPos, -light.Direction).xyz;
+		light.Intensity = 1.0;
+		#endif
 		directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor).xyz;
 		#endif
 	}

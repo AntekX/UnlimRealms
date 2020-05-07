@@ -235,6 +235,8 @@ int RayTracingSandboxApp::Run()
 	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
+		hdrParams.LumAdaptationMin = sunLight.Intensity * 0.5f;
+		hdrParams.LumAdaptationMax = sunLight.Intensity * 1.5f;
 		hdrParams.BloomThreshold = 1.0f;
 		hdrParams.BloomIntensity = 0.05f;
 		hdrRender->SetParams(hdrParams);
