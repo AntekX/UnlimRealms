@@ -330,6 +330,12 @@
     <ClInclude Include="..\..\3rdParty\TinyObjLoader\tiny_obj_loader.h">
       <Filter>3rdParty\TinyObjLoader</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Graf\DX12\GrafSystemDX12.h">
+      <Filter>Graf\DX12</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Graf\DX12\GrafSystemDX12.inline.h">
+      <Filter>Graf\DX12</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -680,6 +686,9 @@
     <ClCompile Include="..\..\UnlimRealms\Graf\GrafRenderer.cpp">
       <Filter>Graf</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Graf\DX12\GrafSystemDX12.cpp">
+      <Filter>Graf\DX12</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Core">
@@ -771,6 +780,9 @@
     </Filter>
     <Filter Include="3rdParty\TinyObjLoader">
       <UniqueIdentifier>{a1e2dd6b-336e-4adf-8187-c50c4ed725cb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Graf\DX12">
+      <UniqueIdentifier>{647b6f4b-d875-460e-9528-406600958b57}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
