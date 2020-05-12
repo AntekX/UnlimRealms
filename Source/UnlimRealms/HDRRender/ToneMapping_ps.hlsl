@@ -51,7 +51,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 	hdrVal += bloom;
 #endif
 	
-	float Lf = lumData.x + Eps;
+	float Lf = lumData.x + LumEps;
 	if (LogLuminance) Lf = exp(Lf) / (SrcTargetSize.x * SrcTargetSize.y);
 	Lf = clamp(Lf, LumAdaptationMin, LumAdaptationMax);
 

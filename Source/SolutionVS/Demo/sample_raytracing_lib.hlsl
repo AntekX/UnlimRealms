@@ -1,5 +1,6 @@
 
 #include "Lighting.hlsli"
+#include "HDRRender/HDRRender.hlsli"
 #include "Atmosphere/AtmosphericScattering.hlsli"
 
 struct SceneConstants
@@ -25,6 +26,11 @@ struct MeshDesc
 };
 
 static const uint RecursionDepthMax = 8;
+static const uint AmbientSampleCount = 8;
+
+#define DEBUG_VIEW_DISABLED 0
+#define DEBUG_VIEW_AMBIENTOCCLUSION 1
+#define DEBUG_VIEW_MODE DEBUG_VIEW_DISABLED
 
 ConstantBuffer<SceneConstants> g_SceneCB			: register(b0);
 RaytracingAccelerationStructure g_SceneStructure	: register(t0);
@@ -111,6 +117,17 @@ float4 CalculateSkyLight(const float3 position, const float3 direction)
 	}
 	color.w = min(1.0, color.w);
 	return color;
+}
+
+float3 GetSampleDirection(float sampleId, float3 samplePos)
+{
+	float xi0 = hash(samplePos.xyz + sampleId * 3456);
+	float xi1 = hash(samplePos.yxz + sampleId * 6543);
+	float3 dir = float3(
+		sqrt(xi0) * cos(2 * Pi * xi1),
+		sqrt(xi0) * sin(2 * Pi * xi1),
+		sqrt(1 - xi0));
+	return dir;
 }
 
 float3 InterpolatedVertexAttribute(float3 attributes[3], float3 barycentrics)
@@ -208,7 +225,6 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	float3 vnormal[3];
 	[unroll] for (int i = 0; i < 3; ++i)
 	{
-		
 		uint vertexOfs = meshDesc.vertexBufferOfs + indices[i] * vertexStride + vertexNormOfs;
 		vnormal[i].x = asfloat(g_VertexBuffer.Load(vertexOfs + 0));
 		vnormal[i].y = asfloat(g_VertexBuffer.Load(vertexOfs + 4));
@@ -216,6 +232,16 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	}
 	float3 normal = /*normalize*/(InterpolatedVertexAttribute(vnormal, baryCoords));
 	normal *= -sign(dot(normal, WorldRayDirection())); // back face normal
+	float3 bitangent = float3(0.0, 0.0, 1.0);
+	if (normal.z + Eps >= 1.0) bitangent = float3(0.0,-1.0, 0.0);
+	if (normal.z - Eps <=-1.0) bitangent = float3(0.0, 1.0, 0.0);
+	float3 tangent = normalize(cross(bitangent, normal));
+	bitangent = cross(normal, tangent);
+	float3x3 surfaceTBN = {
+		tangent,
+		bitangent,
+		normal
+	};
 
 	// material params
 
@@ -227,23 +253,37 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 	MaterialInputs material = (MaterialInputs)0;
 	initMaterial(material);
-	material.baseColor.xyz = 0.75;
+	material.baseColor.xyz = 1.0;
 	material.normal = normal;
 	material.roughness = 1.0;
 	material.metallic = 0.0;
 	material.reflectance = 0.0;
 
 	// mirror
+	#if (0)
+	if (2 == meshID)
+	{
+		//material.baseColor.xyz = float3(0.25, 0.24, 0.22);
+		material.baseColor.xyz = float3(0.98, 0.84, 0.72);
+		material.metallic = 0.0;
+		material.roughness = 0.5;
+		material.reflectance = 1.0;
+	}
+	#endif
+
+	// coated plastic
 	#if (1)
-	//material.baseColor.xyz = float3(0.25, 0.24, 0.22);
-	material.baseColor.xyz = float3(0.98, 0.84, 0.72);
-	material.metallic = 1.0;
-	material.roughness = 0.2;
-	material.reflectance = 1.0;
-	material.hasClearCoat = false;
-	material.clearCoat = 0.5;
-	material.clearCoatRoughness = 0.5;
-	material.clearCoatNormal = normal;
+	if (2 == meshID)
+	{
+		material.baseColor.xyz = float3(0.98, 0.84, 0.72);
+		material.metallic = 0.0;
+		material.roughness = 0.0;
+		material.reflectance = 1.0;
+		material.hasClearCoat = false;
+		material.clearCoat = 1.0;
+		material.clearCoatRoughness = 0.1;
+		material.clearCoatNormal = normal;
+	}
 	#endif
 
 	// copper
@@ -266,7 +306,8 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 	float3 reflectionColor = 0.0;
 	float3 reflectionDir = reflect(WorldRayDirection(), normal);
-	if (rayData.recursionDepth < RecursionDepthMax)
+	bool reflective = (material.reflectance > Eps || material.metallic > Eps);
+	if (rayData.recursionDepth < RecursionDepthMax && reflective)
 	{
 		SampleRayData reflectionData;
 		reflectionData.color = 0;
@@ -343,10 +384,52 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		#if (1)
 		// calculate incoming sun light with respect to atmospheric scattering
 		light.Color.xyz = CalculateSkyLight(hitWorldPos, -light.Direction).xyz;
-		light.Intensity = 1.0;
+		light.Intensity = min(1.0, light.Intensity / ComputeLuminance(light.Color.xyz));
 		#endif
 		directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor).xyz;
 		#endif
+	}
+
+	// evaluate ambient occlusion
+
+	float occlusionFactor = 1.0;
+	float3 occlusionDir = 0.0;
+	if (AmbientSampleCount > 0/* && rayData.recursionDepth == 0*/)
+	{
+		uint instanceInclusionMask = 0xff;
+		uint rayContributionToHitGroupIndex = 0;
+		uint multiplierForGeometryContributionToShaderIndex = 1;
+		uint missShaderIndex = 1; // SampleMissShadow
+		
+		SampleShadowData rayData;
+		RayDesc ray;
+		ray.TMin = 0.001;
+		ray.TMax = 1.0e+4;
+		ray.Origin = hitWorldPos;
+
+		float visibility = 0.0;
+		for (uint isample = 0; isample < AmbientSampleCount; ++isample)
+		{
+			// trace occlusion data
+
+			ray.Direction = mul(GetSampleDirection((float)isample, ray.Origin), surfaceTBN);
+			rayData.occluded = true;
+			occlusionDir += ray.Direction;
+
+			TraceRay(g_SceneStructure,
+				RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+				RAY_FLAG_FORCE_OPAQUE | // skip any hit shaders
+				RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, // skip closets hit shaders (only miss shader writes to shadow payload)
+				instanceInclusionMask,
+				rayContributionToHitGroupIndex,
+				multiplierForGeometryContributionToShaderIndex,
+				missShaderIndex,
+				ray, rayData);
+
+			visibility += (rayData.occluded ? 0.0 : 1.0);
+		}
+		occlusionFactor = visibility / AmbientSampleCount;
+		occlusionDir = normalize(occlusionDir);
 	}
 
 	// final radiance
@@ -357,10 +440,15 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	lightColor.xyz += reflectionColor * fresnelR * reflectanceCoef;
 	#else
 	float3 envColor = CalculateSkyLight(hitWorldPos, normalize(lightingParams.normal * 0.5 + WorldUp)).xyz;
-	float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor; // temp ambient, no indirect spec
+	float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor * occlusionFactor; // temp ambient, no indirect spec
 	float3 reflectedLightColor = reflectionColor * FresnelReflectance(lightingParams);
 	float3 lightColor = directLightColor + indirectLightColor + reflectedLightColor;
 	#endif
 
 	rayData.color = float4(lightColor.xyz, 1.0);
+
+	// debug output overrides
+	#if (DEBUG_VIEW_AMBIENTOCCLUSION == DEBUG_VIEW_MODE)
+	rayData.color = float4(occlusionFactor.xxx * g_SceneCB.lightingDesc.LightSources[0].Intensity, 1.0);
+	#endif
 }
