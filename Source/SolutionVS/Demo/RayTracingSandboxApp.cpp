@@ -898,7 +898,7 @@ int RayTracingSandboxApp::Run()
 			// resize render target(s)
 			if (canvasValid &&
 				(canvasWidth != realm.GetCanvas()->GetClientBound().Width() ||
-					canvasHeight != realm.GetCanvas()->GetClientBound().Height()))
+				canvasHeight != realm.GetCanvas()->GetClientBound().Height()))
 			{
 				canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 				canvasHeight = realm.GetCanvas()->GetClientBound().Height();
@@ -939,7 +939,7 @@ int RayTracingSandboxApp::Run()
 
 					hdrRender->BeginRender(*grafCmdListCrnt);
 
-					// noet: non ray traced rendering can be done here
+					// note: non ray traced rendering can be done here
 
 					hdrRender->EndRender(*grafCmdListCrnt);
 

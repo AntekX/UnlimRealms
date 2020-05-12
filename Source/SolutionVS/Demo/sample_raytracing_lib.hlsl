@@ -240,6 +240,10 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	material.metallic = 1.0;
 	material.roughness = 0.2;
 	material.reflectance = 1.0;
+	material.hasClearCoat = false;
+	material.clearCoat = 0.5;
+	material.clearCoatRoughness = 0.5;
+	material.clearCoatNormal = normal;
 	#endif
 
 	// copper
