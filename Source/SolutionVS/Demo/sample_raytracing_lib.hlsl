@@ -3,12 +3,19 @@
 #include "HDRRender/HDRRender.hlsli"
 #include "Atmosphere/AtmosphericScattering.hlsli"
 
+#pragma pack_matrix(row_major)
+
 struct SceneConstants
 {
 	float4x4 viewProjInv;
+	float4x4 viewProjPrev;
 	float4 cameraPos;
 	float4 viewportSize; // w, h, 1/w, 1/h
 	float4 clearColor;
+	uint accumulationEnabled;
+	uint accumulationFrameNumber;
+	uint accumulationFrameCount;
+	uint1 _pad0;
 	AtmosphereDesc atmoDesc;
 	LightingDesc lightingDesc;
 };
@@ -26,10 +33,11 @@ struct MeshDesc
 };
 
 static const uint RecursionDepthMax = 8;
-static const uint AmbientSampleCount = 8;
+static const uint AmbientSampleCount = 32;
 
 #define DEBUG_VIEW_DISABLED 0
 #define DEBUG_VIEW_AMBIENTOCCLUSION 1
+#define DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR 2
 #define DEBUG_VIEW_MODE DEBUG_VIEW_DISABLED
 
 ConstantBuffer<SceneConstants> g_SceneCB			: register(b0);
@@ -39,6 +47,10 @@ ByteAddressBuffer g_VertexBuffer					: register(t1);
 ByteAddressBuffer g_IndexBuffer						: register(t2);
 ByteAddressBuffer g_MeshBuffer						: register(t3);
 RWTexture2D<float4> g_TargetTexture					: register(u0);
+RWTexture2D<uint2> g_OcclusionBuffer				: register(u1);
+RWTexture2D<uint2> g_OcclusionBufferPrev			: register(u2);
+RWTexture2D<float> g_DepthBuffer					: register(u3);
+RWTexture2D<float> g_DepthBufferPrev				: register(u4);
 
 typedef BuiltInTriangleIntersectionAttributes SampleHitAttributes;
 struct SampleRayData
@@ -119,20 +131,30 @@ float4 CalculateSkyLight(const float3 position, const float3 direction)
 	return color;
 }
 
-float3 GetSampleDirection(float sampleId, float3 samplePos)
+float3 GetSampleDirection(uint seed, float3 samplePos)
 {
-	float xi0 = hash(samplePos.xyz + sampleId * 3456);
-	float xi1 = hash(samplePos.yxz + sampleId * 6543);
+	float xi0 = HashFloat3(Rand3D(samplePos.xyz) + seed);
+	float xi1 = HashFloat3(Rand3D(samplePos.zxy) + seed);
 	float3 dir = float3(
-		sqrt(xi0) * cos(2 * Pi * xi1),
-		sqrt(xi0) * sin(2 * Pi * xi1),
-		sqrt(1 - xi0));
+		sqrt(xi0) * cos(TwoPi * xi1),
+		sqrt(xi0) * sin(TwoPi * xi1),
+		sqrt(1 - xi0) + 1.0e-2);
 	return dir;
 }
 
 float3 InterpolatedVertexAttribute(float3 attributes[3], float3 barycentrics)
 {
 	return (attributes[0] * barycentrics.x + attributes[1] * barycentrics.y + attributes[2] * barycentrics.z);
+}
+
+float2 RayDispatchClipPos()
+{
+	uint3 dispatchSize = DispatchRaysDimensions();
+	uint3 rayDispatchIdx = DispatchRaysIndex();
+	float2 rayPixelPos = (float2)rayDispatchIdx.xy + 0.5;
+	float2 rayUV = rayPixelPos / (float2)dispatchSize.xy;
+	float2 rayClip = float2(rayUV.x, 1.0 - rayUV.y) * 2.0 - 1.0;
+	return rayClip;
 }
 
 [shader("raygeneration")]
@@ -142,21 +164,19 @@ void SampleRaygen()
 	uint3 dispatchSize = DispatchRaysDimensions();
 	if (dispatchIdx.x >= (uint)g_SceneCB.viewportSize.x || dispatchIdx.y >= (uint)g_SceneCB.viewportSize.y)
 		return;
-	
+
 	RayDesc ray;
 	ray.TMin = 0.001;
 	ray.TMax = 1.0e+4;
 
-	float2 rayPixelPos = (float2)dispatchIdx.xy + 0.5;
-	float2 rayUV = rayPixelPos / (float2)dispatchSize.xy;
-	float2 rayClip = float2(rayUV.x, 1.0 - rayUV.y) * 2.0 - 1.0;
+	float2 rayClip = RayDispatchClipPos();
 	#if (0)
 	// test: simple orthographic projection
 	ray.Origin = float3(rayClip, 0.0);
 	ray.Direction = float3(0, 0, 1);
 	#else
 	// calculate camera ray
-	float4 rayWorld = mul(g_SceneCB.viewProjInv, float4(rayClip.xy, 0.0, 1.0));
+	float4 rayWorld = mul(float4(rayClip.xy, 0.0, 1.0), g_SceneCB.viewProjInv);
 	rayWorld.xyz /= rayWorld.w;
 	ray.Origin = g_SceneCB.cameraPos.xyz;
 	ray.Direction = normalize(rayWorld.xyz - ray.Origin);
@@ -401,7 +421,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		uint multiplierForGeometryContributionToShaderIndex = 1;
 		uint missShaderIndex = 1; // SampleMissShadow
 		
-		SampleShadowData rayData;
+		SampleShadowData occlusionData;
 		RayDesc ray;
 		ray.TMin = 0.001;
 		ray.TMax = 1.0e+4;
@@ -412,8 +432,8 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		{
 			// trace occlusion data
 
-			ray.Direction = mul(GetSampleDirection((float)isample, ray.Origin), surfaceTBN);
-			rayData.occluded = true;
+			ray.Direction = mul(GetSampleDirection(isample + g_SceneCB.accumulationFrameNumber, ray.Origin), surfaceTBN);
+			occlusionData.occluded = true;
 			occlusionDir += ray.Direction;
 
 			TraceRay(g_SceneStructure,
@@ -424,12 +444,41 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 				rayContributionToHitGroupIndex,
 				multiplierForGeometryContributionToShaderIndex,
 				missShaderIndex,
-				ray, rayData);
+				ray, occlusionData);
 
-			visibility += (rayData.occluded ? 0.0 : 1.0);
+			visibility += (occlusionData.occluded ? 0.0 : 1.0);
 		}
 		occlusionFactor = visibility / AmbientSampleCount;
 		occlusionDir = normalize(occlusionDir);
+
+		// temporal accumulation
+
+		if (g_SceneCB.accumulationEnabled && rayData.recursionDepth == 0)
+		{
+			float depthCrnt = RayTCurrent();
+			float accumulatedOcclusion = occlusionFactor;
+			uint counter = 1;
+			uint2 packedData = 0;
+			float4 clipPosPrev = mul(float4(hitWorldPos, 1.0), g_SceneCB.viewProjPrev);
+			clipPosPrev.xy /= clipPosPrev.w;
+			if (all(abs(clipPosPrev.xy) < 1.0) && g_SceneCB.accumulationFrameNumber > 0)
+			{
+				uint2 dispatchPosPrev = uint2((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * DispatchRaysDimensions().xy);
+				float depthPrev = g_DepthBufferPrev[dispatchPosPrev];
+				float accumulationConfidence = 1.0 - saturate(abs(depthPrev - depthCrnt) / (depthCrnt * 0.02));
+				packedData = g_OcclusionBufferPrev[dispatchPosPrev];
+				accumulatedOcclusion = float(packedData.x) / 0xffff;
+				counter = min(uint(float(packedData.y) * accumulationConfidence) + 1, g_SceneCB.accumulationFrameCount);
+				accumulatedOcclusion = (accumulatedOcclusion * (counter - 1) / counter) + (occlusionFactor / counter);
+				occlusionFactor = accumulatedOcclusion;
+				occlusionDir.x = accumulationConfidence;
+			}
+			packedData.x = uint(accumulatedOcclusion * 0xffff);
+			packedData.y = counter;
+			uint2 dispatchPosCrnt = DispatchRaysIndex().xy;
+			g_OcclusionBuffer[dispatchPosCrnt] = packedData;
+			g_DepthBuffer[dispatchPosCrnt] = depthCrnt;
+		}
 	}
 
 	// final radiance
@@ -450,5 +499,8 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	// debug output overrides
 	#if (DEBUG_VIEW_AMBIENTOCCLUSION == DEBUG_VIEW_MODE)
 	rayData.color = float4(occlusionFactor.xxx * g_SceneCB.lightingDesc.LightSources[0].Intensity, 1.0);
+	//rayData.color = float4(lerp(float3(1,0,0), float3(0,1,0), occlusionDir.x) * g_SceneCB.lightingDesc.LightSources[0].Intensity, 1.0);
+	#elif (DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR == DEBUG_VIEW_MODE)
+	rayData.color = float4(saturate(occlusionDir.xyz) * g_SceneCB.lightingDesc.LightSources[0].Intensity, 1.0);
 	#endif
 }

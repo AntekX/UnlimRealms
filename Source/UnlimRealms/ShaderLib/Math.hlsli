@@ -90,11 +90,46 @@ float2 IntersectSphere(const float3 rayOrigin, const float3 rayDirection, const 
 // The MIT License
 // Copyright © 2017 Inigo Quilez
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-float hash(float3 p)
+float HashFloat3(float3 p)
 {
 	p = frac(p*0.3183099 + .1);
 	p *= 17.0;
 	return frac(p.x*p.y*p.z*(p.x + p.y + p.z));
+}
+
+// Thomas Wang hash 
+// Ref: http://www.burtleburtle.net/bob/hash/integer.html
+uint HashUInt(uint seed)
+{
+	seed = (seed ^ 61) ^ (seed >> 16);
+	seed *= 9;
+	seed = seed ^ (seed >> 4);
+	seed *= 0x27d4eb2d;
+	seed = seed ^ (seed >> 15);
+	return seed;
+}
+
+// Xorshift algorithm from George Marsaglia's paper.
+uint RandXorshift(uint state)
+{
+	state ^= (state << 13);
+	state ^= (state >> 17);
+	state ^= (state << 5);
+	return state;
+}
+
+float2 Rand2D(const float2 p)
+{
+	float3 p3 = frac(float3(p.xyx) * float3(.1031, .1030, .0973));
+	p3 += dot(p3, p3.yzx + 19.19);
+	return frac((p3.xx + p3.yz)*p3.zy);
+}
+
+float3 Rand3D(const float3 p)
+{
+	float3 p3 = frac(float3(p.xyz) * float3(.1031, .1030, .0973));
+	p3 += dot(p3, p3.yzx + 19.19);
+	return frac((p3.xxx + p3.yzx)*p3.xzy);
 }
 
 #endif

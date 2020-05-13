@@ -371,6 +371,12 @@ int RayTracingSandboxApp::Run()
 		GrafStridedBufferRegionDesc rayGenShaderTable;
 		GrafStridedBufferRegionDesc missShaderTable;
 		GrafStridedBufferRegionDesc hitShaderTable;
+		std::unique_ptr<GrafImage> occlusionBuffer[2];
+		std::unique_ptr<GrafImage> depthBuffer[2];
+		ur_float4x4 viewProjPrev;
+		ur_bool accumulationEnabled;
+		ur_uint accumulationFrameNumber;
+		ur_uint accumulationFrameCount;
 		
 		ur_size sampleInstanceCount;
 		ur_bool animationEnabled;
@@ -383,6 +389,9 @@ int RayTracingSandboxApp::Run()
 			this->animationEnabled = true;
 			this->animationCycleTime = 30.0f;
 			this->animationElapsedTime = 0.0f;
+			this->accumulationEnabled = true;
+			this->accumulationFrameNumber = 0;
+			this->accumulationFrameCount = 33;
 		}
 		~RayTracingScene()
 		{
@@ -411,6 +420,11 @@ int RayTracingSandboxApp::Run()
 			grafRenderer->SafeDelete(shaderMissShadow.release());
 			grafRenderer->SafeDelete(pipelineState.release());
 			grafRenderer->SafeDelete(shaderHandlesBuffer.release());
+			for (ur_uint i = 0; i < 2; ++i)
+			{
+				grafRenderer->SafeDelete(occlusionBuffer[i].release());
+				grafRenderer->SafeDelete(depthBuffer[i].release());
+			}
 		}
 
 		void Initialize()
@@ -567,8 +581,8 @@ int RayTracingSandboxApp::Run()
 			GrafDescriptorRangeDesc bindingTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 				{ GrafDescriptorType::AccelerationStructure, 0, 1 },
-				{ GrafDescriptorType::Buffer, 1, 4 },
-				{ GrafDescriptorType::RWTexture, 0, 1 }
+				{ GrafDescriptorType::Buffer, 1, 3 },
+				{ GrafDescriptorType::RWTexture, 0, 5 }
 			};
 			GrafDescriptorTableLayoutDesc bindingTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::AllRayTracing),
@@ -641,14 +655,67 @@ int RayTracingSandboxApp::Run()
 			this->hitShaderTable = { this->shaderHandlesBuffer.get(), 3 * shaderGroupHandleSize, 1 * shaderGroupHandleSize, shaderGroupHandleSize };
 		}
 
-		void BuildTopLevelAccelerationStructure(ur_float elapsedSeconds = 0.0f)
+		void PrepareAccumulationData(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, Camera& camera)
 		{
-			this->grafRenderer = this->GetRealm().GetComponent<GrafRenderer>();
-			if (ur_null == grafRenderer)
+			if (ur_null == this->grafRenderer)
 				return;
 
-			GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
-			GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
+			GrafSystem* grafSystem = this->grafRenderer->GetGrafSystem();
+			GrafDevice* grafDevice = this->grafRenderer->GetGrafDevice();
+
+			// (re)create buffers
+
+			ur_uint3 targetSize = (grafTargetImage ? grafTargetImage->GetDesc().Size : 0);
+			ur_uint3 crntSize = (this->occlusionBuffer[0] ? this->occlusionBuffer[0]->GetDesc().Size : 0);
+			if (targetSize != crntSize)
+			{
+				GrafImageDesc occlusionBufferDesc = {
+					GrafImageType::Tex2D,
+					GrafFormat::R16G16_UINT,
+					targetSize, 1,
+					ur_uint(GrafImageUsageFlag::ShaderReadWrite),
+					ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+				};
+				for (ur_uint i = 0; i < 2; ++i)
+				{
+					GrafImage* prevBuffer = this->occlusionBuffer[i].release();
+					if (prevBuffer != ur_null) this->grafRenderer->SafeDelete(prevBuffer, grafCmdList);
+					grafSystem->CreateImage(this->occlusionBuffer[i]);
+					this->occlusionBuffer[i]->Initialize(grafDevice, { occlusionBufferDesc });
+				}
+
+				GrafImageDesc depthBufferDesc = {
+					GrafImageType::Tex2D,
+					GrafFormat::R32_SFLOAT,
+					targetSize, 1,
+					ur_uint(GrafImageUsageFlag::ShaderReadWrite),
+					ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+				};
+				for (ur_uint i = 0; i < 2; ++i)
+				{
+					GrafImage* prevBuffer = this->depthBuffer[i].release();
+					if (prevBuffer != ur_null) this->grafRenderer->SafeDelete(prevBuffer, grafCmdList);
+					grafSystem->CreateImage(this->depthBuffer[i]);
+					this->depthBuffer[i]->Initialize(grafDevice, { depthBufferDesc });
+				}
+			}
+
+			// reset temporal data
+
+			if (targetSize != crntSize || !this->accumulationEnabled)
+			{
+				this->viewProjPrev = camera.GetViewProj();
+				this->accumulationFrameNumber = 0;
+			}
+		}
+
+		void BuildTopLevelAccelerationStructure(ur_float elapsedSeconds = 0.0f)
+		{
+			if (ur_null == this->grafRenderer)
+				return;
+
+			GrafSystem* grafSystem = this->grafRenderer->GetGrafSystem();
+			GrafDevice* grafDevice = this->grafRenderer->GetGrafDevice();
 
 			if (this->animationEnabled) this->animationElapsedTime += elapsedSeconds;
 			ur_float crntTimeFactor = (this->animationElapsedTime / this->animationCycleTime);
@@ -745,23 +812,36 @@ int RayTracingSandboxApp::Run()
 			if (ur_null == this->grafRenderer)
 				return;
 
+			PrepareAccumulationData(grafCmdList, grafTargetImage, camera);
+			ur_uint crntFrameDataId = (this->accumulationFrameNumber % 2);
+			ur_uint prevFrameDataId = ((this->accumulationFrameNumber + 1) % 2);
+
 			struct SceneConstants
 			{
 				ur_float4x4 viewProjInv;
+				ur_float4x4 viewProjPrev;
 				ur_float4 cameraPos;
 				ur_float4 viewportSize;
 				ur_float4 clearColor;
+				ur_uint accumulationEnabled;
+				ur_uint accumulationFrameNumber;
+				ur_uint accumulationFrameCount;
+				ur_uint _pad0;
 				Atmosphere::Desc atmoDesc;
 				LightingDesc lightingDesc;
 			} cb;
 			ur_uint3 targetSize = grafTargetImage->GetDesc().Size;
 			cb.viewProjInv = camera.GetViewProjInv();
+			cb.viewProjPrev = this->viewProjPrev;
 			cb.cameraPos = camera.GetPosition();
 			cb.viewportSize.x = (ur_float)targetSize.x;
 			cb.viewportSize.y = (ur_float)targetSize.y;
 			cb.viewportSize.z = 1.0f / cb.viewportSize.x;
 			cb.viewportSize.w = 1.0f / cb.viewportSize.y;
 			cb.clearColor = clearColor;
+			cb.accumulationEnabled = this->accumulationEnabled;
+			cb.accumulationFrameNumber = this->accumulationFrameNumber;
+			cb.accumulationFrameCount = this->accumulationFrameCount;
 			cb.atmoDesc = atmosphereDesc;
 			cb.lightingDesc = lightingDesc;
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
@@ -775,11 +855,19 @@ int RayTracingSandboxApp::Run()
 			descriptorTable->SetBuffer(2, this->indexBuffer.get());
 			descriptorTable->SetBuffer(3, this->meshBuffer.get());
 			descriptorTable->SetRWImage(0, grafTargetImage);
+			descriptorTable->SetRWImage(1, this->occlusionBuffer[crntFrameDataId].get());
+			descriptorTable->SetRWImage(2, this->occlusionBuffer[prevFrameDataId].get());
+			descriptorTable->SetRWImage(3, this->depthBuffer[crntFrameDataId].get());
+			descriptorTable->SetRWImage(4, this->depthBuffer[prevFrameDataId].get());
 
 			grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 			grafCmdList->BindRayTracingPipeline(this->pipelineState.get());
 			grafCmdList->BindRayTracingDescriptorTable(descriptorTable, this->pipelineState.get());
 			grafCmdList->DispatchRays(targetSize.x, targetSize.y, 1, &this->rayGenShaderTable, &this->missShaderTable, &this->hitShaderTable, ur_null);
+
+			// store data for next frame temporal accumulation
+			this->viewProjPrev = camera.GetViewProj();
+			this->accumulationFrameNumber += 1;
 		}
 
 		void ShowImgui()
@@ -787,6 +875,10 @@ int RayTracingSandboxApp::Run()
 			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
 			if (ImGui::CollapsingHeader("RayTracingScene"))
 			{
+				ImGui::Checkbox("AccumulationEnabled", &this->accumulationEnabled);
+				int editableFrameCount = (int)this->accumulationFrameCount;
+				ImGui::InputInt("AccumulationFrames", &editableFrameCount);
+				this->accumulationFrameCount = editableFrameCount;
 				int instanceCount = (int)this->sampleInstanceCount;
 				ImGui::InputInt("InstanceCount", &instanceCount);
 				this->sampleInstanceCount = (ur_size)std::max(0, instanceCount);
