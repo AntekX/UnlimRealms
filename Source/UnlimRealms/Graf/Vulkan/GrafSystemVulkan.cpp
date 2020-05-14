@@ -22,7 +22,6 @@ namespace UnlimRealms
 {
 
 	#if defined(_DEBUG)
-	#define UR_GRAF_LOG_LEVEL_DEBUG
 	#define UR_GRAF_VULKAN_DEBUG_LAYER
 	#else
 	//#define UR_GRAF_VULKAN_DEBUG_LAYER
@@ -50,12 +49,6 @@ namespace UnlimRealms
 
 	// enables swap chain image layout automatic transition to general/common state when it becomes a current render target
 	#define UR_GRAF_VULKAN_SWAPCHAIN_NEXT_IMAGE_IMPLICIT_TRANSITION_TO_GENERAL 1
-
-	#if defined(UR_GRAF_LOG_LEVEL_DEBUG)
-	#define LogNoteGrafDbg(text) GetRealm().GetLog().WriteLine(text, Log::Note)
-	#else
-	#define LogNoteGrafDbg(text)
-	#endif
 
 	// descritor pool per type size
 	struct VulkanDescriptorTypeSize

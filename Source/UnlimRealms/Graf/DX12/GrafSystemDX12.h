@@ -12,6 +12,7 @@
 #pragma once
 
 #include "Graf/GrafSystem.h"
+#include "Sys/Windows/WinUtils.h"
 #include <dxgi1_4.h>
 #include <d3d12.h>
 
@@ -62,6 +63,8 @@ namespace UnlimRealms
 	private:
 
 		Result Deinitialize();
+
+		shared_ref<IDXGIFactory4> dxgiFactory;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

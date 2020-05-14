@@ -12,11 +12,18 @@
 #endif
 #include "Gfx/D3D12/d3dx12.h"
 #include "Gfx/DXGIUtils/DXGIUtils.h"
+#include "comdef.h"
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d12.lib")
 
 namespace UnlimRealms
 {
+
+	static const char* HResultToString(HRESULT res)
+	{
+		// TODO
+		return (FAILED(res) ? "FAILED" : "SUCCEEDED");
+	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,11 +39,63 @@ namespace UnlimRealms
 
 	Result GrafSystemDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		this->dxgiFactory.reset();
+
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::Initialize(Canvas *canvas)
 	{
+		this->Deinitialize();
+
+		LogNoteGrafDbg("GrafSystemDX12: initialization...");
+
+		GrafSystem::Initialize(canvas);
+
+		// initiaize DXGI
+
+		HRESULT hres = CreateDXGIFactory2(0, __uuidof(this->dxgiFactory), this->dxgiFactory);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafSystemDX12: CreateDXGIFactory2 failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		// enumerate physical devices
+
+		std::vector<shared_ref<IDXGIAdapter1>> dxgiAdapters;
+		shared_ref<IDXGIAdapter1> dxgiAdapter;
+		ur_size adapterCount = 0;
+		while (this->dxgiFactory->EnumAdapters1((ur_uint)adapterCount, dxgiAdapter) != DXGI_ERROR_NOT_FOUND)
+		{
+			dxgiAdapters.push_back(dxgiAdapter);
+			dxgiAdapter.reset();
+			++adapterCount;
+		}
+		this->grafPhysicalDeviceDesc.resize(adapterCount);
+
+		for (ur_size iadapter = 0; iadapter < adapterCount; ++iadapter)
+		{
+			DXGI_ADAPTER_DESC1 dxgiAdapterDesc;
+			hres = dxgiAdapters[iadapter]->GetDesc1(&dxgiAdapterDesc);
+			if (FAILED(hres))
+				break;
+
+			GrafPhysicalDeviceDesc& grafDeviceDesc = this->grafPhysicalDeviceDesc[iadapter];
+			grafDeviceDesc = {};
+			grafDeviceDesc.Description = _bstr_t(dxgiAdapterDesc.Description);
+			grafDeviceDesc.VendorId = (ur_uint)dxgiAdapterDesc.VendorId;
+			grafDeviceDesc.DeviceId = (ur_uint)dxgiAdapterDesc.DeviceId;
+			grafDeviceDesc.DedicatedVideoMemory = (ur_size)dxgiAdapterDesc.DedicatedVideoMemory;
+			grafDeviceDesc.SharedSystemMemory = (ur_size)dxgiAdapterDesc.SharedSystemMemory;
+			grafDeviceDesc.DedicatedSystemMemory = (ur_size)dxgiAdapterDesc.DedicatedSystemMemory;
+			grafDeviceDesc.ConstantBufferOffsetAlignment = 256;
+		}
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafSystemDX12: failed to enumerate adapters with HRESULT = ") + HResultToString(hres));
+		}
+
 		return Result(NotImplemented);
 	}
 
