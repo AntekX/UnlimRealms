@@ -12,10 +12,10 @@ struct SceneConstants
 	float4 cameraPos;
 	float4 viewportSize; // w, h, 1/w, 1/h
 	float4 clearColor;
-	uint accumulationEnabled;
-	uint accumulationFrameNumber;
+	uint occlusionSampleCount;
+	uint denoisingEnabled;
 	uint accumulationFrameCount;
-	uint1 _pad0;
+	uint accumulationFrameNumber;
 	AtmosphereDesc atmoDesc;
 	LightingDesc lightingDesc;
 };
@@ -32,12 +32,12 @@ struct MeshDesc
 	uint indexBufferOfs;
 };
 
-static const uint RecursionDepthMax = 8;
-static const uint AmbientSampleCount = 32;
+static const uint RecursionDepthMax = 4;
 
 #define DEBUG_VIEW_DISABLED 0
 #define DEBUG_VIEW_AMBIENTOCCLUSION 1
 #define DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR 2
+#define DEBUG_VIEW_AMBIENTOCCLUSION_CONFIDENCE 3
 #define DEBUG_VIEW_MODE DEBUG_VIEW_DISABLED
 
 ConstantBuffer<SceneConstants> g_SceneCB			: register(b0);
@@ -138,7 +138,7 @@ float3 GetSampleDirection(uint seed, float3 samplePos)
 	float3 dir = float3(
 		sqrt(xi0) * cos(TwoPi * xi1),
 		sqrt(xi0) * sin(TwoPi * xi1),
-		sqrt(1 - xi0) + 1.0e-2);
+		sqrt(1 - xi0));
 	return dir;
 }
 
@@ -226,6 +226,10 @@ void SampleMissShadow(inout SampleShadowData shadowData)
 [shader("closesthit")]
 void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attribs)
 {
+	#if (DEBUG_VIEW_MODE)
+	float4 debugVec0 = 0.0;
+	#endif
+
 	float3 baryCoords = float3(1.0 - attribs.barycentrics.x - attribs.barycentrics.y, attribs.barycentrics.x, attribs.barycentrics.y);
 	float4 debugColor = float4(baryCoords.xyz, 1.0);
 	float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
@@ -413,8 +417,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	// evaluate ambient occlusion
 
 	float occlusionFactor = 1.0;
-	float3 occlusionDir = 0.0;
-	if (AmbientSampleCount > 0/* && rayData.recursionDepth == 0*/)
+	if (g_SceneCB.occlusionSampleCount > 0 && rayData.recursionDepth == 0)
 	{
 		uint instanceInclusionMask = 0xff;
 		uint rayContributionToHitGroupIndex = 0;
@@ -428,13 +431,16 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		ray.Origin = hitWorldPos;
 
 		float visibility = 0.0;
-		for (uint isample = 0; isample < AmbientSampleCount; ++isample)
+		for (uint isample = 0; isample < g_SceneCB.occlusionSampleCount; ++isample)
 		{
 			// trace occlusion data
 
-			ray.Direction = mul(GetSampleDirection(isample + g_SceneCB.accumulationFrameNumber, ray.Origin), surfaceTBN);
+			uint sampleSeed = isample + ((g_SceneCB.occlusionSampleCount * g_SceneCB.accumulationFrameNumber) & 0xffff);
+			ray.Direction = mul(GetSampleDirection(sampleSeed, /*hitWorldPos*/float3(DispatchRaysIndex().xyz)), surfaceTBN);
 			occlusionData.occluded = true;
-			occlusionDir += ray.Direction;
+			#if (DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR == DEBUG_VIEW_MODE)
+			debugVec0.xyz += ray.Direction;
+			#endif
 
 			TraceRay(g_SceneStructure,
 				RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
@@ -448,12 +454,14 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 			visibility += (occlusionData.occluded ? 0.0 : 1.0);
 		}
-		occlusionFactor = visibility / AmbientSampleCount;
-		occlusionDir = normalize(occlusionDir);
+		occlusionFactor = visibility / g_SceneCB.occlusionSampleCount;
+		#if (DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR == DEBUG_VIEW_MODE)
+		debugVec0.xyz = normalize(debugVec0.xyz);
+		#endif
 
-		// temporal accumulation
+		// denosing filter
 
-		if (g_SceneCB.accumulationEnabled && rayData.recursionDepth == 0)
+		if (g_SceneCB.denoisingEnabled && rayData.recursionDepth <= 0)
 		{
 			float depthCrnt = RayTCurrent();
 			float accumulatedOcclusion = occlusionFactor;
@@ -465,19 +473,28 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 			{
 				uint2 dispatchPosPrev = uint2((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * DispatchRaysDimensions().xy);
 				float depthPrev = g_DepthBufferPrev[dispatchPosPrev];
-				float accumulationConfidence = 1.0 - saturate(abs(depthPrev - depthCrnt) / (depthCrnt * 0.02));
+				float accumulationConfidence = 1.0 - saturate(abs(depthPrev - depthCrnt) / (min(depthCrnt, depthPrev) * 0.08));
 				packedData = g_OcclusionBufferPrev[dispatchPosPrev];
 				accumulatedOcclusion = float(packedData.x) / 0xffff;
-				counter = min(uint(float(packedData.y) * accumulationConfidence) + 1, g_SceneCB.accumulationFrameCount);
+				counter = min(uint(float(packedData.y) * (accumulationConfidence > 0.33 ? 1.0 : accumulationConfidence / 0.33)) + 1, g_SceneCB.accumulationFrameCount);
 				accumulatedOcclusion = (accumulatedOcclusion * (counter - 1) / counter) + (occlusionFactor / counter);
+				//accumulatedOcclusion = lerp(1.0, accumulatedOcclusion, saturate(float(counter) / 2));
 				occlusionFactor = accumulatedOcclusion;
-				occlusionDir.x = accumulationConfidence;
+				#if (DEBUG_VIEW_AMBIENTOCCLUSION_CONFIDENCE == DEBUG_VIEW_MODE)
+				debugVec0.x = accumulationConfidence;
+				#endif
 			}
 			packedData.x = uint(accumulatedOcclusion * 0xffff);
 			packedData.y = counter;
 			uint2 dispatchPosCrnt = DispatchRaysIndex().xy;
 			g_OcclusionBuffer[dispatchPosCrnt] = packedData;
 			g_DepthBuffer[dispatchPosCrnt] = depthCrnt;
+			if (0 == g_SceneCB.accumulationFrameNumber)
+			{
+				// first time clear
+				g_OcclusionBufferPrev[dispatchPosCrnt] = uint2(0, 0);
+				g_DepthBufferPrev[dispatchPosCrnt] = 0;
+			}
 		}
 	}
 
@@ -499,8 +516,9 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	// debug output overrides
 	#if (DEBUG_VIEW_AMBIENTOCCLUSION == DEBUG_VIEW_MODE)
 	rayData.color = float4(occlusionFactor.xxx * g_SceneCB.lightingDesc.LightSources[0].Intensity, 1.0);
-	//rayData.color = float4(lerp(float3(1,0,0), float3(0,1,0), occlusionDir.x) * g_SceneCB.lightingDesc.LightSources[0].Intensity, 1.0);
 	#elif (DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR == DEBUG_VIEW_MODE)
-	rayData.color = float4(saturate(occlusionDir.xyz) * g_SceneCB.lightingDesc.LightSources[0].Intensity, 1.0);
+	rayData.color = float4(saturate(debugVec0.xyz) * g_SceneCB.lightingDesc.LightSources[0].Intensity, 1.0);
+	#elif (DEBUG_VIEW_AMBIENTOCCLUSION_CONFIDENCE == DEBUG_VIEW_MODE)
+	rayData.color = float4(lerp(float3(1, 0, 0), float3(0, 1, 0), debugVec0.x) * g_SceneCB.lightingDesc.LightSources[0].Intensity, 1.0);
 	#endif
 }

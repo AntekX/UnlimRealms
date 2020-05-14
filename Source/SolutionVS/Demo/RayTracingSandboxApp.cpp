@@ -374,7 +374,8 @@ int RayTracingSandboxApp::Run()
 		std::unique_ptr<GrafImage> occlusionBuffer[2];
 		std::unique_ptr<GrafImage> depthBuffer[2];
 		ur_float4x4 viewProjPrev;
-		ur_bool accumulationEnabled;
+		ur_uint occlusionSampleCount;
+		ur_bool denoisingEnabled;
 		ur_uint accumulationFrameNumber;
 		ur_uint accumulationFrameCount;
 		
@@ -389,9 +390,10 @@ int RayTracingSandboxApp::Run()
 			this->animationEnabled = true;
 			this->animationCycleTime = 30.0f;
 			this->animationElapsedTime = 0.0f;
-			this->accumulationEnabled = true;
+			this->occlusionSampleCount = 8;
+			this->denoisingEnabled = true;
+			this->accumulationFrameCount = 16;
 			this->accumulationFrameNumber = 0;
-			this->accumulationFrameCount = 33;
 		}
 		~RayTracingScene()
 		{
@@ -702,7 +704,7 @@ int RayTracingSandboxApp::Run()
 
 			// reset temporal data
 
-			if (targetSize != crntSize || !this->accumulationEnabled)
+			if (targetSize != crntSize || !this->denoisingEnabled)
 			{
 				this->viewProjPrev = camera.GetViewProj();
 				this->accumulationFrameNumber = 0;
@@ -823,10 +825,10 @@ int RayTracingSandboxApp::Run()
 				ur_float4 cameraPos;
 				ur_float4 viewportSize;
 				ur_float4 clearColor;
-				ur_uint accumulationEnabled;
-				ur_uint accumulationFrameNumber;
+				ur_uint occlusionSampleCount;
+				ur_uint denoisingEnabled;
 				ur_uint accumulationFrameCount;
-				ur_uint _pad0;
+				ur_uint accumulationFrameNumber;
 				Atmosphere::Desc atmoDesc;
 				LightingDesc lightingDesc;
 			} cb;
@@ -839,9 +841,10 @@ int RayTracingSandboxApp::Run()
 			cb.viewportSize.z = 1.0f / cb.viewportSize.x;
 			cb.viewportSize.w = 1.0f / cb.viewportSize.y;
 			cb.clearColor = clearColor;
-			cb.accumulationEnabled = this->accumulationEnabled;
-			cb.accumulationFrameNumber = this->accumulationFrameNumber;
+			cb.occlusionSampleCount = this->occlusionSampleCount;
+			cb.denoisingEnabled = this->denoisingEnabled;
 			cb.accumulationFrameCount = this->accumulationFrameCount;
+			cb.accumulationFrameNumber = this->accumulationFrameNumber;
 			cb.atmoDesc = atmosphereDesc;
 			cb.lightingDesc = lightingDesc;
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
@@ -866,8 +869,11 @@ int RayTracingSandboxApp::Run()
 			grafCmdList->DispatchRays(targetSize.x, targetSize.y, 1, &this->rayGenShaderTable, &this->missShaderTable, &this->hitShaderTable, ur_null);
 
 			// store data for next frame temporal accumulation
-			this->viewProjPrev = camera.GetViewProj();
-			this->accumulationFrameNumber += 1;
+			if (this->denoisingEnabled)
+			{
+				this->viewProjPrev = camera.GetViewProj();
+				this->accumulationFrameNumber += 1;
+			}
 		}
 
 		void ShowImgui()
@@ -875,13 +881,17 @@ int RayTracingSandboxApp::Run()
 			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
 			if (ImGui::CollapsingHeader("RayTracingScene"))
 			{
-				ImGui::Checkbox("AccumulationEnabled", &this->accumulationEnabled);
-				int editableFrameCount = (int)this->accumulationFrameCount;
-				ImGui::InputInt("AccumulationFrames", &editableFrameCount);
-				this->accumulationFrameCount = editableFrameCount;
-				int instanceCount = (int)this->sampleInstanceCount;
-				ImGui::InputInt("InstanceCount", &instanceCount);
-				this->sampleInstanceCount = (ur_size)std::max(0, instanceCount);
+				int editableInt = 0;
+				editableInt = (int)this->occlusionSampleCount;
+				ImGui::InputInt("OcclusionSampleCount", &editableInt);
+				this->occlusionSampleCount = editableInt;
+				ImGui::Checkbox("DenoisingEnabled", &this->denoisingEnabled);
+				editableInt = (int)this->accumulationFrameCount;
+				ImGui::InputInt("AccumulationFrames", &editableInt);
+				this->accumulationFrameCount = editableInt;
+				editableInt = (int)this->sampleInstanceCount;
+				ImGui::InputInt("InstanceCount", &editableInt);
+				this->sampleInstanceCount = (ur_size)std::max(0, editableInt);
 				ImGui::Checkbox("InstancesAnimationEnabled", &this->animationEnabled);
 				ImGui::InputFloat("InstancesCycleTime", &this->animationCycleTime);
 			}
