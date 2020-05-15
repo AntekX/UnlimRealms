@@ -14,6 +14,16 @@
 
 #include "UnlimRealms.h"
 
+#if defined(_DEBUG)
+#define UR_GRAF_LOG_LEVEL_DEBUG
+#endif
+
+#if defined(UR_GRAF_LOG_LEVEL_DEBUG)
+#define LogNoteGrafDbg(text) GetRealm().GetLog().WriteLine(text, Log::Note)
+#else
+#define LogNoteGrafDbg(text)
+#endif
+
 namespace UnlimRealms
 {
 
