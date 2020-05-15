@@ -310,8 +310,8 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	{
 		//material.baseColor.xyz = float3(0.25, 0.24, 0.22);
 		material.baseColor.xyz = float3(0.98, 0.84, 0.72);
-		material.metallic = 0.0;
-		material.roughness = 0.5;
+		material.metallic = 1.0;
+		material.roughness = 0.2;
 		material.reflectance = 1.0;
 	}
 	#endif
@@ -351,7 +351,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 	float occlusionFactor = 1.0;
 	uint dispatchOcclusionEnabled = 1;// (dispatchPos.x + dispatchPos.y) % 2 | !g_SceneCB.denoisingEnabled; // calculate occlusion in checkerboard
-	if (g_SceneCB.occlusionSampleCount > 0 && dispatchOcclusionEnabled && rayData.recursionDepth == 0)
+	if (g_SceneCB.occlusionSampleCount > 0 && dispatchOcclusionEnabled && rayData.recursionDepth <= 0)
 	{
 		uint instanceInclusionMask = 0xff;
 		uint rayContributionToHitGroupIndex = 0;
