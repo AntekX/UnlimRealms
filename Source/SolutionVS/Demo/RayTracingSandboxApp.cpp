@@ -383,17 +383,19 @@ int RayTracingSandboxApp::Run()
 		ur_bool animationEnabled;
 		ur_float animationCycleTime;
 		ur_float animationElapsedTime;
+		ur_float debugValue;
 
 		RayTracingScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
 		{
-			this->sampleInstanceCount = 7;
-			this->animationEnabled = true;
-			this->animationCycleTime = 30.0f;
-			this->animationElapsedTime = 0.0f;
 			this->occlusionSampleCount = 8;
 			this->denoisingEnabled = true;
 			this->accumulationFrameCount = 16;
 			this->accumulationFrameNumber = 0;
+			this->sampleInstanceCount = 7;
+			this->animationEnabled = true;
+			this->animationCycleTime = 30.0f;
+			this->animationElapsedTime = 0.0f;
+			this->debugValue = 0.0f;
 		}
 		~RayTracingScene()
 		{
@@ -560,7 +562,7 @@ int RayTracingSandboxApp::Run()
 			// initialize common instance buffer for TLAS
 
 			GrafBuffer::InitParams sampleInstanceParams;
-			sampleInstanceParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
+			sampleInstanceParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			sampleInstanceParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			sampleInstanceParams.BufferDesc.SizeInBytes = InstanceCountMax * sizeof(GrafAccelerationStructureInstance);
 
@@ -583,7 +585,7 @@ int RayTracingSandboxApp::Run()
 			GrafDescriptorRangeDesc bindingTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 				{ GrafDescriptorType::AccelerationStructure, 0, 1 },
-				{ GrafDescriptorType::Buffer, 1, 3 },
+				{ GrafDescriptorType::Buffer, 1, 4 },
 				{ GrafDescriptorType::RWTexture, 0, 5 }
 			};
 			GrafDescriptorTableLayoutDesc bindingTableLayoutDesc = {
@@ -723,7 +725,7 @@ int RayTracingSandboxApp::Run()
 			ur_float crntTimeFactor = (this->animationElapsedTime / this->animationCycleTime);
 			ur_float modY;
 			ur_float crntCycleFactor = std::modf(crntTimeFactor, &modY);
-			ur_float animAngle = (MathConst<ur_float>::Pi * 2.0f) * crntCycleFactor;
+			ur_float animAngle = MathConst<ur_float>::Pi * 2.0f * crntCycleFactor;
 
 			// update instances
 
@@ -758,17 +760,37 @@ int RayTracingSandboxApp::Run()
 			Mesh* customMesh = (this->customMeshes.empty() ? ur_null : this->customMeshes[2].get());
 			if (customMesh != ur_null)
 			{
-				GrafAccelerationStructureInstance meshInstance =
+				std::srand(58911192);
+				ur_float radius = 40.0;
+				ur_float size = 2.0;
+				ur_float3 pos(0.0f, -size, 0.0f);
+				ur_float3 frameI, frameJ, frameK;
+				frameJ = ur_float3(0.0f, 1.0, 0.0f);
+				for (ur_size i = 0; i < this->sampleInstanceCount; ++i)
 				{
+					ur_float a = ur_float(std::rand()) / RAND_MAX * MathConst<ur_float>::Pi * 2.0f * (i > 0);
+					ur_float d = radius * sqrtf(ur_float(std::rand()) / RAND_MAX) * (i > 0);
+					pos.x = cosf(a) * d;
+					pos.z = sinf(a) * d;
+
+					a = (ur_float(std::rand()) / RAND_MAX /*+ crntCycleFactor*/) * MathConst<ur_float>::Pi * 2.0f;
+					frameI.x = cosf(a);
+					frameI.y = 0.0f;
+					frameI.z = sinf(a);
+					frameK = ur_float3::Cross(frameI, frameJ);
+
+					GrafAccelerationStructureInstance meshInstance =
 					{
-						2.0f, 0.0f, 0.0f, 0.0f,
-						0.0f, 2.0f, 0.0f,-2.0f,
-						0.0f, 0.0f, 2.0f, 0.0f
-					},
-					customMesh->GetMeshID(), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-					customMesh->accelerationStructureBL->GetDeviceAddress()
-				};
-				sampleInstances.emplace_back(meshInstance);
+						{
+							frameI.x * size, frameJ.x * size, frameK.x * size, pos.x,
+							frameI.y * size, frameJ.y * size, frameK.y * size, pos.y,
+							frameI.z * size, frameJ.z * size, frameK.z * size, pos.z
+						},
+						customMesh->GetMeshID(), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+						customMesh->accelerationStructureBL->GetDeviceAddress()
+					};
+					sampleInstances.emplace_back(meshInstance);
+				}
 			}
 
 			// write to upload buffer
@@ -857,6 +879,7 @@ int RayTracingSandboxApp::Run()
 			descriptorTable->SetBuffer(1, this->vertexBuffer.get());
 			descriptorTable->SetBuffer(2, this->indexBuffer.get());
 			descriptorTable->SetBuffer(3, this->meshBuffer.get());
+			descriptorTable->SetBuffer(4, this->instanceBuffer.get());
 			descriptorTable->SetRWImage(0, grafTargetImage);
 			descriptorTable->SetRWImage(1, this->occlusionBuffer[crntFrameDataId].get());
 			descriptorTable->SetRWImage(2, this->occlusionBuffer[prevFrameDataId].get());
@@ -894,6 +917,7 @@ int RayTracingSandboxApp::Run()
 				this->sampleInstanceCount = (ur_size)std::max(0, editableInt);
 				ImGui::Checkbox("InstancesAnimationEnabled", &this->animationEnabled);
 				ImGui::InputFloat("InstancesCycleTime", &this->animationCycleTime);
+				ImGui::InputFloat("DebugValue", &this->debugValue);
 			}
 		}
 	};
@@ -1015,7 +1039,8 @@ int RayTracingSandboxApp::Run()
 				}
 			}
 
-			auto drawFrameJob = realm.GetJobSystem().Add(JobPriority::High, ur_null, [&](Job::Context& ctx) -> void
+			//auto drawFrameJob = realm.GetJobSystem().Add(JobPriority::High, ur_null, [&](Job::Context& ctx) -> void
+			Job drawFrameJob(realm.GetJobSystem(), ur_null, [&](Job::Context& ctx) -> void
 			{
 				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
@@ -1116,7 +1141,8 @@ int RayTracingSandboxApp::Run()
 				grafDevice->Record(grafCmdListCrnt);
 			});
 
-			drawFrameJob->Wait();
+			//drawFrameJob->Wait();
+			drawFrameJob.Execute();
 
 			// finalize & move to next frame
 			grafRenderer->EndFrameAndPresent();
