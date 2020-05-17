@@ -714,7 +714,7 @@ float4 evaluateMaterial(const MaterialInputs material)
 #endif // TEMP: WIP section
 
 
-float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lightSource, const float directOcclusion)
+float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lightSource, const float directOcclusion, const float specularOcclusion)
 {
 	// common inputs
 
@@ -772,7 +772,7 @@ float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lig
 	float lightAttenuation = 1.0; // todo
 	float3 lightSourceColor = lightSource.Color * lightSource.Intensity * lightAttenuation;
 	float4 lightingResult = float4(0.0, 0.0, 0.0, 1.0);
-	lightingResult.xyz = (Fd + Fr * lightingParams.energyCompensation) * NoL * lightSourceColor * directOcclusion;
+	lightingResult.xyz = (Fd * directOcclusion + Fr * lightingParams.energyCompensation * specularOcclusion) * NoL * lightSourceColor;
 
 	return lightingResult;
 }

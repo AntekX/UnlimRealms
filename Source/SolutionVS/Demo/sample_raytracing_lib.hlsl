@@ -46,6 +46,7 @@ RaytracingAccelerationStructure g_SceneStructure	: register(t0);
 ByteAddressBuffer g_VertexBuffer					: register(t1);
 ByteAddressBuffer g_IndexBuffer						: register(t2);
 ByteAddressBuffer g_MeshBuffer						: register(t3);
+ByteAddressBuffer g_InstanceBuffer					: register(t4);
 RWTexture2D<float4> g_TargetTexture					: register(u0);
 RWTexture2D<uint2> g_OcclusionBuffer				: register(u1);
 RWTexture2D<uint2> g_OcclusionBufferPrev			: register(u2);
@@ -230,9 +231,29 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	float4 debugVec0 = 0.0;
 	#endif
 
+	uint2 dispatchPos = DispatchRaysIndex().xy;
 	float3 baryCoords = float3(1.0 - attribs.barycentrics.x - attribs.barycentrics.y, attribs.barycentrics.x, attribs.barycentrics.y);
 	float4 debugColor = float4(baryCoords.xyz, 1.0);
 	float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
+
+	// read instance transformation
+
+	static const uint InstanceStride = 64; // sizeof GrafAccelerationStructureInstance
+	uint instanceIdx = InstanceIndex();
+	uint instanceOfs = instanceIdx * InstanceStride;
+	float3x4 imx;
+	imx[0] = asfloat(g_InstanceBuffer.Load4(instanceOfs + 0));
+	imx[1] = asfloat(g_InstanceBuffer.Load4(instanceOfs + 16));
+	imx[2] = asfloat(g_InstanceBuffer.Load4(instanceOfs + 32));
+	// transpose to unscale
+	float3x3 instanceFrame = float3x3(
+		float3(imx[0][0], imx[1][0], imx[2][0]),
+		float3(imx[0][1], imx[1][1], imx[2][1]),
+		float3(imx[0][2], imx[1][2], imx[2][2])
+	);
+	instanceFrame[0] = normalize(instanceFrame[0]);
+	instanceFrame[1] = normalize(instanceFrame[1]);
+	instanceFrame[2] = normalize(instanceFrame[2]);
 
 	// read vertex attributes
 
@@ -250,12 +271,9 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	[unroll] for (int i = 0; i < 3; ++i)
 	{
 		uint vertexOfs = meshDesc.vertexBufferOfs + indices[i] * vertexStride + vertexNormOfs;
-		vnormal[i].x = asfloat(g_VertexBuffer.Load(vertexOfs + 0));
-		vnormal[i].y = asfloat(g_VertexBuffer.Load(vertexOfs + 4));
-		vnormal[i].z = asfloat(g_VertexBuffer.Load(vertexOfs + 8));
+		vnormal[i] = asfloat(g_VertexBuffer.Load3(vertexOfs));
 	}
 	float3 normal = /*normalize*/(InterpolatedVertexAttribute(vnormal, baryCoords));
-	normal *= -sign(dot(normal, WorldRayDirection())); // back face normal
 	float3 bitangent = float3(0.0, 0.0, 1.0);
 	if (normal.z + Eps >= 1.0) bitangent = float3(0.0,-1.0, 0.0);
 	if (normal.z - Eps <=-1.0) bitangent = float3(0.0, 1.0, 0.0);
@@ -266,6 +284,9 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		bitangent,
 		normal
 	};
+	surfaceTBN = mul(surfaceTBN, instanceFrame);
+	surfaceTBN *= -sign(dot(surfaceTBN[2], WorldRayDirection())); // back face TBN
+	normal = surfaceTBN[2].xyz;
 
 	// material params
 
@@ -289,8 +310,8 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	{
 		//material.baseColor.xyz = float3(0.25, 0.24, 0.22);
 		material.baseColor.xyz = float3(0.98, 0.84, 0.72);
-		material.metallic = 0.0;
-		material.roughness = 0.5;
+		material.metallic = 1.0;
+		material.roughness = 0.2;
 		material.reflectance = 1.0;
 	}
 	#endif
@@ -325,6 +346,110 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	material.roughness = 1.0;
 	material.reflectance = 0.0;
 	#endif
+
+	// evaluate ambient occlusion
+
+	float occlusionFactor = 1.0;
+	uint dispatchOcclusionEnabled = 1;// (dispatchPos.x + dispatchPos.y) % 2 | !g_SceneCB.denoisingEnabled; // calculate occlusion in checkerboard
+	if (g_SceneCB.occlusionSampleCount > 0 && dispatchOcclusionEnabled && rayData.recursionDepth <= 0)
+	{
+		uint instanceInclusionMask = 0xff;
+		uint rayContributionToHitGroupIndex = 0;
+		uint multiplierForGeometryContributionToShaderIndex = 1;
+		uint missShaderIndex = 1; // SampleMissShadow
+
+		SampleShadowData occlusionData;
+		RayDesc ray;
+		ray.TMin = 0.001;
+		ray.TMax = 1.0e+4;
+		ray.Origin = hitWorldPos;
+
+		float visibility = 0.0;
+		for (uint isample = 0; isample < g_SceneCB.occlusionSampleCount; ++isample)
+		{
+			// trace occlusion data
+
+			uint sampleSeed = isample + ((g_SceneCB.occlusionSampleCount * g_SceneCB.accumulationFrameNumber) & 0xffff);
+			ray.Direction = mul(GetSampleDirection(sampleSeed, /*hitWorldPos*/float3(dispatchPos.xy, 0)), surfaceTBN);
+			occlusionData.occluded = true;
+			#if (DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR == DEBUG_VIEW_MODE)
+			debugVec0.xyz += ray.Direction;
+			#endif
+
+			TraceRay(g_SceneStructure,
+				RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+				RAY_FLAG_FORCE_OPAQUE | // skip any hit shaders
+				RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, // skip closets hit shaders (only miss shader writes to shadow payload)
+				instanceInclusionMask,
+				rayContributionToHitGroupIndex,
+				multiplierForGeometryContributionToShaderIndex,
+				missShaderIndex,
+				ray, occlusionData);
+
+			visibility += (occlusionData.occluded ? 0.0 : 1.0);
+		}
+		occlusionFactor = visibility / g_SceneCB.occlusionSampleCount;
+		#if (DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR == DEBUG_VIEW_MODE)
+		debugVec0.xyz = normalize(debugVec0.xyz);
+		#endif
+
+		// denosing filter
+
+		if (g_SceneCB.denoisingEnabled && rayData.recursionDepth <= 0)
+		{
+			float depthCrnt = RayTCurrent();
+			float accumulatedOcclusion = occlusionFactor;
+			uint counter = 1;
+			uint2 packedData = 0;
+			float4 clipPosPrev = mul(float4(hitWorldPos, 1.0), g_SceneCB.viewProjPrev);
+			clipPosPrev.xy /= clipPosPrev.w;
+			if (all(abs(clipPosPrev.xy) < 1.0) && g_SceneCB.accumulationFrameNumber > 0)
+			{
+				uint2 dispatchPosPrev = uint2((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * DispatchRaysDimensions().xy);
+				float depthPrev = g_DepthBufferPrev[dispatchPosPrev];
+				float accumulationConfidence = 1.0 - saturate(abs(depthPrev - depthCrnt) / (min(depthCrnt, depthPrev) * 0.08));
+				packedData = g_OcclusionBufferPrev[dispatchPosPrev];
+				accumulatedOcclusion = float(packedData.x) / 0xffff;
+				counter = min(uint(float(packedData.y) * (accumulationConfidence > 0.33 ? 1.0 : accumulationConfidence / 0.33 * 0)) + 1, g_SceneCB.accumulationFrameCount);
+				accumulatedOcclusion = (accumulatedOcclusion * (counter - 1) / counter) + (occlusionFactor / counter);
+				//accumulatedOcclusion = lerp(1.0, accumulatedOcclusion, saturate(float(counter) / 2));
+				occlusionFactor = accumulatedOcclusion;
+				#if (DEBUG_VIEW_AMBIENTOCCLUSION_CONFIDENCE == DEBUG_VIEW_MODE)
+				debugVec0.x = accumulationConfidence;
+				#endif
+			}
+			packedData.x = uint(accumulatedOcclusion * 0xffff);
+			packedData.y = counter;
+			g_OcclusionBuffer[dispatchPos] = packedData;
+			g_DepthBuffer[dispatchPos] = depthCrnt;
+			if (0 == g_SceneCB.accumulationFrameNumber)
+			{
+				// first time clear
+				g_OcclusionBufferPrev[dispatchPos] = uint2(0, 0);
+				g_DepthBufferPrev[dispatchPos] = 0;
+			}
+		}
+	}
+	else if (g_SceneCB.occlusionSampleCount > 0 && !dispatchOcclusionEnabled && rayData.recursionDepth == 0)
+	{
+		// deinterleave occlusion data from previous buffer
+
+		float4 clipPosPrev = mul(float4(hitWorldPos, 1.0), g_SceneCB.viewProjPrev);
+		clipPosPrev.xy /= clipPosPrev.w;
+		if (all(abs(clipPosPrev.xy) < 1.0) && g_SceneCB.accumulationFrameNumber > 0)
+		{
+			uint2 dispatchMax = DispatchRaysDimensions().xy - 1;
+			uint2 dispatchPosPrev = uint2((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * DispatchRaysDimensions().xy);
+			static const int2 ofs[4] = { int2(-1,0), int2(0,-1), int2(1,0), int2(0,1) };
+			occlusionFactor = 0.0;
+			for (uint i = 0; i < 4; ++i)
+			{
+				uint2 samplePos = uint2(clamp(int2(dispatchPos)+ofs[i], int2(0, 0), int2(dispatchMax)));
+				occlusionFactor += float(g_OcclusionBufferPrev[samplePos].x) / 0xffff;
+			}
+			occlusionFactor *= 0.25;
+		}
+	}
 
 	// trace reflection data
 
@@ -401,6 +526,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 			ray, shadowData);
 
 		float shadowFactor = (shadowData.occluded ? 0.0 : 1.0);
+		float specularOcclusion = shadowFactor * occlusionFactor;
 
 		#if (SAMPLE_LIGHTING)
 		directLightColor += CalculatePhongLightingDirect(light, hitWorldPos, normal, albedo, shadowFactor, diffuseCoef, specularCoef, specularPower);
@@ -410,92 +536,8 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		light.Color.xyz = CalculateSkyLight(hitWorldPos, -light.Direction).xyz;
 		light.Intensity = min(1.0, light.Intensity / ComputeLuminance(light.Color.xyz));
 		#endif
-		directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor).xyz;
+		directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 		#endif
-	}
-
-	// evaluate ambient occlusion
-
-	float occlusionFactor = 1.0;
-	if (g_SceneCB.occlusionSampleCount > 0 && rayData.recursionDepth == 0)
-	{
-		uint instanceInclusionMask = 0xff;
-		uint rayContributionToHitGroupIndex = 0;
-		uint multiplierForGeometryContributionToShaderIndex = 1;
-		uint missShaderIndex = 1; // SampleMissShadow
-		
-		SampleShadowData occlusionData;
-		RayDesc ray;
-		ray.TMin = 0.001;
-		ray.TMax = 1.0e+4;
-		ray.Origin = hitWorldPos;
-
-		float visibility = 0.0;
-		for (uint isample = 0; isample < g_SceneCB.occlusionSampleCount; ++isample)
-		{
-			// trace occlusion data
-
-			uint sampleSeed = isample + ((g_SceneCB.occlusionSampleCount * g_SceneCB.accumulationFrameNumber) & 0xffff);
-			ray.Direction = mul(GetSampleDirection(sampleSeed, /*hitWorldPos*/float3(DispatchRaysIndex().xyz)), surfaceTBN);
-			occlusionData.occluded = true;
-			#if (DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR == DEBUG_VIEW_MODE)
-			debugVec0.xyz += ray.Direction;
-			#endif
-
-			TraceRay(g_SceneStructure,
-				RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-				RAY_FLAG_FORCE_OPAQUE | // skip any hit shaders
-				RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, // skip closets hit shaders (only miss shader writes to shadow payload)
-				instanceInclusionMask,
-				rayContributionToHitGroupIndex,
-				multiplierForGeometryContributionToShaderIndex,
-				missShaderIndex,
-				ray, occlusionData);
-
-			visibility += (occlusionData.occluded ? 0.0 : 1.0);
-		}
-		occlusionFactor = visibility / g_SceneCB.occlusionSampleCount;
-		#if (DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR == DEBUG_VIEW_MODE)
-		debugVec0.xyz = normalize(debugVec0.xyz);
-		#endif
-
-		// denosing filter
-
-		if (g_SceneCB.denoisingEnabled && rayData.recursionDepth <= 0)
-		{
-			float depthCrnt = RayTCurrent();
-			float accumulatedOcclusion = occlusionFactor;
-			uint counter = 1;
-			uint2 packedData = 0;
-			float4 clipPosPrev = mul(float4(hitWorldPos, 1.0), g_SceneCB.viewProjPrev);
-			clipPosPrev.xy /= clipPosPrev.w;
-			if (all(abs(clipPosPrev.xy) < 1.0) && g_SceneCB.accumulationFrameNumber > 0)
-			{
-				uint2 dispatchPosPrev = uint2((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * DispatchRaysDimensions().xy);
-				float depthPrev = g_DepthBufferPrev[dispatchPosPrev];
-				float accumulationConfidence = 1.0 - saturate(abs(depthPrev - depthCrnt) / (min(depthCrnt, depthPrev) * 0.08));
-				packedData = g_OcclusionBufferPrev[dispatchPosPrev];
-				accumulatedOcclusion = float(packedData.x) / 0xffff;
-				counter = min(uint(float(packedData.y) * (accumulationConfidence > 0.33 ? 1.0 : accumulationConfidence / 0.33)) + 1, g_SceneCB.accumulationFrameCount);
-				accumulatedOcclusion = (accumulatedOcclusion * (counter - 1) / counter) + (occlusionFactor / counter);
-				//accumulatedOcclusion = lerp(1.0, accumulatedOcclusion, saturate(float(counter) / 2));
-				occlusionFactor = accumulatedOcclusion;
-				#if (DEBUG_VIEW_AMBIENTOCCLUSION_CONFIDENCE == DEBUG_VIEW_MODE)
-				debugVec0.x = accumulationConfidence;
-				#endif
-			}
-			packedData.x = uint(accumulatedOcclusion * 0xffff);
-			packedData.y = counter;
-			uint2 dispatchPosCrnt = DispatchRaysIndex().xy;
-			g_OcclusionBuffer[dispatchPosCrnt] = packedData;
-			g_DepthBuffer[dispatchPosCrnt] = depthCrnt;
-			if (0 == g_SceneCB.accumulationFrameNumber)
-			{
-				// first time clear
-				g_OcclusionBufferPrev[dispatchPosCrnt] = uint2(0, 0);
-				g_DepthBufferPrev[dispatchPosCrnt] = 0;
-			}
-		}
 	}
 
 	// final radiance
