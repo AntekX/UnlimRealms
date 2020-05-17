@@ -60,11 +60,14 @@ namespace UnlimRealms
 
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
 
+		inline IDXGIAdapter1* GetDXGIAdapter(ur_uint deviceId) const;
+
 	private:
 
 		Result Deinitialize();
 
 		shared_ref<IDXGIFactory4> dxgiFactory;
+		std::vector<shared_ref<IDXGIAdapter1>> dxgiAdapters;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,9 +87,50 @@ namespace UnlimRealms
 
 		virtual Result WaitIdle();
 
+		inline ID3D12Device5* GetD3DDevice() const;
+
 	private:
 
+		friend class GrafCommandListDX12;
+		struct CommandAllocator;
+		struct CommandAllocatorPool;
+		struct DeviceQueue;
+
+		struct CommandAllocator
+		{
+			shared_ref<ID3D12CommandAllocator> d3dCommandAllocator;
+			CommandAllocatorPool* pool;
+			ur_uint64 submitFenceValue;
+			ur_uint64 resetFenceValue;
+		};
+
+		struct CommandAllocatorPool
+		{
+			std::vector<std::unique_ptr<CommandAllocator>> commandAllocators;
+			std::mutex commandAllocatorsMutex;
+		};
+
+		struct DeviceQueue
+		{
+			shared_ref<ID3D12CommandQueue> d3dQueue;
+			shared_ref<ID3D12Fence1> d3dSubmitFence;
+			ur_uint64 nextSubmitFenceValue;
+			std::unordered_map<std::thread::id, std::unique_ptr<CommandAllocatorPool>> commandPools;
+			std::mutex commandPoolsMutex;
+			std::vector<GrafCommandList*> recordedCommandLists;
+			std::mutex recordedCommandListsMutex;
+		};
+
+		CommandAllocator* GetGraphicsCommandAllocator();
+		CommandAllocator* GetComputeCommandAllocator();
+		CommandAllocator* GetTransferCommandAllocator();
+
 		Result Deinitialize();
+
+		shared_ref<ID3D12Device5> d3dDevice;
+		std::unique_ptr<DeviceQueue> graphicsQueue;
+		std::unique_ptr<DeviceQueue> computeQueue;
+		std::unique_ptr<DeviceQueue> transferQueue;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -158,9 +202,20 @@ namespace UnlimRealms
 			const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
 			const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable);
 
+		inline GrafDeviceDX12::CommandAllocator* GetCommandAllocator() const;
+
+		inline ID3D12CommandList* GetD3DCommandList() const;
+
 	private:
 
+		friend class GrafDeviceDX12;
+
 		Result Deinitialize();
+
+		GrafDeviceDX12::CommandAllocator* commandAllocator;
+		shared_ref<ID3D12GraphicsCommandList1> d3dCommandList;
+		ur_uint64 submitFenceValue;
+		ur_bool closed;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

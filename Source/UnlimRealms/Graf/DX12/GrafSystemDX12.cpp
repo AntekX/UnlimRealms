@@ -19,6 +19,11 @@
 namespace UnlimRealms
 {
 
+	// command buffer synchronisation policy
+	#define UR_GRAF_DX12_COMMAND_LIST_SYNC_DESTROY	1
+	#define UR_GRAF_DX12_COMMAND_LIST_SYNC_RESET	1
+	#define UR_GRAF_DX12_SLEEPZERO_WHILE_WAIT		0
+
 	static const char* HResultToString(HRESULT res)
 	{
 		// TODO
@@ -39,6 +44,7 @@ namespace UnlimRealms
 
 	Result GrafSystemDX12::Deinitialize()
 	{
+		this->dxgiAdapters.clear();
 		this->dxgiFactory.reset();
 
 		return Result(Success);
@@ -62,12 +68,11 @@ namespace UnlimRealms
 
 		// enumerate physical devices
 
-		std::vector<shared_ref<IDXGIAdapter1>> dxgiAdapters;
 		shared_ref<IDXGIAdapter1> dxgiAdapter;
 		ur_size adapterCount = 0;
 		while (this->dxgiFactory->EnumAdapters1((ur_uint)adapterCount, dxgiAdapter) != DXGI_ERROR_NOT_FOUND)
 		{
-			dxgiAdapters.push_back(dxgiAdapter);
+			this->dxgiAdapters.push_back(dxgiAdapter);
 			dxgiAdapter.reset();
 			++adapterCount;
 		}
@@ -76,7 +81,7 @@ namespace UnlimRealms
 		for (ur_size iadapter = 0; iadapter < adapterCount; ++iadapter)
 		{
 			DXGI_ADAPTER_DESC1 dxgiAdapterDesc;
-			hres = dxgiAdapters[iadapter]->GetDesc1(&dxgiAdapterDesc);
+			hres = this->dxgiAdapters[iadapter]->GetDesc1(&dxgiAdapterDesc);
 			if (FAILED(hres))
 				break;
 
@@ -89,6 +94,31 @@ namespace UnlimRealms
 			grafDeviceDesc.SharedSystemMemory = (ur_size)dxgiAdapterDesc.SharedSystemMemory;
 			grafDeviceDesc.DedicatedSystemMemory = (ur_size)dxgiAdapterDesc.DedicatedSystemMemory;
 			grafDeviceDesc.ConstantBufferOffsetAlignment = 256;
+
+			#if defined(UR_GRAF_LOG_LEVEL_DEBUG)
+			LogNoteGrafDbg(std::string("GrafSystemDX12: device available ") + grafDeviceDesc.Description +
+				", VRAM = " + std::to_string(grafDeviceDesc.DedicatedVideoMemory >> 20) + " Mb");
+			#endif
+
+			// create temporary device object to check features support
+
+			shared_ref<ID3D12Device5> d3dDevice;
+			hres = D3D12CreateDevice(dxgiAdapters[iadapter], D3D_FEATURE_LEVEL_11_0, __uuidof(d3dDevice), d3dDevice);
+			if (FAILED(hres))
+				continue;
+
+			D3D12_FEATURE_DATA_D3D12_OPTIONS5 d3dOptions5;
+			hres = d3dDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &d3dOptions5, sizeof(d3dOptions5));
+			if (FAILED(hres))
+				continue;
+
+			grafDeviceDesc.RayTracing.RayTraceSupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0);
+			grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)false;
+			grafDeviceDesc.RayTracing.ShaderGroupHandleSize = 8;
+			grafDeviceDesc.RayTracing.RecursionDepthMax = ~ur_uint32(0);
+			grafDeviceDesc.RayTracing.GeometryCountMax = ~ur_uint64(0);
+			grafDeviceDesc.RayTracing.InstanceCountMax = ~ur_uint64(0);
+			grafDeviceDesc.RayTracing.PrimitiveCountMax = ~ur_uint64(0);
 		}
 		if (FAILED(hres))
 		{
@@ -96,82 +126,97 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafSystemDX12: failed to enumerate adapters with HRESULT = ") + HResultToString(hres));
 		}
 
-		return Result(NotImplemented);
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateDevice(std::unique_ptr<GrafDevice>& grafDevice)
 	{
-		return Result(NotImplemented);
+		grafDevice.reset(new GrafDeviceDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateCommandList(std::unique_ptr<GrafCommandList>& grafCommandList)
 	{
-		return Result(NotImplemented);
+		grafCommandList.reset(new GrafCommandListDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateFence(std::unique_ptr<GrafFence>& grafFence)
 	{
-		return Result(NotImplemented);
+		grafFence.reset(new GrafFenceDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateCanvas(std::unique_ptr<GrafCanvas>& grafCanvas)
 	{
-		return Result(NotImplemented);
+		grafCanvas.reset(new GrafCanvasDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateImage(std::unique_ptr<GrafImage>& grafImage)
 	{
-		return Result(NotImplemented);
+		grafImage.reset(new GrafImageDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer)
 	{
-		return Result(NotImplemented);
+		grafBuffer.reset(new GrafBufferDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateSampler(std::unique_ptr<GrafSampler>& grafSampler)
 	{
-		return Result(NotImplemented);
+		grafSampler.reset(new GrafSamplerDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateShader(std::unique_ptr<GrafShader>& grafShader)
 	{
-		return Result(NotImplemented);
+		grafShader.reset(new GrafShaderDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass)
 	{
-		return Result(NotImplemented);
+		grafRenderPass.reset(new GrafRenderPassDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateRenderTarget(std::unique_ptr<GrafRenderTarget>& grafRenderTarget)
 	{
-		return Result(NotImplemented);
+		grafRenderTarget.reset(new GrafRenderTargetDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateDescriptorTableLayout(std::unique_ptr<GrafDescriptorTableLayout>& grafDescriptorTableLayout)
 	{
-		return Result(NotImplemented);
+		grafDescriptorTableLayout.reset(new GrafDescriptorTableLayoutDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateDescriptorTable(std::unique_ptr<GrafDescriptorTable>& grafDescriptorTable)
 	{
-		return Result(NotImplemented);
+		grafDescriptorTable.reset(new GrafDescriptorTableDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline)
 	{
-		return Result(NotImplemented);
+		grafPipeline.reset(new GrafPipelineDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline)
 	{
-		return Result(NotImplemented);
+		grafRayTracingPipeline.reset(new GrafRayTracingPipelineDX12(*this));
+		return Result(Success);
 	}
 
 	Result GrafSystemDX12::CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct)
 	{
-		return Result(NotImplemented);
+		grafAccelStruct.reset(new GrafAccelerationStructureDX12(*this));
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -188,27 +233,216 @@ namespace UnlimRealms
 
 	Result GrafDeviceDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		this->WaitIdle();
+
+		this->graphicsQueue.reset();
+		this->computeQueue.reset();
+		this->transferQueue.reset();
+		this->d3dDevice.reset();
+
+		return Result(Success);
 	}
 
 	Result GrafDeviceDX12::Initialize(ur_uint deviceId)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		LogNoteGrafDbg("GrafDeviceDX12: initialization...");
+
+		GrafDevice::Initialize(deviceId);
+
+		// get corresponding physical device
+
+		GrafSystemDX12& grafSystemDX12 = static_cast<GrafSystemDX12&>(this->GetGrafSystem());
+		IDXGIAdapter1* dxgiAdapter = grafSystemDX12.GetDXGIAdapter(deviceId);
+		if (ur_null == dxgiAdapter)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafDeviceDX12: can not find IDXGIAdapter for deviceId = ") + std::to_string(this->GetDeviceId()));
+		}
+
+		// create d3d device
+
+		HRESULT hres = D3D12CreateDevice(dxgiAdapter, D3D_FEATURE_LEVEL_11_0, __uuidof(d3dDevice), d3dDevice);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafDeviceDX12: D3D12CreateDevice failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		// create common descriptor heap(s)
+
+		// TODO
+
+		// initialize graphics command queue
+
+		this->graphicsQueue.reset(new DeviceQueue());
+		this->graphicsQueue->nextSubmitFenceValue = 1;
+		
+		D3D12_COMMAND_QUEUE_DESC d3dGraphicsQueueDesc = {};
+		d3dGraphicsQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+		d3dGraphicsQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+		d3dGraphicsQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+		d3dGraphicsQueueDesc.NodeMask = 0;
+		
+		hres = this->d3dDevice->CreateCommandQueue(&d3dGraphicsQueueDesc, __uuidof(this->graphicsQueue->d3dQueue), this->graphicsQueue->d3dQueue);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafDeviceDX12: CreateCommandQueue failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		hres = this->d3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(this->graphicsQueue->d3dSubmitFence), this->graphicsQueue->d3dSubmitFence);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafDeviceDX12: CreateFence failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafDeviceDX12::Record(GrafCommandList* grafCommandList)
 	{
-		return Result(NotImplemented);
+		// NOTE: currently all command lists are recorded to graphics queue
+
+		Result res = NotFound;
+
+		if (this->graphicsQueue != ur_null)
+		{
+			std::lock_guard<std::mutex> lock(this->graphicsQueue->recordedCommandListsMutex);
+			this->graphicsQueue->recordedCommandLists.push_back(grafCommandList);
+			res = Success;
+		}
+
+		return Result(res);
 	}
 
 	Result GrafDeviceDX12::Submit()
 	{
-		return Result(NotImplemented);
+		// NOTE: support submission to different queue families
+		// currently everything's done on the graphics queue
+
+		if (this->graphicsQueue)
+		{
+			this->graphicsQueue->commandPoolsMutex.lock(); // lock pools list modification
+			for (auto& pool : this->graphicsQueue->commandPools) pool.second->commandAllocatorsMutex.lock(); // lock per thread allocators write access
+			this->graphicsQueue->recordedCommandListsMutex.lock(); // lock recording
+			
+			// execute command lists
+			for (auto& grafCommandList : this->graphicsQueue->recordedCommandLists)
+			{
+				GrafCommandListDX12* grafCommandListDX12 = static_cast<GrafCommandListDX12*>(grafCommandList);
+				GrafDeviceDX12::CommandAllocator* grafCmdAllocator = grafCommandListDX12->GetCommandAllocator();
+				ID3D12CommandList* d3dCommandList = grafCommandListDX12->GetD3DCommandList();
+				
+				this->graphicsQueue->d3dQueue->ExecuteCommandLists(1, &d3dCommandList);
+				
+				grafCommandListDX12->submitFenceValue = this->graphicsQueue->nextSubmitFenceValue;
+				grafCmdAllocator->submitFenceValue = this->graphicsQueue->nextSubmitFenceValue;
+			}
+			this->graphicsQueue->recordedCommandLists.clear();
+
+			this->graphicsQueue->recordedCommandListsMutex.unlock();
+			for (auto& pool : this->graphicsQueue->commandPools) pool.second->commandAllocatorsMutex.unlock();
+			this->graphicsQueue->commandPoolsMutex.unlock();
+
+			// signal submission fence
+			this->graphicsQueue->d3dQueue->Signal(this->graphicsQueue->d3dSubmitFence, this->graphicsQueue->nextSubmitFenceValue);
+			this->graphicsQueue->nextSubmitFenceValue += 1;
+		}
+		
+		return Result(Success);
 	}
 
 	Result GrafDeviceDX12::WaitIdle()
 	{
-		return Result(NotImplemented);
+		auto WaitQueue = [](DeviceQueue* deviceQueue) -> void
+		{
+			if (ur_null == deviceQueue)
+				return;
+			while (deviceQueue->nextSubmitFenceValue - 1 > deviceQueue->d3dSubmitFence->GetCompletedValue())
+			{ 
+				#if (UR_GRAF_DX12_SLEEPZERO_WHILE_WAIT)
+				Sleep(0);
+				#endif
+			}
+		};
+
+		WaitQueue(this->graphicsQueue.get());
+		WaitQueue(this->computeQueue.get());
+		WaitQueue(this->transferQueue.get());
+		
+		return Result(Success);
+	}
+
+	GrafDeviceDX12::CommandAllocator* GrafDeviceDX12::GetGraphicsCommandAllocator()
+	{
+		if (ur_null == this->graphicsQueue)
+			return ur_null;
+
+		// get an existing pool for current thread or create a new one
+
+		CommandAllocatorPool* commandAllocatorPool = ur_null;
+		std::thread::id thisThreadId = std::this_thread::get_id();
+		this->graphicsQueue->commandPoolsMutex.lock();
+		auto& poolIter = this->graphicsQueue->commandPools.find(thisThreadId);
+		if (poolIter != this->graphicsQueue->commandPools.end())
+		{
+			commandAllocatorPool = poolIter->second.get();
+		}
+		else
+		{
+			std::unique_ptr<CommandAllocatorPool> newPool(new CommandAllocatorPool());
+			commandAllocatorPool = newPool.get();
+			this->graphicsQueue->commandPools[thisThreadId] = std::move(newPool);
+		}
+		this->graphicsQueue->commandPoolsMutex.unlock();
+
+		// get a reusable allocator or create a mew one
+
+		CommandAllocator* commandAllocator = ur_null;
+		ur_uint64 completedFenceValue = this->graphicsQueue->d3dSubmitFence->GetCompletedValue();
+		commandAllocatorPool->commandAllocatorsMutex.lock();
+		for (auto& cachedAllocator : commandAllocatorPool->commandAllocators)
+		{
+			if (cachedAllocator->submitFenceValue > completedFenceValue)
+				continue; // allocated commands potentially still used on gpu
+
+			commandAllocator = cachedAllocator.get();
+		}
+		if (ur_null == commandAllocator)
+		{
+			std::unique_ptr<CommandAllocator> newAllocator(new CommandAllocator());
+			HRESULT hres = this->d3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(newAllocator->d3dCommandAllocator), newAllocator->d3dCommandAllocator);
+			if (FAILED(hres))
+			{
+				LogError(std::string("GrafDeviceDX12: CreateCommandAllocator failed with HRESULT = ") + HResultToString(hres));
+				return nullptr;
+			}
+			newAllocator->pool = commandAllocatorPool;
+			newAllocator->submitFenceValue = 0;
+			newAllocator->resetFenceValue = 0;
+			commandAllocator = newAllocator.get();
+			commandAllocatorPool->commandAllocators.push_back(std::move(newAllocator));
+		}
+		commandAllocatorPool->commandAllocatorsMutex.unlock();
+
+		return commandAllocator;
+	}
+
+	GrafDeviceDX12::CommandAllocator* GrafDeviceDX12::GetComputeCommandAllocator()
+	{
+		// not implemented
+
+		return ur_null;
+	}
+
+	GrafDeviceDX12::CommandAllocator* GrafDeviceDX12::GetTransferCommandAllocator()
+	{
+		// not implemented
+
+		return ur_null;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -216,6 +450,9 @@ namespace UnlimRealms
 	GrafCommandListDX12::GrafCommandListDX12(GrafSystem &grafSystem) :
 		GrafCommandList(grafSystem)
 	{
+		this->commandAllocator = ur_null;
+		this->submitFenceValue = 0;
+		this->closed = true;
 	}
 
 	GrafCommandListDX12::~GrafCommandListDX12()
@@ -225,35 +462,138 @@ namespace UnlimRealms
 
 	Result GrafCommandListDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		#if (UR_GRAF_DX12_COMMAND_LIST_SYNC_DESTROY)
+		this->Wait(ur_uint64(-1));
+		#endif
+		this->submitFenceValue = 0;
+		this->commandAllocator = ur_null;
+		this->closed = true;
+		
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::Initialize(GrafDevice *grafDevice)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		GrafCommandList::Initialize(grafDevice);
+
+		// validate device 
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafCommandListDX12: failed to initialize, invalid GrafDevice"));
+		}
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		// request allocator from device pool
+
+		this->commandAllocator = grafDeviceDX12->GetGraphicsCommandAllocator();
+		if (ur_null == this->commandAllocator)
+		{
+			return ResultError(Failure, std::string("GrafCommandListDX12: failed to initialize, invalid command allocator"));
+		}
+
+		// create command list in closed state
+
+		const ur_uint nodeMask = 0;
+		this->closed = true;
+		HRESULT hres = d3dDevice->CreateCommandList1(nodeMask, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE,
+			__uuidof(this->d3dCommandList), this->d3dCommandList);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafCommandListDX12: d3dDevice->CreateCommandList1 failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::Begin()
 	{
-		return Result(NotImplemented);
+		if (ur_null == this->d3dCommandList.get())
+			return Result(NotInitialized);
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+		
+		#if (UR_GRAF_DX12_COMMAND_LIST_SYNC_RESET)
+		// make sure this command list can be reused safely
+		this->Wait(ur_uint64(-1));
+		#endif
+
+		this->commandAllocator->pool->commandAllocatorsMutex.lock();
+		
+		if (this->commandAllocator->resetFenceValue <= this->commandAllocator->submitFenceValue)
+		{
+			// first time allocator reset after submitted commands done
+			HRESULT hres = this->commandAllocator->d3dCommandAllocator->Reset();
+			if (FAILED(hres))
+			{
+				this->commandAllocator->pool->commandAllocatorsMutex.unlock();
+				return ResultError(Failure, std::string("GrafCommandListDX12: d3dCommandAllocator->Reset() failed with HRESULT = ") + HResultToString(hres));
+			}
+			this->commandAllocator->resetFenceValue = this->commandAllocator->submitFenceValue + 1;
+		}
+
+		if (this->closed)
+		{
+			// reset command list
+			this->closed = false;
+			HRESULT hres = this->d3dCommandList->Reset(this->commandAllocator->d3dCommandAllocator, ur_null);
+			if (FAILED(hres))
+			{
+				this->commandAllocator->pool->commandAllocatorsMutex.unlock();
+				return ResultError(Failure, std::string("GrafCommandListDX12: d3dCommandList->Reset() failed with HRESULT = ") + HResultToString(hres));
+			}
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::End()
 	{
-		return Result(NotImplemented);
+		// close command list
+		HRESULT hres = this->d3dCommandList->Close();
+		this->closed = true;
+		this->commandAllocator->pool->commandAllocatorsMutex.unlock();
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafCommandListDX12: d3dCommandList->Close() failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::Wait(ur_uint64 timeout)
+	{
+		if (ur_null == this->d3dCommandList.get())
+			return Result(NotInitialized);
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+		Result res(Success);
+		while (this->submitFenceValue > grafDeviceDX12->graphicsQueue->d3dSubmitFence->GetCompletedValue())
+		{
+			if (timeout != ur_uint64(-1))
+			{
+				// infinite and zero wait time are supported only
+				res.Code = TimeOut;
+				break;
+			}
+			#if (UR_GRAF_DX12_SLEEPZERO_WHILE_WAIT)
+			Sleep(0);
+			#endif
+		}
+
+		return res;
+	}
+
+	Result GrafCommandListDX12::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState)
 	{
 		return Result(NotImplemented);
 	}
 
 	Result GrafCommandListDX12::ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState)
-	{
-		return Result(NotImplemented);
-	}
-
-	Result GrafCommandListDX12::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState)
 	{
 		return Result(NotImplemented);
 	}
