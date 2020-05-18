@@ -369,7 +369,8 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		{
 			// trace occlusion data
 
-			uint sampleSeed = isample + ((g_SceneCB.occlusionSampleCount * g_SceneCB.accumulationFrameNumber) & 0xffff);
+			uint accumulationFrame = g_SceneCB.accumulationFrameNumber % g_SceneCB.accumulationFrameCount;
+			uint sampleSeed = isample + ((g_SceneCB.occlusionSampleCount * accumulationFrame) & 0xffff);
 			ray.Direction = mul(GetSampleDirection(sampleSeed, /*hitWorldPos*/float3(dispatchPos.xy, 0)), surfaceTBN);
 			occlusionData.occluded = true;
 			#if (DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR == DEBUG_VIEW_MODE)

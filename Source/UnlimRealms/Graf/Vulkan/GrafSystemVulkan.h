@@ -54,6 +54,8 @@ namespace UnlimRealms
 
 		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 
+		virtual Result CreateShaderLib(std::unique_ptr<GrafShaderLib>& grafShaderLib);
+
 		virtual Result CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
 
 		virtual Result CreateRenderTarget(std::unique_ptr<GrafRenderTarget>& grafRenderTarget);
@@ -401,9 +403,30 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
+		Result InitializeFromVkShaderModule(GrafDevice *grafDevice, const InitParams& initParams, VkShaderModule vkShaderModule);
+
 		inline VkShaderModule GetVkShaderModule() const;
 
 	private:
+
+		Result Deinitialize();
+
+		VkShaderModule vkShaderModule;
+		ur_bool moduleOwner;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafShaderLibVulkan : public GrafShaderLib
+	{
+	public:
+
+		GrafShaderLibVulkan(GrafSystem &grafSystem);
+
+		~GrafShaderLibVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+	protected:
 
 		Result Deinitialize();
 

@@ -90,6 +90,11 @@ namespace UnlimRealms
 		return this->entryPoint;
 	}
 
+	inline GrafShader* GrafShaderLib::GetShader(const ur_uint entryId) const
+	{
+		return (entryId < this->shaders.size() ? this->shaders[entryId].get() : ur_null);
+	}
+
 	inline ur_size GrafRenderPass::GetImageCount() const
 	{
 		return (ur_size)this->renderPassImageDescs.size();

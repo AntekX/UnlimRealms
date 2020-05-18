@@ -37,6 +37,7 @@ namespace UnlimRealms
 	class GrafBuffer;
 	class GrafSampler;
 	class GrafShader;
+	class GrafShaderLib;
 	class GrafRenderPass;
 	class GrafRenderTarget;
 	class GrafDescriptorTableLayout;
@@ -725,6 +726,8 @@ namespace UnlimRealms
 
 		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 
+		virtual Result CreateShaderLib(std::unique_ptr<GrafShaderLib>& grafShaderLib);
+
 		virtual Result CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
 
 		virtual Result CreateRenderTarget(std::unique_ptr<GrafRenderTarget>& grafRenderTarget);
@@ -1054,6 +1057,38 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafShaderLib : public GrafDeviceEntity
+	{
+	public:
+
+		struct UR_DECL EntryPoint
+		{
+			const char* Name;
+			GrafShaderType Type;
+		};
+
+		struct UR_DECL InitParams
+		{
+			ur_byte* ByteCode;
+			ur_size ByteCodeSize;
+			EntryPoint* EntryPoints;
+			ur_uint EntryPointCount;
+		};
+
+		GrafShaderLib(GrafSystem &grafSystem);
+
+		~GrafShaderLib();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline GrafShader* GetShader(const ur_uint entryId) const;
+
+	protected:
+
+		std::vector<std::unique_ptr<GrafShader>> shaders;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafRenderPass : public GrafDeviceEntity
 	{
 	public:
@@ -1347,6 +1382,8 @@ namespace UnlimRealms
 		static Result CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader);
 
 		static Result CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, const std::string& entryPoint, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader);
+
+		static Result CreateShaderLibFromFile(GrafDevice& grafDevice, const std::string& resName, const GrafShaderLib::EntryPoint* entryPoints, ur_uint entryPointCount, std::unique_ptr<GrafShaderLib>& grafShaderLib);
 
 		static Result LoadImageFromFile(GrafDevice& grafDevice, const std::string& resName, ImageData& outputImageData);
 

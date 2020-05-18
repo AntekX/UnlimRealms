@@ -449,6 +449,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafSystemVulkan::CreateShaderLib(std::unique_ptr<GrafShaderLib>& grafShaderLib)
+	{
+		grafShaderLib.reset(new GrafShaderLibVulkan(*this));
+		return Result(Success);
+	}
+
 	Result GrafSystemVulkan::CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass)
 	{
 		grafRenderPass.reset(new GrafRenderPassVulkan(*this));
@@ -3068,6 +3074,7 @@ namespace UnlimRealms
 		GrafShader(grafSystem)
 	{
 		this->vkShaderModule = VK_NULL_HANDLE;
+		this->moduleOwner = true;
 	}
 
 	GrafShaderVulkan::~GrafShaderVulkan()
@@ -3079,9 +3086,13 @@ namespace UnlimRealms
 	{
 		if (this->vkShaderModule != VK_NULL_HANDLE)
 		{
-			vkDestroyShaderModule(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkShaderModule, ur_null);
+			if (this->moduleOwner)
+			{
+				vkDestroyShaderModule(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkShaderModule, ur_null);
+			}
 			this->vkShaderModule = VK_NULL_HANDLE;
 		}
+		this->moduleOwner = true;
 
 		return Result(Success);
 	}
@@ -3114,7 +3125,113 @@ namespace UnlimRealms
 		if (vkRes != VK_SUCCESS)
 			return ResultError(Failure, std::string("GrafShaderVulkan: vkCreateShaderModule failed with VkResult = ") + VkResultToString(vkRes));
 
+		this->moduleOwner = true;
+
 		return Result(Success);
+	}
+
+	Result GrafShaderVulkan::InitializeFromVkShaderModule(GrafDevice *grafDevice, const InitParams& initParams, VkShaderModule vkShaderModule)
+	{
+		this->Deinitialize();
+
+		GrafShader::Initialize(grafDevice, initParams);
+
+		// validate logical device 
+
+		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+		if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafShaderVulkan: failed to initialize, invalid GrafDevice"));
+		}
+		VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+		// this shader references extranl shader modeul
+
+		this->vkShaderModule = vkShaderModule;
+		this->moduleOwner = false;
+
+		return Result(Success);
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GrafShaderLibVulkan::GrafShaderLibVulkan(GrafSystem &grafSystem) :
+		GrafShaderLib(grafSystem)
+	{
+		this->vkShaderModule = VK_NULL_HANDLE;
+	}
+
+	GrafShaderLibVulkan::~GrafShaderLibVulkan()
+	{
+		this->Deinitialize();
+	}
+
+	Result GrafShaderLibVulkan::Deinitialize()
+	{
+		this->shaders.clear();
+
+		if (this->vkShaderModule != VK_NULL_HANDLE)
+		{
+			vkDestroyShaderModule(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkShaderModule, ur_null);
+			this->vkShaderModule = VK_NULL_HANDLE;
+		}
+
+		return Result(Success);
+	}
+
+	Result GrafShaderLibVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	{
+		this->Deinitialize();
+
+		GrafShaderLib::Initialize(grafDevice, initParams);
+
+		// validate logical device 
+
+		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+		if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafShaderLibVulkan: failed to initialize, invalid GrafDevice"));
+		}
+		VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+
+		// create shader module
+
+		VkShaderModuleCreateInfo vkShaderInfo = {};
+		vkShaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		vkShaderInfo.pNext = ur_null;
+		vkShaderInfo.flags = 0;
+		vkShaderInfo.codeSize = initParams.ByteCodeSize;
+		vkShaderInfo.pCode = (const uint32_t*)initParams.ByteCode;
+
+		VkResult vkRes = vkCreateShaderModule(vkDevice, &vkShaderInfo, ur_null, &this->vkShaderModule);
+		if (vkRes != VK_SUCCESS)
+			return ResultError(Failure, std::string("GrafShaderLibVulkan: vkCreateShaderModule failed with VkResult = ") + VkResultToString(vkRes));
+
+		// initialize shaders
+
+		Result res(Success);
+		this->shaders.reserve(initParams.EntryPointCount);
+		for (ur_uint ientry = 0; ientry < initParams.EntryPointCount; ++ientry)
+		{
+			const GrafShaderLib::EntryPoint& libEntryPoint = initParams.EntryPoints[ientry];
+			GrafShader::InitParams grafShaderParams = {};
+			grafShaderParams.ShaderType = libEntryPoint.Type;
+			grafShaderParams.EntryPoint = libEntryPoint.Name;
+			
+			std::unique_ptr<GrafShader> grafShader;
+			this->GetGrafSystem().CreateShader(grafShader);
+			Result shaderRes = static_cast<GrafShaderVulkan*>(grafShader.get())->InitializeFromVkShaderModule(grafDevice, grafShaderParams, this->vkShaderModule);
+			if (Failed(shaderRes))
+			{
+				LogError(std::string("GrafShaderLibVulkan: failed to initialize shader for entry point = ") + libEntryPoint.Name);
+				continue;
+			}
+			res &= shaderRes;
+			
+			this->shaders.push_back(std::move(grafShader));
+		}
+
+		return res;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

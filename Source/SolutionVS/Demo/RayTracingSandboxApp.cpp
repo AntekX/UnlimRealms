@@ -341,8 +341,6 @@ int RayTracingSandboxApp::Run()
 				cmdListBuildAccelStructBL->BuildAccelerationStructure(this->accelerationStructureBL.get(), &geometryDataBL, 1);
 				cmdListBuildAccelStructBL->End();
 				grafDevice->Record(cmdListBuildAccelStructBL);
-				//grafDevice->Submit();
-				//grafDevice->WaitIdle();
 			}
 
 			inline ur_uint32 GetMeshID() const { return ur_uint32(this->meshBufferRegion.Offset / sizeof(MeshDescSample)); }
@@ -362,10 +360,7 @@ int RayTracingSandboxApp::Run()
 		std::unique_ptr<GrafAccelerationStructure> accelerationStructureTL;
 		std::unique_ptr<GrafDescriptorTableLayout> bindingTableLayout;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> bindingTables;
-		std::unique_ptr<GrafShader> shaderRayGen;
-		std::unique_ptr<GrafShader> shaderClosestHit;
-		std::unique_ptr<GrafShader> shaderMiss;
-		std::unique_ptr<GrafShader> shaderMissShadow;
+		std::unique_ptr<GrafShaderLib> shaderLib;
 		std::unique_ptr<GrafRayTracingPipeline> pipelineState;
 		std::unique_ptr<GrafBuffer> shaderHandlesBuffer;
 		GrafStridedBufferRegionDesc rayGenShaderTable;
@@ -418,10 +413,7 @@ int RayTracingSandboxApp::Run()
 			{
 				grafRenderer->SafeDelete(bindingTable.release());
 			}
-			grafRenderer->SafeDelete(shaderRayGen.release());
-			grafRenderer->SafeDelete(shaderClosestHit.release());
-			grafRenderer->SafeDelete(shaderMiss.release());
-			grafRenderer->SafeDelete(shaderMissShadow.release());
+			grafRenderer->SafeDelete(shaderLib.release());
 			grafRenderer->SafeDelete(pipelineState.release());
 			grafRenderer->SafeDelete(shaderHandlesBuffer.release());
 			for (ur_uint i = 0; i < 2; ++i)
@@ -575,10 +567,20 @@ int RayTracingSandboxApp::Run()
 
 			// shaders
 
-			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleRaygen", GrafShaderType::RayGen, this->shaderRayGen);
-			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleMiss", GrafShaderType::Miss, this->shaderMiss);
-			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleMissShadow", GrafShaderType::Miss, this->shaderMissShadow);
-			GrafUtils::CreateShaderFromFile(*grafDevice, "sample_raytracing_lib.spv", "SampleClosestHit", GrafShaderType::ClosestHit, this->shaderClosestHit);
+			enum ShaderLibId
+			{
+				ShaderLibId_RayGen = 0,
+				ShaderLibId_Miss,
+				ShaderLibId_Shadow,
+				ShaderLibId_ClosestHit
+			};
+			GrafShaderLib::EntryPoint shaderLibEntries[] = {
+				{ "SampleRaygen", GrafShaderType::RayGen },
+				{ "SampleMiss", GrafShaderType::Miss },
+				{ "SampleMissShadow", GrafShaderType::Miss },
+				{ "SampleClosestHit", GrafShaderType::ClosestHit }
+			};
+			GrafUtils::CreateShaderLibFromFile(*grafDevice, "sample_raytracing_lib.spv", shaderLibEntries, ur_array_size(shaderLibEntries), this->shaderLib);
 
 			// global shader bindings
 
@@ -604,25 +606,25 @@ int RayTracingSandboxApp::Run()
 			// pipeline
 
 			GrafShader* shaderStages[] = {
-				this->shaderRayGen.get(),
-				this->shaderMiss.get(),
-				this->shaderMissShadow.get(),
-				this->shaderClosestHit.get()
+				this->shaderLib->GetShader(ShaderLibId_RayGen),
+				this->shaderLib->GetShader(ShaderLibId_Miss),
+				this->shaderLib->GetShader(ShaderLibId_Shadow),
+				this->shaderLib->GetShader(ShaderLibId_ClosestHit)
 			};
 
 			GrafRayTracingShaderGroupDesc shaderGroups[4];
 			shaderGroups[0] = GrafRayTracingShaderGroupDesc::Default;
 			shaderGroups[0].Type = GrafRayTracingShaderGroupType::General;
-			shaderGroups[0].GeneralShaderIdx = 0; // shaderRayGen
+			shaderGroups[0].GeneralShaderIdx = ShaderLibId_RayGen;
 			shaderGroups[1] = GrafRayTracingShaderGroupDesc::Default;
 			shaderGroups[1].Type = GrafRayTracingShaderGroupType::General;
-			shaderGroups[1].GeneralShaderIdx = 1; // shaderMiss
+			shaderGroups[1].GeneralShaderIdx = ShaderLibId_Miss;
 			shaderGroups[2] = GrafRayTracingShaderGroupDesc::Default;
 			shaderGroups[2].Type = GrafRayTracingShaderGroupType::General;
-			shaderGroups[2].GeneralShaderIdx = 2; // shaderMissShadow
+			shaderGroups[2].GeneralShaderIdx = ShaderLibId_Shadow;
 			shaderGroups[3] = GrafRayTracingShaderGroupDesc::Default;
 			shaderGroups[3].Type = GrafRayTracingShaderGroupType::TrianglesHit;
-			shaderGroups[3].ClosestHitShaderIdx = 3; // shaderClosestHit
+			shaderGroups[3].ClosestHitShaderIdx = ShaderLibId_ClosestHit;
 
 			GrafDescriptorTableLayout* bindingLayouts[] = {
 				this->bindingTableLayout.get()

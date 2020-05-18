@@ -125,6 +125,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafSystem::CreateShaderLib(std::unique_ptr<GrafShaderLib>& grafShaderLib)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafSystem::CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass)
 	{
 		return Result(NotImplemented);
@@ -558,6 +563,21 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	GrafShaderLib::GrafShaderLib(GrafSystem &grafSystem) :
+		GrafDeviceEntity(grafSystem)
+	{
+	}
+
+	GrafShaderLib::~GrafShaderLib()
+	{
+	}
+
+	Result GrafShaderLib::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	{
+		GrafDeviceEntity::Initialize(grafDevice);
+		return Result(NotImplemented);
+	}
+
 	GrafRenderTarget::GrafRenderTarget(GrafSystem &grafSystem) :
 		GrafDeviceEntity(grafSystem)
 	{
@@ -805,6 +825,52 @@ namespace UnlimRealms
 		if (Failed(grafRes))
 		{
 			return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderFromFile: failed to create shader " + resName);
+		}
+
+		return Result(Success);
+	}
+
+	Result GrafUtils::CreateShaderLibFromFile(GrafDevice& grafDevice, const std::string& resName, const GrafShaderLib::EntryPoint* entryPoints, ur_uint entryPointCount, std::unique_ptr<GrafShaderLib>& grafShaderLib)
+	{
+		Realm& realm = grafDevice.GetRealm();
+		GrafSystem& grafSystem = grafDevice.GetGrafSystem();
+
+		// load
+
+		std::unique_ptr<ur_byte[]> shaderBuffer;
+		ur_size shaderBufferSize = 0;
+		{
+			std::unique_ptr<File> file;
+			Result res = realm.GetStorage().Open(file, resName, ur_uint(StorageAccess::Read) | ur_uint(StorageAccess::Binary));
+			if (Succeeded(res))
+			{
+				shaderBufferSize = file->GetSize();
+				shaderBuffer.reset(new ur_byte[shaderBufferSize]);
+				res &= file->Read(shaderBufferSize, shaderBuffer.get());
+			}
+			if (Failed(res))
+			{
+				return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderLibFromFile: failed to load shader lib " + resName);
+			}
+		}
+
+		// initialize graf shader library
+
+		Result grafRes = grafSystem.CreateShaderLib(grafShaderLib);
+		if (Failed(grafRes))
+		{
+			return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderLibFromFile: failed to create shader lib " + resName);
+		}
+
+		GrafShaderLib::InitParams shaderLibParams = {};
+		shaderLibParams.ByteCode = shaderBuffer.get();
+		shaderLibParams.ByteCodeSize = shaderBufferSize;
+		shaderLibParams.EntryPoints = const_cast<GrafShaderLib::EntryPoint*>(entryPoints);
+		shaderLibParams.EntryPointCount = entryPointCount;
+		grafRes = grafShaderLib->Initialize(&grafDevice, shaderLibParams);
+		if (Failed(grafRes))
+		{
+			return LogResult(Failure, realm.GetLog(), Log::Error, "CreateShaderLibFromFile: failed to initialize shader lib " + resName);
 		}
 
 		return Result(Success);
