@@ -42,7 +42,7 @@ static const uint RecursionDepthMax = 4;
 #define DEBUG_VIEW_AMBIENTOCCLUSION 1
 #define DEBUG_VIEW_AMBIENTOCCLUSION_SAMPLINGDIR 2
 #define DEBUG_VIEW_AMBIENTOCCLUSION_CONFIDENCE 3
-#define DEBUG_VIEW_MODE DEBUG_VIEW_AMBIENTOCCLUSIONc
+#define DEBUG_VIEW_MODE DEBUG_VIEW_DISABLED
 
 ConstantBuffer<SceneConstants> g_SceneCB			: register(b0);
 RaytracingAccelerationStructure g_SceneStructure	: register(t0);
@@ -547,9 +547,9 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 					int2 samplePosCrnt = samplePos + ofs[i];
 					if (samplePosCrnt.x < 0 || samplePosCrnt.y < 0 || samplePosCrnt.x >= srcBufferSize.x || samplePosCrnt.y >= srcBufferSize.y)
 						continue;
-					//float sampleDepth = g_DepthBuffer[samplePosCrnt];
-					//if (abs(sampleDepth - depthCrnt) > depthCrnt * 0.02)
-					//	continue;
+					float sampleDepth = g_DepthBuffer[samplePosCrnt];
+					if (abs(sampleDepth - depthCrnt) > depthCrnt * 0.02)
+						continue;
 					float sampleOcclusion = float(g_OcclusionBuffer[samplePosCrnt].x) / 0xffff;
 					float sampleWeight = 1.0;
 					occlusionFactor += sampleOcclusion * sampleWeight;
@@ -766,6 +766,7 @@ void AOMiss(inout AORayData rayData)
 void AOClosestHit(inout AORayData rayDataInout, in SampleHitAttributes attribs)
 {
 	uint2 dispatchPos = DispatchRaysIndex().xy;
+	float2 dispatchPixelPos = float2(dispatchPos.x * 2 + (dispatchPos.y % 2), dispatchPos.y) + 0.5; // checkerboard position
 	float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
 	float3 baryCoords = float3(1.0 - attribs.barycentrics.x - attribs.barycentrics.y, attribs.barycentrics.x, attribs.barycentrics.y);
 
@@ -798,7 +799,7 @@ void AOClosestHit(inout AORayData rayDataInout, in SampleHitAttributes attribs)
 	{
 		uint accumulationFrame = g_SceneCB.accumulationFrameNumber % g_SceneCB.accumulationFrameCount;
 		uint sampleSeed = isample + ((g_SceneCB.occlusionSampleCount * accumulationFrame) & 0xffff);
-		ray.Direction = mul(GetSampleDirection(sampleSeed, /*hitWorldPos*/float3(dispatchPos.xy, 0)), surfaceTBN);
+		ray.Direction = mul(GetSampleDirection(sampleSeed, /*hitWorldPos*/float3(dispatchPixelPos.xy, 0)), surfaceTBN);
 		rayData.occlusion = 0.0;
 
 		TraceRay(g_SceneStructure,
@@ -859,7 +860,7 @@ void BlurOcclusion(const uint3 dispatchThreadId : SV_DispatchThreadID)
 	float occlusion = 0.0;
 	float weightSum = 0.0;
 	float bufferDepth = g_DepthBuffer[bufferPos];
-	float depthThreshold = bufferDepth * 0.01/*g_SceneCB.debugVec0.x*/;
+	float depthThreshold = bufferDepth * 0.02;
 	for (uint k = 0; k < kernelSampleCount; ++k)
 	{
 		int2 samplePos = bufferPos + kernelOfs[k];

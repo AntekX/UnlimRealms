@@ -981,6 +981,10 @@ int RayTracingSandboxApp::Run()
 			descriptorTable->SetRWImage(4, this->depthBuffer[prevFrameDataId].get());
 
 			grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+			grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+			grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+			grafCmdList->ImageMemoryBarrier(this->depthBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+			grafCmdList->ImageMemoryBarrier(this->depthBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 			grafCmdList->BindRayTracingPipeline(this->pipelineStateRT.get());
 			grafCmdList->BindRayTracingDescriptorTable(descriptorTable, this->pipelineStateRT.get());
 
@@ -994,12 +998,20 @@ int RayTracingSandboxApp::Run()
 				if (this->occlusionPassBlur)
 				{
 					grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::ComputeReadWrite);
+					grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
+					grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
+					grafCmdList->ImageMemoryBarrier(this->depthBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
+					grafCmdList->ImageMemoryBarrier(this->depthBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
 					grafCmdList->BindComputePipeline(this->pipelineStateCompute.get());
 					grafCmdList->BindComputeDescriptorTable(descriptorTable, this->pipelineStateCompute.get());
 					grafCmdList->Dispatch((bufferSize.x - 1) / 8 + 1, (bufferSize.y - 1) / 8 + 1, 1);
 					grafCmdList->BindRayTracingPipeline(this->pipelineStateRT.get());
 					grafCmdList->BindRayTracingDescriptorTable(descriptorTable, this->pipelineStateRT.get());
 					grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+					grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+					grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+					grafCmdList->ImageMemoryBarrier(this->depthBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+					grafCmdList->ImageMemoryBarrier(this->depthBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 				}
 			}
 			
