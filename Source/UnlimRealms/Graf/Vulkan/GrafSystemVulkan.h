@@ -66,6 +66,8 @@ namespace UnlimRealms
 
 		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
 
+		virtual Result CreateComputePipeline(std::unique_ptr<GrafComputePipeline>& grafComputePipeline);
+
 		virtual Result CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline);
 
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
@@ -203,9 +205,9 @@ namespace UnlimRealms
 
 		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
 
-		virtual Result BindComputePipeline(GrafPipeline* grafPipeline);
+		virtual Result BindComputePipeline(GrafComputePipeline* grafPipeline);
 
-		virtual Result BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline);
+		virtual Result BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafComputePipeline* grafPipeline);
 
 		virtual Result Dispatch(ur_uint groupCountX, ur_uint groupCountY, ur_uint groupCountZ);
 
@@ -538,6 +540,29 @@ namespace UnlimRealms
 		GrafPipelineVulkan(GrafSystem &grafSystem);
 
 		~GrafPipelineVulkan();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline VkPipeline GetVkPipeline() const;
+
+		inline VkPipelineLayout GetVkPipelineLayout() const;
+
+	protected:
+
+		Result Deinitialize();
+
+		VkPipeline vkPipeline;
+		VkPipelineLayout vkPipelineLayout;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafComputePipelineVulkan : public GrafComputePipeline
+	{
+	public:
+
+		GrafComputePipelineVulkan(GrafSystem &grafSystem);
+
+		~GrafComputePipelineVulkan();
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 

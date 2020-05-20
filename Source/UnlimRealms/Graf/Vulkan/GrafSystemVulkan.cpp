@@ -485,6 +485,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafSystemVulkan::CreateComputePipeline(std::unique_ptr<GrafComputePipeline>& grafComputePipeline)
+	{
+		grafComputePipeline.reset(new GrafComputePipelineVulkan(*this));
+		return Result(Success);
+	}
+
 	Result GrafSystemVulkan::CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline)
 	{
 		grafRayTracingPipeline.reset(new GrafRayTracingPipelineVulkan(*this));
@@ -1567,22 +1573,22 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafCommandListVulkan::BindComputePipeline(GrafPipeline* grafPipeline)
+	Result GrafCommandListVulkan::BindComputePipeline(GrafComputePipeline* grafPipeline)
 	{
 		if (ur_null == grafPipeline)
 			return Result(InvalidArgs);
 
-		vkCmdBindPipeline(this->vkCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, static_cast<GrafPipelineVulkan*>(grafPipeline)->GetVkPipeline());
+		vkCmdBindPipeline(this->vkCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, static_cast<GrafComputePipelineVulkan*>(grafPipeline)->GetVkPipeline());
 
 		return Result(Success);
 	}
 
-	Result GrafCommandListVulkan::BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline)
+	Result GrafCommandListVulkan::BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafComputePipeline* grafPipeline)
 	{
 		if (ur_null == descriptorTable || ur_null == grafPipeline)
 			return Result(InvalidArgs);
 
-		GrafPipelineVulkan* grafPipelineVulkan = static_cast<GrafPipelineVulkan*>(grafPipeline);
+		GrafComputePipelineVulkan* grafPipelineVulkan = static_cast<GrafComputePipelineVulkan*>(grafPipeline);
 		GrafDescriptorTableVulkan* descriptorTableVulkan = static_cast<GrafDescriptorTableVulkan*>(descriptorTable);
 		VkDescriptorSet vkDescriptorSets[] = { descriptorTableVulkan->GetVkDescriptorSet() };
 
@@ -4139,6 +4145,106 @@ namespace UnlimRealms
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	GrafComputePipelineVulkan::GrafComputePipelineVulkan(GrafSystem &grafSystem) :
+		GrafComputePipeline(grafSystem)
+	{
+		this->vkPipeline = VK_NULL_HANDLE;
+		this->vkPipelineLayout = VK_NULL_HANDLE;
+	}
+
+	GrafComputePipelineVulkan::~GrafComputePipelineVulkan()
+	{
+		this->Deinitialize();
+	}
+
+	Result GrafComputePipelineVulkan::Deinitialize()
+	{
+		if (this->vkPipelineLayout != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipelineLayout, ur_null);
+			this->vkPipelineLayout = VK_NULL_HANDLE;
+		}
+		if (this->vkPipeline != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkPipeline, ur_null);
+			this->vkPipeline = VK_NULL_HANDLE;
+		}
+
+		return Result(Success);
+	}
+
+	Result GrafComputePipelineVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	{
+		this->Deinitialize();
+
+		GrafComputePipeline::Initialize(grafDevice, initParams);
+
+		// validate logical device 
+
+		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+		if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafComputePipelineVulkan: failed to initialize, invalid GrafDevice"));
+		}
+		VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
+		VkResult vkRes = VK_SUCCESS;
+
+		// shader stages
+
+		VkPipelineShaderStageCreateInfo vkShaderStageInfo = {};
+		GrafShader* grafShader = initParams.ShaderStage;
+		vkShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		vkShaderStageInfo.flags = 0;
+		vkShaderStageInfo.stage = GrafUtilsVulkan::GrafToVkShaderStage(grafShader->GetShaderType());
+		vkShaderStageInfo.module = static_cast<GrafShaderVulkan*>(grafShader)->GetVkShaderModule();
+		vkShaderStageInfo.pName = grafShader->GetEntryPoint().c_str();
+
+		// pipeline layout
+
+		std::vector<VkDescriptorSetLayout> vkDescriptorSetLayouts(initParams.DescriptorTableLayoutCount);
+		for (ur_uint ilayout = 0; ilayout < initParams.DescriptorTableLayoutCount; ++ilayout)
+		{
+			vkDescriptorSetLayouts[ilayout] = static_cast<GrafDescriptorTableLayoutVulkan*>(initParams.DescriptorTableLayouts[ilayout])->GetVkDescriptorSetLayout();
+		}
+
+		VkPipelineLayoutCreateInfo vkPipelineLayoutInfo = {};
+		vkPipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		vkPipelineLayoutInfo.flags = 0;
+		vkPipelineLayoutInfo.setLayoutCount = (ur_uint32)vkDescriptorSetLayouts.size();
+		vkPipelineLayoutInfo.pSetLayouts = vkDescriptorSetLayouts.data();
+		vkPipelineLayoutInfo.pushConstantRangeCount = 0;
+		vkPipelineLayoutInfo.pPushConstantRanges = ur_null;
+
+		vkRes = vkCreatePipelineLayout(vkDevice, &vkPipelineLayoutInfo, ur_null, &this->vkPipelineLayout);
+		if (vkRes != VK_SUCCESS)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafComputePipelineVulkan: vkCreatePipelineLayout failed with VkResult = ") + VkResultToString(vkRes));
+		}
+
+		// create pipeline object
+
+		VkComputePipelineCreateInfo vkPipelineInfo = {};
+		vkPipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		vkPipelineInfo.pNext = ur_null;
+		vkPipelineInfo.flags = 0;
+		vkPipelineInfo.stage = vkShaderStageInfo;
+		vkPipelineInfo.layout = this->vkPipelineLayout;
+		vkPipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+		vkPipelineInfo.basePipelineIndex = -1;
+
+		vkRes = vkCreateComputePipelines(vkDevice, VK_NULL_HANDLE, 1, &vkPipelineInfo, ur_null, &this->vkPipeline);
+		if (vkRes != VK_SUCCESS)
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafComputePipelineVulkan: vkCreateComputePipelines failed with VkResult = ") + VkResultToString(vkRes));
+		}
+
+		return Result(Success);
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	GrafRayTracingPipelineVulkan::GrafRayTracingPipelineVulkan(GrafSystem &grafSystem) :
 		GrafRayTracingPipeline(grafSystem)
 	{
@@ -4258,7 +4364,7 @@ namespace UnlimRealms
 		vkPipelineInfo.pLibraryInterface = ur_null;
 		vkPipelineInfo.layout = this->vkPipelineLayout;
 		vkPipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-		vkPipelineInfo.basePipelineIndex = 0;
+		vkPipelineInfo.basePipelineIndex = -1;
 
 		vkRes = vkCreateRayTracingPipelinesKHR(vkDevice, VK_NULL_HANDLE, 1, &vkPipelineInfo, ur_null, &this->vkPipeline);
 		if (vkRes != VK_SUCCESS)

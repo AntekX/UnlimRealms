@@ -155,6 +155,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafSystem::CreateComputePipeline(std::unique_ptr<GrafComputePipeline>& grafComputePipeline)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafSystem::CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline)
 	{
 		return Result(NotImplemented);
@@ -359,12 +364,12 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafCommandList::BindComputePipeline(GrafPipeline* grafPipeline)
+	Result GrafCommandList::BindComputePipeline(GrafComputePipeline* grafPipeline)
 	{
 		return Result(NotImplemented);
 	}
 
-	Result GrafCommandList::BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline)
+	Result GrafCommandList::BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafComputePipeline* grafPipeline)
 	{
 		return Result(NotImplemented);
 	}
@@ -710,6 +715,27 @@ namespace UnlimRealms
 	}
 
 	Result GrafPipeline::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	{
+		GrafDeviceEntity::Initialize(grafDevice);
+		return Result(NotImplemented);
+	}
+
+	const GrafComputePipeline::InitParams GrafComputePipeline::InitParams::Default = {
+		ur_null, // GrafShader*
+		ur_null, // GrafDescriptorTableLayout**
+		0 // DescriptorTableLayoutCount;
+	};
+
+	GrafComputePipeline::GrafComputePipeline(GrafSystem &grafSystem) :
+		GrafDeviceEntity(grafSystem)
+	{
+	}
+
+	GrafComputePipeline::~GrafComputePipeline()
+	{
+	}
+
+	Result GrafComputePipeline::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
 		GrafDeviceEntity::Initialize(grafDevice);
 		return Result(NotImplemented);
@@ -1066,6 +1092,21 @@ namespace UnlimRealms
 			vertexStride += 8;
 		}
 
+		// parse meta data
+		// TEMP: use only the last shape with "lod" in it's name (for ray tracing test purpose),
+		// otherwise all shapes are merged into one mesh
+		tinyobj::shape_t *shapeToUse = ur_null;
+		for (auto& shape : shapes)
+		{
+			//shape.name. += shape.mesh.indices.size();
+			std::transform(shape.name.begin(), shape.name.end(), shape.name.begin(), std::tolower);
+			ur_size lodSpos = shape.name.rfind("lod");
+			if (lodSpos != std::string::npos)
+			{
+				shapeToUse = &shape;
+			}
+		}
+
 		// here we assume that all mesh shapes describe one mesh
 		// note: shape name parameter cane be used to group shapes into different meshes (e.g. LoDs)
 		modelData.Meshes.emplace_back(new MeshData());
@@ -1120,6 +1161,8 @@ namespace UnlimRealms
 			for (ur_size ishape = 0; ishape < shapes.size(); ++ishape)
 			{
 				const tinyobj::shape_t& shape = shapes[ishape];
+				if (shapeToUse && shapeToUse != &shape)
+					continue;
 				if (shape.mesh.indices.empty())
 					continue; // mesh shapes accepted only
 				ur_size nidx;
@@ -1141,6 +1184,8 @@ namespace UnlimRealms
 		ur_size totalMeshIndicesCount = 0;
 		for (auto& shape : shapes)
 		{
+			if (shapeToUse && shapeToUse != &shape)
+				continue;
 			totalMeshIndicesCount += shape.mesh.indices.size();
 		}
 		meshData.Indices.resize(totalMeshIndicesCount * indexStride);
@@ -1151,6 +1196,8 @@ namespace UnlimRealms
 		for (ur_size ishape = 0; ishape < shapes.size(); ++ishape)
 		{
 			const tinyobj::shape_t& shape = shapes[ishape];
+			if (shapeToUse && shapeToUse != &shape)
+				continue;
 			if (shape.mesh.indices.empty())
 				continue; // mesh shapes accepted only
 

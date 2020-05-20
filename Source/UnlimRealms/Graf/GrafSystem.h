@@ -43,6 +43,7 @@ namespace UnlimRealms
 	class GrafDescriptorTableLayout;
 	class GrafDescriptorTable;
 	class GrafPipeline;
+	class GrafComputePipeline;
 	class GrafRayTracingPipeline;
 	class GrafAccelerationStructure;
 
@@ -738,6 +739,8 @@ namespace UnlimRealms
 
 		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
 
+		virtual Result CreateComputePipeline(std::unique_ptr<GrafComputePipeline>& grafComputePipeline);
+
 		virtual Result CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline);
 
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
@@ -866,9 +869,9 @@ namespace UnlimRealms
 
 		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
 
-		virtual Result BindComputePipeline(GrafPipeline* grafPipeline);
+		virtual Result BindComputePipeline(GrafComputePipeline* grafPipeline);
 
-		virtual Result BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline);
+		virtual Result BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafComputePipeline* grafPipeline);
 
 		virtual Result Dispatch(ur_uint groupCountX, ur_uint groupCountY, ur_uint groupCountZ);
 
@@ -1239,6 +1242,26 @@ namespace UnlimRealms
 		GrafPipeline(GrafSystem &grafSystem);
 
 		~GrafPipeline();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafComputePipeline : public GrafDeviceEntity
+	{
+	public:
+
+		struct UR_DECL InitParams
+		{
+			GrafShader* ShaderStage;
+			GrafDescriptorTableLayout** DescriptorTableLayouts;
+			ur_uint DescriptorTableLayoutCount;
+			static const InitParams Default;
+		};
+
+		GrafComputePipeline(GrafSystem &grafSystem);
+
+		~GrafComputePipeline();
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 	};

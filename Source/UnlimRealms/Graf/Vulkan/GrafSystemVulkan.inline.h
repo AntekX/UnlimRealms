@@ -130,6 +130,16 @@ namespace UnlimRealms
 		return this->vkPipelineLayout;
 	}
 
+	inline VkPipeline GrafComputePipelineVulkan::GetVkPipeline() const
+	{
+		return this->vkPipeline;
+	}
+
+	inline VkPipelineLayout GrafComputePipelineVulkan::GetVkPipelineLayout() const
+	{
+		return this->vkPipelineLayout;
+	}
+
 	inline VkPipeline GrafRayTracingPipelineVulkan::GetVkPipeline() const
 	{
 		return this->vkPipeline;

@@ -1,0 +1,31 @@
+# 3ds Max Wavefront OBJ Exporter v0.97b - (c)2007 guruware
+# File Created: 20.05.2020 14:55:32
+
+newmtl VEG_Glo_AtlasDogwood02
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka C:\Users\maximilien.cleda\AppData\Roaming\Ubisoft\Maxhammer\temp\VEG-Glo-AtlasDogwood02_DiffuseMap_PC_0x32b2168acd.tga
+	map_Kd C:\Users\maximilien.cleda\AppData\Roaming\Ubisoft\Maxhammer\temp\VEG-Glo-AtlasDogwood02_DiffuseMap_PC_0x32b2168acd.tga
+	map_d C:\Users\maximilien.cleda\AppData\Roaming\Ubisoft\Maxhammer\temp\VEG-Glo-AtlasDogwood02_DiffuseMap_PC_0x32b2168acd.tga
+
+newmtl VEG_Glo_StemBush02
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka C:\Users\maximilien.cleda\AppData\Roaming\Ubisoft\Maxhammer\temp\VEG-Glo-StemBush02_DiffuseMap_PC_0xaa5402dcb.tga
+	map_Kd C:\Users\maximilien.cleda\AppData\Roaming\Ubisoft\Maxhammer\temp\VEG-Glo-StemBush02_DiffuseMap_PC_0xaa5402dcb.tga

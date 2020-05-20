@@ -758,7 +758,7 @@ float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lig
 		float V = visibilityAnisotropic(lightingParams.roughness, at, ab, ToV, BoV, ToL, BoL, NoV, NoL);
 		float3 F = fresnel(lightingParams.f0, LoH);
 
-		Fr = (D * V) * F;
+		Fr = max(0.0, (D * V) * F);
 	}
 	else
 	{
@@ -766,7 +766,7 @@ float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lig
 		float V = visibility(lightingParams.roughness, NoV, NoL);
 		float3 F = fresnel(lightingParams.f0, LoH);
 
-		Fr = (D * V) * F;
+		Fr = max(0.0, (D * V) * F);
 	}
 
 	float lightAttenuation = 1.0; // todo

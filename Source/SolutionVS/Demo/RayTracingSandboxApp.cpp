@@ -19,6 +19,8 @@
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
+#define FOREST_TEST 0
+
 int RayTracingSandboxApp::Run()
 {
 	// create realm
@@ -29,8 +31,9 @@ int RayTracingSandboxApp::Run()
 	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindowMaximized, L"RayTracing Sandbox"));
 	canvas->Initialize(RectI(0, 0, (ur_uint)GetSystemMetrics(SM_CXSCREEN), (ur_uint)GetSystemMetrics(SM_CYSCREEN)));
 	realm.SetCanvas(std::move(canvas));
-	ur_uint canvasWidth = realm.GetCanvas()->GetClientBound().Width();
-	ur_uint canvasHeight = realm.GetCanvas()->GetClientBound().Height();
+	ur_uint canvasDenom = 1;
+	ur_uint canvasWidth = realm.GetCanvas()->GetClientBound().Width() / canvasDenom;
+	ur_uint canvasHeight = realm.GetCanvas()->GetClientBound().Height() / canvasDenom;
 	ur_bool canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
 
 	// create input system
@@ -235,7 +238,7 @@ int RayTracingSandboxApp::Run()
 	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
-		hdrParams.LumAdaptationMin = sunLight.Intensity * 0.5f;
+		hdrParams.LumAdaptationMin = sunLight.Intensity * 0.15f;
 		hdrParams.LumAdaptationMax = sunLight.Intensity * 1.5f;
 		hdrParams.BloomThreshold = 1.0f;
 		hdrParams.BloomIntensity = 0.05f;
@@ -252,6 +255,17 @@ int RayTracingSandboxApp::Run()
 	class RayTracingScene : public RealmEntity
 	{
 	public:
+
+		enum MeshId
+		{
+			MeshId_Sphere = 0,
+			MeshId_Wuson,
+			MeshId_MedievalBuilding,
+			MeshId_Tree0,
+			MeshId_Bush0,
+			MeshId_Bush1,
+			MeshCount
+		};
 
 		struct VertexSample
 		{
@@ -361,14 +375,21 @@ int RayTracingSandboxApp::Run()
 		std::unique_ptr<GrafDescriptorTableLayout> bindingTableLayout;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> bindingTables;
 		std::unique_ptr<GrafShaderLib> shaderLib;
-		std::unique_ptr<GrafRayTracingPipeline> pipelineState;
+		std::unique_ptr<GrafRayTracingPipeline> pipelineStateRT;
+		std::unique_ptr<GrafComputePipeline> pipelineStateCompute;
 		std::unique_ptr<GrafBuffer> shaderHandlesBuffer;
 		GrafStridedBufferRegionDesc rayGenShaderTable;
 		GrafStridedBufferRegionDesc missShaderTable;
 		GrafStridedBufferRegionDesc hitShaderTable;
+		GrafStridedBufferRegionDesc rayGenShaderTableAO;
+		GrafStridedBufferRegionDesc missShaderTableAO;
+		GrafStridedBufferRegionDesc hitShaderTableAO;
 		std::unique_ptr<GrafImage> occlusionBuffer[2];
 		std::unique_ptr<GrafImage> depthBuffer[2];
 		ur_float4x4 viewProjPrev;
+		ur_bool occlusionPassSeparate;
+		ur_bool occlusionPassBlur;
+		ur_uint occlusionComputeRate;
 		ur_uint occlusionSampleCount;
 		ur_bool denoisingEnabled;
 		ur_uint accumulationFrameNumber;
@@ -382,6 +403,9 @@ int RayTracingSandboxApp::Run()
 
 		RayTracingScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
 		{
+			this->occlusionPassSeparate = true;
+			this->occlusionPassBlur = true;
+			this->occlusionComputeRate = 2;
 			this->occlusionSampleCount = 8;
 			this->denoisingEnabled = true;
 			this->accumulationFrameCount = 16;
@@ -414,7 +438,8 @@ int RayTracingSandboxApp::Run()
 				grafRenderer->SafeDelete(bindingTable.release());
 			}
 			grafRenderer->SafeDelete(shaderLib.release());
-			grafRenderer->SafeDelete(pipelineState.release());
+			grafRenderer->SafeDelete(pipelineStateRT.release());
+			grafRenderer->SafeDelete(pipelineStateCompute.release());
 			grafRenderer->SafeDelete(shaderHandlesBuffer.release());
 			for (ur_uint i = 0; i < 2; ++i)
 			{
@@ -436,7 +461,7 @@ int RayTracingSandboxApp::Run()
 			const ur_size VertexCountMax = (1 << 20);
 			const ur_size IndexCountMax = (1 << 20);
 			const ur_size MeshCountMax = (1 << 10);
-			const ur_size InstanceCountMax = 128;
+			const ur_size InstanceCountMax = 2048;
 
 			// initialize common vertex attributes buffer
 
@@ -518,6 +543,9 @@ int RayTracingSandboxApp::Run()
 				"../Res/Models/sphere.obj",
 				"../Res/Models/wuson.obj",
 				"../Res/Models/Medieval_building.obj",
+				"../Res/Models/test arbre.obj",
+				"../Res/Models/bush01.obj",
+				"../Res/Models/bush02.obj",
 			};
 			for (ur_size ires = 0; ires < ur_array_size(modelResName); ++ires)
 			{
@@ -555,7 +583,7 @@ int RayTracingSandboxApp::Run()
 
 			GrafBuffer::InitParams sampleInstanceParams;
 			sampleInstanceParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
-			sampleInstanceParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+			sampleInstanceParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
 			sampleInstanceParams.BufferDesc.SizeInBytes = InstanceCountMax * sizeof(GrafAccelerationStructureInstance);
 
 			grafSystem->CreateBuffer(this->instanceBuffer);
@@ -570,15 +598,23 @@ int RayTracingSandboxApp::Run()
 			enum ShaderLibId
 			{
 				ShaderLibId_RayGen = 0,
+				ShaderLibId_RayGenAO,
 				ShaderLibId_Miss,
-				ShaderLibId_Shadow,
-				ShaderLibId_ClosestHit
+				ShaderLibId_MissShadow,
+				ShaderLibId_MissAO,
+				ShaderLibId_ClosestHit,
+				ShaderLibId_ClosestHitAO,
+				ShaderLibId_BlurOcclusion,
 			};
 			GrafShaderLib::EntryPoint shaderLibEntries[] = {
 				{ "SampleRaygen", GrafShaderType::RayGen },
+				{ "AORaygen", GrafShaderType::RayGen },
 				{ "SampleMiss", GrafShaderType::Miss },
-				{ "SampleMissShadow", GrafShaderType::Miss },
-				{ "SampleClosestHit", GrafShaderType::ClosestHit }
+				{ "ShadowMiss", GrafShaderType::Miss },
+				{ "AOMiss", GrafShaderType::Miss },
+				{ "SampleClosestHit", GrafShaderType::ClosestHit },
+				{ "AOClosestHit", GrafShaderType::ClosestHit },
+				{ "BlurOcclusion", GrafShaderType::Compute },
 			};
 			GrafUtils::CreateShaderLibFromFile(*grafDevice, "sample_raytracing_lib.spv", shaderLibEntries, ur_array_size(shaderLibEntries), this->shaderLib);
 
@@ -591,7 +627,7 @@ int RayTracingSandboxApp::Run()
 				{ GrafDescriptorType::RWTexture, 0, 5 }
 			};
 			GrafDescriptorTableLayoutDesc bindingTableLayoutDesc = {
-				ur_uint(GrafShaderStageFlag::AllRayTracing),
+				ur_uint(GrafShaderStageFlag::AllRayTracing) | ur_uint(GrafShaderStageFlag::Compute),
 				bindingTableLayoutRanges, ur_array_size(bindingTableLayoutRanges)
 			};
 			grafSystem->CreateDescriptorTableLayout(this->bindingTableLayout);
@@ -603,28 +639,40 @@ int RayTracingSandboxApp::Run()
 				bindingTable->Initialize(grafDevice, { this->bindingTableLayout.get() });
 			}
 
-			// pipeline
+			// ray tracing pipeline
 
 			GrafShader* shaderStages[] = {
 				this->shaderLib->GetShader(ShaderLibId_RayGen),
+				this->shaderLib->GetShader(ShaderLibId_RayGenAO),
 				this->shaderLib->GetShader(ShaderLibId_Miss),
-				this->shaderLib->GetShader(ShaderLibId_Shadow),
-				this->shaderLib->GetShader(ShaderLibId_ClosestHit)
+				this->shaderLib->GetShader(ShaderLibId_MissShadow),
+				this->shaderLib->GetShader(ShaderLibId_MissAO),
+				this->shaderLib->GetShader(ShaderLibId_ClosestHit),
+				this->shaderLib->GetShader(ShaderLibId_ClosestHitAO)
 			};
 
-			GrafRayTracingShaderGroupDesc shaderGroups[4];
+			GrafRayTracingShaderGroupDesc shaderGroups[7];
 			shaderGroups[0] = GrafRayTracingShaderGroupDesc::Default;
 			shaderGroups[0].Type = GrafRayTracingShaderGroupType::General;
 			shaderGroups[0].GeneralShaderIdx = ShaderLibId_RayGen;
 			shaderGroups[1] = GrafRayTracingShaderGroupDesc::Default;
 			shaderGroups[1].Type = GrafRayTracingShaderGroupType::General;
-			shaderGroups[1].GeneralShaderIdx = ShaderLibId_Miss;
+			shaderGroups[1].GeneralShaderIdx = ShaderLibId_RayGenAO;
 			shaderGroups[2] = GrafRayTracingShaderGroupDesc::Default;
 			shaderGroups[2].Type = GrafRayTracingShaderGroupType::General;
-			shaderGroups[2].GeneralShaderIdx = ShaderLibId_Shadow;
+			shaderGroups[2].GeneralShaderIdx = ShaderLibId_Miss;
 			shaderGroups[3] = GrafRayTracingShaderGroupDesc::Default;
-			shaderGroups[3].Type = GrafRayTracingShaderGroupType::TrianglesHit;
-			shaderGroups[3].ClosestHitShaderIdx = ShaderLibId_ClosestHit;
+			shaderGroups[3].Type = GrafRayTracingShaderGroupType::General;
+			shaderGroups[3].GeneralShaderIdx = ShaderLibId_MissShadow;
+			shaderGroups[4] = GrafRayTracingShaderGroupDesc::Default;
+			shaderGroups[4].Type = GrafRayTracingShaderGroupType::General;
+			shaderGroups[4].GeneralShaderIdx = ShaderLibId_MissAO;
+			shaderGroups[5] = GrafRayTracingShaderGroupDesc::Default;
+			shaderGroups[5].Type = GrafRayTracingShaderGroupType::TrianglesHit;
+			shaderGroups[5].ClosestHitShaderIdx = ShaderLibId_ClosestHit;
+			shaderGroups[6] = GrafRayTracingShaderGroupDesc::Default;
+			shaderGroups[6].Type = GrafRayTracingShaderGroupType::TrianglesHit;
+			shaderGroups[6].ClosestHitShaderIdx = ShaderLibId_ClosestHitAO;
 
 			GrafDescriptorTableLayout* bindingLayouts[] = {
 				this->bindingTableLayout.get()
@@ -637,8 +685,8 @@ int RayTracingSandboxApp::Run()
 			pipelineParams.DescriptorTableLayouts = bindingLayouts;
 			pipelineParams.DescriptorTableLayoutCount = ur_array_size(bindingLayouts);
 			pipelineParams.MaxRecursionDepth = 8;
-			grafSystem->CreateRayTracingPipeline(this->pipelineState);
-			this->pipelineState->Initialize(grafDevice, pipelineParams);
+			grafSystem->CreateRayTracingPipeline(this->pipelineStateRT);
+			this->pipelineStateRT->Initialize(grafDevice, pipelineParams);
 
 			// shader group handles buffer
 
@@ -650,15 +698,30 @@ int RayTracingSandboxApp::Run()
 			shaderBufferParams.BufferDesc.SizeInBytes = shaderBufferSize;
 			grafSystem->CreateBuffer(this->shaderHandlesBuffer);
 			this->shaderHandlesBuffer->Initialize(grafDevice, shaderBufferParams);
-			GrafRayTracingPipeline* rayTracingPipeline = this->pipelineState.get();
+			GrafRayTracingPipeline* rayTracingPipeline = this->pipelineStateRT.get();
 			this->shaderHandlesBuffer->Write([rayTracingPipeline, pipelineParams, shaderBufferParams](ur_byte* mappedDataPtr) -> Result
 			{
 				rayTracingPipeline->GetShaderGroupHandles(0, pipelineParams.ShaderGroupCount, shaderBufferParams.BufferDesc.SizeInBytes, mappedDataPtr);
 				return Result(Success);
 			});
-			this->rayGenShaderTable = { this->shaderHandlesBuffer.get(), 0 * shaderGroupHandleSize, 1 * shaderGroupHandleSize, shaderGroupHandleSize };
-			this->missShaderTable = { this->shaderHandlesBuffer.get(), 1 * shaderGroupHandleSize, 2 * shaderGroupHandleSize, shaderGroupHandleSize };
-			this->hitShaderTable = { this->shaderHandlesBuffer.get(), 3 * shaderGroupHandleSize, 1 * shaderGroupHandleSize, shaderGroupHandleSize };
+			this->rayGenShaderTable		= {	this->shaderHandlesBuffer.get(),	0 * shaderGroupHandleSize,	1 * shaderGroupHandleSize,	shaderGroupHandleSize };
+			this->missShaderTable		= { this->shaderHandlesBuffer.get(),	2 * shaderGroupHandleSize,	2 * shaderGroupHandleSize,	shaderGroupHandleSize };
+			this->hitShaderTable		= { this->shaderHandlesBuffer.get(),	5 * shaderGroupHandleSize,	1 * shaderGroupHandleSize,	shaderGroupHandleSize };
+			this->rayGenShaderTableAO	= { this->shaderHandlesBuffer.get(),	1 * shaderGroupHandleSize,	1 * shaderGroupHandleSize,	shaderGroupHandleSize };
+			this->missShaderTableAO		= { this->shaderHandlesBuffer.get(),	4 * shaderGroupHandleSize,	1 * shaderGroupHandleSize,	shaderGroupHandleSize };
+			this->hitShaderTableAO		= { this->shaderHandlesBuffer.get(),	6 * shaderGroupHandleSize,	1 * shaderGroupHandleSize,	shaderGroupHandleSize };
+
+			// compute pipeline
+
+			GrafDescriptorTableLayout* computeBindingLayouts[] = {
+				this->bindingTableLayout.get()
+			};
+			GrafComputePipeline::InitParams computePipelineParams = GrafComputePipeline::InitParams::Default;
+			computePipelineParams.ShaderStage = this->shaderLib->GetShader(ShaderLibId_BlurOcclusion);
+			computePipelineParams.DescriptorTableLayouts = computeBindingLayouts;
+			computePipelineParams.DescriptorTableLayoutCount = ur_array_size(computeBindingLayouts);
+			grafSystem->CreateComputePipeline(this->pipelineStateCompute);
+			this->pipelineStateCompute->Initialize(grafDevice, computePipelineParams);
 		}
 
 		void PrepareAccumulationData(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, Camera& camera)
@@ -673,6 +736,12 @@ int RayTracingSandboxApp::Run()
 
 			ur_uint3 targetSize = (grafTargetImage ? grafTargetImage->GetDesc().Size : 0);
 			ur_uint3 crntSize = (this->occlusionBuffer[0] ? this->occlusionBuffer[0]->GetDesc().Size : 0);
+			if (this->occlusionPassSeparate)
+			{
+				// checkerboard
+				targetSize.x /= 2;
+				targetSize.y /= 1;
+			}
 			if (targetSize != crntSize)
 			{
 				GrafImageDesc occlusionBufferDesc = {
@@ -743,6 +812,7 @@ int RayTracingSandboxApp::Run()
 				this->planeMesh->accelerationStructureBL->GetDeviceAddress()
 			};
 			sampleInstances.emplace_back(planeInstance);
+			#if !(FOREST_TEST)
 			for (ur_size i = 0; i < this->sampleInstanceCount; ++i)
 			{
 				ur_float radius = 7.0f;
@@ -754,24 +824,25 @@ int RayTracingSandboxApp::Run()
 						0.0f, 1.0f, 0.0f, height + cosf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
 						0.0f, 0.0f, 1.0f, radius * sinf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle)
 					},
-					this->customMeshes[0]->GetMeshID(), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-					this->customMeshes[0]->accelerationStructureBL->GetDeviceAddress()
+					this->customMeshes[MeshId_Sphere]->GetMeshID(), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+					this->customMeshes[MeshId_Sphere]->accelerationStructureBL->GetDeviceAddress()
 				};
 				sampleInstances.emplace_back(meshInstance);
 			}
-			Mesh* customMesh = (this->customMeshes.empty() ? ur_null : this->customMeshes[2].get());
-			if (customMesh != ur_null)
+			#endif
+			auto ScatterMeshInstances = [&sampleInstances](Mesh* mesh, ur_size instanceCount, ur_float radius, ur_float size, ur_float posOfs, ur_bool firstInstanceRnd = true) -> void
 			{
-				std::srand(58911192);
-				ur_float radius = 40.0;
-				ur_float size = 2.0;
-				ur_float3 pos(0.0f, -size, 0.0f);
+				if (ur_null == mesh)
+					return;
+				
+				ur_float3 pos(0.0f, posOfs, 0.0f);
 				ur_float3 frameI, frameJ, frameK;
 				frameJ = ur_float3(0.0f, 1.0, 0.0f);
-				for (ur_size i = 0; i < this->sampleInstanceCount; ++i)
+				for (ur_size i = 0; i < instanceCount; ++i)
 				{
-					ur_float a = ur_float(std::rand()) / RAND_MAX * MathConst<ur_float>::Pi * 2.0f * (i > 0);
-					ur_float d = radius * sqrtf(ur_float(std::rand()) / RAND_MAX) * (i > 0);
+					ur_float r = (firstInstanceRnd || i > 0 ? 1.0f : 0.0f);
+					ur_float a = ur_float(std::rand()) / RAND_MAX * MathConst<ur_float>::Pi * 2.0f * r;
+					ur_float d = radius * sqrtf(ur_float(std::rand()) / RAND_MAX) * r;
 					pos.x = cosf(a) * d;
 					pos.z = sinf(a) * d;
 
@@ -788,12 +859,20 @@ int RayTracingSandboxApp::Run()
 							frameI.y * size, frameJ.y * size, frameK.y * size, pos.y,
 							frameI.z * size, frameJ.z * size, frameK.z * size, pos.z
 						},
-						customMesh->GetMeshID(), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-						customMesh->accelerationStructureBL->GetDeviceAddress()
+						mesh->GetMeshID(), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+						mesh->accelerationStructureBL->GetDeviceAddress()
 					};
 					sampleInstances.emplace_back(meshInstance);
 				}
-			}
+			};
+			std::srand(58911192);
+			#if (FOREST_TEST)
+			ScatterMeshInstances(this->customMeshes[MeshId_Tree0].get(), this->sampleInstanceCount, 80.0f, 0.01f, -2.0f, false);
+			ScatterMeshInstances(this->customMeshes[MeshId_Bush0].get(), this->sampleInstanceCount * 8, 240.0f, 0.015f, -2.0f);
+			ScatterMeshInstances(this->customMeshes[MeshId_Bush1].get(), this->sampleInstanceCount * 4, 160.0f, 0.075f, -2.0f);
+			#else
+			ScatterMeshInstances(this->customMeshes[MeshId_MedievalBuilding].get(), this->sampleInstanceCount, 40.0f, 2.0f, -2.0f, false);
+			#endif
 
 			// write to upload buffer
 
@@ -832,6 +911,12 @@ int RayTracingSandboxApp::Run()
 			this->BuildTopLevelAccelerationStructure(elapsedSeconds);
 		}
 
+		void RenderAO(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4 &clearColor, Camera& camera,
+			const LightingDesc& lightingDesc, const Atmosphere::Desc& atmosphereDesc)
+		{
+
+		}
+
 		void Render(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4 &clearColor, Camera& camera,
 			const LightingDesc& lightingDesc, const Atmosphere::Desc& atmosphereDesc)
 		{
@@ -847,12 +932,16 @@ int RayTracingSandboxApp::Run()
 				ur_float4x4 viewProjInv;
 				ur_float4x4 viewProjPrev;
 				ur_float4 cameraPos;
+				ur_float4 cameraDir;
 				ur_float4 viewportSize;
 				ur_float4 clearColor;
+				ur_uint occlusionPassSeparate;
 				ur_uint occlusionSampleCount;
 				ur_uint denoisingEnabled;
 				ur_uint accumulationFrameCount;
 				ur_uint accumulationFrameNumber;
+				ur_uint __pad0[3];
+				ur_float4 debugVec0;
 				Atmosphere::Desc atmoDesc;
 				LightingDesc lightingDesc;
 			} cb;
@@ -860,17 +949,20 @@ int RayTracingSandboxApp::Run()
 			cb.viewProjInv = camera.GetViewProjInv();
 			cb.viewProjPrev = this->viewProjPrev;
 			cb.cameraPos = camera.GetPosition();
+			cb.cameraDir = camera.GetDirection();
 			cb.viewportSize.x = (ur_float)targetSize.x;
 			cb.viewportSize.y = (ur_float)targetSize.y;
 			cb.viewportSize.z = 1.0f / cb.viewportSize.x;
 			cb.viewportSize.w = 1.0f / cb.viewportSize.y;
 			cb.clearColor = clearColor;
+			cb.occlusionPassSeparate = this->occlusionPassSeparate;
 			cb.occlusionSampleCount = this->occlusionSampleCount;
 			cb.denoisingEnabled = this->denoisingEnabled;
 			cb.accumulationFrameCount = this->accumulationFrameCount;
 			cb.accumulationFrameNumber = this->accumulationFrameNumber;
 			cb.atmoDesc = atmosphereDesc;
 			cb.lightingDesc = lightingDesc;
+			cb.debugVec0 = ur_float4(this->debugValue, 0.0f, 0.0f, 0.0f);
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 			Allocation dynamicCBAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
 			dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
@@ -889,8 +981,29 @@ int RayTracingSandboxApp::Run()
 			descriptorTable->SetRWImage(4, this->depthBuffer[prevFrameDataId].get());
 
 			grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);
-			grafCmdList->BindRayTracingPipeline(this->pipelineState.get());
-			grafCmdList->BindRayTracingDescriptorTable(descriptorTable, this->pipelineState.get());
+			grafCmdList->BindRayTracingPipeline(this->pipelineStateRT.get());
+			grafCmdList->BindRayTracingDescriptorTable(descriptorTable, this->pipelineStateRT.get());
+
+			if (this->occlusionPassSeparate)
+			{
+				// render AO in sub resolution
+				ur_uint3 bufferSize = this->occlusionBuffer[0]->GetDesc().Size;
+				grafCmdList->DispatchRays(bufferSize.x, bufferSize.y, 1, &this->rayGenShaderTableAO, &this->missShaderTableAO, &this->hitShaderTableAO, ur_null);
+
+				// blur AO
+				if (this->occlusionPassBlur)
+				{
+					grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::ComputeReadWrite);
+					grafCmdList->BindComputePipeline(this->pipelineStateCompute.get());
+					grafCmdList->BindComputeDescriptorTable(descriptorTable, this->pipelineStateCompute.get());
+					grafCmdList->Dispatch((bufferSize.x - 1) / 8 + 1, (bufferSize.y - 1) / 8 + 1, 1);
+					grafCmdList->BindRayTracingPipeline(this->pipelineStateRT.get());
+					grafCmdList->BindRayTracingDescriptorTable(descriptorTable, this->pipelineStateRT.get());
+					grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+				}
+			}
+			
+			// main RT pass
 			grafCmdList->DispatchRays(targetSize.x, targetSize.y, 1, &this->rayGenShaderTable, &this->missShaderTable, &this->hitShaderTable, ur_null);
 
 			// store data for next frame temporal accumulation
@@ -906,11 +1019,13 @@ int RayTracingSandboxApp::Run()
 			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
 			if (ImGui::CollapsingHeader("RayTracingScene"))
 			{
+				ImGui::Checkbox("OcclusionPassSeparate", &this->occlusionPassSeparate);
+				ImGui::Checkbox("OcclusionPassBlur", &this->occlusionPassBlur);
+				ImGui::Checkbox("DenoisingEnabled", &this->denoisingEnabled);
 				int editableInt = 0;
 				editableInt = (int)this->occlusionSampleCount;
 				ImGui::InputInt("OcclusionSampleCount", &editableInt);
 				this->occlusionSampleCount = editableInt;
-				ImGui::Checkbox("DenoisingEnabled", &this->denoisingEnabled);
 				editableInt = (int)this->accumulationFrameCount;
 				ImGui::InputInt("AccumulationFrames", &editableInt);
 				this->accumulationFrameCount = editableInt;
@@ -1025,11 +1140,11 @@ int RayTracingSandboxApp::Run()
 
 			// resize render target(s)
 			if (canvasValid &&
-				(canvasWidth != realm.GetCanvas()->GetClientBound().Width() ||
-				canvasHeight != realm.GetCanvas()->GetClientBound().Height()))
+				(canvasWidth != realm.GetCanvas()->GetClientBound().Width() / canvasDenom ||
+				canvasHeight != realm.GetCanvas()->GetClientBound().Height() / canvasDenom))
 			{
-				canvasWidth = realm.GetCanvas()->GetClientBound().Width();
-				canvasHeight = realm.GetCanvas()->GetClientBound().Height();
+				canvasWidth = realm.GetCanvas()->GetClientBound().Width() / canvasDenom;
+				canvasHeight = realm.GetCanvas()->GetClientBound().Height() / canvasDenom;
 				// use prev frame command list to make sure RT objects are no longer used before destroying
 				deinitializeGrafRenderTargetObjects(grafMainCmdList[grafRenderer->GetPrevFrameId()].get());
 				// recreate RT objects for new canvas dimensions
@@ -1108,7 +1223,6 @@ int RayTracingSandboxApp::Run()
 						{
 							hdrRender->ShowImgui();
 						}
-						ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
 						if (ImGui::CollapsingHeader("Lighting"))
 						{
 							ImGui::Checkbox("AnimationEnabled", &lightAnimationEnabled);
@@ -1130,6 +1244,12 @@ int RayTracingSandboxApp::Run()
 						if (rayTracingScene != ur_null)
 						{
 							rayTracingScene->ShowImgui();
+						}
+						if (ImGui::CollapsingHeader("Canvas"))
+						{
+							int editableInt = canvasDenom;
+							ImGui::InputInt("ResolutionDenominator", &editableInt);
+							canvasDenom = editableInt;
 						}
 
 						imguiRender->Render(*grafCmdListCrnt);
