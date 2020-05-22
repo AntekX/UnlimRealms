@@ -384,7 +384,7 @@ int RayTracingSandboxApp::Run()
 		GrafStridedBufferRegionDesc rayGenShaderTableAO;
 		GrafStridedBufferRegionDesc missShaderTableAO;
 		GrafStridedBufferRegionDesc hitShaderTableAO;
-		std::unique_ptr<GrafImage> occlusionBuffer[2];
+		std::unique_ptr<GrafImage> occlusionBuffer[3];
 		std::unique_ptr<GrafImage> depthBuffer[2];
 		ur_float4x4 viewProjPrev;
 		ur_bool occlusionPassSeparate;
@@ -441,7 +441,7 @@ int RayTracingSandboxApp::Run()
 			grafRenderer->SafeDelete(pipelineStateRT.release());
 			grafRenderer->SafeDelete(pipelineStateCompute.release());
 			grafRenderer->SafeDelete(shaderHandlesBuffer.release());
-			for (ur_uint i = 0; i < 2; ++i)
+			for (ur_uint i = 0; i < 3; ++i)
 			{
 				grafRenderer->SafeDelete(occlusionBuffer[i].release());
 				grafRenderer->SafeDelete(depthBuffer[i].release());
@@ -624,7 +624,7 @@ int RayTracingSandboxApp::Run()
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 				{ GrafDescriptorType::AccelerationStructure, 0, 1 },
 				{ GrafDescriptorType::Buffer, 1, 4 },
-				{ GrafDescriptorType::RWTexture, 0, 5 }
+				{ GrafDescriptorType::RWTexture, 0, 6 }
 			};
 			GrafDescriptorTableLayoutDesc bindingTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::AllRayTracing) | ur_uint(GrafShaderStageFlag::Compute),
@@ -688,7 +688,7 @@ int RayTracingSandboxApp::Run()
 			grafSystem->CreateRayTracingPipeline(this->pipelineStateRT);
 			this->pipelineStateRT->Initialize(grafDevice, pipelineParams);
 
-			// shader group handles buffer
+			// shader group handles bufferbind
 
 			ur_size shaderGroupHandleSize = grafDeviceDesc->RayTracing.ShaderGroupHandleSize;
 			ur_size shaderBufferSize = pipelineParams.ShaderGroupCount * shaderGroupHandleSize;
@@ -739,9 +739,9 @@ int RayTracingSandboxApp::Run()
 			if (this->occlusionPassSeparate)
 			{
 				// checkerboard
-				targetSize.x /= 2;
-				targetSize.y /= 1;
+				targetSize.x = (targetSize.x > 0 ? (targetSize.x - 1) / 2 + 1 : 0);
 			}
+			ur_bool sizeValid = (targetSize.x * targetSize.y > 0);
 			if (targetSize != crntSize)
 			{
 				GrafImageDesc occlusionBufferDesc = {
@@ -751,12 +751,15 @@ int RayTracingSandboxApp::Run()
 					ur_uint(GrafImageUsageFlag::ShaderReadWrite),
 					ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 				};
-				for (ur_uint i = 0; i < 2; ++i)
+				for (ur_uint i = 0; i < 3; ++i)
 				{
 					GrafImage* prevBuffer = this->occlusionBuffer[i].release();
 					if (prevBuffer != ur_null) this->grafRenderer->SafeDelete(prevBuffer, grafCmdList);
-					grafSystem->CreateImage(this->occlusionBuffer[i]);
-					this->occlusionBuffer[i]->Initialize(grafDevice, { occlusionBufferDesc });
+					if (sizeValid)
+					{
+						grafSystem->CreateImage(this->occlusionBuffer[i]);
+						this->occlusionBuffer[i]->Initialize(grafDevice, { occlusionBufferDesc });
+					}
 				}
 
 				GrafImageDesc depthBufferDesc = {
@@ -770,8 +773,11 @@ int RayTracingSandboxApp::Run()
 				{
 					GrafImage* prevBuffer = this->depthBuffer[i].release();
 					if (prevBuffer != ur_null) this->grafRenderer->SafeDelete(prevBuffer, grafCmdList);
-					grafSystem->CreateImage(this->depthBuffer[i]);
-					this->depthBuffer[i]->Initialize(grafDevice, { depthBufferDesc });
+					if (sizeValid)
+					{
+						grafSystem->CreateImage(this->depthBuffer[i]);
+						this->depthBuffer[i]->Initialize(grafDevice, { depthBufferDesc });
+					}
 				}
 			}
 
@@ -926,6 +932,8 @@ int RayTracingSandboxApp::Run()
 			PrepareAccumulationData(grafCmdList, grafTargetImage, camera);
 			ur_uint crntFrameDataId = (this->accumulationFrameNumber % 2);
 			ur_uint prevFrameDataId = ((this->accumulationFrameNumber + 1) % 2);
+			ur_uint denoisedBufferId = 2;
+			ur_uint3 occlusionBufferSize = (this->occlusionBuffer[0] ? this->occlusionBuffer[0]->GetDesc().Size : 0);
 
 			struct SceneConstants
 			{
@@ -935,12 +943,14 @@ int RayTracingSandboxApp::Run()
 				ur_float4 cameraDir;
 				ur_float4 viewportSize;
 				ur_float4 clearColor;
+				ur_float4 occlusionBufferSize;
 				ur_uint occlusionPassSeparate;
 				ur_uint occlusionSampleCount;
 				ur_uint denoisingEnabled;
+				ur_uint blurEnabled;
 				ur_uint accumulationFrameCount;
 				ur_uint accumulationFrameNumber;
-				ur_uint __pad0[3];
+				ur_uint __pad0[2];
 				ur_float4 debugVec0;
 				Atmosphere::Desc atmoDesc;
 				LightingDesc lightingDesc;
@@ -950,14 +960,19 @@ int RayTracingSandboxApp::Run()
 			cb.viewProjPrev = this->viewProjPrev;
 			cb.cameraPos = camera.GetPosition();
 			cb.cameraDir = camera.GetDirection();
+			cb.clearColor = clearColor;
 			cb.viewportSize.x = (ur_float)targetSize.x;
 			cb.viewportSize.y = (ur_float)targetSize.y;
 			cb.viewportSize.z = 1.0f / cb.viewportSize.x;
 			cb.viewportSize.w = 1.0f / cb.viewportSize.y;
-			cb.clearColor = clearColor;
+			cb.occlusionBufferSize.x = (ur_float)occlusionBufferSize.x;
+			cb.occlusionBufferSize.y = (ur_float)occlusionBufferSize.y;
+			cb.occlusionBufferSize.z = 1.0f / cb.occlusionBufferSize.x;
+			cb.occlusionBufferSize.w = 1.0f / cb.occlusionBufferSize.y;
 			cb.occlusionPassSeparate = this->occlusionPassSeparate;
 			cb.occlusionSampleCount = this->occlusionSampleCount;
 			cb.denoisingEnabled = this->denoisingEnabled;
+			cb.blurEnabled = this->occlusionPassBlur;
 			cb.accumulationFrameCount = this->accumulationFrameCount;
 			cb.accumulationFrameNumber = this->accumulationFrameNumber;
 			cb.atmoDesc = atmosphereDesc;
@@ -977,12 +992,14 @@ int RayTracingSandboxApp::Run()
 			descriptorTable->SetRWImage(0, grafTargetImage);
 			descriptorTable->SetRWImage(1, this->occlusionBuffer[crntFrameDataId].get());
 			descriptorTable->SetRWImage(2, this->occlusionBuffer[prevFrameDataId].get());
-			descriptorTable->SetRWImage(3, this->depthBuffer[crntFrameDataId].get());
-			descriptorTable->SetRWImage(4, this->depthBuffer[prevFrameDataId].get());
+			descriptorTable->SetRWImage(3, this->occlusionBuffer[denoisedBufferId].get());
+			descriptorTable->SetRWImage(4, this->depthBuffer[crntFrameDataId].get());
+			descriptorTable->SetRWImage(5, this->depthBuffer[prevFrameDataId].get());
 
 			grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 			grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 			grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+			grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[denoisedBufferId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 			grafCmdList->ImageMemoryBarrier(this->depthBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 			grafCmdList->ImageMemoryBarrier(this->depthBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 			grafCmdList->BindRayTracingPipeline(this->pipelineStateRT.get());
@@ -991,8 +1008,7 @@ int RayTracingSandboxApp::Run()
 			if (this->occlusionPassSeparate)
 			{
 				// render AO in sub resolution
-				ur_uint3 bufferSize = this->occlusionBuffer[0]->GetDesc().Size;
-				grafCmdList->DispatchRays(bufferSize.x, bufferSize.y, 1, &this->rayGenShaderTableAO, &this->missShaderTableAO, &this->hitShaderTableAO, ur_null);
+				grafCmdList->DispatchRays(occlusionBufferSize.x, occlusionBufferSize.y, 1, &this->rayGenShaderTableAO, &this->missShaderTableAO, &this->hitShaderTableAO, ur_null);
 
 				// blur AO
 				if (this->occlusionPassBlur)
@@ -1000,16 +1016,20 @@ int RayTracingSandboxApp::Run()
 					grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::ComputeReadWrite);
 					grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
 					grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
+					grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[denoisedBufferId].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
 					grafCmdList->ImageMemoryBarrier(this->depthBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
 					grafCmdList->ImageMemoryBarrier(this->depthBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
 					grafCmdList->BindComputePipeline(this->pipelineStateCompute.get());
 					grafCmdList->BindComputeDescriptorTable(descriptorTable, this->pipelineStateCompute.get());
-					grafCmdList->Dispatch((bufferSize.x - 1) / 8 + 1, (bufferSize.y - 1) / 8 + 1, 1);
+					
+					grafCmdList->Dispatch((occlusionBufferSize.x - 1) / 8 + 1, (occlusionBufferSize.y - 1) / 8 + 1, 1);
+					
 					grafCmdList->BindRayTracingPipeline(this->pipelineStateRT.get());
 					grafCmdList->BindRayTracingDescriptorTable(descriptorTable, this->pipelineStateRT.get());
 					grafCmdList->ImageMemoryBarrier(grafTargetImage, GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 					grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 					grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+					grafCmdList->ImageMemoryBarrier(this->occlusionBuffer[denoisedBufferId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 					grafCmdList->ImageMemoryBarrier(this->depthBuffer[crntFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 					grafCmdList->ImageMemoryBarrier(this->depthBuffer[prevFrameDataId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 				}
