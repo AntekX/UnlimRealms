@@ -207,6 +207,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafSystemDX12::CreateComputePipeline(std::unique_ptr<GrafComputePipeline>& grafComputePipeline)
+	{
+		grafComputePipeline.reset(new GrafComputePipelineDX12(*this));
+		return Result(Success);
+	}
+
 	Result GrafSystemDX12::CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline)
 	{
 		grafRayTracingPipeline.reset(new GrafRayTracingPipelineDX12(*this));
@@ -270,7 +276,7 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafDeviceDX12: D3D12CreateDevice failed with HRESULT = ") + HResultToString(hres));
 		}
 
-		// create common descriptor heap(s)
+		// create descriptor heaps
 
 		// TODO
 
@@ -678,12 +684,12 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafCommandListDX12::BindComputePipeline(GrafPipeline* grafPipeline)
+	Result GrafCommandListDX12::BindComputePipeline(GrafComputePipeline* grafPipeline)
 	{
 		return Result(NotImplemented);
 	}
 
-	Result GrafCommandListDX12::BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline)
+	Result GrafCommandListDX12::BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafComputePipeline* grafPipeline)
 	{
 		return Result(NotImplemented);
 	}
@@ -1049,6 +1055,28 @@ namespace UnlimRealms
 	}
 
 	Result GrafPipelineDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	{
+		return Result(NotImplemented);
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GrafComputePipelineDX12::GrafComputePipelineDX12(GrafSystem &grafSystem) :
+		GrafComputePipeline(grafSystem)
+	{
+	}
+
+	GrafComputePipelineDX12::~GrafComputePipelineDX12()
+	{
+		this->Deinitialize();
+	}
+
+	Result GrafComputePipelineDX12::Deinitialize()
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafComputePipelineDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
 		return Result(NotImplemented);
 	}

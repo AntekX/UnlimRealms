@@ -56,6 +56,8 @@ namespace UnlimRealms
 
 		virtual Result CreatePipeline(std::unique_ptr<GrafPipeline>& grafPipeline);
 
+		virtual Result CreateComputePipeline(std::unique_ptr<GrafComputePipeline>& grafComputePipeline);
+
 		virtual Result CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline);
 
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
@@ -186,9 +188,9 @@ namespace UnlimRealms
 
 		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
 
-		virtual Result BindComputePipeline(GrafPipeline* grafPipeline);
+		virtual Result BindComputePipeline(GrafComputePipeline* grafPipeline);
 
-		virtual Result BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline);
+		virtual Result BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafComputePipeline* grafPipeline);
 
 		virtual Result Dispatch(ur_uint groupCountX, ur_uint groupCountY, ur_uint groupCountZ);
 
@@ -436,6 +438,22 @@ namespace UnlimRealms
 		GrafPipelineDX12(GrafSystem &grafSystem);
 
 		~GrafPipelineDX12();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+	protected:
+
+		Result Deinitialize();
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafComputePipelineDX12 : public GrafComputePipeline
+	{
+	public:
+
+		GrafComputePipelineDX12(GrafSystem &grafSystem);
+
+		~GrafComputePipelineDX12();
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
