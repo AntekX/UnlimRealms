@@ -857,6 +857,7 @@ void BlurOcclusion(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		return;
 
 	// normal distrubution, sigma = 1.5
+	#if (0)
 	static const uint kernelSampleCount = 9;
 	static const float kernelWeight[kernelSampleCount] = {
 		0.095332, 0.118095, 0.095332,
@@ -880,6 +881,29 @@ void BlurOcclusion(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		int2( 0,-2), int2(-1,-1), int2( 0,-1),
 		int2(-1, 0), int2( 0, 0), int2( 1, 0),
 		int2(-1, 1), int2( 0, 1), int2( 0, 2)
+	};
+	#endif
+	#else
+	static const uint kernelSampleCount = 25;
+	static const float kernelWeight[kernelSampleCount] = {
+		0.015026, 0.028569, 0.035391, 0.028569, 0.015026,
+		0.028569, 0.054318, 0.067288, 0.054318, 0.028569,
+		0.035391, 0.067288, 0.083355, 0.067288, 0.035391,
+		0.028569, 0.054318, 0.067288, 0.054318, 0.028569,
+		0.015026, 0.028569, 0.035391, 0.028569, 0.015026,
+	};
+	// checkerboard mode (gather "diamond" samples)
+	static const int2 kernelOfs[kernelSampleCount] = {
+		int2( 0,-4),
+		int2(-1,-3), int2( 0,-3),
+		int2(-1,-2), int2( 0,-2), int2( 1,-2),
+		int2(-2,-1), int2(-1,-1), int2( 0,-1), int2( 1,-1),
+		int2(-2, 0), int2(-1, 0), int2( 0, 0), int2( 1, 0), int2( 2, 0),
+		int2(-2, 1), int2(-1, 1), int2( 0, 1), int2( 1, 1),
+		int2(-1, 2), int2( 0, 2), int2( 1, 2),
+		int2(-1, 3), int2( 0, 3),
+		int2( 0, 4),
+
 	};
 	#endif
 	float occlusion = 0.0;
