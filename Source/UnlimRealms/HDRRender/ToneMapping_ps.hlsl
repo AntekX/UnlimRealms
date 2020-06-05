@@ -86,6 +86,7 @@ float4 main(GenericQuadVertex input) : SV_Target
 #endif
 
 	color.xyz = LinearToSRGB(color.xyz);
+	color.w = 1.0;
 
 	return color;
 }
