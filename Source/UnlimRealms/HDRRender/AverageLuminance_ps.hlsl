@@ -13,19 +13,19 @@ Texture2D LumTexture	: register(t0);
 
 static const int SampleCount = 4;
 static const float2 SampleOfs[SampleCount] = {
-	{-0.5,-0.5 }, { 0.5,-0.5 },
-	{-0.5, 0.5 }, { 0.5, 0.5 }
+	{ 0.0, 0.0 }, { 1.0, 0.0 }, { 1.0, 1.0 }, { 0.0, 1.0 }
 };
 
 float4 main(GenericQuadVertex input) : SV_Target
 {
 	float lumAvg = 0.0;
+	float2 samplePos = 0.5 + input.uv * (SrcTargetSize - 1.0);
 	[unroll] for (int i = 0; i < SampleCount; ++i)
 	{
-		float2 uv = input.uv + SampleOfs[i] / SrcTargetSize;
-		float lumVal = LumTexture.Sample(CommonSampler, uv).x;
+		int2 samplePosCrnt = samplePos + SampleOfs[i];
+		float lumVal = LumTexture.Load(int3(samplePosCrnt.xy, 0)).x;
 		lumAvg += lumVal;
 	}
-	if (!LogLuminance) lumAvg = lumAvg / SampleCount;
+	lumAvg = lumAvg / SampleCount;
 	return lumAvg;
 }
