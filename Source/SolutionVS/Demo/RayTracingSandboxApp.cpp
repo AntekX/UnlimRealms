@@ -206,6 +206,7 @@ int RayTracingSandboxApp::Run()
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
 	cameraControl.SetSpeed(4.0);
+	camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
 	camera.SetPosition(ur_float3(9.541f, 5.412f,-12.604f));
 	camera.SetLookAt(cameraControl.GetTargetPoint(), cameraControl.GetWorldUp());
 
@@ -387,6 +388,8 @@ int RayTracingSandboxApp::Run()
 		std::unique_ptr<GrafImage> occlusionBuffer[3];
 		std::unique_ptr<GrafImage> depthBuffer[2];
 		ur_float4x4 viewProjPrev;
+		ur_float4x4 viewProjInvPrev;
+		ur_float3 cameraPosPrev;
 		ur_bool occlusionPassSeparate;
 		ur_bool occlusionPassBlur;
 		ur_uint occlusionComputeRate;
@@ -399,7 +402,7 @@ int RayTracingSandboxApp::Run()
 		ur_bool animationEnabled;
 		ur_float animationCycleTime;
 		ur_float animationElapsedTime;
-		ur_float debugValue;
+		ur_float4 debugVec0;
 
 		RayTracingScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
 		{
@@ -414,7 +417,7 @@ int RayTracingSandboxApp::Run()
 			this->animationEnabled = true;
 			this->animationCycleTime = 30.0f;
 			this->animationElapsedTime = 0.0f;
-			this->debugValue = 0.0f;
+			this->debugVec0 = ur_float4(0.02f, 1.0f, 0.02f, 0.08f);
 		}
 		~RayTracingScene()
 		{
@@ -444,6 +447,9 @@ int RayTracingSandboxApp::Run()
 			for (ur_uint i = 0; i < 3; ++i)
 			{
 				grafRenderer->SafeDelete(occlusionBuffer[i].release());
+			}
+			for (ur_uint i = 0; i < 2; ++i)
+			{
 				grafRenderer->SafeDelete(depthBuffer[i].release());
 			}
 		}
@@ -786,6 +792,8 @@ int RayTracingSandboxApp::Run()
 			if (targetSize != crntSize || !this->denoisingEnabled)
 			{
 				this->viewProjPrev = camera.GetViewProj();
+				this->viewProjInvPrev = camera.GetViewProjInv();
+				this->cameraPosPrev = camera.GetPosition();
 				this->accumulationFrameNumber = 0;
 			}
 		}
@@ -939,8 +947,10 @@ int RayTracingSandboxApp::Run()
 			{
 				ur_float4x4 viewProjInv;
 				ur_float4x4 viewProjPrev;
+				ur_float4x4 viewProjInvPrev;
 				ur_float4 cameraPos;
 				ur_float4 cameraDir;
+				ur_float4 cameraPosPrev;
 				ur_float4 viewportSize;
 				ur_float4 clearColor;
 				ur_float4 occlusionBufferSize;
@@ -958,8 +968,10 @@ int RayTracingSandboxApp::Run()
 			ur_uint3 targetSize = grafTargetImage->GetDesc().Size;
 			cb.viewProjInv = camera.GetViewProjInv();
 			cb.viewProjPrev = this->viewProjPrev;
+			cb.viewProjInvPrev = this->viewProjInvPrev;
 			cb.cameraPos = camera.GetPosition();
 			cb.cameraDir = camera.GetDirection();
+			cb.cameraPosPrev = this->cameraPosPrev;
 			cb.clearColor = clearColor;
 			cb.viewportSize.x = (ur_float)targetSize.x;
 			cb.viewportSize.y = (ur_float)targetSize.y;
@@ -977,10 +989,18 @@ int RayTracingSandboxApp::Run()
 			cb.accumulationFrameNumber = this->accumulationFrameNumber;
 			cb.atmoDesc = atmosphereDesc;
 			cb.lightingDesc = lightingDesc;
-			cb.debugVec0 = ur_float4(this->debugValue, 0.0f, 0.0f, 0.0f);
+			cb.debugVec0 = this->debugVec0;
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 			Allocation dynamicCBAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
 			dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
+
+			// temp: test
+			ur_float dist = camera.GetPosition().Length();
+			ur_float4 hitWorldPosPrev = ur_float4x4::Multiply(cb.viewProjInv, ur_float4(0.0f, 0.0f, 0.0f, 1.0f));
+			(ur_float3&)(hitWorldPosPrev) /= hitWorldPosPrev.w;
+			ur_float3 dir = ((ur_float3&)hitWorldPosPrev - (ur_float3&)cb.cameraPos).Normalize();
+			ur_float3 pos = (ur_float3&)cb.cameraPos + (ur_float3&)cb.cameraDir * dist;
+			ur_float3 posPrev = (ur_float3&)cb.cameraPos + (ur_float3&)dir * dist;
 
 			GrafDescriptorTable* descriptorTable = this->bindingTables[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
@@ -1042,6 +1062,8 @@ int RayTracingSandboxApp::Run()
 			if (this->denoisingEnabled)
 			{
 				this->viewProjPrev = camera.GetViewProj();
+				this->viewProjInvPrev = camera.GetViewProjInv();
+				this->cameraPosPrev = camera.GetPosition();
 				this->accumulationFrameNumber += 1;
 			}
 		}
@@ -1066,7 +1088,7 @@ int RayTracingSandboxApp::Run()
 				this->sampleInstanceCount = (ur_size)std::max(0, editableInt);
 				ImGui::Checkbox("InstancesAnimationEnabled", &this->animationEnabled);
 				ImGui::InputFloat("InstancesCycleTime", &this->animationCycleTime);
-				ImGui::InputFloat("DebugValue", &this->debugValue);
+				ImGui::InputFloat4("DebugValue", &this->debugVec0.x);
 			}
 		}
 	};

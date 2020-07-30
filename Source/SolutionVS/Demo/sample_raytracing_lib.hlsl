@@ -9,8 +9,10 @@ struct SceneConstants
 {
 	float4x4 viewProjInv;
 	float4x4 viewProjPrev;
+	float4x4 viewProjInvPrev;
 	float4 cameraPos;
 	float4 cameraDir;
+	float4 cameraPosPrev;
 	float4 viewportSize; // w, h, 1/w, 1/h
 	float4 clearColor;
 	float4 occlusionBufferSize;
@@ -486,61 +488,6 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 		{
 			// read precomputed occlusion result
 
-			#if (0)
-
-			static const uint resolutionDenom = 4;
-			#if (0)
-			uint2 samplePos = dispatchPos / resolutionDenom;
-			occlusionFactor = float(g_OcclusionBuffer[samplePos].x) / 0xffff;
-			#else
-			#if (0)
-			static const uint kernelSampleCount = 25;
-			static const int2 kernelOfs[kernelSampleCount] = {
-				int2(-2,-2), int2(-1,-2), int2( 0,-2), int2( 1,-2), int2( 2,-2),
-				int2(-2,-1), int2(-1,-1), int2( 0,-1), int2( 1,-1), int2( 2,-1),
-				int2(-2, 0), int2(-1, 0), int2( 0, 0), int2( 1, 0), int2( 2, 0),
-				int2(-2, 1), int2(-1, 1), int2( 0, 1), int2( 1, 1), int2( 2, 1),
-				int2(-2, 2), int2(-1, 2), int2( 0, 2), int2( 1, 2), int2( 2, 2)
-			};
-			static const float kernelWeight[kernelSampleCount] = {
-				0.023528, 0.033969, 0.038393, 0.033969, 0.023528,
-				0.033969, 0.049045, 0.055432, 0.049045, 0.033969,
-				0.038393, 0.055432, 0.062651, 0.055432, 0.038393,
-				0.033969, 0.049045, 0.055432, 0.049045, 0.033969,
-				0.023528, 0.033969, 0.038393, 0.033969, 0.023528
-			};
-			#else
-			static const uint kernelSampleCount = 9;
-			static const int2 kernelOfs[kernelSampleCount] = {
-				int2(-1,-1), int2(0,-1), int2(1,-1),
-				int2(-1, 0), int2(0, 0), int2(1, 0),
-				int2(-1, 1), int2(0, 1), int2(1, 1),
-			};
-			static const float kernelWeight[kernelSampleCount] = {
-				0.095332, 0.118095, 0.095332,
-				0.118095, 0.146293, 0.118095,
-				0.095332, 0.118095, 0.095332
-			};
-			#endif
-			occlusionFactor = 0.0;
-			int2 bufferSize = int2(DispatchRaysDimensions().xy / resolutionDenom);
-			int2 samplePosCenter = int2(dispatchPos / resolutionDenom);
-			float weightSum = 0.0;
-			for (uint k = 0; k < kernelSampleCount; ++k)
-			{
-				int2 samplePos = samplePosCenter + kernelOfs[k];
-				if (samplePos.x < 0 || samplePos.y < 0 || samplePos.x >= bufferSize.x || samplePos.y >= bufferSize.y)
-					continue;
-				occlusionFactor += float(g_OcclusionBuffer[samplePos + kernelOfs[k]].x) / 0xffff * kernelWeight[k];
-				weightSum += kernelWeight[k];
-			}
-			occlusionFactor /= weightSum;
-			#endif
-
-			#else
-
-			// dinterleave precomputed data
-
 			int2 samplePos = int2(dispatchPos.x / 2, dispatchPos.y); // chekerboard data sample pos
 			uint samplePrecomputed = (dispatchPos.x + dispatchPos.y + 1) % 2; // check whether sample has precomputed data or requires deinterleaving
 			
@@ -562,7 +509,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 					if (samplePosCrnt.x < 0 || samplePosCrnt.y < 0 || samplePosCrnt.x >= srcBufferSize.x || samplePosCrnt.y >= srcBufferSize.y)
 						continue;
 					float sampleDepth = g_DepthBuffer[samplePosCrnt];
-					if (abs(sampleDepth - depthCrnt) > depthCrnt * 0.02)
+					if (abs(sampleDepth - depthCrnt) > depthCrnt * /*0.02*/g_SceneCB.debugVec0[0])
 						continue;
 					uint packedOcclusion = (g_SceneCB.blurEnabled ? g_OcclusionBufferDenoised[samplePosCrnt].x : g_OcclusionBuffer[samplePosCrnt].x);
 					float sampleOcclusion = float(packedOcclusion) / 0xffff;
@@ -571,10 +518,8 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 					blendWeightSum += sampleWeight;
 				}
 				occlusionFactor = saturate(occlusionFactor / (blendWeightSum + Eps));
-				//occlusionFactor *= g_SceneCB.debugVec0.x;
+				occlusionFactor *= g_SceneCB.debugVec0[1];
 			}
-
-			#endif
 		}
 	}
 
@@ -749,17 +694,28 @@ void AORaygen()
 			uint2 packedData = g_OcclusionBufferPrev[dispatchPosPrev];
 			accumulatedOcclusion = float(packedData.x) / 0xffff;
 			#if (1)
-			float accumulationConfidence = 1.0 - saturate(abs(depthPrev - depthCrnt) / (min(depthCrnt, depthPrev) * 0.08));
+			float accumulationConfidence = 1.0 - saturate(abs(depthPrev - depthCrnt) / (min(depthCrnt, depthPrev) * /*0.08*/g_SceneCB.debugVec0[3]));
 			accumulationConfidence = (accumulationConfidence > 0.25 ? 1.0 : 0.0);
 			counter = min(uint(float(packedData.y) * accumulationConfidence) + 1, g_SceneCB.accumulationFrameCount);
 			accumulatedOcclusion = (accumulatedOcclusion * (counter - 1) / counter) + (occlusionFactor / counter);
-			#else
+			#elif (0)
 			// test: limited accumulation
-			float accumulationConfidence = 1.0 - saturate(abs(depthPrev - depthCrnt) / (min(depthCrnt, depthPrev) * 0.02));
+			float accumulationConfidence = 1.0 - saturate(abs(depthPrev - depthCrnt) / (min(depthCrnt, depthPrev) * /*0.02*/g_SceneCB.debugVec0[3]));
 			counter = uint(float(packedData.y) * accumulationConfidence) + 1;
 			if (counter <= g_SceneCB.accumulationFrameCount)
 				accumulatedOcclusion = (accumulatedOcclusion * (counter - 1) / counter) + (occlusionFactor / counter);
 			counter = min(counter, g_SceneCB.accumulationFrameCount);
+			#elif (0)
+			// world pos delta based confidence
+			//float4 hitWorldPosPrev = mul(float4(clipPosPrev.xy, depthPrev, 1.0), g_SceneCB.viewProjInvPrev);
+			//float4 rayWorldPrev = mul(float4(rayClip.xy, 0.0, 1.0), g_SceneCB.viewProjInv);
+			//rayWorldPrev.xyz /= rayWorldPrev.w;
+			float3 hitWorldPosPrev = g_SceneCB.cameraPosPrev.xyz + /*normalize(rayWorldPrev.xyz - g_SceneCB.cameraPos.xyz)*/ray.Direction * depthPrev;
+			float posDelta = length(hitWorldPos - hitWorldPosPrev.xyz);
+			float accumulationConfidence = 1.0 - saturate(posDelta / (max(depthCrnt, depthPrev) * /*0.08*/g_SceneCB.debugVec0[3]));
+			accumulationConfidence = (accumulationConfidence > 0.25 ? 1.0 : 0.0);
+			counter = min(uint(float(packedData.y) * accumulationConfidence) + 1, g_SceneCB.accumulationFrameCount);
+			accumulatedOcclusion = (accumulatedOcclusion * (counter - 1) / counter) + (occlusionFactor / counter);
 			#endif
 			occlusionFactor = accumulatedOcclusion;
 			occlusionCounter = counter;
@@ -824,7 +780,7 @@ void AOClosestHit(inout AORayData rayDataInout, in SampleHitAttributes attribs)
 	{
 		uint accumulationFrame = g_SceneCB.accumulationFrameNumber % g_SceneCB.accumulationFrameCount;
 		uint sampleSeed = isample + ((g_SceneCB.occlusionSampleCount * accumulationFrame) & 0xffff);
-		ray.Direction = mul(GetSampleDirection(sampleSeed, /*hitWorldPos*/float3(dispatchPixelPos.xy, 0)), surfaceTBN);
+		ray.Direction = mul(GetSampleDirection(sampleSeed, hitWorldPos/*float3(dispatchPixelPos.xy, 0)*/), surfaceTBN);
 		rayData.occlusion = 0.0;
 
 		TraceRay(g_SceneStructure,
@@ -909,15 +865,15 @@ void BlurOcclusion(const uint3 dispatchThreadId : SV_DispatchThreadID)
 	float occlusion = 0.0;
 	float weightSum = 0.0;
 	float bufferDepth = g_DepthBuffer[bufferPos];
-	float depthThreshold = bufferDepth * 0.02;
+	float depthThreshold = bufferDepth * /*0.02*/g_SceneCB.debugVec0[2];
 	for (uint k = 0; k < kernelSampleCount; ++k)
 	{
 		int2 samplePos = bufferPos + kernelOfs[k];
 		if (samplePos.x < 0 || samplePos.y < 0 || samplePos.x >= bufferSize.x || samplePos.y >= bufferSize.y)
 			continue;
-		//float sampleDepth = g_DepthBuffer[samplePos];
-		//if (abs(sampleDepth - bufferDepth) > depthThreshold)
-		//	continue;
+		float sampleDepth = g_DepthBuffer[samplePos];
+		if (abs(sampleDepth - bufferDepth) > depthThreshold)
+			continue;
 		occlusion += float(g_OcclusionBuffer[samplePos].x) / 0xffff * kernelWeight[k];
 		weightSum += kernelWeight[k];
 	}
