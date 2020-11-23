@@ -659,6 +659,13 @@ int VoxelPlanetApp::Run()
 		moon->Init(std::move(dataVolume), std::move(presentation));
 	}
 
+	// virtual star light source
+	LightDesc lightDesc = {};
+	lightDesc.Color = { 1.0f, 1.0f, 1.0f };
+	lightDesc.Intensity = 200.0f;
+	lightDesc.Direction = { 1.0f, 0.0f, 0.0f };
+	lightDesc.Position = { 0.0f, 0.0f, 0.0f };
+
 	// demo camera
 	Camera camera(realm);
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::Free);
@@ -724,17 +731,17 @@ int VoxelPlanetApp::Run()
 			if (Succeeded(hdrRender->BeginRender(*gfxContext)))
 			{
 				// draw isosurface
-				moon->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), ur_null);
-				isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get());
+				moon->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), ur_null, &lightDesc);
+				isosurface->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), atmosphere.get(), &lightDesc);
 
 				// draw atmosphere
-				atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition());
+				atmosphere->Render(*gfxContext, camera.GetViewProj(), camera.GetPosition(), &lightDesc);
 
 				// end HDR rendering
 				hdrRender->EndRender(*gfxContext);
 
 				// atmospheric post effects
-				atmosphere->RenderPostEffects(*gfxContext, *hdrRender->GetHDRTarget(), camera.GetViewProj(), camera.GetPosition());
+				atmosphere->RenderPostEffects(*gfxContext, *hdrRender->GetHDRTarget(), camera.GetViewProj(), camera.GetPosition(), &lightDesc);
 
 				// resolve HDR image to back buffer
 				gfxContext->SetRenderTarget(gfxSwapChain->GetTargetBuffer(), hdrRender->GetHDRTarget());
