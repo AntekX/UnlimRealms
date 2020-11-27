@@ -587,13 +587,13 @@ int RayTracingSandboxApp::Run()
 
 			// initialize common instance buffer for TLAS
 
-			GrafBuffer::InitParams sampleInstanceParams;
-			sampleInstanceParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
-			sampleInstanceParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
-			sampleInstanceParams.BufferDesc.SizeInBytes = InstanceCountMax * sizeof(GrafAccelerationStructureInstance);
+			GrafBuffer::InitParams instanceBufferParams;
+			instanceBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
+			instanceBufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
+			instanceBufferParams.BufferDesc.SizeInBytes = InstanceCountMax * sizeof(GrafAccelerationStructureInstance);
 
 			grafSystem->CreateBuffer(this->instanceBuffer);
-			this->instanceBuffer->Initialize(grafDevice, sampleInstanceParams);
+			this->instanceBuffer->Initialize(grafDevice, instanceBufferParams);
 
 			// build TLAS
 

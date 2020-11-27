@@ -11,13 +11,13 @@
 
 #pragma once
 
-//#define VK_ENABLE_BETA_EXTENSIONS // TEMP: required for ray tracing prototype
+#define VK_ENABLE_BETA_EXTENSIONS // TEMP: required for ray tracing prototype
 #if defined(_WINDOWS)
 #define VK_USE_PLATFORM_WIN32_KHR
 #endif
 
 #include "Graf/GrafSystem.h"
-#if defined(VK_ENABLE_BETA_EXTENSIONS)
+#if defined(VK_ENABLE_BETA_EXTENSIONS) && 0 // TODO: no longer required, ray tracing is now a part of SDK
 #include "../Tools/vulkan_beta/include/vulkan/vulkan.h"
 #else
 #include "vulkan/vulkan.h"

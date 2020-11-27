@@ -368,7 +368,7 @@ namespace UnlimRealms
 			if (ur_null == deviceQueue)
 				return;
 			while (deviceQueue->nextSubmitFenceValue - 1 > deviceQueue->d3dSubmitFence->GetCompletedValue())
-			{ 
+			{
 				#if (UR_GRAF_DX12_SLEEPZERO_WHILE_WAIT)
 				Sleep(0);
 				#endif

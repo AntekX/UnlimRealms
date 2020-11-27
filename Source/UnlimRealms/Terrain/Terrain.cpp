@@ -35,7 +35,7 @@ namespace UnlimRealms
 
 	Result Terrain::SubSystem::Create(InstanceHandle& instanceHandle, const InstanceDesc &instanceDesc)
 	{
-        instanceHandle = InvalidHandle;
+		instanceHandle = InvalidHandle;
 		return NotImplemented;
 	}
 
@@ -79,8 +79,8 @@ namespace UnlimRealms
 
 	Result Terrain::ProceduralData::Create(InstanceHandle& instanceHandle, const ProceduralData::InstanceDesc &desc)
 	{
-        // TODO
-        return SubSystem::Create(instanceHandle, desc);
+		// TODO
+		return SubSystem::Create(instanceHandle, desc);
 	}
 
 

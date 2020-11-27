@@ -10,7 +10,7 @@
 #if defined(_WINDOWS)
 #include "Sys/Windows/WinCanvas.h"
 #endif
-#if defined(VK_ENABLE_BETA_EXTENSIONS)
+#if defined(VK_ENABLE_BETA_EXTENSIONS) && 0 // TODO: no longer required, ray tracing is now a part of SDK
 #pragma comment(lib, "../../../Tools/vulkan_beta/lib/vulkan-1.lib")
 #else
 #pragma comment(lib, "vulkan-1.lib")
@@ -5059,7 +5059,7 @@ namespace UnlimRealms
 		return GrafToVkFormatLUT[ur_uint(grafFormat)];
 	}
 
-	static const GrafFormat VkToGrafFormatLUT[VK_FORMAT_END_RANGE + 1] = {
+	static const GrafFormat VkToGrafFormatLUT[] = {
 		GrafFormat::Undefined,
 		GrafFormat::Unsupported,			// VK_FORMAT_R4G4_UNORM_PACK8 = 1,
 		GrafFormat::Unsupported,			// VK_FORMAT_R4G4B4A4_UNORM_PACK16 = 2,
