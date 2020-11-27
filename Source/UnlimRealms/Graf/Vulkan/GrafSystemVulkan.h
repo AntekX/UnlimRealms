@@ -11,7 +11,7 @@
 
 #pragma once
 
-#define VK_ENABLE_BETA_EXTENSIONS // TEMP: required for ray tracing prototype
+//#define VK_ENABLE_BETA_EXTENSIONS // TEMP: required for ray tracing prototype
 #if defined(_WINDOWS)
 #define VK_USE_PLATFORM_WIN32_KHR
 #endif
