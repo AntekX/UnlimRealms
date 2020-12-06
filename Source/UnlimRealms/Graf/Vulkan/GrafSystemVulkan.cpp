@@ -102,6 +102,13 @@ namespace UnlimRealms
 		"VK_KHR_swapchain"
 		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		, "VK_KHR_get_memory_requirements2"
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR_PROV)
+		, "VK_KHR_ray_tracing"
+		, "VK_KHR_pipeline_library"
+		, "VK_EXT_descriptor_indexing"
+		, "VK_KHR_buffer_device_address"
+		, "VK_KHR_deferred_host_operations"
+		#else
 		, "VK_KHR_acceleration_structure"
 		, "VK_KHR_ray_tracing_pipeline"
 		, "VK_KHR_ray_query"
@@ -109,6 +116,7 @@ namespace UnlimRealms
 		, "VK_KHR_deferred_host_operations"
 		, "VK_KHR_buffer_device_address"
 		, "VK_EXT_descriptor_indexing"
+		#endif
 		#endif
 	};
 
