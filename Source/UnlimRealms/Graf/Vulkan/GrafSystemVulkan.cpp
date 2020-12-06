@@ -10,8 +10,9 @@
 #if defined(_WINDOWS)
 #include "Sys/Windows/WinCanvas.h"
 #endif
-#if defined(VK_ENABLE_BETA_EXTENSIONS) && 0 // TODO: no longer required, ray tracing is now a part of SDK
-#pragma comment(lib, "../../../Tools/vulkan_beta/lib/vulkan-1.lib")
+#if defined(VK_ENABLE_BETA_EXTENSIONS)
+//#pragma comment(lib, "../../../Tools/vulkan_beta/lib/vulkan-1.lib") // TODO: no longer required, ray tracing is now a part of SDK
+#pragma comment(lib, "vulkan-1.lib")
 #else
 #pragma comment(lib, "vulkan-1.lib")
 #endif
@@ -109,12 +110,15 @@ namespace UnlimRealms
 	static const char* VulkanDeviceExtensions[] = {
 		"VK_KHR_swapchain"
 		#if (UR_GRAF_VULKAN_RAY_TRACING)
-		, "VK_KHR_ray_tracing"
+		//, "VK_KHR_ray_tracing" // TODO: no longer required with new SDK
+		//, "VK_KHR_get_memory_requirements2"
+		, "VK_KHR_acceleration_structure"
+		, "VK_KHR_ray_tracing_pipeline"
+		, "VK_KHR_ray_query"
 		, "VK_KHR_pipeline_library"
-		, "VK_EXT_descriptor_indexing"
-		, "VK_KHR_buffer_device_address"
 		, "VK_KHR_deferred_host_operations"
-		, "VK_KHR_get_memory_requirements2"
+		, "VK_KHR_buffer_device_address"
+		, "VK_EXT_descriptor_indexing"
 		#endif
 	};
 
@@ -608,6 +612,22 @@ namespace UnlimRealms
 			LogNoteGrafDbg(extensionProperty.extensionName);
 		}
 
+		// verify extensions
+
+		for (auto& extensionRequired : VulkanDeviceExtensions)
+		{
+			ur_bool extensionAvailable = false;
+			for (auto& extensionProperty : vkExtensionProperties)
+			{
+				extensionAvailable = (strcmp(extensionProperty.extensionName, extensionRequired) == 0);
+				if (extensionAvailable) break;
+			}
+			if (!extensionAvailable)
+			{
+				return ResultError(Failure, std::string("GrafDeviceVulkan: requested extension is not supported = ") + std::string(extensionRequired));
+			}
+		}
+
 		// enumerate device queue families
 
 		ur_uint32 vkQueueFamilyCount = 0;
@@ -656,7 +676,7 @@ namespace UnlimRealms
 		vkDeviceInfo.ppEnabledExtensionNames = VulkanDeviceExtensions;
 		vkDeviceInfo.pEnabledFeatures = ur_null;
 
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if defined(VK_ENABLE_BETA_EXTENSIONS) && 0
 		VkPhysicalDeviceBufferDeviceAddressFeatures vkBufferDeviceAddressFeatures = {};
 		vkBufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 		vkBufferDeviceAddressFeatures.pNext = nullptr;

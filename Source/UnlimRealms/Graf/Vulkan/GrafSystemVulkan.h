@@ -17,8 +17,10 @@
 #endif
 
 #include "Graf/GrafSystem.h"
-#if defined(VK_ENABLE_BETA_EXTENSIONS) && 0 // TODO: no longer required, ray tracing is now a part of SDK
-#include "../Tools/vulkan_beta/include/vulkan/vulkan.h"
+#if defined(VK_ENABLE_BETA_EXTENSIONS)
+//#include "../Tools/vulkan_beta/include/vulkan/vulkan.h" // TODO: no longer required, ray tracing is now a part of SDK
+#include "vulkan/vulkan.h"
+//#include "vulkan/vulkan_beta.h"
 #else
 #include "vulkan/vulkan.h"
 #endif
