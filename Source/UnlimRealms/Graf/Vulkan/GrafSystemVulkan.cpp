@@ -10,12 +10,7 @@
 #if defined(_WINDOWS)
 #include "Sys/Windows/WinCanvas.h"
 #endif
-#if defined(VK_ENABLE_BETA_EXTENSIONS)
-//#pragma comment(lib, "../../../Tools/vulkan_beta/lib/vulkan-1.lib") // TODO: no longer required, ray tracing is now a part of SDK
 #pragma comment(lib, "vulkan-1.lib")
-#else
-#pragma comment(lib, "vulkan-1.lib")
-#endif
 #define VMA_IMPLEMENTATION
 #include "3rdParty/VulkanMemoryAllocator/vk_mem_alloc.h"
 
@@ -31,17 +26,13 @@ namespace UnlimRealms
 	#define UR_GRAF_VULKAN_DEBUG_MSG_SEVIRITY_MIN VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
 	#endif
 
-	#if defined(VK_ENABLE_BETA_EXTENSIONS) // debug layer has undefined behavior (causes driver crashes) when device is created with ray tracing extensions
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
+	// TODO: check whether debug layer support KHR ray tracing before enabling
 	#undef UR_GRAF_VULKAN_DEBUG_LAYER
 	#endif
 
 	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_2
 	#define UR_GRAF_VULKAN_VMA_ENABLED 1
-	#if defined(VK_ENABLE_BETA_EXTENSIONS)
-	#define UR_GRAF_VULKAN_RAY_TRACING 1
-	#else
-	#define UR_GRAF_VULKAN_RAY_TRACING 0
-	#endif
 	#define UR_GRAF_VULKAN_IMPLICIT_WAIT_DEVICE 1
 
 	// command buffer synchronisation policy
@@ -69,7 +60,7 @@ namespace UnlimRealms
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,		0 },
 		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC,		0 },
 		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,				0 },
-		#if (UR_GRAF_VULKAN_RAY_TRACING)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		{ VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,	1 * 1024 },
 		#endif
 	};
@@ -109,9 +100,8 @@ namespace UnlimRealms
 
 	static const char* VulkanDeviceExtensions[] = {
 		"VK_KHR_swapchain"
-		#if (UR_GRAF_VULKAN_RAY_TRACING)
-		//, "VK_KHR_ray_tracing" // TODO: no longer required with new SDK
-		//, "VK_KHR_get_memory_requirements2"
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
+		, "VK_KHR_get_memory_requirements2"
 		, "VK_KHR_acceleration_structure"
 		, "VK_KHR_ray_tracing_pipeline"
 		, "VK_KHR_ray_query"
@@ -122,7 +112,7 @@ namespace UnlimRealms
 		#endif
 	};
 
-	#if defined(VK_ENABLE_BETA_EXTENSIONS)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 	PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR = ur_null;
 	PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR = ur_null;
 	PFN_vkGetAccelerationStructureMemoryRequirementsKHR vkGetAccelerationStructureMemoryRequirementsKHR = ur_null;
@@ -294,7 +284,7 @@ namespace UnlimRealms
 			VkPhysicalDeviceProperties& vkDeviceProperties = vkDeviceProperties2.properties;
 			vkDeviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
 			vkDeviceProperties2.pNext = ur_null;
-			#if (UR_GRAF_VULKAN_RAY_TRACING)
+			#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 			VkPhysicalDeviceRayTracingPropertiesKHR vkDeviceRayTracingProperties = {};
 			vkDeviceRayTracingProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PROPERTIES_KHR;
 			vkDeviceRayTracingProperties.pNext = ur_null;
@@ -306,7 +296,7 @@ namespace UnlimRealms
 			VkPhysicalDeviceFeatures& vkDeviceFeatures = vkDeviceFeatures2.features;
 			vkDeviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 			vkDeviceFeatures2.pNext = ur_null;
-			#if (UR_GRAF_VULKAN_RAY_TRACING)
+			#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 			VkPhysicalDeviceRayTracingFeaturesKHR vkDeviceRayTracingFeatures = {};
 			vkDeviceRayTracingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_FEATURES_KHR;
 			vkDeviceRayTracingFeatures.pNext = ur_null;
@@ -336,7 +326,7 @@ namespace UnlimRealms
 				if (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & perHeapFlags[memHeapIdx]) grafDeviceDesc.SharedSystemMemory += (ur_size)vkMemHeap.size;
 			}
 
-			#if (UR_GRAF_VULKAN_RAY_TRACING)
+			#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 			grafDeviceDesc.RayTracing.RayTraceSupported = (ur_bool)vkDeviceRayTracingFeatures.rayTracing;
 			grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)vkDeviceRayTracingFeatures.rayQuery;
 			grafDeviceDesc.RayTracing.ShaderGroupHandleSize = vkDeviceRayTracingProperties.shaderGroupHandleSize;
@@ -676,7 +666,7 @@ namespace UnlimRealms
 		vkDeviceInfo.ppEnabledExtensionNames = VulkanDeviceExtensions;
 		vkDeviceInfo.pEnabledFeatures = ur_null;
 
-		#if defined(VK_ENABLE_BETA_EXTENSIONS) && 0
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		VkPhysicalDeviceBufferDeviceAddressFeatures vkBufferDeviceAddressFeatures = {};
 		vkBufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 		vkBufferDeviceAddressFeatures.pNext = nullptr;
@@ -693,7 +683,7 @@ namespace UnlimRealms
 
 		// initialize device extension functions
 
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(this->vkDevice, "vkCreateAccelerationStructureKHR");
 		vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(this->vkDevice, "vkDestroyAccelerationStructureKHR");
 		vkGetAccelerationStructureMemoryRequirementsKHR = (PFN_vkGetAccelerationStructureMemoryRequirementsKHR)vkGetDeviceProcAddr(this->vkDevice, "vkGetAccelerationStructureMemoryRequirementsKHR");
@@ -1084,7 +1074,7 @@ namespace UnlimRealms
 			vkBufferBarrier.srcAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 			vkStageSrc = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 			break;
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		case GrafBufferState::RayTracingConstantBuffer:
 			vkBufferBarrier.srcAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
 			vkStageSrc = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
@@ -1142,7 +1132,7 @@ namespace UnlimRealms
 			vkBufferBarrier.dstAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 			vkStageDst = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 			break;
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		case GrafBufferState::RayTracingConstantBuffer:
 			vkBufferBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
 			vkStageDst = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
@@ -1230,7 +1220,7 @@ namespace UnlimRealms
 			vkImageBarrier.srcAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 			vkStageSrc = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 			break;
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		case GrafImageState::RayTracingRead:
 			vkImageBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
 			vkStageSrc = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
@@ -1280,7 +1270,7 @@ namespace UnlimRealms
 			vkImageBarrier.dstAccessMask = (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 			vkStageDst = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 			break;
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		case GrafImageState::RayTracingRead:
 			vkImageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 			vkStageDst = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
@@ -1626,7 +1616,7 @@ namespace UnlimRealms
 
 	Result GrafCommandListVulkan::BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount)
 	{
-	#if (UR_GRAF_VULKAN_RAY_TRACING)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		GrafAccelerationStructureVulkan* dstStructureVulkan = static_cast<GrafAccelerationStructureVulkan*>(dstStructrure);
 		if (ur_null == dstStructureVulkan || ur_null == dstStructureVulkan->GetScratchBuffer() || ur_null == geometryData || 0 == geometryCount)
 			return Result(InvalidArgs);
@@ -1719,7 +1709,7 @@ namespace UnlimRealms
 
 	Result GrafCommandListVulkan::BindRayTracingPipeline(GrafRayTracingPipeline* grafPipeline)
 	{
-	#if (UR_GRAF_VULKAN_RAY_TRACING)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		if (ur_null == grafPipeline)
 			return Result(InvalidArgs);
 
@@ -1733,7 +1723,7 @@ namespace UnlimRealms
 
 	Result GrafCommandListVulkan::BindRayTracingDescriptorTable(GrafDescriptorTable* descriptorTable, GrafRayTracingPipeline* grafPipeline)
 	{
-	#if (UR_GRAF_VULKAN_RAY_TRACING)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		if (ur_null == descriptorTable || ur_null == grafPipeline)
 			return Result(InvalidArgs);
 
@@ -1753,7 +1743,7 @@ namespace UnlimRealms
 		const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
 		const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable)
 	{
-	#if (UR_GRAF_VULKAN_RAY_TRACING)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		static const VkStridedBufferRegionKHR NullShaderTableRegion = { VK_NULL_HANDLE, 0, 0, 0 };
 		auto FillVkStridedBufferRegion = [](VkStridedBufferRegionKHR& vkStridedBufferRegion, const GrafStridedBufferRegionDesc* grafStridedBufferRegion) -> void
 		{
@@ -2920,7 +2910,7 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafBufferVulkan: vkBindBufferMemory failed with VkResult = ") + VkResultToString(vkRes));
 		}
 
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		// retrieve device address
 	
 		if (ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress) & initParams.BufferDesc.Usage)
@@ -3838,7 +3828,7 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableVulkan::SetAccelerationStructure(ur_uint bindingIdx, GrafAccelerationStructure* accelerationStructure)
 	{
-	#if defined(VK_ENABLE_BETA_EXTENSIONS)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
 		VkAccelerationStructureKHR vkAccelerationStructure = static_cast<GrafAccelerationStructureVulkan*>(accelerationStructure)->GetVkAccelerationStructure();
 
@@ -4298,7 +4288,7 @@ namespace UnlimRealms
 		this->Deinitialize();
 
 		GrafRayTracingPipeline::Initialize(grafDevice, initParams);
-	#if (UR_GRAF_VULKAN_RAY_TRACING)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 
 		// validate logical device 
 
@@ -4401,7 +4391,7 @@ namespace UnlimRealms
 
 	Result GrafRayTracingPipelineVulkan::GetShaderGroupHandles(ur_uint firstGroup, ur_uint groupCount, ur_size dstBufferSize, ur_byte* dstBufferPtr)
 	{
-	#if (UR_GRAF_VULKAN_RAY_TRACING)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
 		
@@ -4420,7 +4410,7 @@ namespace UnlimRealms
 	GrafAccelerationStructureVulkan::GrafAccelerationStructureVulkan(GrafSystem &grafSystem) :
 		GrafAccelerationStructure(grafSystem)
 	{
-	#if (UR_GRAF_VULKAN_RAY_TRACING)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		this->vkAccelerationStructure = VK_NULL_HANDLE;
 	#endif
 		this->vmaAllocation = VK_NULL_HANDLE;
@@ -4434,7 +4424,7 @@ namespace UnlimRealms
 
 	Result GrafAccelerationStructureVulkan::Deinitialize()
 	{
-	#if (UR_GRAF_VULKAN_RAY_TRACING)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		if (this->vkAccelerationStructure != VK_NULL_HANDLE)
 		{
 			vkDestroyAccelerationStructureKHR(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkAccelerationStructure, ur_null);
@@ -4460,7 +4450,7 @@ namespace UnlimRealms
 		this->Deinitialize();
 
 		GrafAccelerationStructure::Initialize(grafDevice, initParams);
-	#if (UR_GRAF_VULKAN_RAY_TRACING)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 
 		// validate logical device 
 
@@ -4710,7 +4700,7 @@ namespace UnlimRealms
 			vkUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 		if (usage & (ur_uint)GrafBufferUsageFlag::StorageBuffer)
 			vkUsage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		if (usage & (ur_uint)GrafBufferUsageFlag::ShaderDeviceAddress)
 			vkUsage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 		if (usage & (ur_uint)GrafBufferUsageFlag::RayTracing)
@@ -4738,7 +4728,7 @@ namespace UnlimRealms
 			vkShaderStage |= VK_SHADER_STAGE_FRAGMENT_BIT;
 		if (shaderStages & (ur_uint)GrafShaderStageFlag::Compute)
 			vkShaderStage |= VK_SHADER_STAGE_COMPUTE_BIT;
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		if (shaderStages & (ur_uint)GrafShaderStageFlag::RayGen)
 			vkShaderStage |= VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 		if (shaderStages & (ur_uint)GrafShaderStageFlag::AnyHit)
@@ -4776,7 +4766,7 @@ namespace UnlimRealms
 		case GrafDescriptorType::Buffer: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
 		case GrafDescriptorType::RWTexture: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; break;
 		case GrafDescriptorType::RWBuffer: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		case GrafDescriptorType::AccelerationStructure: vkDescriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR; break;
 		#endif
 		};
@@ -4930,7 +4920,7 @@ namespace UnlimRealms
 		{
 		case GrafIndexType::UINT16: vkIndexType = VK_INDEX_TYPE_UINT16; break;
 		case GrafIndexType::UINT32: vkIndexType = VK_INDEX_TYPE_UINT32; break;
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		case GrafIndexType::None: vkIndexType = VK_INDEX_TYPE_NONE_KHR; break;
 		#endif
 		};
@@ -4960,7 +4950,7 @@ namespace UnlimRealms
 		return vkOp;
 	}
 
-#if defined(VK_ENABLE_BETA_EXTENSIONS)
+#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 
 	VkRayTracingShaderGroupTypeKHR GrafUtilsVulkan::GrafToVkRayTracingShaderGroupType(GrafRayTracingShaderGroupType shaderGroupType)
 	{

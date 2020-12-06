@@ -11,19 +11,17 @@
 
 #pragma once
 
-//#define VK_ENABLE_BETA_EXTENSIONS // TEMP: required for ray tracing prototype
 #if defined(_WINDOWS)
 #define VK_USE_PLATFORM_WIN32_KHR
 #endif
 
-#include "Graf/GrafSystem.h"
-#if defined(VK_ENABLE_BETA_EXTENSIONS)
-//#include "../Tools/vulkan_beta/include/vulkan/vulkan.h" // TODO: no longer required, ray tracing is now a part of SDK
-#include "vulkan/vulkan.h"
-//#include "vulkan/vulkan_beta.h"
-#else
-#include "vulkan/vulkan.h"
+#define UR_GRAF_VULKAN_RAY_TRACING_KHR 0 // enables KHR ray tracing support
+#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
+#define VK_ENABLE_BETA_EXTENSIONS
 #endif
+
+#include "Graf/GrafSystem.h"
+#include "vulkan/vulkan.h"
 #include "3rdParty/VulkanMemoryAllocator/vk_mem_alloc.h"
 
 namespace UnlimRealms
@@ -616,7 +614,7 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
-	#if defined(VK_ENABLE_BETA_EXTENSIONS)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		inline VkAccelerationStructureKHR GetVkAccelerationStructure() const;
 	#endif
 
@@ -626,7 +624,7 @@ namespace UnlimRealms
 
 		Result Deinitialize();
 
-	#if defined(VK_ENABLE_BETA_EXTENSIONS)
+	#if defined(UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		VkAccelerationStructureKHR vkAccelerationStructure;
 	#endif
 		VmaAllocation vmaAllocation;
@@ -664,7 +662,7 @@ namespace UnlimRealms
 		static inline VkAttachmentStoreOp GrafToVkStoreOp(GrafRenderPassDataOp dataOp);
 		static inline VkFormat GrafToVkFormat(GrafFormat grafFormat);
 		static inline GrafFormat VkToGrafFormat(VkFormat vkFormat);
-		#if defined(VK_ENABLE_BETA_EXTENSIONS)
+		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		static inline VkRayTracingShaderGroupTypeKHR GrafToVkRayTracingShaderGroupType(GrafRayTracingShaderGroupType shaderGroupType);
 		static inline VkGeometryTypeKHR GrafToVkAccelerationStructureGeometryType(GrafAccelerationStructureGeometryType geometryType);
 		static inline VkGeometryFlagsKHR GrafToVkAccelerationStructureGeometryFlags(GrafAccelerationStructureGeometryFlags geometryFlags);
