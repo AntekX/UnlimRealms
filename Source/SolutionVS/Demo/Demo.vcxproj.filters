@@ -42,6 +42,9 @@
     <ClInclude Include="RayTracingSandboxApp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="HybridRenderingApp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -60,6 +63,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="RayTracingSandboxApp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="HybridRenderingApp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -84,6 +90,9 @@
       <Filter>Source Files</Filter>
     </FxCompile>
     <FxCompile Include="sample_raytracing_lib.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="HybridRenderingApp_lib.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
   </ItemGroup>

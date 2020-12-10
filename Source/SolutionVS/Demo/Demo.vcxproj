@@ -186,6 +186,7 @@ call "CompileHLSL_SPIRV.bat"</Command>
   <ItemGroup>
     <ClInclude Include="D3D12SandboxApp.h" />
     <ClInclude Include="Demo.h" />
+    <ClInclude Include="HybridRenderingApp.h" />
     <ClInclude Include="RayTracingSandboxApp.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="stdafx.h" />
@@ -196,6 +197,7 @@ call "CompileHLSL_SPIRV.bat"</Command>
   <ItemGroup>
     <ClCompile Include="D3D12SandboxApp.cpp" />
     <ClCompile Include="Demo.cpp" />
+    <ClCompile Include="HybridRenderingApp.cpp" />
     <ClCompile Include="RayTracingSandboxApp.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -214,6 +216,20 @@ call "CompileHLSL_SPIRV.bat"</Command>
     <Image Include="small.ico" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="HybridRenderingApp_lib.hlsl">
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">6.3</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">6.3</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.3</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.3</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Library</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Library</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Library</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+      </EntryPointName>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </EntryPointName>
+    </FxCompile>
     <FxCompile Include="sample_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>

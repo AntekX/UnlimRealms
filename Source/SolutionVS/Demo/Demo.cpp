@@ -7,6 +7,7 @@
 #include "D3D12SandboxApp.h"
 #include "VulkanSandboxApp.h"
 #include "RayTracingSandboxApp.h"
+#include "HybridRenderingApp.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -17,6 +18,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	//D3D12SandboxApp demoApp;
 	//VulkanSandboxApp demoApp;
 	//RayTracingSandboxApp demoApp;
+	//HybridRenderingApp demoApp;
 	
 	return demoApp.Run();
 }
