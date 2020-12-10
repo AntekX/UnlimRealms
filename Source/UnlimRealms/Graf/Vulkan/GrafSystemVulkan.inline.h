@@ -150,7 +150,7 @@ namespace UnlimRealms
 		return this->vkPipelineLayout;
 	}
 
-	#if defined(VK_ENABLE_BETA_EXTENSIONS)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 	inline VkAccelerationStructureKHR GrafAccelerationStructureVulkan::GetVkAccelerationStructure() const
 	{
 		return this->vkAccelerationStructure;
