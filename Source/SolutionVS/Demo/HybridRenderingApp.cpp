@@ -69,42 +69,29 @@ int HybridRenderingApp::Run()
 	}
 
 	// initialize GRAF objects
+	enum RenderTargetImageUsage
+	{
+		RenderTargetImageUsage_Depth = 0,
+		RenderTargetImageUsage_Geometry0, // xyz: baseColor; w: materialTypeID;
+		RenderTargetImageUsage_Geometry1, // xy: normal; z: roughness; w: reflectance;
+		RenderTargetImageCount
+	};
+	static const GrafFormat RenderTargetImageFormat[RenderTargetImageCount] = {
+		GrafFormat::D24_UNORM_S8_UINT,
+		GrafFormat::R8G8B8A8_UNORM,
+		GrafFormat::R8G8B8A8_UNORM,
+	};
 	struct RenderTargetObjects
 	{
-		enum ImageUsage
-		{
-			ImageUsage_Depth = 0,
-			ImageUsage_Normal,
-			ImageCount
-		};
-
-		GrafRenderer* grafRenderer;
-		std::unique_ptr<GrafImage> images[ImageCount];
-		std::vector<std::unique_ptr<GrafRenderTarget>> targetPerFrame;
-		
-		Result Initialize()
-		{
-			Result res(Success);
-
-			// TODO
-
-			return res;
-		}
-
-		void Deinitialize()
-		{
-			targetPerFrame.clear();
-		}
-
-		RenderTargetObjects(GrafRenderer* grafRenderer) : grafRenderer(grafRenderer) {}
-		~RenderTargetObjects() { Deinitialize(); }
+		std::unique_ptr<GrafImage> images[RenderTargetImageCount];
+		std::unique_ptr<GrafRenderTarget> renderTarget;
 	};
 	struct GrafObjects
 	{
 		GrafRenderer* grafRenderer;
 		std::vector<std::unique_ptr<GrafCommandList>> cmdListPerFrame;
-		std::unique_ptr<RenderTargetObjects> renderTargetObjects;
 		std::unique_ptr<GrafRenderPass> rasterRenderPass;
+		std::unique_ptr<RenderTargetObjects> renderTargetObjects;
 
 		Result Initialize()
 		{
@@ -124,20 +111,112 @@ int HybridRenderingApp::Run()
 			}
 			if (Failed(res)) return res;
 
+			// rasterization render pass
+			res = grafSystem->CreateRenderPass(rasterRenderPass);
+			if (Failed(res)) return res;
+			GrafRenderPassImageDesc rasterRenderPassImageDesc[RenderTargetImageCount];
+			for (ur_uint imageIdx = 0; imageIdx < RenderTargetImageCount; ++imageIdx)
+			{
+				auto& passImageDesc = rasterRenderPassImageDesc[imageIdx];
+				RenderTargetImageUsage imageUsage = RenderTargetImageUsage(imageIdx);
+				passImageDesc.Format = RenderTargetImageFormat[imageIdx];
+				passImageDesc.InitialState = (RenderTargetImageUsage_Depth == imageUsage ? GrafImageState::DepthStencilWrite : GrafImageState::ColorWrite);
+				passImageDesc.FinalState = passImageDesc.InitialState;
+				passImageDesc.LoadOp = GrafRenderPassDataOp::Load;
+				passImageDesc.StoreOp = GrafRenderPassDataOp::Store;
+				passImageDesc.StencilLoadOp = GrafRenderPassDataOp::DontCare;
+				passImageDesc.StencilStoreOp = GrafRenderPassDataOp::DontCare;
+			}
+			res = rasterRenderPass->Initialize(grafDevice, { rasterRenderPassImageDesc, ur_array_size(rasterRenderPassImageDesc) });
+			if (Failed(res)) return res;
+
 			return res;
 		}
 
 		void Deinitialize()
 		{
+			// here we expect that device is idle
+			DestroyRenderTargetObjects();
+			rasterRenderPass.reset();
 			cmdListPerFrame.clear();
+		}
+
+		Result CreateRenderTargetObjects(ur_uint width, ur_uint height)
+		{
+			Result res(Success);
+			GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
+			GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
+
+			DestroyRenderTargetObjects(ur_null);
+
+			renderTargetObjects.reset(new RenderTargetObjects());
+
+			// images
+			GrafImage* renderTargetImages[RenderTargetImageCount];
+			for (ur_uint imageIdx = 0; imageIdx < RenderTargetImageCount; ++imageIdx)
+			{
+				auto& image = renderTargetObjects->images[imageIdx];
+				res = grafSystem->CreateImage(image);
+				if (Failed(res)) return res;
+				GrafImageDesc imageDesc = {
+					GrafImageType::Tex2D,
+					RenderTargetImageFormat[imageIdx],
+					ur_uint3(width, height, 1), 1,
+					ur_uint((GrafUtils::IsDepthStencilFormat(RenderTargetImageFormat[imageIdx]) ?
+						GrafImageUsageFlag::DepthStencilRenderTarget : GrafImageUsageFlag::ColorRenderTarget)),
+					ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+				};
+				res = image->Initialize(grafDevice, { imageDesc });
+				if (Failed(res)) return res;
+				renderTargetImages[imageIdx] = image.get();
+			}
+
+			// rasterization pass render target
+			res = grafSystem->CreateRenderTarget(renderTargetObjects->renderTarget);
+			if (Failed(res)) return res;
+			GrafRenderTarget::InitParams renderTargetParams = {
+				rasterRenderPass.get(),
+				renderTargetImages,
+				ur_array_size(renderTargetImages)
+			};
+			res = renderTargetObjects->renderTarget->Initialize(grafDevice, renderTargetParams);
+			if (Failed(res)) return res;
+
+			return res;
+		}
+
+		void DestroyRenderTargetObjects(GrafCommandList* syncCmdList = ur_null)
+		{
+			if (ur_null == renderTargetObjects)
+				return;
+
+			if (syncCmdList != ur_null)
+			{
+				auto objectsToDestroy = renderTargetObjects.release();
+				grafRenderer->AddCommandListCallback(syncCmdList, {}, [objectsToDestroy](GrafCallbackContext& ctx) -> Result
+				{
+					delete objectsToDestroy;
+					return Result(Success);
+				});
+			}
+			
+			renderTargetObjects.reset();
 		}
 
 		GrafObjects(GrafRenderer* grafRenderer) : grafRenderer(grafRenderer) {}
 		~GrafObjects() { Deinitialize(); }
 	};
 	GrafObjects grafObjects(grafRenderer);
-	grafObjects.Initialize();
-	// TODO: initialize all here
+	res = grafObjects.Initialize();
+	if (Succeeded(res))
+	{
+		res = grafObjects.CreateRenderTargetObjects(canvasWidth, canvasHeight);
+	}
+	if (Failed(res))
+	{
+		grafObjects.Deinitialize();
+		realm.GetLog().WriteLine("HybridRenderingApp: failed to initialize one or more graphic objects", Log::Error);
+	}
 
 	// initialize ImguiRender
 	ImguiRender* imguiRender = ur_null;
@@ -233,7 +312,7 @@ int HybridRenderingApp::Run()
 		{
 			GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 			GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
-			GrafCommandList* grafCmdListCrnt = ur_null;// grafMainCmdList[grafRenderer->GetCurrentFrameId()].get();
+			GrafCommandList* grafCmdListCrnt = grafObjects.cmdListPerFrame[grafRenderer->GetCurrentFrameId()].get();
 			grafCmdListCrnt->Begin();
 
 			GrafViewportDesc grafViewport = {};
@@ -247,7 +326,7 @@ int HybridRenderingApp::Run()
 			grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
 			grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), rtClearValue);
 
-			updateFrameJob->Wait();
+			updateFrameJob->Wait(); // make sure async update is done
 
 			{ // foreground color render pass (drawing directly into swap chain image)
 
@@ -291,18 +370,17 @@ int HybridRenderingApp::Run()
 			// begin frame rendering
 			grafRenderer->BeginFrame();
 
-			// resize render target(s)
+			// update render target(s)
 			ur_uint canvasWidthNew = realm.GetCanvas()->GetClientBound().Width() / canvasDenom;
 			ur_uint canvasHeightNew = realm.GetCanvas()->GetClientBound().Height() / canvasDenom;
 			if (canvasValid && (canvasWidth != canvasWidthNew || canvasHeight != canvasHeightNew))
 			{
 				canvasWidth = canvasWidthNew;
 				canvasHeight = canvasHeightNew;
-				// TODO
 				// use prev frame command list to make sure RT objects are destroyed only when it is no longer used
-				//deinitializeGrafRenderTargetObjects(grafMainCmdList[grafRenderer->GetPrevFrameId()].get());
+				grafObjects.DestroyRenderTargetObjects(grafObjects.cmdListPerFrame[grafRenderer->GetPrevFrameId()].get());
 				// recreate RT objects for new canvas dimensions
-				//initializeGrafRenderTargetObjects();
+				grafObjects.CreateRenderTargetObjects(canvasWidth, canvasHeight);
 			}
 
 			Job* renderFrameJob = ur_null;
@@ -332,7 +410,7 @@ int HybridRenderingApp::Run()
 	// TODO
 
 	// destroy GRAF objects
-	//deinitializeGrafObjects();
+	grafObjects.Deinitialize();
 
 	// destroy realm objects
 	realm.RemoveComponent<ImguiRender>();
