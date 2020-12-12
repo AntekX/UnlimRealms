@@ -170,6 +170,12 @@ namespace UnlimRealms
 
 		virtual Result Wait(ur_uint64 timeout = ur_uint64(-1));
 
+		virtual Result InsertDebugLabel(const char* name, const ur_float4& color = ur_float4::Zero);
+
+		virtual Result BeginDebugLabel(const char* name, const ur_float4& color = ur_float4::Zero);
+
+		virtual Result EndDebugLabel();
+
 		virtual Result BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState);
 
 		virtual Result ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState);

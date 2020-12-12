@@ -66,6 +66,8 @@ namespace UnlimRealms
 			this->y = v.y;
 		}
 
+		static const TVector2<T> Zero;
+
 		TVector2<T> operator+ (const TVector2<T> &v) const
 		{
 			TVector2 r;
@@ -268,6 +270,8 @@ namespace UnlimRealms
 			this->y = v.y;
 			this->z = v.z;
 		}
+
+		static const TVector3<T> Zero;
 
 		TVector3<T> operator+ (const TVector3<T> &v) const
 		{
@@ -570,6 +574,8 @@ namespace UnlimRealms
 			this->z = v.z;
 			this->w = _w;
 		}
+
+		static const TVector4<T> Zero;
 
 		TVector4<T>& operator= (const TVector3<T> &v)
 		{
@@ -1128,6 +1134,15 @@ namespace UnlimRealms
 			this->FrustumPlanes(*this, planes, normalize);
 		}
 	};
+
+	template <class T>
+	const TVector2<T> TVector2<T>::Zero = { 0, 0 };
+
+	template <class T>
+	const TVector3<T> TVector3<T>::Zero = { 0, 0, 0 };
+
+	template <class T>
+	const TVector4<T> TVector4<T>::Zero = { 0, 0, 0, 0 };
 
 	template <class T>
 	const TMatrix<T> TMatrix<T>::Zero = {

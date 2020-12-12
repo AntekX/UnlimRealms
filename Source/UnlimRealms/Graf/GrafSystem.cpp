@@ -274,6 +274,21 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandList::InsertDebugLabel(const char* name, const ur_float4& color)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandList::BeginDebugLabel(const char* name, const ur_float4& color)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandList::EndDebugLabel()
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandList::ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState)
 	{
 		return Result(NotImplemented);

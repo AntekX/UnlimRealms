@@ -594,6 +594,21 @@ namespace UnlimRealms
 		return res;
 	}
 
+	Result GrafCommandListDX12::InsertDebugLabel(const char* name, const ur_float4& color)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandListDX12::BeginDebugLabel(const char* name, const ur_float4& color)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandListDX12::EndDebugLabel()
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandListDX12::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState)
 	{
 		return Result(NotImplemented);

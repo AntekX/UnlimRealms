@@ -32,6 +32,7 @@ namespace UnlimRealms
 	#endif
 
 	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_2
+	#define UR_GRAF_VULKAN_DEBUG_LABLES 1
 	#define UR_GRAF_VULKAN_VMA_ENABLED 1
 	#define UR_GRAF_VULKAN_IMPLICIT_WAIT_DEVICE 1
 
@@ -93,7 +94,7 @@ namespace UnlimRealms
 		#if defined(_WINDOWS)
 		, "VK_KHR_win32_surface"
 		#endif
-		#if defined(UR_GRAF_VULKAN_DEBUG_LAYER)
+		#if defined(UR_GRAF_VULKAN_DEBUG_LAYER) || (UR_GRAF_VULKAN_DEBUG_LABLES)
 		, "VK_EXT_debug_utils"
 		#endif
 	};
@@ -119,6 +120,14 @@ namespace UnlimRealms
 		#endif
 		#endif
 	};
+
+	#if defined(UR_GRAF_VULKAN_DEBUG_LABLES)
+	PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = ur_null;
+	PFN_vkSetDebugUtilsObjectTagEXT vkSetDebugUtilsObjectTagEXT = ur_null;
+	PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT = ur_null;
+	PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT = ur_null;
+	PFN_vkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabelEXT = ur_null;
+	#endif
 
 	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 	PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR = ur_null;
@@ -691,6 +700,14 @@ namespace UnlimRealms
 
 		// initialize device extension functions
 
+		#if defined(UR_GRAF_VULKAN_DEBUG_LABLES)
+		vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(this->vkDevice, "vkSetDebugUtilsObjectNameEXT");
+		vkSetDebugUtilsObjectTagEXT = (PFN_vkSetDebugUtilsObjectTagEXT)vkGetDeviceProcAddr(this->vkDevice, "vkSetDebugUtilsObjectTagEXT");
+		vkCmdBeginDebugUtilsLabelEXT = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetDeviceProcAddr(this->vkDevice, "vkCmdBeginDebugUtilsLabelEXT");
+		vkCmdEndDebugUtilsLabelEXT = (PFN_vkCmdEndDebugUtilsLabelEXT)vkGetDeviceProcAddr(this->vkDevice, "vkCmdEndDebugUtilsLabelEXT");
+		vkCmdInsertDebugUtilsLabelEXT = (PFN_vkCmdInsertDebugUtilsLabelEXT)vkGetDeviceProcAddr(this->vkDevice, "vkCmdInsertDebugUtilsLabelEXT");
+		#endif
+
 		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(this->vkDevice, "vkCreateAccelerationStructureKHR");
 		vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(this->vkDevice, "vkDestroyAccelerationStructureKHR");
@@ -1016,6 +1033,66 @@ namespace UnlimRealms
 		VkResult vkRes = vkWaitForFences(vkDevice, 1, &this->vkSubmitFence, true, timeout);
 
 		return Result(vkRes == VK_SUCCESS ? Success : TimeOut);
+	}
+
+	Result GrafCommandListVulkan::InsertDebugLabel(const char* name, const ur_float4& color)
+	{
+	#if (UR_GRAF_VULKAN_DEBUG_LABLES)
+		if (ur_null == vkCmdInsertDebugUtilsLabelEXT)
+			return Result(NotImplemented);
+
+		VkDebugUtilsLabelEXT vkDebugUtilsLabel = {};
+		vkDebugUtilsLabel.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+		vkDebugUtilsLabel.pNext = ur_null;
+		vkDebugUtilsLabel.pLabelName = name;
+		vkDebugUtilsLabel.color[0] = color[0];
+		vkDebugUtilsLabel.color[1] = color[1];
+		vkDebugUtilsLabel.color[2] = color[2];
+		vkDebugUtilsLabel.color[3] = color[3];
+
+		vkCmdInsertDebugUtilsLabelEXT(this->vkCommandBuffer, &vkDebugUtilsLabel);
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
+	Result GrafCommandListVulkan::BeginDebugLabel(const char* name, const ur_float4& color)
+	{
+	#if (UR_GRAF_VULKAN_DEBUG_LABLES)
+		if (ur_null == vkCmdBeginDebugUtilsLabelEXT)
+			return Result(NotImplemented);
+
+		VkDebugUtilsLabelEXT vkDebugUtilsLabel = {};
+		vkDebugUtilsLabel.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+		vkDebugUtilsLabel.pNext = ur_null;
+		vkDebugUtilsLabel.pLabelName = name;
+		vkDebugUtilsLabel.color[0] = color[0];
+		vkDebugUtilsLabel.color[1] = color[1];
+		vkDebugUtilsLabel.color[2] = color[2];
+		vkDebugUtilsLabel.color[3] = color[3];
+		
+		vkCmdBeginDebugUtilsLabelEXT(this->vkCommandBuffer, &vkDebugUtilsLabel);
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
+	Result GrafCommandListVulkan::EndDebugLabel()
+	{
+	#if (UR_GRAF_VULKAN_DEBUG_LABLES)
+		if (ur_null == vkCmdEndDebugUtilsLabelEXT)
+			return Result(NotImplemented);
+
+		vkCmdEndDebugUtilsLabelEXT(this->vkCommandBuffer);
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
 	}
 
 	Result GrafCommandListVulkan::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState)

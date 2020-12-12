@@ -375,10 +375,15 @@ int VoxelPlanetApp::Run()
 
 			auto drawFrameJob = realm.GetJobSystem().Add(JobPriority::High, ur_null, [&](Job::Context& ctx) -> void
 			{
+				static const ur_float4 DebugLabelColorMain = { 1.0f, 0.8f, 0.7f, 1.0f };
+				static const ur_float4 DebugLabelColorPass = { 0.6f, 1.0f, 0.6f, 1.0f };
+				static const ur_float4 DebugLabelColorRender = { 0.8f, 0.8f, 1.0f, 1.0f };
+
 				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
 				GrafCommandList* grafCmdListCrnt = grafMainCmdList[grafRenderer->GetCurrentFrameId()].get();
 				grafCmdListCrnt->Begin();
+				grafCmdListCrnt->BeginDebugLabel("DrawFrame", DebugLabelColorMain);
 
 				GrafViewportDesc grafViewport = {};
 				grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
@@ -395,35 +400,51 @@ int VoxelPlanetApp::Run()
 				{ 
 					// HDR & depth render pass
 
+					grafCmdListCrnt->BeginDebugLabel("MainPass", DebugLabelColorPass);
 					hdrRender->BeginRender(*grafCmdListCrnt);
 
 					// draw isosurface
 					if (isosurface != ur_null)
 					{
+						grafCmdListCrnt->BeginDebugLabel("Isosurface", DebugLabelColorRender);
 						updateFrameJob->WaitProgress(UpdateStage_IsosurfaceReady);
 						isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get(), &lightDesc);
+						grafCmdListCrnt->EndDebugLabel();
 					}
 
 					// draw atmosphere
 					if (atmosphere != ur_null)
 					{
+						grafCmdListCrnt->BeginDebugLabel("Atmosphere", DebugLabelColorRender);
 						atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), &lightDesc);
+						grafCmdListCrnt->EndDebugLabel();
 					}
 
 					hdrRender->EndRender(*grafCmdListCrnt);
+					grafCmdListCrnt->EndDebugLabel();
+
+					grafCmdListCrnt->BeginDebugLabel("PostEFfects", DebugLabelColorPass);
 
 					// atmospheric post effects
 					if (atmosphere != ur_null)
 					{
+						grafCmdListCrnt->BeginDebugLabel("AtmosphericEffects", DebugLabelColorRender);
 						atmosphere->RenderPostEffects(*grafCmdListCrnt, *hdrRender->GetHDRRenderTarget(), camera.GetViewProj(), camera.GetPosition(), &lightDesc);
+						grafCmdListCrnt->EndDebugLabel();
 					}
 
+					// resolve
+					grafCmdListCrnt->BeginDebugLabel("ResolveHDRInput", DebugLabelColorRender);
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 					hdrRender->Resolve(*grafCmdListCrnt, grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get());
+					grafCmdListCrnt->EndDebugLabel();
+
+					grafCmdListCrnt->EndDebugLabel();
 				}
 
 				{ // color & depth render pass
 
+					grafCmdListCrnt->BeginDebugLabel("GenericPrimtives", DebugLabelColorPass);
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 					grafCmdListCrnt->BeginRenderPass(grafPassColorDepth.get(), grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get());
 
@@ -431,10 +452,12 @@ int VoxelPlanetApp::Run()
 					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());
 
 					grafCmdListCrnt->EndRenderPass();
+					grafCmdListCrnt->EndDebugLabel();
 				}
 
 				{ // foreground color render pass (drawing directly into swap chain image)
-
+					
+					grafCmdListCrnt->BeginDebugLabel("ForegroundPass", DebugLabelColorPass);
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 					grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
 					grafCmdListCrnt->SetViewport(grafViewport, true);
@@ -445,6 +468,8 @@ int VoxelPlanetApp::Run()
 					showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
 					if (showGUI)
 					{
+						grafCmdListCrnt->BeginDebugLabel("ImGui", DebugLabelColorRender);
+
 						ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
 						ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
 						ImGui::ShowMetricsWindow();
@@ -465,12 +490,16 @@ int VoxelPlanetApp::Run()
 						}
 
 						imguiRender->Render(*grafCmdListCrnt);
+
+						grafCmdListCrnt->EndDebugLabel();
 					}
 
 					grafCmdListCrnt->EndRenderPass();
+					grafCmdListCrnt->EndDebugLabel();
 				}
 
 				// finalize current command list
+				grafCmdListCrnt->EndDebugLabel();
 				grafCmdListCrnt->End();
 				grafDevice->Record(grafCmdListCrnt);
 			});
