@@ -399,52 +399,51 @@ int VoxelPlanetApp::Run()
 				if (hdrRender != ur_null)
 				{ 
 					// HDR & depth render pass
-
-					grafCmdListCrnt->BeginDebugLabel("MainPass", DebugLabelColorPass);
-					hdrRender->BeginRender(*grafCmdListCrnt);
-
-					// draw isosurface
-					if (isosurface != ur_null)
 					{
-						grafCmdListCrnt->BeginDebugLabel("Isosurface", DebugLabelColorRender);
-						updateFrameJob->WaitProgress(UpdateStage_IsosurfaceReady);
-						isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get(), &lightDesc);
-						grafCmdListCrnt->EndDebugLabel();
+						GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "MainPass", DebugLabelColorPass);
+						hdrRender->BeginRender(*grafCmdListCrnt);
+
+						// draw isosurface
+						if (isosurface != ur_null)
+						{
+							GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "Isosurface", DebugLabelColorRender);
+							updateFrameJob->WaitProgress(UpdateStage_IsosurfaceReady);
+							isosurface->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), atmosphere.get(), &lightDesc);
+						}
+
+						// draw atmosphere
+						if (atmosphere != ur_null)
+						{
+							GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "Atmosphere", DebugLabelColorRender);
+							atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), &lightDesc);
+						}
+
+						hdrRender->EndRender(*grafCmdListCrnt);
 					}
 
-					// draw atmosphere
-					if (atmosphere != ur_null)
+					// post effects
 					{
-						grafCmdListCrnt->BeginDebugLabel("Atmosphere", DebugLabelColorRender);
-						atmosphere->Render(*grafCmdListCrnt, camera.GetViewProj(), camera.GetPosition(), &lightDesc);
-						grafCmdListCrnt->EndDebugLabel();
+						GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "PostEFfects", DebugLabelColorPass);
+
+						// atmospheric post effects
+						if (atmosphere != ur_null)
+						{
+							GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "AtmosphericEffects", DebugLabelColorRender);
+							atmosphere->RenderPostEffects(*grafCmdListCrnt, *hdrRender->GetHDRRenderTarget(), camera.GetViewProj(), camera.GetPosition(), &lightDesc);
+						}
+
+						// resolve HDR input
+						{
+							GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ResolveHDRInput", DebugLabelColorRender);
+							grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
+							hdrRender->Resolve(*grafCmdListCrnt, grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get());
+						}
 					}
-
-					hdrRender->EndRender(*grafCmdListCrnt);
-					grafCmdListCrnt->EndDebugLabel();
-
-					grafCmdListCrnt->BeginDebugLabel("PostEFfects", DebugLabelColorPass);
-
-					// atmospheric post effects
-					if (atmosphere != ur_null)
-					{
-						grafCmdListCrnt->BeginDebugLabel("AtmosphericEffects", DebugLabelColorRender);
-						atmosphere->RenderPostEffects(*grafCmdListCrnt, *hdrRender->GetHDRRenderTarget(), camera.GetViewProj(), camera.GetPosition(), &lightDesc);
-						grafCmdListCrnt->EndDebugLabel();
-					}
-
-					// resolve
-					grafCmdListCrnt->BeginDebugLabel("ResolveHDRInput", DebugLabelColorRender);
-					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
-					hdrRender->Resolve(*grafCmdListCrnt, grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get());
-					grafCmdListCrnt->EndDebugLabel();
-
-					grafCmdListCrnt->EndDebugLabel();
 				}
 
-				{ // color & depth render pass
-
-					grafCmdListCrnt->BeginDebugLabel("GenericPrimtives", DebugLabelColorPass);
+				// color & depth render pass
+				{
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "GenericPrimtives", DebugLabelColorPass);
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 					grafCmdListCrnt->BeginRenderPass(grafPassColorDepth.get(), grafTargetColorDepth[grafCanvas->GetCurrentImageId()].get());
 
@@ -452,12 +451,11 @@ int VoxelPlanetApp::Run()
 					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());
 
 					grafCmdListCrnt->EndRenderPass();
-					grafCmdListCrnt->EndDebugLabel();
 				}
 
-				{ // foreground color render pass (drawing directly into swap chain image)
-					
-					grafCmdListCrnt->BeginDebugLabel("ForegroundPass", DebugLabelColorPass);
+				// foreground color render pass (drawing directly into swap chain image)
+				{
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ForegroundPass", DebugLabelColorPass);
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 					grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
 					grafCmdListCrnt->SetViewport(grafViewport, true);
@@ -468,8 +466,6 @@ int VoxelPlanetApp::Run()
 					showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
 					if (showGUI)
 					{
-						grafCmdListCrnt->BeginDebugLabel("ImGui", DebugLabelColorRender);
-
 						ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
 						ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
 						ImGui::ShowMetricsWindow();
@@ -489,17 +485,15 @@ int VoxelPlanetApp::Run()
 							hdrRender->ShowImgui();
 						}
 
+						GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ImGui", DebugLabelColorRender);
 						imguiRender->Render(*grafCmdListCrnt);
-
-						grafCmdListCrnt->EndDebugLabel();
 					}
 
 					grafCmdListCrnt->EndRenderPass();
-					grafCmdListCrnt->EndDebugLabel();
 				}
 
 				// finalize current command list
-				grafCmdListCrnt->EndDebugLabel();
+				grafCmdListCrnt->EndDebugLabel(); // DrawFrame
 				grafCmdListCrnt->End();
 				grafDevice->Record(grafCmdListCrnt);
 			});

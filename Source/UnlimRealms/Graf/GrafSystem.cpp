@@ -825,6 +825,17 @@ namespace UnlimRealms
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	GrafUtils::ScopedDebugLabel::ScopedDebugLabel(GrafCommandList* cmdList, const char* name, const ur_float4& color)
+	{
+		this->cmdList = cmdList;
+		this->cmdList->BeginDebugLabel(name, color);
+	}
+	
+	GrafUtils::ScopedDebugLabel::~ScopedDebugLabel()
+	{
+		this->cmdList->EndDebugLabel();
+	}
+
 	Result GrafUtils::CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader)
 	{
 		return GrafUtils::CreateShaderFromFile(grafDevice, resName, GrafShader::DefaultEntryPoint, shaderType, grafShader);

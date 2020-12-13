@@ -1338,6 +1338,15 @@ namespace UnlimRealms
 
 		static inline ur_bool IsDepthStencilFormat(GrafFormat grafFormat);
 
+		class UR_DECL ScopedDebugLabel
+		{
+		public:
+			ScopedDebugLabel(GrafCommandList* cmdList, const char* name, const ur_float4& color = ur_float4::Zero);
+			~ScopedDebugLabel();
+		private:
+			GrafCommandList* cmdList;
+		};
+
 		struct ImageData
 		{
 			GrafImageDesc Desc;
