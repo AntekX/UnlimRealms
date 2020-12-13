@@ -292,6 +292,10 @@ int HybridRenderingApp::Run()
 
 		GrafRenderer* grafRenderer;
 		std::vector<std::unique_ptr<Mesh>> meshes;
+		std::unique_ptr<GrafDescriptorTableLayout> rasterDescTableLayout;
+		std::vector<std::unique_ptr<GrafDescriptorTable>> rasterDescTablePerFrame;
+		std::unique_ptr<GrafPipeline> rasterPipelineState;
+		std::unique_ptr<GrafShaderLib> shaderLib;
 
 		DemoScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
 		{
@@ -335,6 +339,53 @@ int HybridRenderingApp::Run()
 					}
 				}
 			}
+
+			// rasterization pipeline configuration
+			
+			Result res = grafSystem->CreatePipeline(this->rasterPipelineState);
+			if (Succeeded(res))
+			{
+				/*GrafShader* shaderStages[] = {
+					this->grafObjects.VS.get(),
+					this->grafObjects.PS.get()
+				};
+				GrafDescriptorTableLayout* descriptorLayouts[] = {
+					this->grafObjects.shaderDescriptorLayout.get(),
+				};
+				GrafVertexElementDesc vertexElements[] = {
+					{ GrafFormat::R32G32B32_SFLOAT, 0 },
+					{ GrafFormat::R32G32B32_SFLOAT, 12 },
+					{ GrafFormat::R8G8B8A8_UNORM, 24 },
+				};
+				GrafVertexInputDesc vertexInputs[] = { {
+					GrafVertexInputType::PerVertex, 0, sizeof(Vertex),
+					vertexElements, ur_array_size(vertexElements)
+				} };
+				GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
+				pipelineParams.RenderPass = rasterRenderPass;
+				pipelineParams.ShaderStages = shaderStages;
+				pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+				pipelineParams.DescriptorTableLayouts = descriptorLayouts;
+				pipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+				pipelineParams.VertexInputDesc = vertexInputs;
+				pipelineParams.VertexInputCount = ur_array_size(vertexInputs);
+				pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleList;
+				pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
+				pipelineParams.CullMode = GrafCullMode::Back;
+				pipelineParams.DepthTestEnable = true;
+				pipelineParams.DepthWriteEnable = true;
+				pipelineParams.DepthCompareOp = GrafCompareOp::LessOrEqual;
+				res = this->grafObjects.pipelineSolid->Initialize(grafDevice, pipelineParams);*/
+			}
+		}
+
+		void Update(ur_float elapsedSeconds)
+		{
+
+		}
+
+		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet)
+		{
 		}
 	};
 	std::unique_ptr<DemoScene> demoScene;
@@ -416,10 +467,17 @@ int HybridRenderingApp::Run()
 			timer = timeNow;
 			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f;  // to seconds
 
-			ctx.progress = 1;
+			ctx.progress++;
 
-			// upadte scene here
-			// TODO
+			// update demo scene
+
+			if (demoScene != ur_null)
+			{
+				demoScene->Update(elapsedTime);
+			}
+
+			ctx.progress++;
+
 		}; // end update func
 		
 		Job* updateFrameJob = ur_null;
@@ -454,8 +512,14 @@ int HybridRenderingApp::Run()
 
 			updateFrameJob->Wait(); // make sure async update is done
 
-			{ // foreground color render pass (drawing directly into swap chain image)
+			// demo scene
+			if (demoScene != ur_null)
+			{
+				demoScene->Render(grafCmdListCrnt, renderTargetSet.get());
+			}
 
+			// foreground color render pass (drawing directly into swap chain image)
+			{
 				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 				grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
 				grafCmdListCrnt->SetViewport(grafViewport, true);
