@@ -587,6 +587,10 @@ int HybridRenderingApp::Run()
 
 		auto& RenderFrameJobFunc = [&](Job::Context& ctx) -> void
 		{
+			static const ur_float4 DebugLabelColorMain = { 1.0f, 0.8f, 0.7f, 1.0f };
+			static const ur_float4 DebugLabelColorPass = { 0.6f, 1.0f, 0.6f, 1.0f };
+			static const ur_float4 DebugLabelColorRender = { 0.8f, 0.8f, 1.0f, 1.0f };
+
 			GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
 			GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 			GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
@@ -594,6 +598,7 @@ int HybridRenderingApp::Run()
 			
 			GrafCommandList* grafCmdListCrnt = cmdListPerFrame[grafRenderer->GetCurrentFrameId()].get();
 			grafCmdListCrnt->Begin();
+			grafCmdListCrnt->BeginDebugLabel("DrawFrame", DebugLabelColorMain);
 
 			GrafViewportDesc grafViewport = {};
 			grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
@@ -610,6 +615,7 @@ int HybridRenderingApp::Run()
 
 			// rasterization pass
 			{
+				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "RasterizePass", DebugLabelColorPass);
 				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 				{
 					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::TransferDst);
@@ -629,6 +635,7 @@ int HybridRenderingApp::Run()
 
 				if (demoScene != ur_null)
 				{
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "DemoScene", DebugLabelColorRender);
 					demoScene->Render(grafCmdListCrnt, renderTargetSet.get(), camera);
 				}
 
@@ -638,6 +645,7 @@ int HybridRenderingApp::Run()
 			// ray tracing pass
 			if (grafDeviceDesc->RayTracing.RayTraceSupported)
 			{
+				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "RayTracePass", DebugLabelColorPass);
 				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 				{
 					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::RayTracingRead);
@@ -645,12 +653,14 @@ int HybridRenderingApp::Run()
 
 				if (demoScene != ur_null)
 				{
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "DemoScene", DebugLabelColorRender);
 					demoScene->RayTrace(grafCmdListCrnt, renderTargetSet.get(), camera);
 				}
 			}
 
 			// foreground color render pass (drawing directly into swap chain image)
 			{
+				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ForegroundPass", DebugLabelColorPass);
 				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 				grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
 				grafCmdListCrnt->SetViewport(grafViewport, true);
@@ -674,6 +684,7 @@ int HybridRenderingApp::Run()
 						canvasDenom = editableInt;
 					}
 
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ImGui", DebugLabelColorRender);
 					imguiRender->Render(*grafCmdListCrnt);
 				}
 
@@ -681,6 +692,7 @@ int HybridRenderingApp::Run()
 			}
 
 			// finalize current command list
+			grafCmdListCrnt->EndDebugLabel();
 			grafCmdListCrnt->End();
 			grafDevice->Record(grafCmdListCrnt);
 
