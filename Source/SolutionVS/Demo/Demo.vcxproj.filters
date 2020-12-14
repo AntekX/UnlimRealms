@@ -92,12 +92,21 @@
     <FxCompile Include="sample_raytracing_lib.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
-    <FxCompile Include="HybridRenderingApp_lib.hlsl">
+    <FxCompile Include="HybridRendering_lib.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="HybridRendering_vs.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="HybridRendering_ps.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\Tools\CompileHLSL_SPIRV.bat">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="HybridRendering.hlsli">
       <Filter>Source Files</Filter>
     </None>
   </ItemGroup>

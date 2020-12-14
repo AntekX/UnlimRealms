@@ -166,6 +166,8 @@ namespace UnlimRealms
 
 		virtual Result ClearColorImage(GrafImage* grafImage, GrafClearValue clearValue);
 
+		virtual Result ClearDepthStencilImage(GrafImage* grafImage, GrafClearValue clearValue);
+
 		virtual Result SetViewport(const GrafViewportDesc& grafViewportDesc, ur_bool resetScissorsRect = false);
 
 		virtual Result SetScissorsRect(const RectI& scissorsRect);

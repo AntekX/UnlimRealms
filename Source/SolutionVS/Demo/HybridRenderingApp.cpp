@@ -75,13 +75,20 @@ int HybridRenderingApp::Run()
 		RenderTargetImageUsage_Depth = 0,
 		RenderTargetImageUsage_Geometry0, // xyz: baseColor; w: materialTypeID;
 		RenderTargetImageUsage_Geometry1, // xy: normal; z: roughness; w: reflectance;
-		RenderTargetImageCount
+		RenderTargetImageCount,
+		RenderTargetColorImageCount = RenderTargetImageCount - 1
 	};
 	
 	static const GrafFormat RenderTargetImageFormat[RenderTargetImageCount] = {
 		GrafFormat::D24_UNORM_S8_UINT,
 		GrafFormat::R8G8B8A8_UNORM,
 		GrafFormat::R8G8B8A8_UNORM,
+	};
+
+	static GrafClearValue RenderTargetClearValues[RenderTargetImageCount] = {
+		{ 1.0f, 0.0f, 0.0f, 0.0f },
+		{ 0.0f, 0.0f, 0.0f, 0.0f },
+		{ 0.0f, 0.0f, 0.0f, 0.0f },
 	};
 	
 	struct RenderTargetSet
@@ -124,22 +131,30 @@ int HybridRenderingApp::Run()
 
 		// images
 		GrafImage* renderTargetImages[RenderTargetImageCount];
-		for (ur_uint imageIdx = 0; imageIdx < RenderTargetImageCount; ++imageIdx)
+		for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 		{
-			auto& image = renderTargetSet->images[imageIdx];
+			auto& image = renderTargetSet->images[imageId];
 			res = grafSystem->CreateImage(image);
 			if (Failed(res)) return res;
+			ur_uint imageUsageFlags = 0;
+			if (RenderTargetImageUsage_Depth == imageId)
+			{
+				imageUsageFlags = ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget) | ur_uint(GrafImageUsageFlag::TransferDst);
+			}
+			else
+			{
+				imageUsageFlags = ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::TransferDst);
+			}
 			GrafImageDesc imageDesc = {
 				GrafImageType::Tex2D,
-				RenderTargetImageFormat[imageIdx],
+				RenderTargetImageFormat[imageId],
 				ur_uint3(width, height, 1), 1,
-				ur_uint((GrafUtils::IsDepthStencilFormat(RenderTargetImageFormat[imageIdx]) ?
-					GrafImageUsageFlag::DepthStencilRenderTarget : GrafImageUsageFlag::ColorRenderTarget)),
+				imageUsageFlags,
 				ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 			};
 			res = image->Initialize(grafDevice, { imageDesc });
 			if (Failed(res)) return res;
-			renderTargetImages[imageIdx] = image.get();
+			renderTargetImages[imageId] = image.get();
 		}
 
 		// rasterization pass render target
@@ -186,11 +201,11 @@ int HybridRenderingApp::Run()
 		res = grafSystem->CreateRenderPass(rasterRenderPass);
 		if (Failed(res)) return res;
 		GrafRenderPassImageDesc rasterRenderPassImageDesc[RenderTargetImageCount];
-		for (ur_uint imageIdx = 0; imageIdx < RenderTargetImageCount; ++imageIdx)
+		for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 		{
-			auto& passImageDesc = rasterRenderPassImageDesc[imageIdx];
-			RenderTargetImageUsage imageUsage = RenderTargetImageUsage(imageIdx);
-			passImageDesc.Format = RenderTargetImageFormat[imageIdx];
+			auto& passImageDesc = rasterRenderPassImageDesc[imageId];
+			RenderTargetImageUsage imageUsage = RenderTargetImageUsage(imageId);
+			passImageDesc.Format = RenderTargetImageFormat[imageId];
 			passImageDesc.InitialState = (RenderTargetImageUsage_Depth == imageUsage ? GrafImageState::DepthStencilWrite : GrafImageState::ColorWrite);
 			passImageDesc.FinalState = passImageDesc.InitialState;
 			passImageDesc.LoadOp = GrafRenderPassDataOp::Load;
@@ -243,16 +258,21 @@ int HybridRenderingApp::Run()
 
 			std::unique_ptr<GrafBuffer> vertexBuffer;
 			std::unique_ptr<GrafBuffer> indexBuffer;
+			ur_uint verticesCount;
+			ur_uint indicesCount;
 
 			Mesh(GrafSystem &grafSystem) : GrafEntity(grafSystem) {}
 			~Mesh() {}
 
 			void Initialize(GrafRenderer* grafRenderer,
-				const Vertex* vertices, ur_size verticesCount,
-				const Index* indices, ur_size indicesCount)
+				const Vertex* vertices, ur_uint verticesCount,
+				const Index* indices, ur_uint indicesCount)
 			{
 				GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
 				GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
+
+				this->verticesCount = verticesCount;
+				this->indicesCount = indicesCount;
 
 				// vertex attributes buffer
 
@@ -292,10 +312,12 @@ int HybridRenderingApp::Run()
 
 		GrafRenderer* grafRenderer;
 		std::vector<std::unique_ptr<Mesh>> meshes;
-		std::unique_ptr<GrafDescriptorTableLayout> rasterDescTableLayout;
-		std::vector<std::unique_ptr<GrafDescriptorTable>> rasterDescTablePerFrame;
+		std::unique_ptr<GrafDescriptorTableLayout> descTableLayout;
+		std::vector<std::unique_ptr<GrafDescriptorTable>> descTablePerFrame;
 		std::unique_ptr<GrafPipeline> rasterPipelineState;
 		std::unique_ptr<GrafShaderLib> shaderLib;
+		std::unique_ptr<GrafShader> shaderVertex;
+		std::unique_ptr<GrafShader> shaderPixel;
 
 		DemoScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
 		{
@@ -304,7 +326,7 @@ int HybridRenderingApp::Run()
 		{
 		}
 
-		void Initialize()
+		void Initialize(GrafRenderPass* rasterRenderPass)
 		{
 			this->grafRenderer = this->GetRealm().GetComponent<GrafRenderer>();
 			if (ur_null == grafRenderer)
@@ -333,34 +355,70 @@ int HybridRenderingApp::Run()
 					{
 						std::unique_ptr<Mesh> mesh(new Mesh(*grafSystem));
 						mesh->Initialize(this->grafRenderer,
-							(Mesh::Vertex*)meshData.Vertices.data(), meshData.Vertices.size() / sizeof(Mesh::Vertex),
-							(Mesh::Index*)meshData.Indices.data(), meshData.Indices.size() / sizeof(Mesh::Index));
+							(Mesh::Vertex*)meshData.Vertices.data(), ur_uint(meshData.Vertices.size() / sizeof(Mesh::Vertex)),
+							(Mesh::Index*)meshData.Indices.data(), ur_uint(meshData.Indices.size() / sizeof(Mesh::Index)));
 						this->meshes.emplace_back(std::move(mesh));
 					}
 				}
 			}
 
+			// load shaders
+
+			enum ShaderLibId
+			{
+				ShaderLibId_Dummy,
+			};
+			GrafShaderLib::EntryPoint shaderLibEntries[] = {
+				{ "dummyShaderToMakeFXCHappy", GrafShaderType::Compute },
+			};
+			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_lib.spv", shaderLibEntries, ur_array_size(shaderLibEntries), this->shaderLib);
+			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_vs.spv", GrafShaderType::Vertex, this->shaderVertex);
+			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_ps.spv", GrafShaderType::Pixel, this->shaderPixel);
+
+			// global descriptor table
+
+			GrafDescriptorRangeDesc descTableLayoutRanges[] = {
+				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+			};
+			GrafDescriptorTableLayoutDesc descTableLayoutDesc = {
+				ur_uint(GrafShaderStageFlag::Vertex) |
+				ur_uint(GrafShaderStageFlag::Pixel) |
+				ur_uint(GrafShaderStageFlag::Compute) |
+				ur_uint(GrafShaderStageFlag::AllRayTracing),
+				descTableLayoutRanges, ur_array_size(descTableLayoutRanges)
+			};
+			grafSystem->CreateDescriptorTableLayout(this->descTableLayout);
+			this->descTableLayout->Initialize(grafDevice, { descTableLayoutDesc });
+			this->descTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
+			for (auto& descTable : this->descTablePerFrame)
+			{
+				grafSystem->CreateDescriptorTable(descTable);
+				descTable->Initialize(grafDevice, { this->descTableLayout.get() });
+			}
+
 			// rasterization pipeline configuration
 			
-			Result res = grafSystem->CreatePipeline(this->rasterPipelineState);
-			if (Succeeded(res))
+			grafSystem->CreatePipeline(this->rasterPipelineState);
 			{
-				/*GrafShader* shaderStages[] = {
-					this->grafObjects.VS.get(),
-					this->grafObjects.PS.get()
+				GrafShader* shaderStages[] = {
+					this->shaderVertex.get(),
+					this->shaderPixel.get(),
 				};
 				GrafDescriptorTableLayout* descriptorLayouts[] = {
-					this->grafObjects.shaderDescriptorLayout.get(),
+					this->descTableLayout.get(),
 				};
 				GrafVertexElementDesc vertexElements[] = {
 					{ GrafFormat::R32G32B32_SFLOAT, 0 },
-					{ GrafFormat::R32G32B32_SFLOAT, 12 },
-					{ GrafFormat::R8G8B8A8_UNORM, 24 },
+					{ GrafFormat::R32G32B32_SFLOAT, 12 }
 				};
 				GrafVertexInputDesc vertexInputs[] = { {
-					GrafVertexInputType::PerVertex, 0, sizeof(Vertex),
+					GrafVertexInputType::PerVertex, 0, sizeof(Mesh::Vertex),
 					vertexElements, ur_array_size(vertexElements)
 				} };
+				GrafColorBlendOpDesc colorTargetBlendOpDesc[RenderTargetColorImageCount] = {
+					GrafColorBlendOpDesc::Default,
+					GrafColorBlendOpDesc::Default
+				};
 				GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
 				pipelineParams.RenderPass = rasterRenderPass;
 				pipelineParams.ShaderStages = shaderStages;
@@ -375,7 +433,9 @@ int HybridRenderingApp::Run()
 				pipelineParams.DepthTestEnable = true;
 				pipelineParams.DepthWriteEnable = true;
 				pipelineParams.DepthCompareOp = GrafCompareOp::LessOrEqual;
-				res = this->grafObjects.pipelineSolid->Initialize(grafDevice, pipelineParams);*/
+				pipelineParams.ColorBlendOpDesc = colorTargetBlendOpDesc;
+				pipelineParams.ColorBlendOpDescCount = ur_array_size(colorTargetBlendOpDesc);
+				this->rasterPipelineState->Initialize(grafDevice, pipelineParams);
 			}
 		}
 
@@ -384,15 +444,48 @@ int HybridRenderingApp::Run()
 
 		}
 
-		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet)
+		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera)
 		{
+			// upload frame constants
+
+			struct SceneConstants
+			{
+				ur_float4x4 viewProj;
+			} cb;
+			cb.viewProj = camera.GetViewProj();
+
+			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
+			Allocation dynamicCBAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
+			dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
+
+			// update frame descriptor table
+
+			GrafDescriptorTable* descriptorTable = this->descTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			descriptorTable->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
+
+			// rasterization pass
+
+			grafCmdList->BindPipeline(this->rasterPipelineState.get());
+			grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
+			for (auto& mesh : this->meshes)
+			{
+				ur_uint instanceCount = 1; // TODO
+				grafCmdList->BindVertexBuffer(mesh->vertexBuffer.get(), 0);
+				grafCmdList->BindIndexBuffer(mesh->indexBuffer.get(), (sizeof(Mesh::Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32));
+				grafCmdList->DrawIndexed(mesh->indicesCount, instanceCount, 0, 0, 0);
+			}
+		}
+
+		void RayTrace(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera)
+		{
+			// TODO
 		}
 	};
 	std::unique_ptr<DemoScene> demoScene;
 	if (grafRenderer != ur_null)
 	{
 		demoScene.reset(new DemoScene(realm));
-		demoScene->Initialize();
+		demoScene->Initialize(rasterRenderPass.get());
 	}
 
 	// initialize ImguiRender
@@ -415,7 +508,7 @@ int HybridRenderingApp::Run()
 	cameraControl.SetTargetPoint(ur_float3(0.0f));
 	cameraControl.SetSpeed(4.0);
 	camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
-	camera.SetPosition(ur_float3(9.541f, 5.412f, -12.604f));
+	camera.SetPosition(ur_float3(0.0f, 0.0f, -8.0f));
 	camera.SetLookAt(cameraControl.GetTargetPoint(), cameraControl.GetWorldUp());
 
 	// Main message loop:
@@ -494,8 +587,11 @@ int HybridRenderingApp::Run()
 
 		auto& RenderFrameJobFunc = [&](Job::Context& ctx) -> void
 		{
+			GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
 			GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 			GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
+			const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
+			
 			GrafCommandList* grafCmdListCrnt = cmdListPerFrame[grafRenderer->GetCurrentFrameId()].get();
 			grafCmdListCrnt->Begin();
 
@@ -512,10 +608,45 @@ int HybridRenderingApp::Run()
 
 			updateFrameJob->Wait(); // make sure async update is done
 
-			// demo scene
-			if (demoScene != ur_null)
+			// rasterization pass
 			{
-				demoScene->Render(grafCmdListCrnt, renderTargetSet.get());
+				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
+				{
+					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::TransferDst);
+					if (RenderTargetImageUsage_Depth == imageId)
+					{
+						grafCmdListCrnt->ClearDepthStencilImage(renderTargetSet->images[imageId].get(), RenderTargetClearValues[imageId]);
+						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::DepthStencilWrite);
+					}
+					else
+					{
+						grafCmdListCrnt->ClearColorImage(renderTargetSet->images[imageId].get(), RenderTargetClearValues[imageId]);
+						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ColorWrite);
+					}
+				}
+
+				grafCmdListCrnt->BeginRenderPass(rasterRenderPass.get(), renderTargetSet->renderTarget.get());
+
+				if (demoScene != ur_null)
+				{
+					demoScene->Render(grafCmdListCrnt, renderTargetSet.get(), camera);
+				}
+
+				grafCmdListCrnt->EndRenderPass();
+			}
+
+			// ray tracing pass
+			if (grafDeviceDesc->RayTracing.RayTraceSupported)
+			{
+				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
+				{
+					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::RayTracingRead);
+				}
+
+				if (demoScene != ur_null)
+				{
+					demoScene->RayTrace(grafCmdListCrnt, renderTargetSet.get(), camera);
+				}
 			}
 
 			// foreground color render pass (drawing directly into swap chain image)

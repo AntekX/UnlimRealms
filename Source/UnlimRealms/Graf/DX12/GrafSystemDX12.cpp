@@ -629,6 +629,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandListDX12::ClearDepthStencilImage(GrafImage* grafImage, GrafClearValue clearValue)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandListDX12::SetViewport(const GrafViewportDesc& grafViewportDesc, ur_bool resetScissorsRect)
 	{
 		return Result(NotImplemented);

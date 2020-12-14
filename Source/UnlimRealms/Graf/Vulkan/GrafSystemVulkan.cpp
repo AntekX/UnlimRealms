@@ -1415,6 +1415,27 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafCommandListVulkan::ClearDepthStencilImage(GrafImage* grafImage, GrafClearValue clearValue)
+	{
+		if (ur_null == grafImage)
+			return Result(InvalidArgs);
+
+		VkImage vkImage = static_cast<GrafImageVulkan*>(grafImage)->GetVkImage();
+		VkImageLayout vkImageLayout = GrafUtilsVulkan::GrafToVkImageLayout(grafImage->GetState());
+		VkClearDepthStencilValue vkClearValue = {};
+		vkClearValue.depth = clearValue.f32[0];
+		vkClearValue.stencil = clearValue.u32[1];
+		VkImageSubresourceRange vkClearRange = {};
+		vkClearRange.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(grafImage->GetDesc().Usage);
+		vkClearRange.levelCount = grafImage->GetDesc().MipLevels;
+		vkClearRange.baseArrayLayer = 0;
+		vkClearRange.layerCount = 1;
+
+		vkCmdClearDepthStencilImage(this->vkCommandBuffer, vkImage, vkImageLayout, &vkClearValue, 1, &vkClearRange);
+
+		return Result(Success);
+	}
+
 	Result GrafCommandListVulkan::SetViewport(const GrafViewportDesc& grafViewportDesc, ur_bool resetScissorsRect)
 	{
 		VkViewport vkViewport = {};
@@ -3246,7 +3267,7 @@ namespace UnlimRealms
 		}
 		VkDevice vkDevice = grafDeviceVulkan->GetVkDevice();
 
-		// this shader references extranl shader modeul
+		// this shader references extranl shader module
 
 		this->vkShaderModule = vkShaderModule;
 		this->moduleOwner = false;

@@ -3,7 +3,7 @@ rem dxc -help
 set "SPIRV_TARGET=vulkan1.2"
 set "SPIRV=-spirv"
 rem set "SPIRV=-spirv -fspv-target-env=%SPIRV_TARGET%"
-set "SHADER_MODEL=5_0"
+set "SHADER_MODEL=6_3"
 set "SHADER_REGISTER_SPACE=0"
 set "SHADER_REGISTER_BINDING=-fvk-b-shift 0 %SHADER_REGISTER_SPACE% -fvk-s-shift 256 %SHADER_REGISTER_SPACE% -fvk-t-shift 512 %SHADER_REGISTER_SPACE% -fvk-u-shift 768 %SHADER_REGISTER_SPACE%"
 set "SHADER_ENTRYPOINT=main"
@@ -19,12 +19,14 @@ echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
 
 set "SHADER_PATH_SRC=..\Source\SolutionVS\Demo"
 set "SHADER_NAME=sample_raytracing"
-dxc %SPIRV% -T lib_6_3 %SHADER_REGISTER_BINDING% %SHADER_PATH_SRC%\%SHADER_NAME%_lib.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_lib.spv -I ..\Source\UnlimRealms -I ..\Source\UnlimRealms\ShaderLib
+dxc %SPIRV% -T lib_%SHADER_MODEL% %SHADER_REGISTER_BINDING% %SHADER_PATH_SRC%\%SHADER_NAME%_lib.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_lib.spv -I ..\Source\UnlimRealms -I ..\Source\UnlimRealms\ShaderLib
 echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
 
 set "SHADER_PATH_SRC=..\Source\SolutionVS\Demo"
-set "SHADER_NAME=HybridRenderingApp"
-dxc %SPIRV% -T lib_6_3 %SHADER_REGISTER_BINDING% %SHADER_PATH_SRC%\%SHADER_NAME%_lib.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_lib.spv -I ..\Source\UnlimRealms -I ..\Source\UnlimRealms\ShaderLib
+set "SHADER_NAME=HybridRendering"
+dxc %SPIRV% -T lib_%SHADER_MODEL% %SHADER_REGISTER_BINDING% %SHADER_PATH_SRC%\%SHADER_NAME%_lib.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_lib.spv -I ..\Source\UnlimRealms -I ..\Source\UnlimRealms\ShaderLib
+dxc %SPIRV% -T vs_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_vs.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_vs.spv -I ..\Source\UnlimRealms -I ..\Source\UnlimRealms\ShaderLib -fvk-invert-y
+dxc %SPIRV% -T ps_%SHADER_MODEL% %SHADER_REGISTER_BINDING% -E %SHADER_ENTRYPOINT% %SHADER_PATH_SRC%\%SHADER_NAME%_ps.hlsl -Fo %SHADER_PATH_DST%\%SHADER_NAME%_ps.spv -I ..\Source\UnlimRealms -I ..\Source\UnlimRealms\ShaderLib
 echo CompileHLSL_SPIRV compiled %SHADER_NAME% shader(s)
 
 set "SHADER_PATH_SRC=..\Source\UnlimRealms\ImguiRender"
