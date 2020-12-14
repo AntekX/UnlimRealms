@@ -2815,6 +2815,14 @@ namespace UnlimRealms
 		vkViewInfo.subresourceRange.baseArrayLayer = 0;
 		vkViewInfo.subresourceRange.layerCount = 1;
 
+		if ((this->GetDesc().Usage & ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget)) &&
+			(this->GetDesc().Usage & ur_uint(GrafImageUsageFlag::ShaderInput)))
+		{
+			// create depth only view if used as a shader input
+			// TODO: investigate whether separate views required for VkFramebufferCreateInfo and shader input
+			vkViewInfo.subresourceRange.aspectMask = (VK_IMAGE_ASPECT_DEPTH_BIT);
+		}
+
 		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice()); // at this point device expected to be validate
 		VkResult res = vkCreateImageView(grafDeviceVulkan->GetVkDevice(), &vkViewInfo, ur_null, &this->vkImageView);
 		if (res != VK_SUCCESS)
@@ -4785,7 +4793,9 @@ namespace UnlimRealms
 		case GrafImageState::DepthStencilRead: vkImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL; break;
 		case GrafImageState::ShaderRead: vkImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; break;
 		case GrafImageState::ShaderReadWrite: vkImageLayout = VK_IMAGE_LAYOUT_GENERAL; break;
+		case GrafImageState::ComputeRead: vkImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; break;
 		case GrafImageState::ComputeReadWrite: vkImageLayout = VK_IMAGE_LAYOUT_GENERAL; break;
+		case GrafImageState::RayTracingRead: vkImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; break;
 		case GrafImageState::RayTracingReadWrite: vkImageLayout = VK_IMAGE_LAYOUT_GENERAL; break;
 		};
 		return vkImageLayout;

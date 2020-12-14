@@ -20,7 +20,7 @@
 using namespace UnlimRealms;
 
 #define UPDATE_ASYNC 1
-#define RENDER_ASYNC 0
+#define RENDER_ASYNC 1
 
 int HybridRenderingApp::Run()
 {
@@ -32,9 +32,9 @@ int HybridRenderingApp::Run()
 	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindowMaximized, L"HybridRenderingDemo"));
 	canvas->Initialize(RectI(0, 0, (ur_uint)GetSystemMetrics(SM_CXSCREEN), (ur_uint)GetSystemMetrics(SM_CYSCREEN)));
 	realm.SetCanvas(std::move(canvas));
-	ur_uint canvasDenom = 1;
-	ur_uint canvasWidth = realm.GetCanvas()->GetClientBound().Width() / canvasDenom;
-	ur_uint canvasHeight = realm.GetCanvas()->GetClientBound().Height() / canvasDenom;
+	ur_float canvasScale = 1;
+	ur_uint canvasWidth = ur_uint(realm.GetCanvas()->GetClientBound().Width() * canvasScale);
+	ur_uint canvasHeight = ur_uint(realm.GetCanvas()->GetClientBound().Height() * canvasScale);
 	ur_bool canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
 
 	// create input system
@@ -238,6 +238,8 @@ int HybridRenderingApp::Run()
 		struct SceneConstants
 		{
 			ur_float4x4 viewProj;
+			ur_float4 cameraPos;
+			ur_float4 cameraDir;
 		};
 
 		enum MeshId
@@ -494,6 +496,8 @@ int HybridRenderingApp::Run()
 			// update & upload frame constants
 
 			sceneConstants.viewProj = camera.GetViewProj();
+			sceneConstants.cameraPos = camera.GetPosition();
+			sceneConstants.cameraDir = camera.GetDirection();
 
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 			this->sceneCBCrntFrameAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
@@ -687,8 +691,8 @@ int HybridRenderingApp::Run()
 			grafCmdListCrnt->BeginDebugLabel("DrawFrame", DebugLabelColorMain);
 
 			GrafViewportDesc grafViewport = {};
-			grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
-			grafViewport.Height = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.y;
+			grafViewport.Width = (ur_float)canvasWidth;
+			grafViewport.Height = (ur_float)canvasHeight;
 			grafViewport.Near = 0.0f;
 			grafViewport.Far = 1.0f;
 			grafCmdListCrnt->SetViewport(grafViewport, true);
@@ -775,6 +779,12 @@ int HybridRenderingApp::Run()
 				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ForegroundPass", DebugLabelColorPass);
 				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 				grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
+
+				GrafViewportDesc grafViewport = {};
+				grafViewport.Width = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.x;
+				grafViewport.Height = (ur_float)grafCanvas->GetCurrentImage()->GetDesc().Size.y;
+				grafViewport.Near = 0.0f;
+				grafViewport.Far = 1.0f;
 				grafCmdListCrnt->SetViewport(grafViewport, true);
 
 				// draw GUI
@@ -799,9 +809,8 @@ int HybridRenderingApp::Run()
 					}
 					if (ImGui::CollapsingHeader("Canvas"))
 					{
-						int editableInt = canvasDenom;
-						ImGui::InputInt("ResolutionDenominator", &editableInt);
-						canvasDenom = editableInt;
+						ImGui::InputFloat("ResolutionScale", &canvasScale);
+						canvasScale = std::max(1.0f / 16.0f, std::min(4.0f, canvasScale));
 					}
 
 					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ImGui", DebugLabelColorRender);
@@ -824,8 +833,8 @@ int HybridRenderingApp::Run()
 			grafRenderer->BeginFrame();
 
 			// update render target(s)
-			ur_uint canvasWidthNew = realm.GetCanvas()->GetClientBound().Width() / canvasDenom;
-			ur_uint canvasHeightNew = realm.GetCanvas()->GetClientBound().Height() / canvasDenom;
+			ur_uint canvasWidthNew = ur_uint(realm.GetCanvas()->GetClientBound().Width() * canvasScale);
+			ur_uint canvasHeightNew = ur_uint(realm.GetCanvas()->GetClientBound().Height() * canvasScale);
 			if (canvasValid && (canvasWidth != canvasWidthNew || canvasHeight != canvasHeightNew))
 			{
 				canvasWidth = canvasWidthNew;

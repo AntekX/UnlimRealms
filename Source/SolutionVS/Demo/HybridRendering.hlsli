@@ -8,6 +8,8 @@
 struct SceneConstants
 {
 	float4x4 viewProj;
+	float4 cameraPos;
+	float4 cameraDir;
 };
 
 struct MeshVertexInput
