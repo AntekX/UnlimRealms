@@ -20,7 +20,7 @@
 using namespace UnlimRealms;
 
 #define UPDATE_ASYNC 1
-#define RENDER_ASYNC 1
+#define RENDER_ASYNC 0
 
 int HybridRenderingApp::Run()
 {
@@ -136,14 +136,14 @@ int HybridRenderingApp::Run()
 			auto& image = renderTargetSet->images[imageId];
 			res = grafSystem->CreateImage(image);
 			if (Failed(res)) return res;
-			ur_uint imageUsageFlags = 0;
+			ur_uint imageUsageFlags = ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ShaderInput);
 			if (RenderTargetImageUsage_Depth == imageId)
 			{
-				imageUsageFlags = ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget) | ur_uint(GrafImageUsageFlag::TransferDst);
+				imageUsageFlags |= ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget);
 			}
 			else
 			{
-				imageUsageFlags = ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::TransferDst);
+				imageUsageFlags |= ur_uint(GrafImageUsageFlag::ColorRenderTarget);
 			}
 			GrafImageDesc imageDesc = {
 				GrafImageType::Tex2D,
@@ -235,6 +235,11 @@ int HybridRenderingApp::Run()
 	{
 	public:
 
+		struct SceneConstants
+		{
+			ur_float4x4 viewProj;
+		};
+
 		enum MeshId
 		{
 			MeshId_Plane = 0,
@@ -312,12 +317,17 @@ int HybridRenderingApp::Run()
 
 		GrafRenderer* grafRenderer;
 		std::vector<std::unique_ptr<Mesh>> meshes;
-		std::unique_ptr<GrafDescriptorTableLayout> descTableLayout;
-		std::vector<std::unique_ptr<GrafDescriptorTable>> descTablePerFrame;
+		std::unique_ptr<GrafDescriptorTableLayout> rasterDescTableLayout;
+		std::vector<std::unique_ptr<GrafDescriptorTable>> rasterDescTablePerFrame;
 		std::unique_ptr<GrafPipeline> rasterPipelineState;
+		std::unique_ptr<GrafDescriptorTableLayout> lightingDescTableLayout;
+		std::vector<std::unique_ptr<GrafDescriptorTable>> lightingDescTablePerFrame;
+		std::unique_ptr<GrafComputePipeline> lightingPipelineState;
 		std::unique_ptr<GrafShaderLib> shaderLib;
 		std::unique_ptr<GrafShader> shaderVertex;
 		std::unique_ptr<GrafShader> shaderPixel;
+		SceneConstants sceneConstants;
+		Allocation sceneCBCrntFrameAlloc;
 
 		DemoScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
 		{
@@ -366,34 +376,34 @@ int HybridRenderingApp::Run()
 
 			enum ShaderLibId
 			{
+				ShaderLibId_ComputeLighting,
 				ShaderLibId_Dummy,
 			};
 			GrafShaderLib::EntryPoint shaderLibEntries[] = {
+				{ "ComputeLighting", GrafShaderType::Compute },
 				{ "dummyShaderToMakeFXCHappy", GrafShaderType::Compute },
 			};
 			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_lib.spv", shaderLibEntries, ur_array_size(shaderLibEntries), this->shaderLib);
 			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_vs.spv", GrafShaderType::Vertex, this->shaderVertex);
 			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_ps.spv", GrafShaderType::Pixel, this->shaderPixel);
 
-			// global descriptor table
+			// rasterization descriptor table
 
-			GrafDescriptorRangeDesc descTableLayoutRanges[] = {
+			GrafDescriptorRangeDesc rasterDescTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 			};
-			GrafDescriptorTableLayoutDesc descTableLayoutDesc = {
+			GrafDescriptorTableLayoutDesc rasterDescTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::Vertex) |
-				ur_uint(GrafShaderStageFlag::Pixel) |
-				ur_uint(GrafShaderStageFlag::Compute) |
-				ur_uint(GrafShaderStageFlag::AllRayTracing),
-				descTableLayoutRanges, ur_array_size(descTableLayoutRanges)
+				ur_uint(GrafShaderStageFlag::Pixel),
+				rasterDescTableLayoutRanges, ur_array_size(rasterDescTableLayoutRanges)
 			};
-			grafSystem->CreateDescriptorTableLayout(this->descTableLayout);
-			this->descTableLayout->Initialize(grafDevice, { descTableLayoutDesc });
-			this->descTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
-			for (auto& descTable : this->descTablePerFrame)
+			grafSystem->CreateDescriptorTableLayout(this->rasterDescTableLayout);
+			this->rasterDescTableLayout->Initialize(grafDevice, { rasterDescTableLayoutDesc });
+			this->rasterDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
+			for (auto& descTable : this->rasterDescTablePerFrame)
 			{
 				grafSystem->CreateDescriptorTable(descTable);
-				descTable->Initialize(grafDevice, { this->descTableLayout.get() });
+				descTable->Initialize(grafDevice, { this->rasterDescTableLayout.get() });
 			}
 
 			// rasterization pipeline configuration
@@ -405,7 +415,7 @@ int HybridRenderingApp::Run()
 					this->shaderPixel.get(),
 				};
 				GrafDescriptorTableLayout* descriptorLayouts[] = {
-					this->descTableLayout.get(),
+					this->rasterDescTableLayout.get(),
 				};
 				GrafVertexElementDesc vertexElements[] = {
 					{ GrafFormat::R32G32B32_SFLOAT, 0 },
@@ -437,33 +447,64 @@ int HybridRenderingApp::Run()
 				pipelineParams.ColorBlendOpDescCount = ur_array_size(colorTargetBlendOpDesc);
 				this->rasterPipelineState->Initialize(grafDevice, pipelineParams);
 			}
+
+			// lighting descriptor table
+
+			GrafDescriptorRangeDesc lightingDescTableLayoutRanges[] = {
+				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+				{ GrafDescriptorType::Texture, 0, 3 },
+				{ GrafDescriptorType::RWTexture, 0, 1 },
+			};
+			GrafDescriptorTableLayoutDesc lightingDescTableLayoutDesc = {
+				ur_uint(GrafShaderStageFlag::Compute) |
+				ur_uint(GrafShaderStageFlag::AllRayTracing),
+				lightingDescTableLayoutRanges, ur_array_size(lightingDescTableLayoutRanges)
+			};
+			grafSystem->CreateDescriptorTableLayout(this->lightingDescTableLayout);
+			this->lightingDescTableLayout->Initialize(grafDevice, { lightingDescTableLayoutDesc });
+			this->lightingDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
+			for (auto& descTable : this->lightingDescTablePerFrame)
+			{
+				grafSystem->CreateDescriptorTable(descTable);
+				descTable->Initialize(grafDevice, { this->lightingDescTableLayout.get() });
+			}
+
+			// lighting compute pipeline configuration
+
+			grafSystem->CreateComputePipeline(this->lightingPipelineState);
+			{
+				GrafDescriptorTableLayout* descriptorLayouts[] = {
+					this->lightingDescTableLayout.get()
+				};
+				GrafComputePipeline::InitParams computePipelineParams = GrafComputePipeline::InitParams::Default;
+				computePipelineParams.ShaderStage = this->shaderLib->GetShader(ShaderLibId_ComputeLighting);
+				computePipelineParams.DescriptorTableLayouts = descriptorLayouts;
+				computePipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+				this->lightingPipelineState->Initialize(grafDevice, computePipelineParams);
+			}
 		}
 
 		void Update(ur_float elapsedSeconds)
 		{
-
+			// do some animation here
 		}
 
 		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera)
 		{
-			// upload frame constants
+			// update & upload frame constants
 
-			struct SceneConstants
-			{
-				ur_float4x4 viewProj;
-			} cb;
-			cb.viewProj = camera.GetViewProj();
+			sceneConstants.viewProj = camera.GetViewProj();
 
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
-			Allocation dynamicCBAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
-			dynamicCB->Write((ur_byte*)&cb, sizeof(cb), 0, dynamicCBAlloc.Offset);
+			this->sceneCBCrntFrameAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
+			dynamicCB->Write((ur_byte*)&sceneConstants, sizeof(sceneConstants), 0, this->sceneCBCrntFrameAlloc.Offset);
 
-			// update frame descriptor table
+			// update descriptor table
 
-			GrafDescriptorTable* descriptorTable = this->descTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
-			descriptorTable->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
+			GrafDescriptorTable* descriptorTable = this->rasterDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			descriptorTable->SetConstantBuffer(0, dynamicCB, this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 
-			// rasterization pass
+			// rasterize meshes
 
 			grafCmdList->BindPipeline(this->rasterPipelineState.get());
 			grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
@@ -479,6 +520,37 @@ int HybridRenderingApp::Run()
 		void RayTrace(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera)
 		{
 			// TODO
+		}
+
+		void ComputeLighting(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, GrafRenderTarget* lightingTarget)
+		{
+			// update descriptor table
+			// common frame constant buffer is expected to be uploaded during rasterization pass
+
+			GrafDescriptorTable* descriptorTable = this->lightingDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
+			{
+				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId].get());
+			}
+			descriptorTable->SetRWImage(0, lightingTarget->GetImage(0));
+
+			// compute
+
+			grafCmdList->BindComputePipeline(this->lightingPipelineState.get());
+			grafCmdList->BindComputeDescriptorTable(descriptorTable, this->lightingPipelineState.get());
+
+			static const ur_uint3 groupSize = { 8, 8, 1 };
+			const ur_uint3& targetSize = lightingTarget->GetImage(0)->GetDesc().Size;
+			grafCmdList->Dispatch((targetSize.x - 1) / groupSize.x + 1, (targetSize.y - 1) / groupSize.y + 1, 1);
+		}
+
+		void ShowImgui()
+		{
+			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+			if (ImGui::CollapsingHeader("DemoScene"))
+			{
+			}
 		}
 	};
 	std::unique_ptr<DemoScene> demoScene;
@@ -499,6 +571,20 @@ int HybridRenderingApp::Run()
 			realm.RemoveComponent<ImguiRender>();
 			imguiRender = ur_null;
 			realm.GetLog().WriteLine("HybridRenderingApp: failed to initialize ImguiRender", Log::Error);
+		}
+	}
+
+	// HDR rendering manager
+	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
+	{
+		HDRRender::Params hdrParams = HDRRender::Params::Default;
+		hdrParams.BloomThreshold = 4.0f;
+		hdrRender->SetParams(hdrParams);
+		res = hdrRender->Init(canvasWidth, canvasHeight, ur_null);
+		if (Failed(res))
+		{
+			realm.GetLog().WriteLine("VoxelPlanetApp: failed to initialize HDRRender", Log::Error);
+			hdrRender.reset();
 		}
 	}
 
@@ -658,6 +744,32 @@ int HybridRenderingApp::Run()
 				}
 			}
 
+			// lighting pass
+			if (hdrRender != ur_null)
+			{
+				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "LightingPass", DebugLabelColorPass);
+				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
+				{
+					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeRead);
+				}
+				grafCmdListCrnt->ImageMemoryBarrier(hdrRender->GetHDRRenderTarget()->GetImage(0), GrafImageState::Current, GrafImageState::ComputeReadWrite);
+				
+				demoScene->ComputeLighting(grafCmdListCrnt, renderTargetSet.get(), hdrRender->GetHDRRenderTarget());
+			}
+
+			// post effects
+			{
+				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "PostEFfects", DebugLabelColorPass);
+
+				// resolve HDR input directly to renderer's swap chain RT
+				if (hdrRender != ur_null)
+				{
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ResolveHDRInput", DebugLabelColorRender);
+					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
+					hdrRender->Resolve(*grafCmdListCrnt, grafRenderer->GetCanvasRenderTarget());
+				}
+			}
+
 			// foreground color render pass (drawing directly into swap chain image)
 			{
 				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ForegroundPass", DebugLabelColorPass);
@@ -677,6 +789,14 @@ int HybridRenderingApp::Run()
 
 					grafRenderer->ShowImgui();
 					cameraControl.ShowImgui();
+					if (hdrRender != ur_null)
+					{
+						hdrRender->ShowImgui();
+					}
+					if (demoScene != ur_null)
+					{
+						demoScene->ShowImgui();
+					}
 					if (ImGui::CollapsingHeader("Canvas"))
 					{
 						int editableInt = canvasDenom;
@@ -714,6 +834,11 @@ int HybridRenderingApp::Run()
 				DestroyRenderTargetObjects(cmdListPerFrame[grafRenderer->GetPrevFrameId()].get());
 				// recreate RT objects for new canvas dimensions
 				InitRenderTargetObjects(canvasWidth, canvasHeight);
+				// reinit HDR renderer images
+				if (hdrRender != ur_null)
+				{
+					hdrRender->Init(canvasWidth, canvasHeight, ur_null);
+				}
 			}
 
 			Job* renderFrameJob = ur_null;
@@ -741,6 +866,7 @@ int HybridRenderingApp::Run()
 
 	// destroy scene objects
 	demoScene.reset();
+	hdrRender.reset();
 
 	// destroy GRAF objects
 	DestroyGrafObjects();

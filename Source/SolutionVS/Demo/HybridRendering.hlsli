@@ -10,8 +10,6 @@ struct SceneConstants
 	float4x4 viewProj;
 };
 
-ConstantBuffer<SceneConstants> g_SceneCB	: register(b0);
-
 struct MeshVertexInput
 {
 	float3 pos	: POSITION;
