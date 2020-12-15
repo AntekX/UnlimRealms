@@ -36,65 +36,74 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint2 imagePos = dispatchThreadId.xy;
 	float clipDepth = g_GeometryDepth.Load(int3(imagePos.xy, 0));
-	float4 geomtryData0 = g_GeometryImage0.Load(int3(imagePos.xy, 0));
-	float4 geomtryData1 = g_GeometryImage1.Load(int3(imagePos.xy, 0));
-	float4 geomtryData2 = g_GeometryImage2.Load(int3(imagePos.xy, 0));
-
 	bool isSky = (clipDepth >= 1.0);
-	float3 normal = geomtryData1.xyz * 2.0 - 1.0;
 	float2 uvPos = (float2(imagePos) + 0.5) * g_SceneCB.TargetSize.zw;
 	float3 clipPos = float3(float2(uvPos.x, 1.0 - uvPos.y) * 2.0 - 1.0, clipDepth);
-	float viewDepth = ClipDepthToViewDepth(clipDepth, g_SceneCB.Proj);
 	float3 worldPos = ClipPosToWorldPos(clipPos, g_SceneCB.ViewProjInv);
-	//float3 worldRay = normalize(ClipPosToWorldPos(float3(clipPos.xy, 0), g_SceneCB.ViewProjInv) - g_SceneCB.CameraPos.xyz);
 	float3 worldRay = normalize(worldPos - g_SceneCB.CameraPos.xyz);
 
-	// material params
+	float3 lightingResult = 0.0;
 
-	MaterialInputs material = (MaterialInputs)0;
-	initMaterial(material);
-	material.normal = normal;
-	if (g_SceneCB.OverrideMaterial)
+	[branch] if (isSky)
 	{
-		material.baseColor.xyz = g_SceneCB.Material.BaseColor;
-		material.roughness = g_SceneCB.Material.Roughness;
-		material.metallic = g_SceneCB.Material.Metallic;
-		material.reflectance = g_SceneCB.Material.Reflectance;
+		lightingResult = CalculateSkyLight(g_SceneCB.CameraPos.xyz, worldRay).xyz;
 	}
 	else
 	{
-		// TODO: read mesh material
-		material.baseColor.xyz = 1.0;
-		material.roughness = 1.0;
-		material.metallic = 0.0;
-		material.reflectance = 0.04;
+		// read geometry buffer
+
+		float4 geomtryData0 = g_GeometryImage0.Load(int3(imagePos.xy, 0));
+		float4 geomtryData1 = g_GeometryImage1.Load(int3(imagePos.xy, 0));
+		float4 geomtryData2 = g_GeometryImage2.Load(int3(imagePos.xy, 0));
+		
+		float3 normal = geomtryData1.xyz * 2.0 - 1.0;
+
+		// material params
+
+		MaterialInputs material = (MaterialInputs)0;
+		initMaterial(material);
+		material.normal = normal;
+		if (g_SceneCB.OverrideMaterial)
+		{
+			material.baseColor.xyz = g_SceneCB.Material.BaseColor;
+			material.roughness = g_SceneCB.Material.Roughness;
+			material.metallic = g_SceneCB.Material.Metallic;
+			material.reflectance = g_SceneCB.Material.Reflectance;
+		}
+		else
+		{
+			// TODO: read mesh material
+			material.baseColor.xyz = float3(geomtryData2.zw, 0);// 0.5;
+			material.roughness = 0.25;
+			material.metallic = 0.0;
+			material.reflectance = 0.04;
+		}
+
+		// lighting params
+
+		LightingParams lightingParams;
+		getLightingParams(worldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
+
+		// direct light
+
+		float3 directLightColor = 0;
+		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
+		{
+			LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
+			float shadowFactor = 1.0;
+			float specularOcclusion = 1.0;
+			directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
+		}
+
+		// indirect light
+
+		float3 envColor = CalculateSkyLight(worldPos, normalize(lightingParams.normal * 0.5 + WorldUp)).xyz; // simplified sky light
+		float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor; // no indirect spec
+
+		// final
+
+		lightingResult = directLightColor + indirectLightColor;
 	}
-
-	// lighting params
-
-	LightingParams lightingParams;
-	getLightingParams(worldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
-
-	// calculate direct light
-
-	float3 directLightColor = 0;
-	for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
-	{
-		LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
-		float shadowFactor = 1.0;
-		float specularOcclusion = 1.0;
-		directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
-	}
-
-	// final result
-
-	float4 skyLight = 0.0;
-	[branch] if (isSky)
-	{
-		skyLight = CalculateSkyLight(g_SceneCB.CameraPos.xyz, worldRay);
-	}
-	
-	float3 lightingResult = directLightColor * !isSky + skyLight.xyz * isSky;
 
 	g_LightingTarget[imagePos] = float4(lightingResult, 1.0);
 }

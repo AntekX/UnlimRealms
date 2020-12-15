@@ -9,6 +9,7 @@ MeshPixelInput main(MeshVertexInput input)
 
 	output.Pos = mul(float4(input.Pos.xyz, 1.0), g_SceneCB.ViewProj);
 	output.Norm = input.Norm;
+	output.TexCoord = input.TexCoord;
 
 	return output;
 }

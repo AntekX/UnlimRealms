@@ -1293,7 +1293,7 @@ namespace UnlimRealms
 					}
 				}
 			}
-			if (!attribs.vertices.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Color)))
+			if (!attribs.colors.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Color)))
 			{
 				ur_byte* vertexElementPtr = (verticesPtr + vertexColorOfs);
 				ur_float* typedElementPtr;
@@ -1308,7 +1308,7 @@ namespace UnlimRealms
 					vertexElementPtr += vertexStride;
 				}
 			}
-			if (!attribs.normals.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::TexCoord)))
+			if (!attribs.texcoords.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::TexCoord)))
 			{
 				ur_byte* vertexElementPtr = (verticesPtr + vertexTexcoordOfs);
 				ur_float* typedElementPtr;

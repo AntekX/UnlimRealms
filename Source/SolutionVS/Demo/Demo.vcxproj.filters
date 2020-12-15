@@ -5,45 +5,56 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
-    </Filter>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="HybridRenderingApp">
+      <UniqueIdentifier>{b770da4e-db22-42a3-81f3-2d4c40b07404}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="RayTracingSandboxApp">
+      <UniqueIdentifier>{cfe81b8f-1b31-45b8-a8c1-87d7a33482c5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="VoxelPlanetApp">
+      <UniqueIdentifier>{baaa198a-a366-4bd5-be3f-e310fb714328}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="VulkanSandboxApp">
+      <UniqueIdentifier>{3dfde923-8971-4d11-b339-15297a30f842}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="D3D12SandboxApp">
+      <UniqueIdentifier>{1b8a2bc8-b535-4649-8763-57206b584016}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="stdafx.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="targetver.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Resource.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Demo.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="D3D12SandboxApp.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="VoxelPlanetApp.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="VulkanSandboxApp.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="HybridRenderingApp.h">
+      <Filter>HybridRenderingApp</Filter>
     </ClInclude>
     <ClInclude Include="RayTracingSandboxApp.h">
-      <Filter>Header Files</Filter>
+      <Filter>RayTracingSandboxApp</Filter>
     </ClInclude>
-    <ClInclude Include="HybridRenderingApp.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="Demo.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="stdafx.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="targetver.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VoxelPlanetApp.h">
+      <Filter>VoxelPlanetApp</Filter>
+    </ClInclude>
+    <ClInclude Include="D3D12SandboxApp.h">
+      <Filter>D3D12SandboxApp</Filter>
+    </ClInclude>
+    <ClInclude Include="VulkanSandboxApp.h">
+      <Filter>VulkanSandboxApp</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -53,20 +64,20 @@
     <ClCompile Include="Demo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="D3D12SandboxApp.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="VoxelPlanetApp.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="VulkanSandboxApp.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="HybridRenderingApp.cpp">
+      <Filter>HybridRenderingApp</Filter>
     </ClCompile>
     <ClCompile Include="RayTracingSandboxApp.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>RayTracingSandboxApp</Filter>
     </ClCompile>
-    <ClCompile Include="HybridRenderingApp.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="VoxelPlanetApp.cpp">
+      <Filter>VoxelPlanetApp</Filter>
+    </ClCompile>
+    <ClCompile Include="D3D12SandboxApp.cpp">
+      <Filter>D3D12SandboxApp</Filter>
+    </ClCompile>
+    <ClCompile Include="VulkanSandboxApp.cpp">
+      <Filter>VulkanSandboxApp</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -89,17 +100,17 @@
     <FxCompile Include="sample_ps.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
-    <FxCompile Include="sample_raytracing_lib.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
     <FxCompile Include="HybridRendering_lib.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
-    <FxCompile Include="HybridRendering_vs.hlsl">
-      <Filter>Source Files</Filter>
+      <Filter>HybridRenderingApp</Filter>
     </FxCompile>
     <FxCompile Include="HybridRendering_ps.hlsl">
-      <Filter>Source Files</Filter>
+      <Filter>HybridRenderingApp</Filter>
+    </FxCompile>
+    <FxCompile Include="HybridRendering_vs.hlsl">
+      <Filter>HybridRenderingApp</Filter>
+    </FxCompile>
+    <FxCompile Include="sample_raytracing_lib.hlsl">
+      <Filter>RayTracingSandboxApp</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
@@ -107,7 +118,7 @@
       <Filter>Source Files</Filter>
     </None>
     <None Include="HybridRendering.hlsli">
-      <Filter>Source Files</Filter>
+      <Filter>HybridRenderingApp</Filter>
     </None>
   </ItemGroup>
 </Project>

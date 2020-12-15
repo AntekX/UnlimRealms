@@ -24,14 +24,16 @@ struct SceneConstants
 
 struct MeshVertexInput
 {
-	float3 Pos	: POSITION;
-	float3 Norm : NORMAL;
+	float3 Pos		: POSITION;
+	float3 Norm		: NORMAL;
+	float2 TexCoord	: TEXCOORD;
 };
 
 struct MeshPixelInput
 {
-	float4 Pos	: SV_POSITION;
-	float3 Norm : NORMAL;
+	float4 Pos		: SV_POSITION;
+	float3 Norm		: NORMAL;
+	float2 TexCoord	: TEXCOORD;
 };
 
 struct MeshPixelOutput

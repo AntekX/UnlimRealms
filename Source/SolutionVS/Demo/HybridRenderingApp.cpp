@@ -270,8 +270,9 @@ int HybridRenderingApp::Run()
 
 			struct Vertex
 			{
-				ur_float3 pos;
-				ur_float3 norm;
+				ur_float3 Pos;
+				ur_float3 Norm;
+				ur_float2 TexCoord;
 			};
 
 			typedef ur_uint32 Index;
@@ -371,7 +372,10 @@ int HybridRenderingApp::Run()
 
 			// load mesh(es)
 
-			GrafUtils::MeshVertexElementFlags vertexMask = (ur_uint(GrafUtils::MeshVertexElementFlag::Position) | ur_uint(GrafUtils::MeshVertexElementFlag::Normal)); // load only subset of attributes compatible with Mesh::Vertex
+			GrafUtils::MeshVertexElementFlags meshVertexMask = // must be compatible with Mesh::Vertex
+				ur_uint(GrafUtils::MeshVertexElementFlag::Position) |
+				ur_uint(GrafUtils::MeshVertexElementFlag::Normal) |
+				ur_uint(GrafUtils::MeshVertexElementFlag::TexCoord);
 			std::string modelResName[] = {
 				"../Res/Models/Plane.obj",
 				"../Res/Models/Sphere.obj",
@@ -381,10 +385,10 @@ int HybridRenderingApp::Run()
 			for (ur_size ires = 0; ires < ur_array_size(modelResName); ++ires)
 			{
 				GrafUtils::ModelData modelData;
-				if (GrafUtils::LoadModelFromFile(*grafDevice, modelResName[ires], modelData, vertexMask) == Success && modelData.Meshes.size() > 0)
+				if (GrafUtils::LoadModelFromFile(*grafDevice, modelResName[ires], modelData, meshVertexMask) == Success && modelData.Meshes.size() > 0)
 				{
 					const GrafUtils::MeshData& meshData = *modelData.Meshes[0];
-					if (meshData.VertexElementFlags & vertexMask) // make sure all masked attributes available in the mesh
+					if (meshData.VertexElementFlags & meshVertexMask) // make sure all masked attributes available in the mesh
 					{
 						std::unique_ptr<Mesh> mesh(new Mesh(*grafSystem));
 						mesh->Initialize(this->grafRenderer,
@@ -441,8 +445,9 @@ int HybridRenderingApp::Run()
 					this->rasterDescTableLayout.get(),
 				};
 				GrafVertexElementDesc vertexElements[] = {
-					{ GrafFormat::R32G32B32_SFLOAT, 0 },
-					{ GrafFormat::R32G32B32_SFLOAT, 12 }
+					{ GrafFormat::R32G32B32_SFLOAT, 0 },	// pos
+					{ GrafFormat::R32G32B32_SFLOAT, 12 },	// normal
+					{ GrafFormat::R32G32_SFLOAT, 24 }		// tex coord
 				};
 				GrafVertexInputDesc vertexInputs[] = { {
 					GrafVertexInputType::PerVertex, 0, sizeof(Mesh::Vertex),
