@@ -73,8 +73,8 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		else
 		{
 			// TODO: read mesh material
-			material.baseColor.xyz = float3(geomtryData2.zw, 0);// 0.5;
-			material.roughness = 0.25;
+			material.baseColor.xyz = float3(geomtryData2.zw, 0);// 0.25;
+			material.roughness = 0.5;
 			material.metallic = 0.0;
 			material.reflectance = 0.04;
 		}
@@ -91,7 +91,8 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		{
 			LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
 			float shadowFactor = 1.0;
-			float specularOcclusion = 1.0;
+			float specularOcclusion = shadowFactor;
+			specularOcclusion *= saturate(dot(-light.Direction, lightingParams.normal) * 20.0); // fake self occlusion at grazing angels
 			directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 		}
 

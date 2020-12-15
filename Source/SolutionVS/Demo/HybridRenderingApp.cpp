@@ -352,8 +352,8 @@ int HybridRenderingApp::Run()
 			memset(&this->sceneConstants, 0, sizeof(SceneConstants));
 			// default material override
 			this->sceneConstants.OverrideMaterial = true;
-			this->sceneConstants.Material.BaseColor = { 0.5f, 0.5f, 0.5f };
-			this->sceneConstants.Material.Roughness = 0.25f;
+			this->sceneConstants.Material.BaseColor = { 0.25f, 0.25f, 0.25f };
+			this->sceneConstants.Material.Roughness = 0.5f;
 			this->sceneConstants.Material.Reflectance = 0.04f;
 		}
 		~DemoScene()

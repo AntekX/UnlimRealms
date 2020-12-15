@@ -864,7 +864,7 @@ namespace UnlimRealms
 		GrafImageDesc bloomImageDesc = {
 			GrafImageType::Tex2D,
 			GrafFormat::R16G16B16A16_SFLOAT,
-			ur_uint3((ur_uint)std::max(ur_uint(1), width / 4), (ur_uint)std::max(ur_uint(1), height / 4), 1), 1,
+			ur_uint3((ur_uint)std::max(ur_uint(1), width / 8), (ur_uint)std::max(ur_uint(1), height / 8), 1), 1,
 			ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderInput),
 			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 		};

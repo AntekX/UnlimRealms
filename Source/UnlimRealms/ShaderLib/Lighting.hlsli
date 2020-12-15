@@ -117,8 +117,7 @@ float V_SmithGGXCorrelated(float roughness, float NoV, float NoL)
 	float v = 0.5 / (lambdaV + lambdaL);
 	// a2=0 => v = 1 / 4*NoL*NoV   => min=1/4, max=+inf
 	// a2=1 => v = 1 / 2*(NoL+NoV) => min=1/4, max=+inf
-	// clamp to the maximum value representable in mediump
-	return (isinf(v) ? 0.0 : v);
+	return v;
 }
 
 float V_SmithGGXCorrelated_Fast(float roughness, float NoV, float NoL)
@@ -191,7 +190,7 @@ float visibility(float roughness, float NoV, float NoL)
 float3 fresnel(const float3 f0, float LoH)
 {
 	#if (BRDF_SPECULAR_F == SPECULAR_F_SCHLICK)
-	float f90 = saturate(dot(f0, (float3)(50.0 * 0.33)));
+	float f90 = saturate(dot(f0, (float3)(50.0 * 0.33))); // Frostbyte trick, values blow 2% include prebaked micro occlusion (therefore 50)
 	return F_Schlick(f0, f90, LoH);
 	#endif
 }
@@ -718,9 +717,11 @@ float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lig
 {
 	// common inputs
 
+	float lightAttenuation = 1.0; // todo
+	float3 lightColor = lightSource.Color * lightSource.Intensity * lightAttenuation;
 	float3 lightDir = -lightSource.Direction; // dir towards light source
 	float3 halfV = normalize(lightingParams.viewDir + lightDir);
-	float NoV = saturate(dot(lightingParams.normal, lightingParams.viewDir));
+	float NoV = abs(dot(lightingParams.normal, lightingParams.viewDir)) + 1.0e-5; // safe NoV, avoids artifacts in visibility function
 	float NoL = saturate(dot(lightingParams.normal, lightDir));
 	float NoH = saturate(dot(lightingParams.normal, halfV));
 	float LoH = saturate(dot(lightDir, halfV));
@@ -728,6 +729,7 @@ float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lig
 	// diffuse term
 
 	float3 Fd = lightingParams.diffuseColor * diffuse(lightingParams.roughness, NoV, NoL, LoH);
+	Fd *= NoL * lightColor * directOcclusion;
 
 	// specular term
 
@@ -766,15 +768,16 @@ float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lig
 		float V = visibility(lightingParams.roughness, NoV, NoL);
 		float3 F = fresnel(lightingParams.f0, LoH);
 
-		Fr = max(0.0, (D * V) * F);
+		Fr = (D * V) * F;
 	}
 
-	float lightAttenuation = 1.0; // todo
-	float3 lightSourceColor = lightSource.Color * lightSource.Intensity * lightAttenuation;
-	float4 lightingResult = float4(0.0, 0.0, 0.0, 1.0);
-	lightingResult.xyz = (Fd * directOcclusion + Fr * lightingParams.energyCompensation * specularOcclusion) * NoL * lightSourceColor;
+	Fr *= lightingParams.energyCompensation * lightColor * specularOcclusion;
 
-	return lightingResult;
+	// final
+
+	float3 lightingResult = Fd + Fr;
+
+	return float4(lightingResult, 1.0);
 }
 
 float3 FresnelReflectance(LightingParams lightingParams)
