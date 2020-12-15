@@ -8,6 +8,7 @@
 struct SceneConstants
 {
 	float4x4 viewProj;
+	float4x4 viewProjInv;
 	float4 cameraPos;
 	float4 cameraDir;
 };
@@ -28,4 +29,5 @@ struct MeshPixelOutput
 {
 	float4 target0	: SV_Target0;
 	float4 target1	: SV_Target1;
+	float4 target2	: SV_Target2;
 };

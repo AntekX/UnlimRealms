@@ -74,7 +74,8 @@ int HybridRenderingApp::Run()
 	{
 		RenderTargetImageUsage_Depth = 0,
 		RenderTargetImageUsage_Geometry0, // xyz: baseColor; w: materialTypeID;
-		RenderTargetImageUsage_Geometry1, // xy: normal; z: roughness; w: reflectance;
+		RenderTargetImageUsage_Geometry1, // xyz: worldNormal; w: roughness;
+		RenderTargetImageUsage_Geometry2, // x: reflectance; yzw: unused;
 		RenderTargetImageCount,
 		RenderTargetColorImageCount = RenderTargetImageCount - 1
 	};
@@ -83,10 +84,12 @@ int HybridRenderingApp::Run()
 		GrafFormat::D24_UNORM_S8_UINT,
 		GrafFormat::R8G8B8A8_UNORM,
 		GrafFormat::R8G8B8A8_UNORM,
+		GrafFormat::R8G8B8A8_UNORM,
 	};
 
 	static GrafClearValue RenderTargetClearValues[RenderTargetImageCount] = {
 		{ 1.0f, 0.0f, 0.0f, 0.0f },
+		{ 0.0f, 0.0f, 0.0f, 0.0f },
 		{ 0.0f, 0.0f, 0.0f, 0.0f },
 		{ 0.0f, 0.0f, 0.0f, 0.0f },
 	};
@@ -238,6 +241,7 @@ int HybridRenderingApp::Run()
 		struct SceneConstants
 		{
 			ur_float4x4 viewProj;
+			ur_float4x4 viewProjInv;
 			ur_float4 cameraPos;
 			ur_float4 cameraDir;
 		};
@@ -427,10 +431,11 @@ int HybridRenderingApp::Run()
 					GrafVertexInputType::PerVertex, 0, sizeof(Mesh::Vertex),
 					vertexElements, ur_array_size(vertexElements)
 				} };
-				GrafColorBlendOpDesc colorTargetBlendOpDesc[RenderTargetColorImageCount] = {
-					GrafColorBlendOpDesc::Default,
-					GrafColorBlendOpDesc::Default
-				};
+				GrafColorBlendOpDesc colorTargetBlendOpDesc[RenderTargetColorImageCount];
+				for (ur_uint imageId = 0; imageId < RenderTargetColorImageCount; ++imageId)
+				{
+					colorTargetBlendOpDesc[imageId] = GrafColorBlendOpDesc::Default;
+				}
 				GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
 				pipelineParams.RenderPass = rasterRenderPass;
 				pipelineParams.ShaderStages = shaderStages;
@@ -454,7 +459,7 @@ int HybridRenderingApp::Run()
 
 			GrafDescriptorRangeDesc lightingDescTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-				{ GrafDescriptorType::Texture, 0, 3 },
+				{ GrafDescriptorType::Texture, 0, RenderTargetImageCount },
 				{ GrafDescriptorType::RWTexture, 0, 1 },
 			};
 			GrafDescriptorTableLayoutDesc lightingDescTableLayoutDesc = {
@@ -496,6 +501,7 @@ int HybridRenderingApp::Run()
 			// update & upload frame constants
 
 			sceneConstants.viewProj = camera.GetViewProj();
+			sceneConstants.viewProjInv = camera.GetViewProjInv();
 			sceneConstants.cameraPos = camera.GetPosition();
 			sceneConstants.cameraDir = camera.GetDirection();
 
@@ -529,7 +535,7 @@ int HybridRenderingApp::Run()
 		void ComputeLighting(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, GrafRenderTarget* lightingTarget)
 		{
 			// update descriptor table
-			// common frame constant buffer is expected to be uploaded during rasterization pass
+			// common constant buffer is expected to be uploaded during rasterization pass
 
 			GrafDescriptorTable* descriptorTable = this->lightingDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
@@ -595,10 +601,10 @@ int HybridRenderingApp::Run()
 	// setup main camera
 	Camera camera(realm);
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
-	cameraControl.SetTargetPoint(ur_float3(0.0f));
+	cameraControl.SetTargetPoint(ur_float3(0.0f, 2.0f, 0.0f));
 	cameraControl.SetSpeed(4.0);
 	camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
-	camera.SetPosition(ur_float3(0.0f, 0.0f, -8.0f));
+	camera.SetPosition(ur_float3(9.541f, 5.412f, -12.604f));
 	camera.SetLookAt(cameraControl.GetTargetPoint(), cameraControl.GetWorldUp());
 
 	// Main message loop:
