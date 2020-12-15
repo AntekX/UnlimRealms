@@ -240,10 +240,19 @@ int HybridRenderingApp::Run()
 
 		struct SceneConstants
 		{
-			ur_float4x4 viewProj;
-			ur_float4x4 viewProjInv;
-			ur_float4 cameraPos;
-			ur_float4 cameraDir;
+			ur_float4x4 Proj;
+			ur_float4x4 ViewProj;
+			ur_float4x4 ViewProjInv;
+			ur_float4 CameraPos;
+			ur_float4 CameraDir;
+			ur_float4 SourceSize;
+			ur_float4 TargetSize;
+			ur_float4 DebugVec0;
+			ur_bool OverrideMaterial;
+			ur_float3 __pad0;
+			LightingDesc Lighting;
+			Atmosphere::Desc Atmosphere;
+			MeshMaterialDesc Material;
 		};
 
 		enum MeshId
@@ -334,9 +343,17 @@ int HybridRenderingApp::Run()
 		std::unique_ptr<GrafShader> shaderPixel;
 		SceneConstants sceneConstants;
 		Allocation sceneCBCrntFrameAlloc;
+		ur_float4 debugVec0;
 
 		DemoScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
 		{
+			this->debugVec0 = ur_float4::Zero;
+			memset(&this->sceneConstants, 0, sizeof(SceneConstants));
+			// default material override
+			this->sceneConstants.OverrideMaterial = true;
+			this->sceneConstants.Material.BaseColor = { 0.5f, 0.5f, 0.5f };
+			this->sceneConstants.Material.Roughness = 0.25f;
+			this->sceneConstants.Material.Reflectance = 0.04f;
 		}
 		~DemoScene()
 		{
@@ -496,14 +513,25 @@ int HybridRenderingApp::Run()
 			// do some animation here
 		}
 
-		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera)
+		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera,
+			const LightingDesc& lightingDesc, const Atmosphere::Desc& atmosphereDesc)
 		{
 			// update & upload frame constants
 
-			sceneConstants.viewProj = camera.GetViewProj();
-			sceneConstants.viewProjInv = camera.GetViewProjInv();
-			sceneConstants.cameraPos = camera.GetPosition();
-			sceneConstants.cameraDir = camera.GetDirection();
+			const ur_uint3& targetSize = renderTargetSet->renderTarget->GetImage(0)->GetDesc().Size;
+			sceneConstants.Proj = camera.GetProj();
+			sceneConstants.ViewProj = camera.GetViewProj();
+			sceneConstants.ViewProjInv = camera.GetViewProjInv();
+			sceneConstants.CameraPos = camera.GetPosition();
+			sceneConstants.CameraDir = camera.GetDirection();
+			sceneConstants.TargetSize.x = (ur_float)targetSize.x;
+			sceneConstants.TargetSize.y = (ur_float)targetSize.y;
+			sceneConstants.TargetSize.z = 1.0f / sceneConstants.TargetSize.x;
+			sceneConstants.TargetSize.w = 1.0f / sceneConstants.TargetSize.y;
+			sceneConstants.SourceSize = sceneConstants.TargetSize;
+			sceneConstants.DebugVec0 = this->debugVec0;
+			sceneConstants.Lighting = lightingDesc;
+			sceneConstants.Atmosphere = atmosphereDesc;
 
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 			this->sceneCBCrntFrameAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
@@ -557,9 +585,21 @@ int HybridRenderingApp::Run()
 
 		void ShowImgui()
 		{
+			ur_float editableFloat3[3];
 			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
 			if (ImGui::CollapsingHeader("DemoScene"))
 			{
+				ImGui::InputFloat4("DebugVec0", &this->debugVec0.x);
+				if (ImGui::CollapsingHeader("Material"))
+				{
+					ImGui::Checkbox("Override", &this->sceneConstants.OverrideMaterial);
+					memcpy(editableFloat3, &this->sceneConstants.Material.BaseColor, sizeof(ur_float3));
+					ImGui::InputFloat3("BaseColor", editableFloat3);
+					this->sceneConstants.Material.BaseColor = editableFloat3;
+					ImGui::InputFloat("Roughness", &this->sceneConstants.Material.Roughness);
+					ImGui::InputFloat("Metallic", &this->sceneConstants.Material.Metallic);
+					ImGui::InputFloat("Reflectance", &this->sceneConstants.Material.Reflectance);
+				}
 			}
 		}
 	};
@@ -589,6 +629,7 @@ int HybridRenderingApp::Run()
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
 		hdrParams.BloomThreshold = 4.0f;
+		hdrParams.BloomIntensity = 0.1f;
 		hdrRender->SetParams(hdrParams);
 		res = hdrRender->Init(canvasWidth, canvasHeight, ur_null);
 		if (Failed(res))
@@ -597,6 +638,37 @@ int HybridRenderingApp::Run()
 			hdrRender.reset();
 		}
 	}
+
+	// light source params
+	LightDesc sunLight = {};
+	sunLight.Color = { 1.0f, 1.0f, 1.0f };
+	sunLight.Intensity = 50.0f;
+	sunLight.Direction = { -0.8165f,-0.40825f,-0.40825f };
+	LightDesc sunLight2 = {};
+	sunLight2.Color = { 1.0f, 0.1f, 0.0f };
+	sunLight2.Intensity = 50.0f;
+	sunLight2.Direction = { 0.8018f,-0.26726f,-0.5345f };
+	LightingDesc lightingDesc = {};
+	lightingDesc.LightSourceCount = 1;
+	lightingDesc.LightSources[0] = sunLight;
+	lightingDesc.LightSources[1] = sunLight2;
+
+	// light source animation
+	ur_float lightCycleTime = 60.0f;
+	ur_float lightCrntCycleFactor = 0.0f;
+	ur_bool lightAnimationEnabled = true;
+	ur_float lightAnimationElapsedTime = 0.0f;
+
+	// atmosphere params
+	Atmosphere::Desc atmosphereDesc = {
+		6371.0e+3f,
+		6381.0e+3f,
+		0.250f,
+		-0.980f,
+		2.0e-7f,
+		7.0e-7f,
+		2.718f,
+	};
 
 	// setup main camera
 	Camera camera(realm);
@@ -655,6 +727,23 @@ int HybridRenderingApp::Run()
 			auto deltaTime = ClockDeltaAs<std::chrono::microseconds>(timeNow - timer);
 			timer = timeNow;
 			ur_float elapsedTime = (float)deltaTime.count() * 1.0e-6f;  // to seconds
+
+			ctx.progress++;
+
+			// upadte light source(s)
+
+			if (lightAnimationEnabled) lightAnimationElapsedTime += elapsedTime;
+			else lightAnimationElapsedTime = lightCrntCycleFactor * lightCycleTime;
+			ur_float crntTimeFactor = (lightAnimationEnabled ? (lightAnimationElapsedTime / lightCycleTime) : lightCrntCycleFactor);
+			ur_float modY;
+			lightCrntCycleFactor = std::modf(crntTimeFactor, &modY);
+			ur_float3 sunDir;
+			sunDir.x = -cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
+			sunDir.z = -sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
+			sunDir.y = -powf(fabs(sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor)), 2.0f) * 0.6f - 0.05f;
+			sunDir.Normalize();
+			LightDesc& sunLight = lightingDesc.LightSources[0];
+			sunLight.Direction = sunDir;
 
 			ctx.progress++;
 
@@ -732,7 +821,7 @@ int HybridRenderingApp::Run()
 				if (demoScene != ur_null)
 				{
 					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "DemoScene", DebugLabelColorRender);
-					demoScene->Render(grafCmdListCrnt, renderTargetSet.get(), camera);
+					demoScene->Render(grafCmdListCrnt, renderTargetSet.get(), camera, lightingDesc, atmosphereDesc);
 				}
 
 				grafCmdListCrnt->EndRenderPass();
@@ -808,6 +897,14 @@ int HybridRenderingApp::Run()
 					if (hdrRender != ur_null)
 					{
 						hdrRender->ShowImgui();
+					}
+					if (ImGui::CollapsingHeader("Lighting"))
+					{
+						ImGui::Checkbox("AnimationEnabled", &lightAnimationEnabled);
+						ImGui::InputFloat("CycleTime", &lightCycleTime);
+						ImGui::DragFloat("CrntCycleFactor", &lightCrntCycleFactor, 0.01f, 0.0f, 1.0f);
+						ImGui::ColorEdit3("Color", &lightingDesc.LightSources[0].Color.x);
+						ImGui::InputFloat("Intensity", &lightingDesc.LightSources[0].Intensity);
 					}
 					if (demoScene != ur_null)
 					{

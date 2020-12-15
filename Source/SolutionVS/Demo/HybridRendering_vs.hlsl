@@ -7,8 +7,8 @@ MeshPixelInput main(MeshVertexInput input)
 {
 	MeshPixelInput output;
 
-	output.pos = mul(float4(input.pos.xyz, 1.0), g_SceneCB.viewProj);
-	output.norm = input.norm;
+	output.Pos = mul(float4(input.Pos.xyz, 1.0), g_SceneCB.ViewProj);
+	output.Norm = input.Norm;
 
 	return output;
 }

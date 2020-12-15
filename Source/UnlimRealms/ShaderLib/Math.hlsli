@@ -84,6 +84,21 @@ float2 IntersectSphere(const float3 rayOrigin, const float3 rayDirection, const 
 	return float2(near, far);
 }
 
+//------------------------------------------------------------------------------
+// Depth Utils
+//------------------------------------------------------------------------------
+
+float ClipDepthToViewDepth(in float clipDepth, in float4x4 proj)
+{
+	return proj[3][2] / (clipDepth - proj[2][2]);
+}
+
+float3 ClipPosToWorldPos(in float3 clipPos, in float4x4 viewProjInv)
+{
+	float4 worldPos = mul(float4(clipPos, 1.0), viewProjInv);
+	return (worldPos.xyz / worldPos.w);
+}
+
 /***************************************************************/
 // 3D value noise
 // Ref: https://www.shadertoy.com/view/XsXfRH
