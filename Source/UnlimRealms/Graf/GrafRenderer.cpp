@@ -538,6 +538,9 @@ namespace UnlimRealms
 
 	Result GrafRenderer::Upload(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 	{
+		// TODO: cached command list from GetTransientCommandList() should be used here
+		// simultaneous Wait() threading issue must be fixed first (a call in cmd list Begin() and another in UpdateCommandListCache())
+
 		// create upload command list
 		std::unique_ptr<GrafCommandList> grafUploadCmdList;
 		Result res = this->grafSystem->CreateCommandList(grafUploadCmdList);

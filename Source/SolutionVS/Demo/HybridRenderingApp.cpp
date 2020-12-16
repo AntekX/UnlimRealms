@@ -634,7 +634,7 @@ int HybridRenderingApp::Run()
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
 		hdrParams.BloomThreshold = 4.0f;
-		hdrParams.BloomIntensity = 0.1f;
+		hdrParams.BloomIntensity = 0.5f;
 		hdrRender->SetParams(hdrParams);
 		res = hdrRender->Init(canvasWidth, canvasHeight, ur_null);
 		if (Failed(res))

@@ -26,6 +26,7 @@ namespace UnlimRealms
 	};
 
 	const ur_uint BlurPasses = 8;
+	const ur_uint BloomImageDenom = 4;
 
 	HDRRender::HDRRender(Realm &realm) :
 		RealmEntity(realm)
@@ -189,8 +190,8 @@ namespace UnlimRealms
 
 		// (re)init bloom target
 		descRT.Format = GfxFormat::R16G16B16A16;
-		descRT.Width = std::max(ur_uint(1), width / 4);
-		descRT.Height = std::max(ur_uint(1), height / 4);
+		descRT.Width = std::max(ur_uint(1), width / BloomImageDenom);
+		descRT.Height = std::max(ur_uint(1), height / BloomImageDenom);
 		res = gfxObjects->bloomRT[0]->Initialize(descRT, false, GfxFormat::Unknown);
 		res &= gfxObjects->bloomRT[1]->Initialize(descRT, false, GfxFormat::Unknown);
 		if (Failed(res))
@@ -864,7 +865,7 @@ namespace UnlimRealms
 		GrafImageDesc bloomImageDesc = {
 			GrafImageType::Tex2D,
 			GrafFormat::R16G16B16A16_SFLOAT,
-			ur_uint3((ur_uint)std::max(ur_uint(1), width / 8), (ur_uint)std::max(ur_uint(1), height / 8), 1), 1,
+			ur_uint3((ur_uint)std::max(ur_uint(1), width / BloomImageDenom), (ur_uint)std::max(ur_uint(1), height / BloomImageDenom), 1), 1,
 			ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderInput),
 			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 		};
@@ -941,6 +942,7 @@ namespace UnlimRealms
 	#if !defined(UR_GRAF)
 		return Result(NotImplemented);
 	#else
+		GrafUtils::ScopedDebugLabel label(&grafCmdList, "HDRRender::Resolve");
 		if (ur_null == this->grafRTObjects.get())
 			return Result(NotInitialized);
 
@@ -949,6 +951,8 @@ namespace UnlimRealms
 		ur_uint frameFirstTableId = frameIdx * (ur_uint)this->grafRTObjects->lumRTChain.size();
 
 		// HDR RT to first luminance image
+
+		grafCmdList.BeginDebugLabel("Luminance");
 
 		ConstantsCB cb;
 		cb.SrcTargetSize.x = (ur_float)this->grafRTObjects->hdrRTImage->GetDesc().Size.x;
@@ -1008,8 +1012,12 @@ namespace UnlimRealms
 			grafCmdList.EndRenderPass();
 		}
 
+		grafCmdList.EndDebugLabel();
+
 		// compute bloom texture from HDR source
 		
+		grafCmdList.BeginDebugLabel("Bloom");
+
 		rtViewport.Width = (ur_float)this->grafRTObjects->bloomImage[0]->GetDesc().Size.x;
 		rtViewport.Height = (ur_float)this->grafRTObjects->bloomImage[0]->GetDesc().Size.y;
 		
@@ -1060,7 +1068,11 @@ namespace UnlimRealms
 		}
 		if (dstIdx != 0) this->grafRTObjects->bloomImage[0].swap(this->grafRTObjects->bloomImage[1]);
 
+		grafCmdList.EndDebugLabel();
+
 		// apply tonemapping and write to resolve target
+
+		grafCmdList.BeginDebugLabel("Tonemapping");
 
 		cb.SrcTargetSize.x = (ur_float)this->grafRTObjects->hdrRTImage->GetDesc().Size.x;
 		cb.SrcTargetSize.y = (ur_float)this->grafRTObjects->hdrRTImage->GetDesc().Size.y;
@@ -1086,6 +1098,8 @@ namespace UnlimRealms
 		grafCmdList.BindDescriptorTable(descTable, this->grafObjects->tonemapPipeline.get());
 		grafCmdList.Draw(4, 1, 0, 0);
 		grafCmdList.EndRenderPass();
+
+		grafCmdList.EndDebugLabel();
 
 		return Result(Success);
 	#endif
