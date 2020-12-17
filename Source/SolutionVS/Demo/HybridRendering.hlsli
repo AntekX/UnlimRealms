@@ -22,6 +22,9 @@ struct SceneConstants
 	MeshMaterialDesc Material;
 };
 
+// Instance format must be up to date with GrafAccelerationStructureInstance
+static const uint InstanceStride = 64;
+
 struct MeshVertexInput
 {
 	float3 Pos		: POSITION;

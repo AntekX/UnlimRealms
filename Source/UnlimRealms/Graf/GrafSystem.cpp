@@ -1048,11 +1048,11 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	const GrafUtils::MeshMaterialDesc GrafUtils::MeshMaterialDesc::Default = {
-		{ 1.0f, 1.0f, 1.0f }, // BaseColor
+		{ 0.25f, 0.25f, 0.25f }, // BaseColor
 		{ 0.0f, 0.0f, 0.0f }, // EmissiveColor
-		1.0f, // Roughness
+		0.5f, // Roughness
 		0.0f, // Metallic
-		0.5f, // Reflectance
+		0.04f, // Reflectance
 		0.0f, // ClearCoat
 		0.0f, // ClearCoatRoughness
 		0.0f, // Anisotropy

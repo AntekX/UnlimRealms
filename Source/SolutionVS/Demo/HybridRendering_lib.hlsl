@@ -98,7 +98,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		// indirect light
 
-		float3 envColor = CalculateSkyLight(worldPos, normalize(lightingParams.normal * 0.5 + WorldUp)).xyz; // simplified sky light
+		float3 envColor = CalculateSkyLight(worldPos, normalize(lightingParams.normal * 0.5 + WorldUp)).xyz * Pi; // simplified sky light
 		float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor; // no indirect spec
 
 		// final

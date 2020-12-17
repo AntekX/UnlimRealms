@@ -255,6 +255,8 @@ int HybridRenderingApp::Run()
 			MeshMaterialDesc Material;
 		};
 
+		typedef GrafAccelerationStructureInstance Instance; // HW ray tracing compatible instance structure
+
 		enum MeshId
 		{
 			MeshId_Plane = 0,
@@ -277,21 +279,30 @@ int HybridRenderingApp::Run()
 
 			typedef ur_uint32 Index;
 
+			struct DrawData
+			{
+				ur_uint instanceCount;
+				ur_uint instanceOfs;
+			};
+
+			MeshId meshId;
 			std::unique_ptr<GrafBuffer> vertexBuffer;
 			std::unique_ptr<GrafBuffer> indexBuffer;
 			ur_uint verticesCount;
 			ur_uint indicesCount;
+			DrawData drawData;
 
 			Mesh(GrafSystem &grafSystem) : GrafEntity(grafSystem) {}
 			~Mesh() {}
 
-			void Initialize(GrafRenderer* grafRenderer,
+			void Initialize(GrafRenderer* grafRenderer, MeshId meshId,
 				const Vertex* vertices, ur_uint verticesCount,
 				const Index* indices, ur_uint indicesCount)
 			{
 				GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
 				GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
 
+				this->meshId = meshId;
 				this->verticesCount = verticesCount;
 				this->indicesCount = indicesCount;
 
@@ -329,10 +340,13 @@ int HybridRenderingApp::Run()
 
 				grafRenderer->Upload((ur_byte*)indices, this->indexBuffer.get(), IBParams.BufferDesc.SizeInBytes);
 			}
+
+			inline MeshId GetMeshId() const { return this->meshId; }
 		};
 
 		GrafRenderer* grafRenderer;
 		std::vector<std::unique_ptr<Mesh>> meshes;
+		std::unique_ptr<GrafBuffer> instanceBuffer;
 		std::unique_ptr<GrafDescriptorTableLayout> rasterDescTableLayout;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> rasterDescTablePerFrame;
 		std::unique_ptr<GrafPipeline> rasterPipelineState;
@@ -346,15 +360,27 @@ int HybridRenderingApp::Run()
 		Allocation sceneCBCrntFrameAlloc;
 		ur_float4 debugVec0;
 
+		std::vector<Instance> sampleInstances;
+		ur_uint sampleInstanceCount;
+		ur_bool animationEnabled;
+		ur_float animationCycleTime;
+		ur_float animationElapsedTime;
+
 		DemoScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
 		{
 			this->debugVec0 = ur_float4::Zero;
 			memset(&this->sceneConstants, 0, sizeof(SceneConstants));
+			
 			// default material override
 			this->sceneConstants.OverrideMaterial = true;
 			this->sceneConstants.Material.BaseColor = { 0.25f, 0.25f, 0.25f };
 			this->sceneConstants.Material.Roughness = 0.5f;
 			this->sceneConstants.Material.Reflectance = 0.04f;
+
+			this->sampleInstanceCount = 16;
+			this->animationEnabled = true;
+			this->animationCycleTime = 30.0f;
+			this->animationElapsedTime = 0.0f;
 		}
 		~DemoScene()
 		{
@@ -376,28 +402,45 @@ int HybridRenderingApp::Run()
 				ur_uint(GrafUtils::MeshVertexElementFlag::Position) |
 				ur_uint(GrafUtils::MeshVertexElementFlag::Normal) |
 				ur_uint(GrafUtils::MeshVertexElementFlag::TexCoord);
-			std::string modelResName[] = {
-				"../Res/Models/Plane.obj",
-				"../Res/Models/Sphere.obj",
-				"../Res/Models/Wuson.obj",
-				"../Res/Models/Medieval_building.obj",
+			struct MeshResDesc
+			{
+				MeshId Id;
+				std::string Name;
 			};
-			for (ur_size ires = 0; ires < ur_array_size(modelResName); ++ires)
+			MeshResDesc meshResDesc[] = {
+				{ MeshId_Plane, "../Res/Models/Plane.obj" },
+				{ MeshId_Sphere, "../Res/Models/Sphere.obj" },
+				{ MeshId_Wuson, "../Res/Models/Wuson.obj" },
+				{ MeshId_MedievalBuilding, "../Res/Models/Medieval_building.obj" },
+			};
+			for (ur_size ires = 0; ires < ur_array_size(meshResDesc); ++ires)
 			{
 				GrafUtils::ModelData modelData;
-				if (GrafUtils::LoadModelFromFile(*grafDevice, modelResName[ires], modelData, meshVertexMask) == Success && modelData.Meshes.size() > 0)
+				if (GrafUtils::LoadModelFromFile(*grafDevice, meshResDesc[ires].Name, modelData, meshVertexMask) == Success && modelData.Meshes.size() > 0)
 				{
 					const GrafUtils::MeshData& meshData = *modelData.Meshes[0];
 					if (meshData.VertexElementFlags & meshVertexMask) // make sure all masked attributes available in the mesh
 					{
 						std::unique_ptr<Mesh> mesh(new Mesh(*grafSystem));
-						mesh->Initialize(this->grafRenderer,
+						mesh->Initialize(this->grafRenderer, meshResDesc[ires].Id,
 							(Mesh::Vertex*)meshData.Vertices.data(), ur_uint(meshData.Vertices.size() / sizeof(Mesh::Vertex)),
 							(Mesh::Index*)meshData.Indices.data(), ur_uint(meshData.Indices.size() / sizeof(Mesh::Index)));
 						this->meshes.emplace_back(std::move(mesh));
 					}
 				}
 			}
+
+			// instance buffer
+
+			static const ur_size InstanceCountMax = 1024;
+
+			GrafBuffer::InitParams instanceBufferParams;
+			instanceBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
+			instanceBufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
+			instanceBufferParams.BufferDesc.SizeInBytes = InstanceCountMax * sizeof(Instance);
+
+			grafSystem->CreateBuffer(this->instanceBuffer);
+			this->instanceBuffer->Initialize(grafDevice, instanceBufferParams);
 
 			// load shaders
 
@@ -418,6 +461,7 @@ int HybridRenderingApp::Run()
 
 			GrafDescriptorRangeDesc rasterDescTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+				{ GrafDescriptorType::Buffer, 0, 1 },
 			};
 			GrafDescriptorTableLayoutDesc rasterDescTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::Vertex) |
@@ -515,7 +559,110 @@ int HybridRenderingApp::Run()
 
 		void Update(ur_float elapsedSeconds)
 		{
-			// do some animation here
+			if (ur_null == this->grafRenderer)
+				return;
+
+			GrafSystem* grafSystem = this->grafRenderer->GetGrafSystem();
+			GrafDevice* grafDevice = this->grafRenderer->GetGrafDevice();
+
+			if (this->animationEnabled) this->animationElapsedTime += elapsedSeconds;
+			ur_float crntTimeFactor = (this->animationElapsedTime / this->animationCycleTime);
+			ur_float modY;
+			ur_float crntCycleFactor = std::modf(crntTimeFactor, &modY);
+			ur_float animAngle = MathConst<ur_float>::Pi * 2.0f * crntCycleFactor;
+
+			// clear per mesh draw data
+
+			for (auto& mesh : this->meshes)
+			{
+				memset(&mesh->drawData, 0, sizeof(Mesh::DrawData));
+			}
+
+			// update instances
+
+			sampleInstances.clear();
+			ur_uint instanceBufferOfs = 0;
+
+			// plane
+			
+			static const float planeScale = 100.0f;
+			Instance planeInstance =
+			{
+				{
+					planeScale, 0.0f, 0.0f, 0.0f,
+					0.0f, 1.0f, 0.0f, 0.0f,
+					0.0f, 0.0f, planeScale, 0.0f
+				},
+				ur_uint32(MeshId_Plane), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+				ur_uint64(-1)//this->meshes[MeshId_Plane]->accelerationStructureBL->GetDeviceAddress()
+			};
+			this->meshes[MeshId_Plane]->drawData.instanceCount = 1;
+			this->meshes[MeshId_Plane]->drawData.instanceOfs = instanceBufferOfs;
+			instanceBufferOfs += 1;
+			sampleInstances.emplace_back(planeInstance);
+
+			// animated spheres
+			for (ur_size i = 0; i < this->sampleInstanceCount; ++i)
+			{
+				ur_float radius = 7.0f;
+				ur_float height = 2.0f;
+				GrafAccelerationStructureInstance meshInstance =
+				{
+					{
+						1.0f, 0.0f, 0.0f, radius * cosf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
+						0.0f, 1.0f, 0.0f, height + cosf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
+						0.0f, 0.0f, 1.0f, radius * sinf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle)
+					},
+					ur_uint32(MeshId_Sphere), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+					ur_uint64(-1)//this->meshes[MeshId_Sphere]->accelerationStructureBL->GetDeviceAddress()
+				};
+				sampleInstances.emplace_back(meshInstance);
+			}
+			this->meshes[MeshId_Sphere]->drawData.instanceCount = this->sampleInstanceCount;
+			this->meshes[MeshId_Sphere]->drawData.instanceOfs = instanceBufferOfs;
+			instanceBufferOfs += this->sampleInstanceCount;
+
+			// static randomly scarttered meshes
+			auto ScatterMeshInstances = [this, &instanceBufferOfs](Mesh* mesh, ur_uint instanceCount, ur_float radius, ur_float size, ur_float posOfs, ur_bool firstInstanceRnd = true) -> void
+			{
+				if (ur_null == mesh)
+					return;
+
+				ur_float3 pos(0.0f, posOfs, 0.0f);
+				ur_float3 frameI, frameJ, frameK;
+				frameJ = ur_float3(0.0f, 1.0, 0.0f);
+				for (ur_size i = 0; i < instanceCount; ++i)
+				{
+					ur_float r = (firstInstanceRnd || i > 0 ? 1.0f : 0.0f);
+					ur_float a = ur_float(std::rand()) / RAND_MAX * MathConst<ur_float>::Pi * 2.0f * r;
+					ur_float d = radius * sqrtf(ur_float(std::rand()) / RAND_MAX) * r;
+					pos.x = cosf(a) * d;
+					pos.z = sinf(a) * d;
+
+					a = (ur_float(std::rand()) / RAND_MAX /*+ crntCycleFactor*/) * MathConst<ur_float>::Pi * 2.0f;
+					frameI.x = cosf(a);
+					frameI.y = 0.0f;
+					frameI.z = sinf(a);
+					frameK = ur_float3::Cross(frameI, frameJ);
+
+					GrafAccelerationStructureInstance meshInstance =
+					{
+						{
+							frameI.x * size, frameJ.x * size, frameK.x * size, pos.x,
+							frameI.y * size, frameJ.y * size, frameK.y * size, pos.y,
+							frameI.z * size, frameJ.z * size, frameK.z * size, pos.z
+						},
+						ur_uint32(mesh->GetMeshId()), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
+						ur_uint64(-1)//mesh->accelerationStructureBL->GetDeviceAddress()
+					};
+					this->sampleInstances.emplace_back(meshInstance);
+				}
+				mesh->drawData.instanceCount = instanceCount;
+				mesh->drawData.instanceOfs = instanceBufferOfs;
+				instanceBufferOfs += instanceCount;
+			};
+			std::srand(58911192);
+			ScatterMeshInstances(this->meshes[MeshId_MedievalBuilding].get(), this->sampleInstanceCount, 40.0f, 2.0f, 0.0f, false);
 		}
 
 		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera,
@@ -542,15 +689,28 @@ int HybridRenderingApp::Run()
 			this->sceneCBCrntFrameAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
 			dynamicCB->Write((ur_byte*)&sceneConstants, sizeof(sceneConstants), 0, this->sceneCBCrntFrameAlloc.Offset);
 
+			// upload instances
+
+			ur_size updateSize = sampleInstances.size() * sizeof(Instance);
+			if (updateSize > this->instanceBuffer->GetDesc().SizeInBytes)
+				return; // too many instances
+
+			Allocation uploadAllocation = grafRenderer->GetDynamicUploadBufferAllocation(updateSize);
+			GrafBuffer* uploadBuffer = grafRenderer->GetDynamicUploadBuffer();
+			uploadBuffer->Write((const ur_byte*)sampleInstances.data(), uploadAllocation.Size, 0, uploadAllocation.Offset);
+			grafCmdList->Copy(uploadBuffer, this->instanceBuffer.get(), updateSize, uploadAllocation.Offset, 0);
+
 			// update descriptor table
 
 			GrafDescriptorTable* descriptorTable = this->rasterDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(0, dynamicCB, this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			descriptorTable->SetBuffer(0, this->instanceBuffer.get());
 
 			// rasterize meshes
 
 			grafCmdList->BindPipeline(this->rasterPipelineState.get());
 			grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
+			#if (0)
 			for (auto& mesh : this->meshes)
 			{
 				ur_uint instanceCount = 1; // TODO
@@ -558,6 +718,17 @@ int HybridRenderingApp::Run()
 				grafCmdList->BindIndexBuffer(mesh->indexBuffer.get(), (sizeof(Mesh::Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32));
 				grafCmdList->DrawIndexed(mesh->indicesCount, instanceCount, 0, 0, 0);
 			}
+			#else
+			for (auto& mesh : this->meshes)
+			{
+				if (0 == mesh->drawData.instanceCount)
+					continue;
+
+				grafCmdList->BindVertexBuffer(mesh->vertexBuffer.get(), 0);
+				grafCmdList->BindIndexBuffer(mesh->indexBuffer.get(), (sizeof(Mesh::Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32));
+				grafCmdList->DrawIndexed(mesh->indicesCount, mesh->drawData.instanceCount, 0, 0, mesh->drawData.instanceOfs);
+			}
+			#endif
 		}
 
 		void RayTrace(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera)
@@ -590,10 +761,16 @@ int HybridRenderingApp::Run()
 
 		void ShowImgui()
 		{
+			ur_int editableInt = 0;
 			ur_float editableFloat3[3];
 			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
 			if (ImGui::CollapsingHeader("DemoScene"))
 			{
+				editableInt = (int)this->sampleInstanceCount;
+				ImGui::InputInt("InstanceCount", &editableInt);
+				this->sampleInstanceCount = (ur_size)std::max(0, editableInt);
+				ImGui::Checkbox("InstancesAnimationEnabled", &this->animationEnabled);
+				ImGui::InputFloat("InstancesCycleTime", &this->animationCycleTime);
 				ImGui::InputFloat4("DebugVec0", &this->debugVec0.x);
 				if (ImGui::CollapsingHeader("Material"))
 				{
@@ -745,7 +922,7 @@ int HybridRenderingApp::Run()
 			ur_float3 sunDir;
 			sunDir.x = -cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
 			sunDir.z = -sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
-			sunDir.y = -powf(fabs(sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor)), 2.0f) * 0.6f - 0.05f;
+			sunDir.y = -powf(fabs(sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor)), 2.0f) * 0.6f - 0.02f;
 			sunDir.Normalize();
 			LightDesc& sunLight = lightingDesc.LightSources[0];
 			sunLight.Direction = sunDir;
