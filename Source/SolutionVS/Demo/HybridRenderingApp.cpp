@@ -710,15 +710,6 @@ int HybridRenderingApp::Run()
 
 			grafCmdList->BindPipeline(this->rasterPipelineState.get());
 			grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
-			#if (0)
-			for (auto& mesh : this->meshes)
-			{
-				ur_uint instanceCount = 1; // TODO
-				grafCmdList->BindVertexBuffer(mesh->vertexBuffer.get(), 0);
-				grafCmdList->BindIndexBuffer(mesh->indexBuffer.get(), (sizeof(Mesh::Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32));
-				grafCmdList->DrawIndexed(mesh->indicesCount, instanceCount, 0, 0, 0);
-			}
-			#else
 			for (auto& mesh : this->meshes)
 			{
 				if (0 == mesh->drawData.instanceCount)
