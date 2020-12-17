@@ -90,6 +90,8 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 		{
 			LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
+			//light.Color = CalculateSkyLight(worldPos, -light.Direction).xyz / Pi;
+			//light.Intensity = 1.0;
 			float shadowFactor = 1.0;
 			float specularOcclusion = shadowFactor;
 			specularOcclusion *= saturate(dot(-light.Direction, lightingParams.normal) * 20.0); // fake self occlusion at grazing angels

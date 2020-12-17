@@ -683,12 +683,25 @@ namespace UnlimRealms
 		vkDeviceInfo.ppEnabledExtensionNames = VulkanDeviceExtensions;
 		vkDeviceInfo.pEnabledFeatures = ur_null;
 
+		void** ppCrntCreateNextPtr = const_cast<void**>(&vkDeviceInfo.pNext);
 		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
+		
 		VkPhysicalDeviceBufferDeviceAddressFeatures vkBufferDeviceAddressFeatures = {};
 		vkBufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-		vkBufferDeviceAddressFeatures.pNext = nullptr;
+		vkBufferDeviceAddressFeatures.pNext = ur_null;
 		vkBufferDeviceAddressFeatures.bufferDeviceAddress = true;
-		vkDeviceInfo.pNext = &vkBufferDeviceAddressFeatures;
+		*ppCrntCreateNextPtr = &vkBufferDeviceAddressFeatures;
+		ppCrntCreateNextPtr = &vkBufferDeviceAddressFeatures.pNext;
+
+		VkPhysicalDeviceDescriptorIndexingFeaturesEXT vkDescriptorIndexingFeatures = {};
+		vkDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+		vkDescriptorIndexingFeatures.pNext = ur_null;
+		vkDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = true;
+		vkDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+		vkDescriptorIndexingFeatures.runtimeDescriptorArray = true;
+		*ppCrntCreateNextPtr = &vkDescriptorIndexingFeatures;
+		ppCrntCreateNextPtr = &vkDescriptorIndexingFeatures.pNext;
+
 		#endif
 
 		VkResult res = vkCreateDevice(vkPhysicalDevice, &vkDeviceInfo, ur_null, &this->vkDevice);
