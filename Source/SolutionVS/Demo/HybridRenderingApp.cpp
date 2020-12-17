@@ -719,7 +719,6 @@ int HybridRenderingApp::Run()
 				grafCmdList->BindIndexBuffer(mesh->indexBuffer.get(), (sizeof(Mesh::Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32));
 				grafCmdList->DrawIndexed(mesh->indicesCount, mesh->drawData.instanceCount, 0, 0, mesh->drawData.instanceOfs);
 			}
-			#endif
 		}
 
 		void RayTrace(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera)
