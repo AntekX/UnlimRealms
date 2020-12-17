@@ -435,7 +435,7 @@ int HybridRenderingApp::Run()
 			static const ur_size InstanceCountMax = 1024;
 
 			GrafBuffer::InitParams instanceBufferParams;
-			instanceBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
+			instanceBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferDst) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			instanceBufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
 			instanceBufferParams.BufferDesc.SizeInBytes = InstanceCountMax * sizeof(Instance);
 
@@ -663,6 +663,25 @@ int HybridRenderingApp::Run()
 			};
 			std::srand(58911192);
 			ScatterMeshInstances(this->meshes[MeshId_MedievalBuilding].get(), this->sampleInstanceCount, 40.0f, 2.0f, 0.0f, false);
+
+			// upload instances
+
+			ur_size updateSize = sampleInstances.size() * sizeof(Instance);
+			if (updateSize > this->instanceBuffer->GetDesc().SizeInBytes)
+				return; // too many instances
+
+			#if (0)
+			GrafCommandList* grafCmdList = grafRenderer->GetTransientCommandList();
+			Allocation uploadAllocation = grafRenderer->GetDynamicUploadBufferAllocation(updateSize);
+			GrafBuffer* uploadBuffer = grafRenderer->GetDynamicUploadBuffer();
+			uploadBuffer->Write((const ur_byte*)sampleInstances.data(), uploadAllocation.Size, 0, uploadAllocation.Offset);
+			grafCmdList->Begin();
+			grafCmdList->Copy(uploadBuffer, this->instanceBuffer.get(), updateSize, uploadAllocation.Offset, 0);
+			grafCmdList->End();
+			grafDevice->Record(grafCmdList);
+			#else
+			grafRenderer->Upload((ur_byte*)sampleInstances.data(), this->instanceBuffer.get(), updateSize);
+			#endif
 		}
 
 		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera,
@@ -688,17 +707,6 @@ int HybridRenderingApp::Run()
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 			this->sceneCBCrntFrameAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
 			dynamicCB->Write((ur_byte*)&sceneConstants, sizeof(sceneConstants), 0, this->sceneCBCrntFrameAlloc.Offset);
-
-			// upload instances
-
-			ur_size updateSize = sampleInstances.size() * sizeof(Instance);
-			if (updateSize > this->instanceBuffer->GetDesc().SizeInBytes)
-				return; // too many instances
-
-			Allocation uploadAllocation = grafRenderer->GetDynamicUploadBufferAllocation(updateSize);
-			GrafBuffer* uploadBuffer = grafRenderer->GetDynamicUploadBuffer();
-			uploadBuffer->Write((const ur_byte*)sampleInstances.data(), uploadAllocation.Size, 0, uploadAllocation.Offset);
-			grafCmdList->Copy(uploadBuffer, this->instanceBuffer.get(), updateSize, uploadAllocation.Offset, 0);
 
 			// update descriptor table
 
