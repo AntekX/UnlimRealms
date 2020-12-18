@@ -19,7 +19,7 @@ static const float2 SampleOfs[SampleCount] = {
 float4 main(GenericQuadVertex input) : SV_Target
 {
 	float lumAvg = 0.0;
-	float2 samplePos = 0.5 + input.uv * (SrcTargetSize - 1.0);
+	float2 samplePos = input.uv * (SrcTargetSize - 1.0);
 	[unroll] for (int i = 0; i < SampleCount; ++i)
 	{
 		int2 samplePosCrnt = samplePos + SampleOfs[i];

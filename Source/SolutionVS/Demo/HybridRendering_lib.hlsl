@@ -14,15 +14,15 @@ RWTexture2D<float4>	g_LightingTarget		: register(u0);
 
 float4 CalculateSkyLight(const float3 position, const float3 direction)
 {
-	const float SkyIrradianceFactor = Pi;
 	float height = lerp(g_SceneCB.Atmosphere.InnerRadius, g_SceneCB.Atmosphere.OuterRadius, 0.05);
 	float4 color = 0.0;
 	for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 	{
 		LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
+		if (0 == ilight) light.Intensity = 1362 * 683.0; // TEST: solar irradiance at high atmo W/m^2 to Lux
 		float3 worldFrom = position + float3(0.0, height, 0.0);
 		float3 worldTo = worldFrom + direction;
-		color += AtmosphericScatteringSky(g_SceneCB.Atmosphere, light, worldTo, worldFrom) * SkyIrradianceFactor;
+		color += AtmosphericScatteringSky(g_SceneCB.Atmosphere, light, worldTo, worldFrom);
 	}
 	color.w = min(1.0, color.w);
 	return color;
@@ -86,12 +86,15 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		// direct light
 
+		// TEST: solar irradiance at ground level in lux
+		const float SolarIlluminanceMax = 123100.0; // noon
+		const float SolarIlluminanceMin = 79000.0; // evening
+
 		float3 directLightColor = 0;
 		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 		{
 			LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
-			//light.Color = CalculateSkyLight(worldPos, -light.Direction).xyz / Pi;
-			//light.Intensity = 1.0;
+			if (0 == ilight) light.Intensity = lerp(SolarIlluminanceMin, SolarIlluminanceMax, saturate(dot(-light.Direction, lightingParams.normal)));
 			float shadowFactor = 1.0;
 			float specularOcclusion = shadowFactor;
 			specularOcclusion *= saturate(dot(-light.Direction, lightingParams.normal) * 20.0); // fake self occlusion at grazing angels
@@ -100,7 +103,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		// indirect light
 
-		float3 envColor = CalculateSkyLight(worldPos, normalize(lightingParams.normal * 0.5 + WorldUp)).xyz * Pi; // simplified sky light
+		float3 envColor = CalculateSkyLight(worldPos, normalize(lightingParams.normal * 0.5 + WorldUp)).xyz; // simplified sky light
 		float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor; // no indirect spec
 
 		// final

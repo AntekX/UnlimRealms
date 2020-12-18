@@ -840,12 +840,13 @@ int HybridRenderingApp::Run()
 	ur_float lightAnimationElapsedTime = 0.0f;
 
 	// atmosphere params
+	// temp: super low Mie & G to fake sun disc
 	Atmosphere::Desc atmosphereDesc = {
 		6371.0e+3f,
 		6381.0e+3f,
 		0.250f,
 		-0.980f,
-		2.0e-7f,
+		3.0e-8f,
 		7.0e-7f,
 		2.718f,
 	};
@@ -1085,6 +1086,16 @@ int HybridRenderingApp::Run()
 						ImGui::DragFloat("CrntCycleFactor", &lightCrntCycleFactor, 0.01f, 0.0f, 1.0f);
 						ImGui::ColorEdit3("Color", &lightingDesc.LightSources[0].Color.x);
 						ImGui::InputFloat("Intensity", &lightingDesc.LightSources[0].Intensity);
+					}
+					if (ImGui::CollapsingHeader("Atmosphere"))
+					{
+						ImGui::InputFloat("InnerRadius", &atmosphereDesc.InnerRadius);
+						ImGui::InputFloat("OuterRadius", &atmosphereDesc.OuterRadius);
+						ImGui::DragFloat("ScaleDepth", &atmosphereDesc.ScaleDepth, 0.01f, 0.0f, 1.0f);
+						ImGui::InputFloat("Kr", &atmosphereDesc.Kr);
+						ImGui::InputFloat("Km", &atmosphereDesc.Km);
+						ImGui::DragFloat("G", &atmosphereDesc.G, 0.01f, -1.0f, 1.0f);
+						ImGui::InputFloat("D", &atmosphereDesc.D);
 					}
 					if (demoScene != ur_null)
 					{
