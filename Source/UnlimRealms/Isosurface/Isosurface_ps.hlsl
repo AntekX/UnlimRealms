@@ -145,7 +145,7 @@ float4 main(PS_INPUT input) : SV_Target
 	const float sunNdotL = max(0.0, dot(-Light.Direction, surfNormal));
 	const float globalSelfShadow = max(0.0, dot(+Light.Direction, sphereN));
 	
-	float3 directLightIntensity = (Light.Color * Light.Intensity) * 0.025;
+	float3 directLightIntensity = (Light.Color * Light.Intensity);
 	float3 surfDirect = surfAlbedo * max(0.0, sunNdotL - globalSelfShadow) * directLightIntensity;
 	float3 surfAmbient = surfAlbedo * ambientLight;
 	color.xyz = surfAmbient + AtmosphericScatteringSurface(Atmosphere, Light, surfDirect, input.wpos.xyz, CameraPos.xyz).xyz;

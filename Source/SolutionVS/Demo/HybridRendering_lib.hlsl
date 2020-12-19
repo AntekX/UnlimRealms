@@ -4,6 +4,7 @@
 // common bindings
 
 ConstantBuffer<SceneConstants> g_SceneCB	: register(b0);
+sampler				g_SamplerBilinear		: register(s0);
 Texture2D<float>	g_GeometryDepth			: register(t0);
 Texture2D<float4>	g_GeometryImage0		: register(t1);
 Texture2D<float4>	g_GeometryImage1		: register(t2);
@@ -19,7 +20,8 @@ float4 CalculateSkyLight(const float3 position, const float3 direction)
 	for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 	{
 		LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
-		if (0 == ilight) light.Intensity = 1362 * 683.0; // TEST: solar irradiance at high atmo W/m^2 to Lux
+		if (LightType_Directional != light.Type)
+			continue;
 		float3 worldFrom = position + float3(0.0, height, 0.0);
 		float3 worldTo = worldFrom + direction;
 		color += AtmosphericScatteringSky(g_SceneCB.Atmosphere, light, worldTo, worldFrom);
@@ -56,7 +58,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		float4 geomtryData1 = g_GeometryImage1.Load(int3(imagePos.xy, 0));
 		float4 geomtryData2 = g_GeometryImage2.Load(int3(imagePos.xy, 0));
 		
-		float3 normal = geomtryData1.xyz * 2.0 - 1.0;
+		float3 normal = geomtryData1.xyz;
 
 		// material params
 
@@ -86,18 +88,13 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		// direct light
 
-		// TEST: solar irradiance at ground level in lux
-		const float SolarIlluminanceMax = 123100.0; // noon
-		const float SolarIlluminanceMin = 79000.0; // evening
-
 		float3 directLightColor = 0;
 		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 		{
 			LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
-			if (0 == ilight) light.Intensity = lerp(SolarIlluminanceMin, SolarIlluminanceMax, saturate(dot(-light.Direction, lightingParams.normal)));
-			float shadowFactor = 1.0;
+			float NoL = dot(-light.Direction, lightingParams.normal);
+			float shadowFactor = saturate(NoL  * 10.0); // temp: simplified self shadowing
 			float specularOcclusion = shadowFactor;
-			specularOcclusion *= saturate(dot(-light.Direction, lightingParams.normal) * 20.0); // fake self occlusion at grazing angels
 			directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 		}
 

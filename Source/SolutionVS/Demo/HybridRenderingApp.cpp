@@ -74,8 +74,8 @@ int HybridRenderingApp::Run()
 	{
 		RenderTargetImageUsage_Depth = 0,
 		RenderTargetImageUsage_Geometry0, // xyz: baseColor; w: materialTypeID;
-		RenderTargetImageUsage_Geometry1, // xyz: worldNormal; w: roughness;
-		RenderTargetImageUsage_Geometry2, // x: reflectance; yzw: unused;
+		RenderTargetImageUsage_Geometry1, // xyz: worldNormal; w: unused;
+		RenderTargetImageUsage_Geometry2, // X: roughness; y: reflectance; zw: unused;
 		RenderTargetImageCount,
 		RenderTargetColorImageCount = RenderTargetImageCount - 1
 	};
@@ -83,7 +83,7 @@ int HybridRenderingApp::Run()
 	static const GrafFormat RenderTargetImageFormat[RenderTargetImageCount] = {
 		GrafFormat::D24_UNORM_S8_UINT,
 		GrafFormat::R8G8B8A8_UNORM,
-		GrafFormat::R8G8B8A8_UNORM,
+		GrafFormat::R32G32B32A32_SFLOAT,
 		GrafFormat::R8G8B8A8_UNORM,
 	};
 
@@ -356,6 +356,7 @@ int HybridRenderingApp::Run()
 		std::unique_ptr<GrafShaderLib> shaderLib;
 		std::unique_ptr<GrafShader> shaderVertex;
 		std::unique_ptr<GrafShader> shaderPixel;
+		std::unique_ptr<GrafSampler> samplerBilinear;
 		SceneConstants sceneConstants;
 		Allocation sceneCBCrntFrameAlloc;
 		ur_float4 debugVec0;
@@ -457,6 +458,15 @@ int HybridRenderingApp::Run()
 			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_vs.spv", GrafShaderType::Vertex, this->shaderVertex);
 			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_ps.spv", GrafShaderType::Pixel, this->shaderPixel);
 
+			// samplers
+			
+			GrafSamplerDesc samplerDesc = {
+				GrafFilterType::Linear, GrafFilterType::Linear, GrafFilterType::Nearest,
+				GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp
+			};
+			grafSystem->CreateSampler(this->samplerBilinear);
+			this->samplerBilinear->Initialize(grafDevice, { samplerDesc });
+
 			// rasterization descriptor table
 
 			GrafDescriptorRangeDesc rasterDescTableLayoutRanges[] = {
@@ -525,6 +535,7 @@ int HybridRenderingApp::Run()
 
 			GrafDescriptorRangeDesc lightingDescTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+				{ GrafDescriptorType::Sampler, 0, 1 },
 				{ GrafDescriptorType::Texture, 0, RenderTargetImageCount },
 				{ GrafDescriptorType::RWTexture, 0, 1 },
 			};
@@ -741,6 +752,7 @@ int HybridRenderingApp::Run()
 
 			GrafDescriptorTable* descriptorTable = this->lightingDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			descriptorTable->SetSampler(0, this->samplerBilinear.get());
 			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 			{
 				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId].get());
@@ -808,6 +820,7 @@ int HybridRenderingApp::Run()
 	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
+		hdrParams.LumWhite = 1.0f;
 		hdrParams.BloomThreshold = 4.0f;
 		hdrParams.BloomIntensity = 0.5f;
 		hdrRender->SetParams(hdrParams);
@@ -820,16 +833,20 @@ int HybridRenderingApp::Run()
 	}
 
 	// light source params
-	LightDesc sunLight = {};
+	LightDesc sunLight = {}; // main directional light source
+	sunLight.Type = LightType_Directional;
 	sunLight.Color = { 1.0f, 1.0f, 1.0f };
-	sunLight.Intensity = 50.0f;
+	sunLight.Intensity = SolarIlluminanceNoon;
+	sunLight.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
 	sunLight.Direction = { -0.8165f,-0.40825f,-0.40825f };
-	LightDesc sunLight2 = {};
+	LightDesc sunLight2 = {}; // artificial second star
+	sunLight2.Type = LightType_Directional;
 	sunLight2.Color = { 1.0f, 0.1f, 0.0f };
-	sunLight2.Intensity = 50.0f;
+	sunLight2.Intensity = SolarIlluminanceNoon * 1;
+	sunLight2.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere * 0.25;
 	sunLight2.Direction = { 0.8018f,-0.26726f,-0.5345f };
 	LightingDesc lightingDesc = {};
-	lightingDesc.LightSourceCount = 1;
+	lightingDesc.LightSourceCount = 2;
 	lightingDesc.LightSources[0] = sunLight;
 	lightingDesc.LightSources[1] = sunLight2;
 
@@ -925,6 +942,8 @@ int HybridRenderingApp::Run()
 			sunDir.Normalize();
 			LightDesc& sunLight = lightingDesc.LightSources[0];
 			sunLight.Direction = sunDir;
+			sunLight.Intensity = lerp(SolarIlluminanceEvening, SolarIlluminanceNoon, sunLight.Direction.y);
+			sunLight.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
 
 			ctx.progress++;
 

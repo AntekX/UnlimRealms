@@ -131,7 +131,7 @@ float3 AtmosphericSingleScattering(const AtmosphereDesc a, const LightDesc light
 	totalInscatteringMie *= PhaseMie(a, dirToCameraCos) * a.Km;//ScatterMie / (Pi * 4.0);
 	totalInscatteringRayleigh *= PhaseRayleigh(a, dirToCameraCos) * a.Kr * LightWaveLengthScatterConst;//ScatterRayleigh / (Pi * 4.0);
 	
-	return (light.Color * light.Intensity) * (totalInscatteringMie + totalInscatteringRayleigh);
+	return (light.Color * light.IntensityTopAtmosphere) * (totalInscatteringMie + totalInscatteringRayleigh);
 }
 
 float4 AtmosphericScatteringSky(const AtmosphereDesc a, const LightDesc light, const float3 vpos, const float3 cameraPos)
@@ -172,7 +172,7 @@ float4 AtmosphericScatteringSurface(const AtmosphereDesc a, const LightDesc ligh
 
 	// real light intensity leads to super dense (foggy) atmospere look due to the planetoid small size
 	// multiplying it here by a factor to get more pleasant surface rendering
-	float3 lightIntensity = (light.Color * light.Intensity) * 0.15;
+	float3 lightIntensity = (light.Color * light.IntensityTopAtmosphere) * 0.5;
 	float3 scatteredLight = lightIntensity * totalInscatteringRayleigh * a.Kr * LightWaveLengthScatterConst;
 	float3 lightResult = scatteredLight + surfLight * transmittance;
 
