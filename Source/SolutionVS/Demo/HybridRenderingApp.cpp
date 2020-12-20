@@ -374,7 +374,7 @@ int HybridRenderingApp::Run()
 			
 			// default material override
 			this->sceneConstants.OverrideMaterial = true;
-			this->sceneConstants.Material.BaseColor = { 0.25f, 0.25f, 0.25f };
+			this->sceneConstants.Material.BaseColor = { 0.5f, 0.5f, 0.5f };
 			this->sceneConstants.Material.Roughness = 0.5f;
 			this->sceneConstants.Material.Reflectance = 0.04f;
 
@@ -936,13 +936,15 @@ int HybridRenderingApp::Run()
 			ur_float modY;
 			lightCrntCycleFactor = std::modf(crntTimeFactor, &modY);
 			ur_float3 sunDir;
+			const ur_float SunInclinationScale = 0.6f;
+			const ur_float SunInclinationBias = 0.02f;
 			sunDir.x = -cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
 			sunDir.z = -sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
-			sunDir.y = -powf(fabs(sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor)), 2.0f) * 0.6f - 0.02f;
+			sunDir.y = -powf(fabs(sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor)), 2.0f) * SunInclinationScale - SunInclinationBias;
 			sunDir.Normalize();
 			LightDesc& sunLight = lightingDesc.LightSources[0];
 			sunLight.Direction = sunDir;
-			sunLight.Intensity = lerp(SolarIlluminanceEvening, SolarIlluminanceNoon, sunLight.Direction.y);
+			sunLight.Intensity = lerp(SolarIlluminanceEvening, SolarIlluminanceNoon, std::min(1.0f, -sunLight.Direction.y / SunInclinationScale));
 			sunLight.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
 
 			ctx.progress++;
