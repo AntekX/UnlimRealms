@@ -136,7 +136,7 @@ float3 CalculatePhongLightingIndirect(in float3 worldPos, in float3 normal, in f
 
 float4 CalculateSkyLight(const float3 position, const float3 direction)
 {
-	const float SkyLightIntensity = 20;
+	const float SkyLightIntensity = 1;// 20;
 	float height = lerp(g_SceneCB.atmoDesc.InnerRadius, g_SceneCB.atmoDesc.OuterRadius, 0.05);
 	float4 color = 0.0;
 	for (uint ilight = 0; ilight < g_SceneCB.lightingDesc.LightSourceCount; ++ilight)
@@ -620,7 +620,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	lightColor.xyz += reflectionColor * fresnelR * reflectanceCoef;
 	#else
 	float3 envColor = CalculateSkyLight(hitWorldPos, normalize(lightingParams.normal * 0.5 + WorldUp)).xyz;
-	float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor * occlusionFactor; // temp ambient, no indirect spec
+	float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor * pow(max(occlusionFactor, 0.01), 0.5); // temp ambient, no indirect spec
 	float3 reflectedLightColor = reflectionColor * FresnelReflectance(lightingParams) * saturate(occlusionFactor + 0.2); // x occlusionFactor because AO evaluation is disabled in reflection tracing
 	float3 lightColor = directLightColor + indirectLightColor + reflectedLightColor;
 	#endif

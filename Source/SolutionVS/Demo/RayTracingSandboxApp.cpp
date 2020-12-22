@@ -216,12 +216,11 @@ int RayTracingSandboxApp::Run()
 	sunLight.Color = { 1.0f, 1.0f, 1.0f };
 	sunLight.Intensity = SolarIlluminanceNoon;
 	sunLight.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
-	sunLight.Intensity = 200.0f;
 	sunLight.Direction = { -0.8165f,-0.40825f,-0.40825f };
 	LightDesc sunLight2 = {};
 	sunLight2.Type = LightType_Directional;
 	sunLight2.Color = { 1.0f, 0.1f, 0.0f };
-	sunLight2.Intensity = SolarIlluminanceNoon;
+	sunLight2.Intensity = SolarIlluminanceEvening;
 	sunLight2.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
 	sunLight2.Direction = { 0.8018f,-0.26726f,-0.5345f };
 	LightingDesc lightingDesc = {};
@@ -230,12 +229,13 @@ int RayTracingSandboxApp::Run()
 	lightingDesc.LightSources[1] = sunLight2;
 
 	// atmosphere params
+	// temp: super low Mie & G to fake sun disc
 	Atmosphere::Desc atmosphereDesc = {
 		6371.0e+3f,
 		6381.0e+3f,
 		0.250f,
 		-0.980f,
-		2.0e-7f,
+		3.0e-8f,
 		7.0e-7f,
 		2.718f,
 	};
@@ -244,8 +244,9 @@ int RayTracingSandboxApp::Run()
 	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
-		hdrParams.LumAdaptationMin = sunLight.Intensity * 0.15f;
-		hdrParams.LumAdaptationMax = sunLight.Intensity * 1.5f;
+		hdrParams.LumWhite = 1.0f;
+		hdrParams.LumAdaptationMin = sunLight.Intensity * 0.1f;
+		hdrParams.LumAdaptationMax = sunLight.Intensity * 1.0f;
 		hdrParams.BloomThreshold = 1.0f;
 		hdrParams.BloomIntensity = 0.05f;
 		hdrRender->SetParams(hdrParams);
