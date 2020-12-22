@@ -620,7 +620,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 	lightColor.xyz += reflectionColor * fresnelR * reflectanceCoef;
 	#else
 	float3 envColor = CalculateSkyLight(hitWorldPos, normalize(lightingParams.normal * 0.5 + WorldUp)).xyz;
-	float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor * pow(max(occlusionFactor, 0.01), 0.5); // temp ambient, no indirect spec
+	float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor * occlusionFactor; // temp ambient, no indirect spec
 	float3 reflectedLightColor = reflectionColor * FresnelReflectance(lightingParams) * saturate(occlusionFactor + 0.2); // x occlusionFactor because AO evaluation is disabled in reflection tracing
 	float3 lightColor = directLightColor + indirectLightColor + reflectedLightColor;
 	#endif

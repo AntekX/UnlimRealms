@@ -245,7 +245,7 @@ int RayTracingSandboxApp::Run()
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
 		hdrParams.LumWhite = 1.0f;
-		hdrParams.LumAdaptationMin = sunLight.Intensity * 0.1f;
+		hdrParams.LumAdaptationMin = sunLight.Intensity * 0.01f;
 		hdrParams.LumAdaptationMax = sunLight.Intensity * 1.0f;
 		hdrParams.BloomThreshold = 1.0f;
 		hdrParams.BloomIntensity = 0.05f;

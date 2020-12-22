@@ -19,13 +19,18 @@ static const float2 SampleOfs[SampleCount] = {
 float4 main(GenericQuadVertex input) : SV_Target
 {
 	float lumAvg = 0.0;
+	float weight = 0.0;
 	float2 samplePos = input.uv * (SrcTargetSize - 1.0);
 	[unroll] for (int i = 0; i < SampleCount; ++i)
 	{
 		int2 samplePosCrnt = samplePos + SampleOfs[i];
 		float lumVal = LumTexture.Load(int3(samplePosCrnt.xy, 0)).x;
-		lumAvg += lumVal;
+		[flatten] if (samplePosCrnt.x < SrcTargetSize.x && samplePosCrnt.y < SrcTargetSize.y)
+		{
+			lumAvg += lumVal;
+			weight += 1.0;
+		}
 	}
-	lumAvg = lumAvg / SampleCount;
+	lumAvg = lumAvg / weight;
 	return lumAvg;
 }
