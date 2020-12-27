@@ -937,8 +937,8 @@ int HybridRenderingApp::Run()
 	LightDesc sunLight2 = {}; // artificial second star
 	sunLight2.Type = LightType_Directional;
 	sunLight2.Color = { 1.0f, 0.1f, 0.0f };
-	sunLight2.Intensity = SolarIlluminanceNoon * 1;
-	sunLight2.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere * 0.25;
+	sunLight2.Intensity = SolarIlluminanceNoon * 0.5;
+	sunLight2.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere * 0.5;
 	sunLight2.Direction = { 0.8018f,-0.26726f,-0.5345f };
 	LightingDesc lightingDesc = {};
 	lightingDesc.LightSourceCount = 2;
