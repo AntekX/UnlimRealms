@@ -5144,6 +5144,8 @@ namespace UnlimRealms
 
 	static const VkFormat GrafToVkFormatLUT[ur_uint(GrafFormat::Count)] = {
 		VK_FORMAT_UNDEFINED,
+		VK_FORMAT_R8_UNORM,
+		VK_FORMAT_R8_SNORM,
 		VK_FORMAT_R8_UINT,
 		VK_FORMAT_R8_SINT,
 		VK_FORMAT_R8G8_UINT,
@@ -5208,8 +5210,8 @@ namespace UnlimRealms
 		GrafFormat::Unsupported,			// VK_FORMAT_R5G5B5A1_UNORM_PACK16 = 6,
 		GrafFormat::Unsupported,			// VK_FORMAT_B5G5R5A1_UNORM_PACK16 = 7,
 		GrafFormat::Unsupported,			// VK_FORMAT_A1R5G5B5_UNORM_PACK16 = 8,
-		GrafFormat::Unsupported,			// VK_FORMAT_R8_UNORM = 9,
-		GrafFormat::Unsupported,			// VK_FORMAT_R8_SNORM = 10,
+		GrafFormat::R8_UNORM,				// VK_FORMAT_R8_UNORM = 9,
+		GrafFormat::R8_SNORM,				// VK_FORMAT_R8_SNORM = 10,
 		GrafFormat::Unsupported,			// VK_FORMAT_R8_USCALED = 11,
 		GrafFormat::Unsupported,			// VK_FORMAT_R8_SSCALED = 12,
 		GrafFormat::R8_UINT,				// VK_FORMAT_R8_UINT = 13,

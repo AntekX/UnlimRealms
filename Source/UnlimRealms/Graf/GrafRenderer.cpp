@@ -303,7 +303,6 @@ namespace UnlimRealms
 		if (ur_null == grafEnity)
 			return Result(InvalidArgs);
 
-		ur_bool recycledCmdList = false;
 		if (ur_null == grafSyncCmdList)
 		{
 			#if (0)

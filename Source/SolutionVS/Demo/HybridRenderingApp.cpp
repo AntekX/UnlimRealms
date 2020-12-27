@@ -69,7 +69,7 @@ int HybridRenderingApp::Run()
 	}
 
 	// initialize GRAF objects
-	
+
 	enum RenderTargetImageUsage
 	{
 		RenderTargetImageUsage_Depth = 0,
@@ -93,6 +93,16 @@ int HybridRenderingApp::Run()
 		{ 0.0f, 0.0f, 0.0f, 0.0f },
 		{ 0.0f, 0.0f, 0.0f, 0.0f },
 	};
+
+	enum LightingImageUsage
+	{
+		LightingImageUsage_DirectShadow = 0,
+		LightingImageCount
+	};
+
+	static const GrafFormat LightingImageFormat[LightingImageCount] = {
+		GrafFormat::R8_UNORM,
+	};
 	
 	struct RenderTargetSet
 	{
@@ -100,39 +110,57 @@ int HybridRenderingApp::Run()
 		std::unique_ptr<GrafRenderTarget> renderTarget;
 	};
 
+	struct LightingBufferSet
+	{
+		std::unique_ptr<GrafImage> images[LightingImageCount];
+	};
+
 	std::vector<std::unique_ptr<GrafCommandList>> cmdListPerFrame;
 	std::unique_ptr<GrafRenderPass> rasterRenderPass;
 	std::unique_ptr<RenderTargetSet> renderTargetSet;
+	std::unique_ptr<LightingBufferSet> lightingBufferSet;
+	ur_uint lightingBufferDownscale = 1;
 
-	auto& DestroyRenderTargetObjects = [&](GrafCommandList* syncCmdList = ur_null)
+	auto& DestroyFrameBufferObjects = [&](GrafCommandList* syncCmdList = ur_null)
 	{
-		if (ur_null == renderTargetSet)
-			return;
-
-		if (syncCmdList != ur_null)
+		if (renderTargetSet != ur_null)
 		{
-			auto objectToDestroy = renderTargetSet.release();
-			grafRenderer->AddCommandListCallback(syncCmdList, {}, [objectToDestroy](GrafCallbackContext& ctx) -> Result
+			if (syncCmdList != ur_null)
 			{
-				delete objectToDestroy;
-				return Result(Success);
-			});
+				auto objectToDestroy = renderTargetSet.release();
+				grafRenderer->AddCommandListCallback(syncCmdList, {}, [objectToDestroy](GrafCallbackContext& ctx) -> Result
+				{
+					delete objectToDestroy;
+					return Result(Success);
+				});
+			}
+			renderTargetSet.reset();
 		}
-
-		renderTargetSet.reset();
+		if (lightingBufferSet != ur_null)
+		{
+			if (syncCmdList != ur_null)
+			{
+				auto objectToDestroy = lightingBufferSet.release();
+				grafRenderer->AddCommandListCallback(syncCmdList, {}, [objectToDestroy](GrafCallbackContext& ctx) -> Result
+				{
+					delete objectToDestroy;
+					return Result(Success);
+				});
+			}
+			lightingBufferSet.reset();
+		}
 	};
 
-	auto& InitRenderTargetObjects = [&](ur_uint width, ur_uint height) -> Result
+	auto& InitFrameBufferObjects = [&](ur_uint width, ur_uint height) -> Result
 	{
 		Result res(Success);
 		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
 		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 
-		DestroyRenderTargetObjects(ur_null);
+		DestroyFrameBufferObjects(ur_null);
 
+		// rasterization buffer images
 		renderTargetSet.reset(new RenderTargetSet());
-
-		// images
 		GrafImage* renderTargetImages[RenderTargetImageCount];
 		for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 		{
@@ -171,13 +199,33 @@ int HybridRenderingApp::Run()
 		res = renderTargetSet->renderTarget->Initialize(grafDevice, renderTargetParams);
 		if (Failed(res)) return res;
 
+		// lighting buffer images
+		ur_uint lightingBufferWidth = width / std::max(1u, lightingBufferDownscale);
+		ur_uint lightingBufferHeight = height / std::max(1u, lightingBufferDownscale);
+		lightingBufferSet.reset(new LightingBufferSet());
+		for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
+		{
+			auto& image = lightingBufferSet->images[imageId];
+			res = grafSystem->CreateImage(image);
+			if (Failed(res)) return res;
+			GrafImageDesc imageDesc = {
+				GrafImageType::Tex2D,
+				LightingImageFormat[imageId],
+				ur_uint3(lightingBufferWidth, lightingBufferHeight, 1), 1,
+				ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ShaderInput) | ur_uint(GrafImageUsageFlag::ShaderReadWrite),
+				ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+			};
+			res = image->Initialize(grafDevice, { imageDesc });
+			if (Failed(res)) return res;
+		}
+
 		return res;
 	};
 
 	auto& DestroyGrafObjects = [&]()
 	{
 		// here we expect that device is idle
-		DestroyRenderTargetObjects();
+		DestroyFrameBufferObjects();
 		rasterRenderPass.reset();
 		cmdListPerFrame.clear();
 	};
@@ -225,7 +273,7 @@ int HybridRenderingApp::Run()
 	res = InitGrafObjects();
 	if (Succeeded(res))
 	{
-		res = InitRenderTargetObjects(canvasWidth, canvasHeight);
+		res = InitFrameBufferObjects(canvasWidth, canvasHeight);
 	}
 	if (Failed(res))
 	{
@@ -288,6 +336,7 @@ int HybridRenderingApp::Run()
 			MeshId meshId;
 			std::unique_ptr<GrafBuffer> vertexBuffer;
 			std::unique_ptr<GrafBuffer> indexBuffer;
+			std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
 			ur_uint verticesCount;
 			ur_uint indicesCount;
 			DrawData drawData;
@@ -301,10 +350,13 @@ int HybridRenderingApp::Run()
 			{
 				GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
 				GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
+				const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 
 				this->meshId = meshId;
 				this->verticesCount = verticesCount;
 				this->indicesCount = indicesCount;
+				ur_size vertexStride = sizeof(Vertex);
+				GrafIndexType indexType = (sizeof(Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32);
 
 				// vertex attributes buffer
 
@@ -316,7 +368,7 @@ int HybridRenderingApp::Run()
 					ur_uint(GrafBufferUsageFlag::RayTracing) |
 					ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 				VBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
-				VBParams.BufferDesc.SizeInBytes = verticesCount * sizeof(Vertex);
+				VBParams.BufferDesc.SizeInBytes = verticesCount * vertexStride;
 
 				grafSystem->CreateBuffer(this->vertexBuffer);
 				this->vertexBuffer->Initialize(grafDevice, VBParams);
@@ -339,6 +391,49 @@ int HybridRenderingApp::Run()
 				this->indexBuffer->Initialize(grafDevice, IBParams);
 
 				grafRenderer->Upload((ur_byte*)indices, this->indexBuffer.get(), IBParams.BufferDesc.SizeInBytes);
+
+				if (grafDeviceDesc->RayTracing.RayTraceSupported)
+				{
+					// initiaize bottom level acceleration structure container
+
+					GrafAccelerationStructureGeometryDesc accelStructGeomDescBL = {};
+					accelStructGeomDescBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
+					accelStructGeomDescBL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
+					accelStructGeomDescBL.IndexType = indexType;
+					accelStructGeomDescBL.PrimitiveCountMax = ur_uint32(indicesCount / 3);
+					accelStructGeomDescBL.VertexCountMax = ur_uint32(verticesCount);
+					accelStructGeomDescBL.TransformsEnabled = false;
+
+					GrafAccelerationStructure::InitParams accelStructParamsBL = {};
+					accelStructParamsBL.StructureType = GrafAccelerationStructureType::BottomLevel;
+					accelStructParamsBL.BuildFlags = GrafAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlag::PreferFastTrace);
+					accelStructParamsBL.Geometry = &accelStructGeomDescBL;
+					accelStructParamsBL.GeometryCount = 1;
+
+					grafSystem->CreateAccelerationStructure(this->accelerationStructureBL);
+					this->accelerationStructureBL->Initialize(grafDevice, accelStructParamsBL);
+
+					// build bottom level acceleration structure for sample geometry
+
+					GrafAccelerationStructureTrianglesData trianglesData = {};
+					trianglesData.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
+					trianglesData.VertexStride = vertexStride;
+					trianglesData.VerticesDeviceAddress = vertexBuffer->GetDeviceAddress();
+					trianglesData.IndexType = indexType;
+					trianglesData.IndicesDeviceAddress = indexBuffer->GetDeviceAddress();
+
+					GrafAccelerationStructureGeometryData geometryDataBL = {};
+					geometryDataBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
+					geometryDataBL.GeometryFlags = ur_uint(GrafAccelerationStructureGeometryFlag::Opaque);
+					geometryDataBL.TrianglesData = &trianglesData;
+					geometryDataBL.PrimitiveCount = ur_uint32(indicesCount / 3);
+
+					GrafCommandList* cmdListBuildAccelStructBL = grafRenderer->GetTransientCommandList();
+					cmdListBuildAccelStructBL->Begin();
+					cmdListBuildAccelStructBL->BuildAccelerationStructure(this->accelerationStructureBL.get(), &geometryDataBL, 1);
+					cmdListBuildAccelStructBL->End();
+					grafDevice->Record(cmdListBuildAccelStructBL);
+				}
 			}
 
 			inline MeshId GetMeshId() const { return this->meshId; }
@@ -1154,10 +1249,10 @@ int HybridRenderingApp::Run()
 			{
 				canvasWidth = canvasWidthNew;
 				canvasHeight = canvasHeightNew;
-				// use prev frame command list to make sure RT objects are destroyed only when it is no longer used
-				DestroyRenderTargetObjects(cmdListPerFrame[grafRenderer->GetPrevFrameId()].get());
-				// recreate RT objects for new canvas dimensions
-				InitRenderTargetObjects(canvasWidth, canvasHeight);
+				// use prev frame command list to make sure frame buffer objects are destroyed only when it is no longer used
+				DestroyFrameBufferObjects(cmdListPerFrame[grafRenderer->GetPrevFrameId()].get());
+				// recreate frame buffer objects for new canvas dimensions
+				InitFrameBufferObjects(canvasWidth, canvasHeight);
 				// reinit HDR renderer images
 				if (hdrRender != ur_null)
 				{

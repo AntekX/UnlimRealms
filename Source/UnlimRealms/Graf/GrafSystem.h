@@ -111,6 +111,8 @@ namespace UnlimRealms
 	{
 		Unsupported = -1,
 		Undefined = 0,
+		R8_UNORM,
+		R8_SNORM,
 		R8_UINT,
 		R8_SINT,
 		R8G8_UINT,
