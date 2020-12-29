@@ -103,6 +103,10 @@ int HybridRenderingApp::Run()
 	static const GrafFormat LightingImageFormat[LightingImageCount] = {
 		GrafFormat::R8_UNORM,
 	};
+
+	static GrafClearValue LightingBufferClearValues[LightingImageCount] = {
+		{ 1.0f, 0.0f, 0.0f, 0.0f },
+	};
 	
 	struct RenderTargetSet
 	{
@@ -1300,6 +1304,11 @@ int HybridRenderingApp::Run()
 				}
 				for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
 				{
+					if (!grafDeviceDesc->RayTracing.RayTraceSupported)
+					{
+						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::TransferDst);
+						grafCmdListCrnt->ClearColorImage(lightingBufferSet->images[imageId].get(), LightingBufferClearValues[imageId]);
+					}
 					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeRead);
 				}
 				grafCmdListCrnt->ImageMemoryBarrier(hdrRender->GetHDRRenderTarget()->GetImage(0), GrafImageState::Current, GrafImageState::ComputeReadWrite);
