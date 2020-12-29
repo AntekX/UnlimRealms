@@ -337,6 +337,7 @@ int HybridRenderingApp::Run()
 			std::unique_ptr<GrafBuffer> vertexBuffer;
 			std::unique_ptr<GrafBuffer> indexBuffer;
 			std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
+			ur_uint64 accelerationStructureHandle;
 			ur_uint verticesCount;
 			ur_uint indicesCount;
 			DrawData drawData;
@@ -353,6 +354,7 @@ int HybridRenderingApp::Run()
 				const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 
 				this->meshId = meshId;
+				this->accelerationStructureHandle = ur_uint64(-1);
 				this->verticesCount = verticesCount;
 				this->indicesCount = indicesCount;
 				ur_size vertexStride = sizeof(Vertex);
@@ -412,6 +414,7 @@ int HybridRenderingApp::Run()
 
 					grafSystem->CreateAccelerationStructure(this->accelerationStructureBL);
 					this->accelerationStructureBL->Initialize(grafDevice, accelStructParamsBL);
+					this->accelerationStructureHandle = this->accelerationStructureBL->GetDeviceAddress();
 
 					// build bottom level acceleration structure for sample geometry
 
@@ -437,6 +440,7 @@ int HybridRenderingApp::Run()
 			}
 
 			inline MeshId GetMeshId() const { return this->meshId; }
+			inline ur_uint64 GetBLASHandle() const { return this->accelerationStructureHandle; }
 		};
 
 		GrafRenderer* grafRenderer;
@@ -810,7 +814,7 @@ int HybridRenderingApp::Run()
 					0.0f, 0.0f, planeScale, 0.0f
 				},
 				ur_uint32(MeshId_Plane), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-				ur_uint64(this->meshes[MeshId_Plane]->accelerationStructureBL->GetDeviceAddress())
+				ur_uint64(this->meshes[MeshId_Plane]->GetBLASHandle())
 			};
 			this->meshes[MeshId_Plane]->drawData.instanceCount = 1;
 			this->meshes[MeshId_Plane]->drawData.instanceOfs = instanceBufferOfs;
@@ -830,7 +834,7 @@ int HybridRenderingApp::Run()
 						0.0f, 0.0f, 1.0f, radius * sinf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle)
 					},
 					ur_uint32(MeshId_Sphere), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-					ur_uint64(this->meshes[MeshId_Sphere]->accelerationStructureBL->GetDeviceAddress())
+					ur_uint64(this->meshes[MeshId_Sphere]->GetBLASHandle())
 				};
 				sampleInstances.emplace_back(meshInstance);
 			}
@@ -869,7 +873,7 @@ int HybridRenderingApp::Run()
 							frameI.z * size, frameJ.z * size, frameK.z * size, pos.z
 						},
 						ur_uint32(mesh->GetMeshId()), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-						ur_uint64(mesh->accelerationStructureBL->GetDeviceAddress())
+						ur_uint64(mesh->GetBLASHandle())
 					};
 					this->sampleInstances.emplace_back(meshInstance);
 				}
