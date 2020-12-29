@@ -45,3 +45,12 @@ struct MeshPixelOutput
 	float4 Target1	: SV_Target1;
 	float4 Target2	: SV_Target2;
 };
+
+// ray tracing shader table
+static const uint RTShaderId_MissDirect = 0;
+
+struct RayDataDirect
+{
+	// TODO
+	bool occluded;
+};

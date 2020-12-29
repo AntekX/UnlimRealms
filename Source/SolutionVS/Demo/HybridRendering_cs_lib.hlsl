@@ -9,6 +9,7 @@ Texture2D<float>	g_GeometryDepth			: register(t0);
 Texture2D<float4>	g_GeometryImage0		: register(t1);
 Texture2D<float4>	g_GeometryImage1		: register(t2);
 Texture2D<float4>	g_GeometryImage2		: register(t3);
+Texture2D<float>	g_ShadowResult			: register(t4);
 RWTexture2D<float4>	g_LightingTarget		: register(u0);
 
 // lighting common
@@ -39,7 +40,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 	uint2 imagePos = dispatchThreadId.xy;
 	float clipDepth = g_GeometryDepth.Load(int3(imagePos.xy, 0));
 	bool isSky = (clipDepth >= 1.0);
-	float2 uvPos = (float2(imagePos) + 0.5) * g_SceneCB.TargetSize.zw;
+	float2 uvPos = (float2(imagePos)+0.5) * g_SceneCB.TargetSize.zw;
 	float3 clipPos = float3(float2(uvPos.x, 1.0 - uvPos.y) * 2.0 - 1.0, clipDepth);
 	float3 worldPos = ClipPosToWorldPos(clipPos, g_SceneCB.ViewProjInv);
 	float3 worldRay = normalize(worldPos - g_SceneCB.CameraPos.xyz);
@@ -57,8 +58,12 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		float4 geomtryData0 = g_GeometryImage0.Load(int3(imagePos.xy, 0));
 		float4 geomtryData1 = g_GeometryImage1.Load(int3(imagePos.xy, 0));
 		float4 geomtryData2 = g_GeometryImage2.Load(int3(imagePos.xy, 0));
-		
+
 		float3 normal = geomtryData1.xyz;
+
+		// read lighting buffer
+		
+		float shadowDirect = g_ShadowResult.Load(int3(imagePos.xy, 0));
 
 		// material params
 
@@ -97,6 +102,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			float specularOcclusion = shadowFactor;
 			directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 		}
+		directLightColor *= shadowDirect;
 
 		// indirect light
 
@@ -110,12 +116,4 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 	}
 
 	g_LightingTarget[imagePos] = float4(lightingResult, 1.0);
-}
-
-// TEMP
-[shader("compute")]
-[numthreads(8, 8, 1)]
-void dummyShaderToMakeFXCHappy(const uint3 dispatchThreadId : SV_DispatchThreadID)
-{
-
 }

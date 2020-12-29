@@ -448,7 +448,16 @@ int HybridRenderingApp::Run()
 		std::unique_ptr<GrafDescriptorTableLayout> lightingDescTableLayout;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> lightingDescTablePerFrame;
 		std::unique_ptr<GrafComputePipeline> lightingPipelineState;
+		std::unique_ptr<GrafAccelerationStructure> accelerationStructureTL;
+		std::unique_ptr<GrafDescriptorTableLayout> raytraceDescTableLayout;
+		std::vector<std::unique_ptr<GrafDescriptorTable>> raytraceDescTablePerFrame;
+		std::unique_ptr<GrafRayTracingPipeline> raytracePipelineState;
+		std::unique_ptr<GrafBuffer> raytraceShaderHandlesBuffer;
+		GrafStridedBufferRegionDesc rayGenShaderTable;
+		GrafStridedBufferRegionDesc rayMissShaderTable;
+		GrafStridedBufferRegionDesc rayHitShaderTable;
 		std::unique_ptr<GrafShaderLib> shaderLib;
+		std::unique_ptr<GrafShaderLib> shaderLibRT;
 		std::unique_ptr<GrafShader> shaderVertex;
 		std::unique_ptr<GrafShader> shaderPixel;
 		std::unique_ptr<GrafSampler> samplerBilinear;
@@ -543,18 +552,28 @@ int HybridRenderingApp::Run()
 			enum ShaderLibId
 			{
 				ShaderLibId_ComputeLighting,
-				ShaderLibId_Dummy,
 			};
-			GrafShaderLib::EntryPoint shaderLibEntries[] = {
+			GrafShaderLib::EntryPoint ShaderLibEntries[] = {
 				{ "ComputeLighting", GrafShaderType::Compute },
-				{ "dummyShaderToMakeFXCHappy", GrafShaderType::Compute },
 			};
-			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_lib.spv", shaderLibEntries, ur_array_size(shaderLibEntries), this->shaderLib);
+			enum RTShaderLibId
+			{
+				RTShaderLibId_RayGenDirect,
+				RTShaderLibId_MissDirect,
+				RTShaderLibId_ClosestHitDirect,
+			};
+			GrafShaderLib::EntryPoint RTShaderLibEntries[] = {
+				{ "RayGenDirect", GrafShaderType::RayGen },
+				{ "MissDirect", GrafShaderType::Miss },
+				{ "ClosestHitDirect", GrafShaderType::ClosestHit },
+			};
+			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_cs_lib.spv", ShaderLibEntries, ur_array_size(ShaderLibEntries), this->shaderLib);
+			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_rt_lib.spv", RTShaderLibEntries, ur_array_size(RTShaderLibEntries), this->shaderLibRT);
 			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_vs.spv", GrafShaderType::Vertex, this->shaderVertex);
 			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_ps.spv", GrafShaderType::Pixel, this->shaderPixel);
 
 			// samplers
-			
+
 			GrafSamplerDesc samplerDesc = {
 				GrafFilterType::Linear, GrafFilterType::Linear, GrafFilterType::Nearest,
 				GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp
@@ -631,12 +650,11 @@ int HybridRenderingApp::Run()
 			GrafDescriptorRangeDesc lightingDescTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 				{ GrafDescriptorType::Sampler, 0, 1 },
-				{ GrafDescriptorType::Texture, 0, RenderTargetImageCount },
+				{ GrafDescriptorType::Texture, 0, 5 },
 				{ GrafDescriptorType::RWTexture, 0, 1 },
 			};
 			GrafDescriptorTableLayoutDesc lightingDescTableLayoutDesc = {
-				ur_uint(GrafShaderStageFlag::Compute) |
-				ur_uint(GrafShaderStageFlag::AllRayTracing),
+				ur_uint(GrafShaderStageFlag::Compute),
 				lightingDescTableLayoutRanges, ur_array_size(lightingDescTableLayoutRanges)
 			};
 			grafSystem->CreateDescriptorTableLayout(this->lightingDescTableLayout);
@@ -661,6 +679,97 @@ int HybridRenderingApp::Run()
 				computePipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
 				this->lightingPipelineState->Initialize(grafDevice, computePipelineParams);
 			}
+
+			if (grafDeviceDesc->RayTracing.RayTraceSupported)
+			{
+				// initiaize top level acceleration structure container
+
+				GrafAccelerationStructureGeometryDesc accelStructGeomDescTL = {};
+				accelStructGeomDescTL.GeometryType = GrafAccelerationStructureGeometryType::Instances;
+				accelStructGeomDescTL.PrimitiveCountMax = InstanceCountMax;
+
+				GrafAccelerationStructure::InitParams accelStructParamsTL = {};
+				accelStructParamsTL.StructureType = GrafAccelerationStructureType::TopLevel;
+				accelStructParamsTL.BuildFlags = GrafAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlag::PreferFastTrace);
+				accelStructParamsTL.Geometry = &accelStructGeomDescTL;
+				accelStructParamsTL.GeometryCount = 1;
+
+				grafSystem->CreateAccelerationStructure(this->accelerationStructureTL);
+				this->accelerationStructureTL->Initialize(grafDevice, accelStructParamsTL);
+
+				// ray tracing descriptor table
+
+				GrafDescriptorRangeDesc raytraceDescTableLayoutRanges[] = {
+					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+					{ GrafDescriptorType::Texture, 0, 4 },
+					{ GrafDescriptorType::AccelerationStructure, 4, 1},
+					{ GrafDescriptorType::RWTexture, 0, 1 },
+				};
+				GrafDescriptorTableLayoutDesc raytraceDescTableLayoutDesc = {
+					ur_uint(GrafShaderStageFlag::AllRayTracing),
+					raytraceDescTableLayoutRanges, ur_array_size(raytraceDescTableLayoutRanges)
+				};
+				grafSystem->CreateDescriptorTableLayout(this->raytraceDescTableLayout);
+				this->raytraceDescTableLayout->Initialize(grafDevice, { raytraceDescTableLayoutDesc });
+				this->raytraceDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
+				for (auto& descTable : this->raytraceDescTablePerFrame)
+				{
+					grafSystem->CreateDescriptorTable(descTable);
+					descTable->Initialize(grafDevice, { this->raytraceDescTableLayout.get() });
+				}
+
+				// ray tracing pipeline
+
+				GrafShader* shaderStages[] = {
+					this->shaderLibRT->GetShader(RTShaderLibId_RayGenDirect),
+					this->shaderLibRT->GetShader(RTShaderLibId_MissDirect),
+					this->shaderLibRT->GetShader(RTShaderLibId_ClosestHitDirect),
+				};
+				GrafRayTracingShaderGroupDesc shaderGroups[3];
+				shaderGroups[0] = GrafRayTracingShaderGroupDesc::Default;
+				shaderGroups[0].Type = GrafRayTracingShaderGroupType::General;
+				shaderGroups[0].GeneralShaderIdx = RTShaderLibId_RayGenDirect;
+				shaderGroups[1] = GrafRayTracingShaderGroupDesc::Default;
+				shaderGroups[1].Type = GrafRayTracingShaderGroupType::General;
+				shaderGroups[1].GeneralShaderIdx = RTShaderLibId_MissDirect;
+				shaderGroups[2] = GrafRayTracingShaderGroupDesc::Default;
+				shaderGroups[2].Type = GrafRayTracingShaderGroupType::TrianglesHit;
+				shaderGroups[2].GeneralShaderIdx = RTShaderLibId_ClosestHitDirect;
+
+				GrafDescriptorTableLayout* descriptorLayouts[] = {
+					this->raytraceDescTableLayout.get()
+				};
+				GrafRayTracingPipeline::InitParams raytracePipelineParams = GrafRayTracingPipeline::InitParams::Default;
+				raytracePipelineParams.ShaderStages = shaderStages;
+				raytracePipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+				raytracePipelineParams.ShaderGroups = shaderGroups;
+				raytracePipelineParams.ShaderGroupCount = ur_array_size(shaderGroups);
+				raytracePipelineParams.DescriptorTableLayouts = descriptorLayouts;
+				raytracePipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+				raytracePipelineParams.MaxRecursionDepth = 8;
+				grafSystem->CreateRayTracingPipeline(this->raytracePipelineState);
+				this->raytracePipelineState->Initialize(grafDevice, raytracePipelineParams);
+
+				// shader group handles buffer
+
+				ur_size sgHandleSize = grafDeviceDesc->RayTracing.ShaderGroupHandleSize;
+				ur_size shaderBufferSize = raytracePipelineParams.ShaderGroupCount * sgHandleSize;
+				GrafBuffer::InitParams shaderBufferParams;
+				shaderBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::TransferSrc);
+				shaderBufferParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+				shaderBufferParams.BufferDesc.SizeInBytes = shaderBufferSize;
+				grafSystem->CreateBuffer(this->raytraceShaderHandlesBuffer);
+				this->raytraceShaderHandlesBuffer->Initialize(grafDevice, shaderBufferParams);
+				GrafRayTracingPipeline* rayTracingPipeline = this->raytracePipelineState.get();
+				this->raytraceShaderHandlesBuffer->Write([rayTracingPipeline, raytracePipelineParams, shaderBufferParams](ur_byte* mappedDataPtr) -> Result
+				{
+					rayTracingPipeline->GetShaderGroupHandles(0, raytracePipelineParams.ShaderGroupCount, shaderBufferParams.BufferDesc.SizeInBytes, mappedDataPtr);
+					return Result(Success);
+				});
+				this->rayGenShaderTable		= { this->raytraceShaderHandlesBuffer.get(),	0 * sgHandleSize,	1 * sgHandleSize,	sgHandleSize };
+				this->rayMissShaderTable	= { this->raytraceShaderHandlesBuffer.get(),	1 * sgHandleSize,	1 * sgHandleSize,	sgHandleSize };
+				this->rayHitShaderTable		= { this->raytraceShaderHandlesBuffer.get(),	2 * sgHandleSize,	1 * sgHandleSize,	sgHandleSize };
+			}
 		}
 
 		void Update(ur_float elapsedSeconds)
@@ -670,6 +779,7 @@ int HybridRenderingApp::Run()
 
 			GrafSystem* grafSystem = this->grafRenderer->GetGrafSystem();
 			GrafDevice* grafDevice = this->grafRenderer->GetGrafDevice();
+			const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 
 			if (this->animationEnabled) this->animationElapsedTime += elapsedSeconds;
 			ur_float crntTimeFactor = (this->animationElapsedTime / this->animationCycleTime);
@@ -700,7 +810,7 @@ int HybridRenderingApp::Run()
 					0.0f, 0.0f, planeScale, 0.0f
 				},
 				ur_uint32(MeshId_Plane), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-				ur_uint64(-1)//this->meshes[MeshId_Plane]->accelerationStructureBL->GetDeviceAddress()
+				ur_uint64(this->meshes[MeshId_Plane]->accelerationStructureBL->GetDeviceAddress())
 			};
 			this->meshes[MeshId_Plane]->drawData.instanceCount = 1;
 			this->meshes[MeshId_Plane]->drawData.instanceOfs = instanceBufferOfs;
@@ -720,7 +830,7 @@ int HybridRenderingApp::Run()
 						0.0f, 0.0f, 1.0f, radius * sinf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle)
 					},
 					ur_uint32(MeshId_Sphere), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-					ur_uint64(-1)//this->meshes[MeshId_Sphere]->accelerationStructureBL->GetDeviceAddress()
+					ur_uint64(this->meshes[MeshId_Sphere]->accelerationStructureBL->GetDeviceAddress())
 				};
 				sampleInstances.emplace_back(meshInstance);
 			}
@@ -759,7 +869,7 @@ int HybridRenderingApp::Run()
 							frameI.z * size, frameJ.z * size, frameK.z * size, pos.z
 						},
 						ur_uint32(mesh->GetMeshId()), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-						ur_uint64(-1)//mesh->accelerationStructureBL->GetDeviceAddress()
+						ur_uint64(mesh->accelerationStructureBL->GetDeviceAddress())
 					};
 					this->sampleInstances.emplace_back(meshInstance);
 				}
@@ -776,18 +886,33 @@ int HybridRenderingApp::Run()
 			if (updateSize > this->instanceBuffer->GetDesc().SizeInBytes)
 				return; // too many instances
 
-			#if (0)
 			GrafCommandList* grafCmdList = grafRenderer->GetTransientCommandList();
+			grafCmdList->Begin();
+
 			Allocation uploadAllocation = grafRenderer->GetDynamicUploadBufferAllocation(updateSize);
 			GrafBuffer* uploadBuffer = grafRenderer->GetDynamicUploadBuffer();
 			uploadBuffer->Write((const ur_byte*)sampleInstances.data(), uploadAllocation.Size, 0, uploadAllocation.Offset);
-			grafCmdList->Begin();
 			grafCmdList->Copy(uploadBuffer, this->instanceBuffer.get(), updateSize, uploadAllocation.Offset, 0);
+
+			if (grafDeviceDesc->RayTracing.RayTraceSupported)
+			{
+				// build TLAS on device
+
+				GrafAccelerationStructureInstancesData asInstanceData = {};
+				asInstanceData.IsPointersArray = false;
+				asInstanceData.DeviceAddress = this->instanceBuffer->GetDeviceAddress();
+
+				GrafAccelerationStructureGeometryData sampleGeometryDataTL = {};
+				sampleGeometryDataTL.GeometryType = GrafAccelerationStructureGeometryType::Instances;
+				sampleGeometryDataTL.GeometryFlags = ur_uint(GrafAccelerationStructureGeometryFlag::Opaque);
+				sampleGeometryDataTL.InstancesData = &asInstanceData;
+				sampleGeometryDataTL.PrimitiveCount = ur_uint32(sampleInstances.size());
+
+				grafCmdList->BuildAccelerationStructure(this->accelerationStructureTL.get(), &sampleGeometryDataTL, 1);
+			}
+
 			grafCmdList->End();
 			grafDevice->Record(grafCmdList);
-			#else
-			grafRenderer->Upload((ur_byte*)sampleInstances.data(), this->instanceBuffer.get(), updateSize);
-			#endif
 		}
 
 		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera,
@@ -835,12 +960,30 @@ int HybridRenderingApp::Run()
 			}
 		}
 
-		void RayTrace(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera)
+		void RayTrace(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
 		{
-			// TODO
+			// update descriptor table
+			// common constant buffer is expected to be uploaded during rasterization pass
+
+			GrafDescriptorTable* descriptorTable = this->raytraceDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
+			{
+				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId].get());
+			}
+			descriptorTable->SetAccelerationStructure(4, this->accelerationStructureTL.get());
+			descriptorTable->SetRWImage(0, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
+
+			// trace rays
+
+			grafCmdList->BindRayTracingPipeline(this->raytracePipelineState.get());
+			grafCmdList->BindRayTracingDescriptorTable(descriptorTable, this->raytracePipelineState.get());
+
+			const ur_uint3& targetSize = lightingBufferSet->images[LightingImageUsage_DirectShadow]->GetDesc().Size;
+			grafCmdList->DispatchRays(targetSize.x, targetSize.y, 1, &this->rayGenShaderTable, &this->rayMissShaderTable, &this->rayHitShaderTable, ur_null);
 		}
 
-		void ComputeLighting(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, GrafRenderTarget* lightingTarget)
+		void ComputeLighting(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet, GrafRenderTarget* lightingTarget)
 		{
 			// update descriptor table
 			// common constant buffer is expected to be uploaded during rasterization pass
@@ -852,6 +995,7 @@ int HybridRenderingApp::Run()
 			{
 				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId].get());
 			}
+			descriptorTable->SetImage(4, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
 			descriptorTable->SetRWImage(0, lightingTarget->GetImage(0));
 
 			// compute
@@ -1117,7 +1261,6 @@ int HybridRenderingApp::Run()
 
 				if (demoScene != ur_null)
 				{
-					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "DemoScene", DebugLabelColorRender);
 					demoScene->Render(grafCmdListCrnt, renderTargetSet.get(), camera, lightingDesc, atmosphereDesc);
 				}
 
@@ -1132,11 +1275,14 @@ int HybridRenderingApp::Run()
 				{
 					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::RayTracingRead);
 				}
+				for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
+				{
+					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
+				}
 
 				if (demoScene != ur_null)
 				{
-					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "DemoScene", DebugLabelColorRender);
-					demoScene->RayTrace(grafCmdListCrnt, renderTargetSet.get(), camera);
+					demoScene->RayTrace(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
 				}
 			}
 
@@ -1148,9 +1294,16 @@ int HybridRenderingApp::Run()
 				{
 					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeRead);
 				}
+				for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
+				{
+					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeRead);
+				}
 				grafCmdListCrnt->ImageMemoryBarrier(hdrRender->GetHDRRenderTarget()->GetImage(0), GrafImageState::Current, GrafImageState::ComputeReadWrite);
 				
-				demoScene->ComputeLighting(grafCmdListCrnt, renderTargetSet.get(), hdrRender->GetHDRRenderTarget());
+				if (demoScene != ur_null)
+				{
+					demoScene->ComputeLighting(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get(), hdrRender->GetHDRRenderTarget());
+				}
 			}
 
 			// post effects

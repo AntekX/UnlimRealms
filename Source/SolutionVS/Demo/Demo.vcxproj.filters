@@ -100,9 +100,6 @@
     <FxCompile Include="sample_ps.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
-    <FxCompile Include="HybridRendering_lib.hlsl">
-      <Filter>HybridRenderingApp</Filter>
-    </FxCompile>
     <FxCompile Include="HybridRendering_ps.hlsl">
       <Filter>HybridRenderingApp</Filter>
     </FxCompile>
@@ -111,6 +108,12 @@
     </FxCompile>
     <FxCompile Include="sample_raytracing_lib.hlsl">
       <Filter>RayTracingSandboxApp</Filter>
+    </FxCompile>
+    <FxCompile Include="HybridRendering_rt_lib.hlsl">
+      <Filter>HybridRenderingApp</Filter>
+    </FxCompile>
+    <FxCompile Include="HybridRendering_cs_lib.hlsl">
+      <Filter>HybridRenderingApp</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
