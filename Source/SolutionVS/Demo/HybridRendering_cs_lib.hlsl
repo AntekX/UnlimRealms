@@ -93,7 +93,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 		{
 			LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
-			float shadowFactor = (((shadowPerLightPacked >> ilight) & 0x1) > 0 ? 0.0 : 1.0);
+			float shadowFactor = float((shadowPerLightPacked >> (ilight * 0x8)) & 0xff) / 255.0;
 			float NoL = dot(-light.Direction, lightingParams.normal);
 			shadowFactor *= saturate(NoL  * 10.0); // temp: simplified self shadowing
 			float specularOcclusion = shadowFactor;

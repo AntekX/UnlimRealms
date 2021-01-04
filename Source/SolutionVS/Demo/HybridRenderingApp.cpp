@@ -101,7 +101,7 @@ int HybridRenderingApp::Run()
 	};
 
 	static const GrafFormat LightingImageFormat[LightingImageCount] = {
-		GrafFormat::R8_UINT,
+		GrafFormat::R32_UINT,
 	};
 
 	static GrafClearValue LightingBufferClearValues[LightingImageCount] = {
@@ -301,7 +301,8 @@ int HybridRenderingApp::Run()
 			ur_float4 TargetSize;
 			ur_float4 DebugVec0;
 			ur_bool OverrideMaterial;
-			ur_float3 __pad0;
+			ur_uint FrameNumber;
+			ur_float2 __pad0;
 			LightingDesc Lighting;
 			Atmosphere::Desc Atmosphere;
 			MeshMaterialDesc Material;
@@ -485,6 +486,7 @@ int HybridRenderingApp::Run()
 			memset(&this->sceneConstants, 0, sizeof(SceneConstants));
 			
 			// default material override
+			this->sceneConstants.FrameNumber = 0;
 			this->sceneConstants.OverrideMaterial = true;
 			this->sceneConstants.Material.BaseColor = { 0.5f, 0.5f, 0.5f };
 			this->sceneConstants.Material.Roughness = 0.5f;
@@ -794,6 +796,10 @@ int HybridRenderingApp::Run()
 			ur_float modY;
 			ur_float crntCycleFactor = std::modf(crntTimeFactor, &modY);
 			ur_float animAngle = MathConst<ur_float>::Pi * 2.0f * crntCycleFactor;
+
+			// update local frame counter
+
+			this->sceneConstants.FrameNumber += 1;
 
 			// clear per mesh draw data
 

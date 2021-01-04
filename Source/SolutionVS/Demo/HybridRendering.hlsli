@@ -16,7 +16,8 @@ struct SceneConstants
 	float4 TargetSize; // w, h, 1/w, 1/h
 	float4 DebugVec0;
 	bool OverrideMaterial;
-	float3 __pad0;
+	uint FrameNumber;
+	float2 __pad0;
 	LightingDesc Lighting;
 	AtmosphereDesc Atmosphere;
 	MeshMaterialDesc Material;

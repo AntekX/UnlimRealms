@@ -11,11 +11,13 @@
 
 // useful lighting constants
 
-static const CFLOAT(SolarIlluminanceNoon) = 123100.0; // lux
-static const CFLOAT(SolarIlluminanceEvening) = 79000.0; // lux
-static const CFLOAT(LuminousEfficacyMax) = 683.0; // Lm/W
-static const CFLOAT(SolarIrradianceTopAtmosphere) = 1362.0; // W/m2
-static const CFLOAT(SolarIlluminanceTopAtmosphere) = 930246.0; // lux, SolarIrradianceTopAtmosphere * LuminousEfficacyMax
+static const CFLOAT(SolarIlluminanceNoon) = 123100.0f; // lux
+static const CFLOAT(SolarIlluminanceEvening) = 79000.0f; // lux
+static const CFLOAT(LuminousEfficacyMax) = 683.0f; // Lm/W
+static const CFLOAT(SolarIrradianceTopAtmosphere) = 1362.0f; // W/m2
+static const CFLOAT(SolarIlluminanceTopAtmosphere) = 930246.0f; // lux, SolarIrradianceTopAtmosphere * LuminousEfficacyMax
+static const CFLOAT(SolarDiskAngle) = 0.00925f; // 0.53 deg
+static const CFLOAT(SolarDiskHalfAngle) = 0.004625f;
 
 // structures are explicitly aligned to be used in/as constant buffers
 
@@ -33,7 +35,7 @@ struct LightDesc
 	CFLOAT	(IntensityTopAtmosphere);
 };
 
-#define LIGHT_SOURCES_MAX 4
+#define LIGHT_SOURCES_MAX 8
 struct LightingDesc
 {
 	LightDesc LightSources[LIGHT_SOURCES_MAX];
