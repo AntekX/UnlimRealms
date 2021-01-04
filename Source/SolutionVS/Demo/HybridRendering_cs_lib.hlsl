@@ -9,7 +9,7 @@ Texture2D<float>	g_GeometryDepth			: register(t0);
 Texture2D<float4>	g_GeometryImage0		: register(t1);
 Texture2D<float4>	g_GeometryImage1		: register(t2);
 Texture2D<float4>	g_GeometryImage2		: register(t3);
-Texture2D<float>	g_ShadowResult			: register(t4);
+Texture2D<uint>		g_ShadowResult			: register(t4);
 RWTexture2D<float4>	g_LightingTarget		: register(u0);
 
 // lighting common
@@ -55,21 +55,17 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 	{
 		// read geometry buffer
 
-		float4 geomtryData0 = g_GeometryImage0.Load(int3(imagePos.xy, 0));
-		float4 geomtryData1 = g_GeometryImage1.Load(int3(imagePos.xy, 0));
-		float4 geomtryData2 = g_GeometryImage2.Load(int3(imagePos.xy, 0));
-
-		float3 normal = geomtryData1.xyz;
+		GBufferData gbData = LoadGBufferData(imagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 
 		// read lighting buffer
 		
-		float shadowDirect = g_ShadowResult.Load(int3(imagePos.xy, 0));
+		uint shadowPerLightPacked = g_ShadowResult.Load(int3(imagePos.xy, 0));
 
 		// material params
 
 		MaterialInputs material = (MaterialInputs)0;
 		initMaterial(material);
-		material.normal = normal;
+		material.normal = gbData.Normal;
 		if (g_SceneCB.OverrideMaterial)
 		{
 			material.baseColor.xyz = g_SceneCB.Material.BaseColor;
@@ -80,7 +76,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		else
 		{
 			// TODO: read mesh material
-			material.baseColor.xyz = float3(geomtryData2.zw, 0);// 0.25;
+			material.baseColor.xyz = 0.5;
 			material.roughness = 0.5;
 			material.metallic = 0.0;
 			material.reflectance = 0.04;
@@ -97,12 +93,12 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 		{
 			LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
+			float shadowFactor = (((shadowPerLightPacked >> ilight) & 0x1) > 0 ? 0.0 : 1.0);
 			float NoL = dot(-light.Direction, lightingParams.normal);
-			float shadowFactor = saturate(NoL  * 10.0); // temp: simplified self shadowing
+			shadowFactor *= saturate(NoL  * 10.0); // temp: simplified self shadowing
 			float specularOcclusion = shadowFactor;
 			directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 		}
-		directLightColor *= shadowDirect;
 
 		// indirect light
 

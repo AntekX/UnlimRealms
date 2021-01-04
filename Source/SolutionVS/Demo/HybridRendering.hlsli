@@ -46,7 +46,7 @@ struct MeshPixelOutput
 	float4 Target2	: SV_Target2;
 };
 
-// ray tracing shader table
+// Ray tracing shader table
 static const uint RTShaderId_MissDirect = 0;
 
 struct RayDataDirect
@@ -54,3 +54,45 @@ struct RayDataDirect
 	// TODO
 	bool occluded;
 };
+
+// Gemotry buffer utils
+
+struct GBufferData
+{
+	float ClipDepth;
+	float3 Normal;
+};
+
+struct GBufferPacked
+{
+	float Depth;
+	float4 Image0;
+	float4 Image1;
+	float4 Image2;
+};
+
+GBufferData UnpackGBufferData(in GBufferPacked gbPacked)
+{
+	GBufferData gbData = (GBufferData)0;
+
+	gbData.ClipDepth = gbPacked.Depth;
+	gbData.Normal = gbPacked.Image1.xyz;
+
+	return gbData;
+}
+
+GBufferData LoadGBufferData(in int2 imagePos,
+	in Texture2D<float>		geometryDepth,
+	in Texture2D<float4>	geometryImage0,
+	in Texture2D<float4>	geometryImage1,
+	in Texture2D<float4>	geometryImage2)
+{
+	GBufferPacked gbPacked = (GBufferPacked)0;
+
+	gbPacked.Depth = geometryDepth.Load(int3(imagePos.xy, 0));
+	gbPacked.Image0 = geometryImage0.Load(int3(imagePos.xy, 0));
+	gbPacked.Image1 = geometryImage1.Load(int3(imagePos.xy, 0));
+	gbPacked.Image2 = geometryImage2.Load(int3(imagePos.xy, 0));
+
+	return UnpackGBufferData(gbPacked);
+}

@@ -99,6 +99,13 @@ float3 ClipPosToWorldPos(in float3 clipPos, in float4x4 viewProjInv)
 	return (worldPos.xyz / worldPos.w);
 }
 
+float3 ImagePosToWorldPos(in int2 imagePos, in float2 imageToUvScale, in float clipDepth, in float4x4 viewProjInv)
+{
+	float2 uvPos = (float2(imagePos) + 0.5) * imageToUvScale;
+	float3 clipPos = float3(float2(uvPos.x, 1.0 - uvPos.y) * 2.0 - 1.0, clipDepth);
+	return ClipPosToWorldPos(clipPos, viewProjInv);
+}
+
 /***************************************************************/
 // 3D value noise
 // Ref: https://www.shadertoy.com/view/XsXfRH

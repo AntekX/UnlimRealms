@@ -101,7 +101,7 @@ int HybridRenderingApp::Run()
 	};
 
 	static const GrafFormat LightingImageFormat[LightingImageCount] = {
-		GrafFormat::R8_UNORM,
+		GrafFormat::R8_UINT,
 	};
 
 	static GrafClearValue LightingBufferClearValues[LightingImageCount] = {
