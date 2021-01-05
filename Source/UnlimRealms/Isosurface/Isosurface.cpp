@@ -26,9 +26,10 @@ namespace UnlimRealms
 		{ 1.0f, 1.0f, 1.0f },	// Color
 		200.0f,					// Intensity
 		{ 1.0f, 0.0f, 0.0f },	// Direction
-		0, // pad
+		0.0f,					// Size
 		{ 0.0f, 0.0f, 0.0f },	// Position
-		0, // pad
+		0.0f,					// IntensityTopAtmosphere
+		LightType_Directional,	// Type
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

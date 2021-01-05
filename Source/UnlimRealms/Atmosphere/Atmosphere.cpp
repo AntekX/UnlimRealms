@@ -51,12 +51,13 @@ namespace UnlimRealms
 	};
 
 	static const LightDesc LightDescDefault = {
-		{ 1.0f, 1.0f, 1.0f },	// Color
-		200.0f,					// Intensity
-		{ 1.0f, 0.0f, 0.0f },	// Direction
-		0, // pad
-		{ 0.0f, 0.0f, 0.0f },	// Position
-		0, // pad
+		{ 1.0f, 1.0f, 1.0f },			// Color
+		SolarIlluminanceNoon,			// Intensity
+		{ 1.0f, 0.0f, 0.0f },			// Direction
+		SolarDiskHalfAngleTangent,		// Size
+		{ 0.0f, 0.0f, 0.0f },			// Position
+		SolarIlluminanceTopAtmosphere,	// IntensityTopAtmosphere
+		LightType_Directional,			// Type
 	};
 
 	Atmosphere::Atmosphere(Realm &realm) :

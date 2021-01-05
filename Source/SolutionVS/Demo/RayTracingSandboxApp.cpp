@@ -217,12 +217,14 @@ int RayTracingSandboxApp::Run()
 	sunLight.Intensity = SolarIlluminanceNoon;
 	sunLight.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
 	sunLight.Direction = { -0.8165f,-0.40825f,-0.40825f };
+	sunLight.Size = SolarDiskHalfAngleTangent * 2.0f;
 	LightDesc sunLight2 = {};
 	sunLight2.Type = LightType_Directional;
 	sunLight2.Color = { 1.0f, 0.1f, 0.0f };
 	sunLight2.Intensity = SolarIlluminanceEvening;
 	sunLight2.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
 	sunLight2.Direction = { 0.8018f,-0.26726f,-0.5345f };
+	sunLight2.Size = SolarDiskHalfAngleTangent * 4.0f;
 	LightingDesc lightingDesc = {};
 	lightingDesc.LightSourceCount = 2;
 	lightingDesc.LightSources[0] = sunLight;

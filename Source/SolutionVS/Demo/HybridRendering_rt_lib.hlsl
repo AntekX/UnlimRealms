@@ -13,13 +13,30 @@ RWTexture2D<uint>				g_ShadowTarget		: register(u0);
 
 // common functions
 
-static const uint SampleCount = 64; // TODO: move to CB
+static const uint SampleCount = 32; // TODO: move to CB
 
-float3 GetSampleDirection(uint seed)
+float3 GetDiskSampleDirection(uint sampleId)
 {
-	float diskSize = tan(SolarDiskHalfAngle * 4); // todo: light constant, move outside
-	float2 dir2d = diskSize * BlueNoiseDiskLUT64[seed % 64]; // [-1, 1]
+	#if (1)
+	float2 dir2d = BlueNoiseDiskLUT64[sampleId % 64]; // [-1, 1]
 	return float3(dir2d.xy, 1.0);
+	#else
+	float2 p2d = Hammersley(sampleId % SampleCount, SampleCount) * 2.0 - 1.0;
+	float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
+	return float3(p2d.xy, 1.0);
+	#endif
+}
+
+float3x3 ComputeDirectLightTBN(const LightDesc lightDesc)
+{
+	float3x3 lightDirTBN;
+	lightDirTBN[2] = -lightDesc.Direction.xyz;
+	lightDirTBN[0] = float3(1, 0, 0);
+	lightDirTBN[1] = normalize(cross(lightDirTBN[2], lightDirTBN[0]));
+	lightDirTBN[0] = cross(lightDirTBN[1], lightDirTBN[2]);
+	lightDirTBN[0] *= lightDesc.Size; // scale by tangent of the visible disk half angle (to transform [-1,1] disk samples)
+	lightDirTBN[1] *= lightDesc.Size;
+	return lightDirTBN;
 }
 
 // ray generation: direct light
@@ -39,6 +56,13 @@ void RayGenDirect()
 	{
 		float3 worldPos = ImagePosToWorldPos(imagePos, g_SceneCB.TargetSize.zw, gbData.ClipDepth, g_SceneCB.ViewProjInv);
 		float distBasedEps = length(worldPos - g_SceneCB.CameraPos.xyz) * 5.0e-3;
+		
+		uint dispatchHash = HashUInt(dispatchIdx.x + dispatchIdx.y * (uint)g_SceneCB.TargetSize.x + g_SceneCB.FrameNumber);
+		float2 dispathNoise2d = BlueNoiseDiskLUT64[dispatchHash % 64];
+		float3x3 dispatchSamplingFrame;
+		dispatchSamplingFrame[2] = float3(0.0, 0.0, 1.0);
+		dispatchSamplingFrame[0] = normalize(float3(dispathNoise2d.xy, 0.0));
+		dispatchSamplingFrame[1] = cross(dispatchSamplingFrame[2], dispatchSamplingFrame[0]);
 
 		RayDesc ray;
 		ray.Origin = worldPos + gbData.Normal * distBasedEps;
@@ -49,18 +73,16 @@ void RayGenDirect()
 		occlusionPerLightPacked = 0x0;
 		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 		{
+			LightDesc lightDesc = g_SceneCB.Lighting.LightSources[ilight];
+			float3x3 lightDirTBN = ComputeDirectLightTBN(lightDesc);
 			float shadowFactor = 0.0;
+
 			for (uint isample = 0; isample < SampleCount; ++isample)
 			{
 				if (SampleCount > 1)
 				{
-					float3 sampleDir = GetSampleDirection(isample + g_SceneCB.FrameNumber);
-					float3x3 sampleTBN;
-					sampleTBN[2] = -g_SceneCB.Lighting.LightSources[ilight].Direction.xyz;
-					sampleTBN[0] = float3(1, 0, 0);
-					sampleTBN[1] = normalize(cross(sampleTBN[2], sampleTBN[0]));
-					sampleTBN[0] = cross(sampleTBN[1], sampleTBN[2]);
-					ray.Direction = mul(sampleDir, sampleTBN);
+					float3 sampleDir = GetDiskSampleDirection(isample);
+					ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), lightDirTBN);
 				}
 				else
 				{

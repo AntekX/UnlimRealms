@@ -154,6 +154,33 @@ float3 Rand3D(const float3 p)
 	return frac((p3.xxx + p3.yzx)*p3.xzy);
 }
 
+float2 Hammersley(const uint sampleId, const uint sampleCount)
+{
+	uint bits = sampleId;
+	bits = (bits << 16) | (bits >> 16);
+	bits = ((bits & 0x55555555) << 1) | ((bits & 0xAAAAAAAA) >> 1);
+	bits = ((bits & 0x33333333) << 2) | ((bits & 0xCCCCCCCC) >> 2);
+	bits = ((bits & 0x0F0F0F0F) << 4) | ((bits & 0xF0F0F0F0) >> 4);
+	bits = ((bits & 0x00FF00FF) << 8) | ((bits & 0xFF00FF00) >> 8);
+	return float2(sampleId / float(sampleCount), bits / 4294967296u); // / 2^32
+}
+
+float3 HemisphereSampleUniform(float u, float v)
+{
+	float phi = v * TwoPi;
+	float cosTheta = 1.0 - u;
+	float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+}
+
+float3 HemisphereSampleCosine(float u, float v)
+{
+	float phi = v * TwoPi;
+	float cosTheta = sqrt(1.0 - u);
+	float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+}
+
 static const float2 BlueNoiseDiskLUT64[64] = {
 	float2(0.478712, 0.875764),
 	float2(-0.337956, -0.793959),

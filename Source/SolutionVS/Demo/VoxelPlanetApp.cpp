@@ -281,6 +281,7 @@ int VoxelPlanetApp::Run()
 	lightDesc.Intensity = lightDesc.IntensityTopAtmosphere * 0.15f;
 	lightDesc.Direction = { 1.0f, 0.0f, 0.0f };
 	lightDesc.Position = { 0.0f, 0.0f, 0.0f };
+	lightDesc.Size = 0.0f;
 	
 	// main application camera
 	Camera camera(realm);
@@ -686,10 +687,13 @@ int VoxelPlanetApp::Run()
 
 	// virtual star light source
 	LightDesc lightDesc = {};
+	lightDesc.Type = LightType_Directional;
 	lightDesc.Color = { 1.0f, 1.0f, 1.0f };
-	lightDesc.Intensity = 200.0f;
+	lightDesc.IntensityTopAtmosphere = 200.0f;
+	lightDesc.Intensity = lightDesc.IntensityTopAtmosphere * 0.15f;
 	lightDesc.Direction = { 1.0f, 0.0f, 0.0f };
 	lightDesc.Position = { 0.0f, 0.0f, 0.0f };
+	lightDesc.Size = 0.0f;
 
 	// demo camera
 	Camera camera(realm);

@@ -18,6 +18,8 @@ static const CFLOAT(SolarIrradianceTopAtmosphere) = 1362.0f; // W/m2
 static const CFLOAT(SolarIlluminanceTopAtmosphere) = 930246.0f; // lux, SolarIrradianceTopAtmosphere * LuminousEfficacyMax
 static const CFLOAT(SolarDiskAngle) = 0.00925f; // 0.53 deg
 static const CFLOAT(SolarDiskHalfAngle) = 0.004625f;
+static const CFLOAT(SolarDiskAngleTangent) = 0.009251f; // tan(SolarDiskAngle)
+static const CFLOAT(SolarDiskHalfAngleTangent) = 0.004625f; // tan(SolarDiskHalfAngle)
 
 // structures are explicitly aligned to be used in/as constant buffers
 
@@ -30,9 +32,11 @@ struct LightDesc
 	CFLOAT3	(Color);
 	CFLOAT	(Intensity);
 	CFLOAT3	(Direction);
-	CUINT	(Type);
+	CFLOAT	(Size);
 	CFLOAT3	(Position);
 	CFLOAT	(IntensityTopAtmosphere);
+	CUINT	(Type);
+	CFLOAT3	(__pad0);
 };
 
 #define LIGHT_SOURCES_MAX 8
