@@ -22,6 +22,13 @@ using namespace UnlimRealms;
 #define UPDATE_ASYNC 1
 #define RENDER_ASYNC 1
 
+struct Settings
+{
+	ur_uint LightingBufferDownscale = 2;
+	ur_uint RaytraceSamplesPerLight = 32;
+	ur_bool RaytracePerFrameJitter = false;
+} g_Settings;
+
 int HybridRenderingApp::Run()
 {
 	// create realm
@@ -36,6 +43,7 @@ int HybridRenderingApp::Run()
 	ur_uint canvasWidth = ur_uint(realm.GetCanvas()->GetClientBound().Width() * canvasScale);
 	ur_uint canvasHeight = ur_uint(realm.GetCanvas()->GetClientBound().Height() * canvasScale);
 	ur_bool canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
+	ur_bool canvasChanged = false;
 
 	// create input system
 	std::unique_ptr<WinInput> input(new WinInput(realm));
@@ -123,7 +131,6 @@ int HybridRenderingApp::Run()
 	std::unique_ptr<GrafRenderPass> rasterRenderPass;
 	std::unique_ptr<RenderTargetSet> renderTargetSet;
 	std::unique_ptr<LightingBufferSet> lightingBufferSet;
-	ur_uint lightingBufferDownscale = 1;
 
 	auto& DestroyFrameBufferObjects = [&](GrafCommandList* syncCmdList = ur_null)
 	{
@@ -204,8 +211,8 @@ int HybridRenderingApp::Run()
 		if (Failed(res)) return res;
 
 		// lighting buffer images
-		ur_uint lightingBufferWidth = width / std::max(1u, lightingBufferDownscale);
-		ur_uint lightingBufferHeight = height / std::max(1u, lightingBufferDownscale);
+		ur_uint lightingBufferWidth = width / std::max(1u, g_Settings.LightingBufferDownscale);
+		ur_uint lightingBufferHeight = height / std::max(1u, g_Settings.LightingBufferDownscale);
 		lightingBufferSet.reset(new LightingBufferSet());
 		for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
 		{
@@ -297,12 +304,14 @@ int HybridRenderingApp::Run()
 			ur_float4x4 ViewProjInv;
 			ur_float4 CameraPos;
 			ur_float4 CameraDir;
-			ur_float4 SourceSize;
 			ur_float4 TargetSize;
+			ur_float4 LightBufferSize;
 			ur_float4 DebugVec0;
 			ur_bool OverrideMaterial;
 			ur_uint FrameNumber;
-			ur_float2 __pad0;
+			ur_uint SamplesPerLight;
+			ur_bool PerFrameJitter;
+			//ur_uint __pad0;
 			LightingDesc Lighting;
 			Atmosphere::Desc Atmosphere;
 			MeshMaterialDesc Material;
@@ -929,12 +938,13 @@ int HybridRenderingApp::Run()
 			grafDevice->Record(grafCmdList);
 		}
 
-		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, Camera& camera,
-			const LightingDesc& lightingDesc, const Atmosphere::Desc& atmosphereDesc)
+		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet,
+			Camera& camera, const LightingDesc& lightingDesc, const Atmosphere::Desc& atmosphereDesc)
 		{
 			// update & upload frame constants
 
 			const ur_uint3& targetSize = renderTargetSet->renderTarget->GetImage(0)->GetDesc().Size;
+			const ur_uint3& lightBufferSize = lightingBufferSet->images[LightingImageUsage_DirectShadow]->GetDesc().Size;
 			sceneConstants.Proj = camera.GetProj();
 			sceneConstants.ViewProj = camera.GetViewProj();
 			sceneConstants.ViewProjInv = camera.GetViewProjInv();
@@ -944,10 +954,15 @@ int HybridRenderingApp::Run()
 			sceneConstants.TargetSize.y = (ur_float)targetSize.y;
 			sceneConstants.TargetSize.z = 1.0f / sceneConstants.TargetSize.x;
 			sceneConstants.TargetSize.w = 1.0f / sceneConstants.TargetSize.y;
-			sceneConstants.SourceSize = sceneConstants.TargetSize;
+			sceneConstants.LightBufferSize.x = (ur_float)lightBufferSize.x;
+			sceneConstants.LightBufferSize.y = (ur_float)lightBufferSize.y;
+			sceneConstants.LightBufferSize.z = 1.0f / sceneConstants.LightBufferSize.x;
+			sceneConstants.LightBufferSize.w = 1.0f / sceneConstants.LightBufferSize.y;
 			sceneConstants.DebugVec0 = this->debugVec0;
 			sceneConstants.Lighting = lightingDesc;
 			sceneConstants.Atmosphere = atmosphereDesc;
+			sceneConstants.SamplesPerLight = g_Settings.RaytraceSamplesPerLight;
+			sceneConstants.PerFrameJitter = g_Settings.RaytracePerFrameJitter;
 
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 			this->sceneCBCrntFrameAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
@@ -1277,7 +1292,7 @@ int HybridRenderingApp::Run()
 
 				if (demoScene != ur_null)
 				{
-					demoScene->Render(grafCmdListCrnt, renderTargetSet.get(), camera, lightingDesc, atmosphereDesc);
+					demoScene->Render(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get(), camera, lightingDesc, atmosphereDesc);
 				}
 
 				grafCmdListCrnt->EndRenderPass();
@@ -1391,10 +1406,24 @@ int HybridRenderingApp::Run()
 					{
 						demoScene->ShowImgui();
 					}
+					if (ImGui::CollapsingHeader("RayTracing"))
+					{
+						ur_uint lightingBufferDownscalePrev = g_Settings.LightingBufferDownscale;
+						ur_int editableInt = (ur_int)g_Settings.LightingBufferDownscale;
+						ImGui::InputInt("LightBufferDowncale", &editableInt);
+						g_Settings.LightingBufferDownscale = (ur_uint)std::max(1, std::min(16, editableInt));
+						canvasChanged |= (g_Settings.LightingBufferDownscale != lightingBufferDownscalePrev);
+						editableInt = (ur_int)g_Settings.RaytraceSamplesPerLight;
+						ImGui::InputInt("SamplesPerLight", &editableInt);
+						g_Settings.RaytraceSamplesPerLight = (ur_uint)std::max(1, std::min(1024, editableInt));
+						ImGui::Checkbox("PerFrameJitter", &g_Settings.RaytracePerFrameJitter);
+					}
 					if (ImGui::CollapsingHeader("Canvas"))
 					{
+						ur_float canvasScalePrev = canvasScale;
 						ImGui::InputFloat("ResolutionScale", &canvasScale);
 						canvasScale = std::max(1.0f / 16.0f, std::min(4.0f, canvasScale));
+						canvasChanged |= (canvasScale != canvasScalePrev);
 					}
 
 					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ImGui", DebugLabelColorRender);
@@ -1419,8 +1448,9 @@ int HybridRenderingApp::Run()
 			// update render target(s)
 			ur_uint canvasWidthNew = ur_uint(realm.GetCanvas()->GetClientBound().Width() * canvasScale);
 			ur_uint canvasHeightNew = ur_uint(realm.GetCanvas()->GetClientBound().Height() * canvasScale);
-			if (canvasValid && (canvasWidth != canvasWidthNew || canvasHeight != canvasHeightNew))
+			if (canvasValid && (canvasChanged || canvasWidth != canvasWidthNew || canvasHeight != canvasHeightNew))
 			{
+				canvasChanged = false;
 				canvasWidth = canvasWidthNew;
 				canvasHeight = canvasHeightNew;
 				// use prev frame command list to make sure frame buffer objects are destroyed only when it is no longer used

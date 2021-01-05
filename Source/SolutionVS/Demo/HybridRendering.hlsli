@@ -12,12 +12,14 @@ struct SceneConstants
 	float4x4 ViewProjInv;
 	float4 CameraPos;
 	float4 CameraDir;
-	float4 SourceSize; // w, h, 1/w, 1/h
 	float4 TargetSize; // w, h, 1/w, 1/h
+	float4 LightBufferSize; // w, h, 1/w, 1/h
 	float4 DebugVec0;
 	bool OverrideMaterial;
 	uint FrameNumber;
-	float2 __pad0;
+	uint SamplesPerLight;
+	bool PerFrameJitter;
+	//uint __pad0;
 	LightingDesc Lighting;
 	AtmosphereDesc Atmosphere;
 	MeshMaterialDesc Material;

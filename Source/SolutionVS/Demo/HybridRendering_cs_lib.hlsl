@@ -31,6 +31,12 @@ float4 CalculateSkyLight(const float3 position, const float3 direction)
 	return color;
 }
 
+// upsampling
+
+static const int2 QuadSampleOfs[4] = {
+	{ 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 }
+};
+
 // compute lighting
 
 [shader("compute")]
@@ -58,8 +64,37 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		GBufferData gbData = LoadGBufferData(imagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 
 		// read lighting buffer
-		
-		uint shadowPerLightPacked = g_ShadowResult.Load(int3(imagePos.xy, 0));
+
+		float shadowPerLight[4] = { 0, 0, 0, 0 };
+		//uint lightBufferDownscale = uint(g_SceneCB.TargetSize.x * g_SceneCB.LightBufferSize.z);
+		#if (0)
+		// point upsampling
+		int2 lightBufferPos = (float2(imagePos.xy) + 0.5) * g_SceneCB.TargetSize.zw * g_SceneCB.LightBufferSize.xy;
+		uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
+		[unroll] for (uint j = 0; j < 4; ++j)
+		{
+			shadowPerLight[j] = float((shadowPerLightPacked >> (j * 0x8)) & 0xff) / 255.0;
+		}
+		#else
+		// filtered upsampling
+		float2 lightBufferPos = ((float2(imagePos.xy) + 0.5) * g_SceneCB.TargetSize.zw * g_SceneCB.LightBufferSize.xy - 0.5);
+		float2 posWeight = frac(lightBufferPos);
+		float sampleWeight[4] = {
+			(1.0 - posWeight.x) * (1.0 - posWeight.y),
+			posWeight.x * (1.0 - posWeight.y),
+			posWeight.x * posWeight.y,
+			(1.0 - posWeight.x) * posWeight.y
+		};
+		[unroll] for (uint i = 0; i < 4; ++i)
+		{
+			int2 lightSamplePos = int2(clamp(lightBufferPos + QuadSampleOfs[i], float2(0, 0), g_SceneCB.LightBufferSize.xy - 1));
+			uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightSamplePos.xy, 0));
+			[unroll] for (uint j = 0; j < 4; ++j)
+			{
+				shadowPerLight[j] += float((shadowPerLightPacked >> (j * 0x8)) & 0xff) / 255.0 * sampleWeight[i];
+			}
+		}
+		#endif
 
 		// material params
 
@@ -93,9 +128,9 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 		{
 			LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
-			float shadowFactor = float((shadowPerLightPacked >> (ilight * 0x8)) & 0xff) / 255.0;
+			float shadowFactor = shadowPerLight[ilight];
 			float NoL = dot(-light.Direction, lightingParams.normal);
-			shadowFactor *= saturate(NoL  * 10.0); // temp: simplified self shadowing
+			shadowFactor *= saturate(NoL  * 10.0); // approximate self shadowing at grazing angles
 			float specularOcclusion = shadowFactor;
 			directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 		}

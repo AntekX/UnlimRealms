@@ -13,17 +13,15 @@ RWTexture2D<uint>				g_ShadowTarget		: register(u0);
 
 // common functions
 
-static const uint SampleCount = 32; // TODO: move to CB
-
 float3 GetDiskSampleDirection(uint sampleId)
 {
 	#if (1)
 	float2 dir2d = BlueNoiseDiskLUT64[sampleId % 64]; // [-1, 1]
 	return float3(dir2d.xy, 1.0);
 	#else
-	float2 p2d = Hammersley(sampleId % SampleCount, SampleCount) * 2.0 - 1.0;
+	float2 p2d = Hammersley(sampleId % g_SceneCB.SamplesPerLight, g_SceneCB.SamplesPerLight) * 2.0 - 1.0;
 	float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
-	return float3(p2d.xy, 1.0);
+	return float3(dir.xy, 1.0);
 	#endif
 }
 
@@ -45,7 +43,9 @@ float3x3 ComputeDirectLightTBN(const LightDesc lightDesc)
 void RayGenDirect()
 {
 	uint3 dispatchIdx = DispatchRaysIndex();
-	uint2 imagePos = dispatchIdx.xy; // TODO: support downscaled dispatch
+	uint2 dispatchSize = (uint2)g_SceneCB.LightBufferSize.xy;
+	uint2 imagePos = (uint2)((float2(dispatchIdx.xy) + 0.5) * g_SceneCB.LightBufferSize.zw * g_SceneCB.TargetSize.xy);
+	// TODO: adjust imagePos to a sub pixel with minimal depth to avoid self shadowing in low res at grazing angles
 	
 	// read geometry buffer
 	GBufferData gbData = LoadGBufferData(imagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
@@ -56,8 +56,9 @@ void RayGenDirect()
 	{
 		float3 worldPos = ImagePosToWorldPos(imagePos, g_SceneCB.TargetSize.zw, gbData.ClipDepth, g_SceneCB.ViewProjInv);
 		float distBasedEps = length(worldPos - g_SceneCB.CameraPos.xyz) * 5.0e-3;
-		
-		uint dispatchHash = HashUInt(dispatchIdx.x + dispatchIdx.y * (uint)g_SceneCB.TargetSize.x + g_SceneCB.FrameNumber);
+
+		uint frameHashOfs = g_SceneCB.FrameNumber * dispatchSize.x * dispatchSize.y * g_SceneCB.PerFrameJitter;
+		uint dispatchHash = HashUInt(dispatchIdx.x + dispatchIdx.y * (uint)g_SceneCB.TargetSize.x + frameHashOfs);
 		float2 dispathNoise2d = BlueNoiseDiskLUT64[dispatchHash % 64];
 		float3x3 dispatchSamplingFrame;
 		dispatchSamplingFrame[2] = float3(0.0, 0.0, 1.0);
@@ -77,17 +78,11 @@ void RayGenDirect()
 			float3x3 lightDirTBN = ComputeDirectLightTBN(lightDesc);
 			float shadowFactor = 0.0;
 
-			for (uint isample = 0; isample < SampleCount; ++isample)
+			for (uint isample = 0; isample < g_SceneCB.SamplesPerLight; ++isample)
 			{
-				if (SampleCount > 1)
-				{
-					float3 sampleDir = GetDiskSampleDirection(isample);
-					ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), lightDirTBN);
-				}
-				else
-				{
-					ray.Direction = -g_SceneCB.Lighting.LightSources[ilight].Direction.xyz;
-				}
+				float3 sampleDir = GetDiskSampleDirection(isample - 1);
+				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), lightDirTBN);
+				//ray.Direction = -g_SceneCB.Lighting.LightSources[ilight].Direction.xyz;
 
 				RayDataDirect rayData = (RayDataDirect)0;
 				rayData.occluded = true;
@@ -107,8 +102,13 @@ void RayGenDirect()
 
 				shadowFactor += float(rayData.occluded);
 			}
-			shadowFactor = 1.0 - shadowFactor / SampleCount;
+			shadowFactor = 1.0 - shadowFactor / g_SceneCB.SamplesPerLight;
 			occlusionPerLightPacked |= uint(shadowFactor * 0xff) << (ilight * 0x8);
+
+			#if (0)
+			float dbgValue = float(dispatchHash % 64) / 64;
+			occlusionPerLightPacked = 0xff00 + dbgValue * 0xff;
+			#endif
 		}
 	}
 
