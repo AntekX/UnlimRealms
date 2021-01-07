@@ -77,13 +77,16 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		}
 		#else
 		// filtered upsampling
+		/*uint frameHashOfs = g_SceneCB.FrameNumber * (uint)g_SceneCB.TargetSize.x * (uint)g_SceneCB.TargetSize.y * g_SceneCB.PerFrameJitter;
+		uint pixelHash = HashUInt(imagePos.x + imagePos.y * (uint)g_SceneCB.TargetSize.x + frameHashOfs);
+		float2 jitter2d = BlueNoiseDiskLUT64[pixelHash % 64] * 0.5;*/
 		float2 lightBufferPos = ((float2(imagePos.xy) + 0.5) * g_SceneCB.TargetSize.zw * g_SceneCB.LightBufferSize.xy - 0.5);
-		float2 posWeight = frac(lightBufferPos);
+		float2 pf = frac(lightBufferPos);
 		float sampleWeight[4] = {
-			(1.0 - posWeight.x) * (1.0 - posWeight.y),
-			posWeight.x * (1.0 - posWeight.y),
-			posWeight.x * posWeight.y,
-			(1.0 - posWeight.x) * posWeight.y
+			(1.0 - pf.x) * (1.0 - pf.y),
+			pf.x * (1.0 - pf.y),
+			pf.x * pf.y,
+			(1.0 - pf.x) * pf.y
 		};
 		[unroll] for (uint i = 0; i < 4; ++i)
 		{

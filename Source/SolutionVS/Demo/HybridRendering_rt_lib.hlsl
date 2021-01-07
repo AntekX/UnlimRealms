@@ -44,9 +44,34 @@ void RayGenDirect()
 {
 	uint3 dispatchIdx = DispatchRaysIndex();
 	uint2 dispatchSize = (uint2)g_SceneCB.LightBufferSize.xy;
+
+	#if (0)
+	// fetch at dispatch position center
 	uint2 imagePos = (uint2)((float2(dispatchIdx.xy) + 0.5) * g_SceneCB.LightBufferSize.zw * g_SceneCB.TargetSize.xy);
-	// TODO: adjust imagePos to a sub pixel with minimal depth to avoid self shadowing in low res at grazing angles
-	
+	#else
+	// find best fitting sub position
+	uint2 imagePos = (uint2)(float2(dispatchIdx.xy) * g_SceneCB.LightBufferSize.zw * g_SceneCB.TargetSize.xy);
+	uint dispatchDownscale = g_SceneCB.TargetSize.x * g_SceneCB.LightBufferSize.z;
+	[branch] if (dispatchDownscale > 1)
+	{
+		uint2 imageSubPos = 0;
+		float clipDepthMax = 0.0;
+		for (uint iy = 0; iy < dispatchDownscale; ++iy)
+		{
+			for (uint ix = 0; ix < dispatchDownscale; ++ix)
+			{
+				float clipDepth = g_GeometryDepth.Load(int3(imagePos.x + ix, imagePos.y + iy, 0));
+				[flatten] if (clipDepth > clipDepthMax)
+				{
+					clipDepthMax = clipDepth;
+					imageSubPos = uint2(ix, iy);
+				}
+			}
+		}
+		imagePos += imageSubPos;
+	}
+	#endif
+
 	// read geometry buffer
 	GBufferData gbData = LoadGBufferData(imagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 	bool isSky = (gbData.ClipDepth >= 1.0);
@@ -58,7 +83,7 @@ void RayGenDirect()
 		float distBasedEps = length(worldPos - g_SceneCB.CameraPos.xyz) * 5.0e-3;
 
 		uint frameHashOfs = g_SceneCB.FrameNumber * dispatchSize.x * dispatchSize.y * g_SceneCB.PerFrameJitter;
-		uint dispatchHash = HashUInt(dispatchIdx.x + dispatchIdx.y * (uint)g_SceneCB.TargetSize.x + frameHashOfs);
+		uint dispatchHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x + frameHashOfs);
 		float2 dispathNoise2d = BlueNoiseDiskLUT64[dispatchHash % 64];
 		float3x3 dispatchSamplingFrame;
 		dispatchSamplingFrame[2] = float3(0.0, 0.0, 1.0);
