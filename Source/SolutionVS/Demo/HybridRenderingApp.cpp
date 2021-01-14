@@ -105,15 +105,18 @@ int HybridRenderingApp::Run()
 	enum LightingImageUsage
 	{
 		LightingImageUsage_DirectShadow = 0,
+		LightingImageUsage_TracingInfo, // x = sub sample pos
 		LightingImageCount
 	};
 
 	static const GrafFormat LightingImageFormat[LightingImageCount] = {
 		GrafFormat::R32_UINT,
+		GrafFormat::R8_UINT,
 	};
 
 	static GrafClearValue LightingBufferClearValues[LightingImageCount] = {
 		{ 1.0f, 0.0f, 0.0f, 0.0f },
+		{ 0.0f, 0.0f, 0.0f, 0.0f },
 	};
 	
 	struct RenderTargetSet
@@ -669,7 +672,7 @@ int HybridRenderingApp::Run()
 			GrafDescriptorRangeDesc lightingDescTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 				{ GrafDescriptorType::Sampler, 0, 1 },
-				{ GrafDescriptorType::Texture, 0, 5 },
+				{ GrafDescriptorType::Texture, 0, 6 },
 				{ GrafDescriptorType::RWTexture, 0, 1 },
 			};
 			GrafDescriptorTableLayoutDesc lightingDescTableLayoutDesc = {
@@ -722,7 +725,7 @@ int HybridRenderingApp::Run()
 					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 					{ GrafDescriptorType::Texture, 0, 4 },
 					{ GrafDescriptorType::AccelerationStructure, 4, 1},
-					{ GrafDescriptorType::RWTexture, 0, 1 },
+					{ GrafDescriptorType::RWTexture, 0, 2 },
 				};
 				GrafDescriptorTableLayoutDesc raytraceDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::AllRayTracing),
@@ -1002,6 +1005,7 @@ int HybridRenderingApp::Run()
 			}
 			descriptorTable->SetAccelerationStructure(4, this->accelerationStructureTL.get());
 			descriptorTable->SetRWImage(0, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
+			descriptorTable->SetRWImage(1, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
 
 			// trace rays
 
@@ -1025,6 +1029,7 @@ int HybridRenderingApp::Run()
 				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId].get());
 			}
 			descriptorTable->SetImage(4, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
+			descriptorTable->SetImage(5, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
 			descriptorTable->SetRWImage(0, lightingTarget->GetImage(0));
 
 			// compute

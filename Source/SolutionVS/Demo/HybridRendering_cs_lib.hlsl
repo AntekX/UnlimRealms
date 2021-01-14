@@ -10,6 +10,7 @@ Texture2D<float4>	g_GeometryImage0		: register(t1);
 Texture2D<float4>	g_GeometryImage1		: register(t2);
 Texture2D<float4>	g_GeometryImage2		: register(t3);
 Texture2D<uint>		g_ShadowResult			: register(t4);
+Texture2D<uint>		g_TracingInfo			: register(t5);
 RWTexture2D<float4>	g_LightingTarget		: register(u0);
 
 // lighting common
@@ -80,7 +81,11 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		/*uint frameHashOfs = g_SceneCB.FrameNumber * (uint)g_SceneCB.TargetSize.x * (uint)g_SceneCB.TargetSize.y * g_SceneCB.PerFrameJitter;
 		uint pixelHash = HashUInt(imagePos.x + imagePos.y * (uint)g_SceneCB.TargetSize.x + frameHashOfs);
 		float2 jitter2d = BlueNoiseDiskLUT64[pixelHash % 64] * 0.5;*/
+		uint lightBufferDownscale = g_SceneCB.TargetSize.x * g_SceneCB.LightBufferSize.z;
 		float2 lightBufferPos = ((float2(imagePos.xy) + 0.5) * g_SceneCB.TargetSize.zw * g_SceneCB.LightBufferSize.xy - 0.5);
+		uint tracingInfo = g_TracingInfo.Load(int3(lightBufferPos.xy, 0));
+		int2 tracingSamplePos = int2(tracingInfo % lightBufferDownscale, tracingInfo / lightBufferDownscale); // sub sample used in ray tracing pass
+		// TODO: use tracingSamplePos to fetch surface info from gbuffer to calculate porper sampleWeight
 		float2 pf = frac(lightBufferPos);
 		float sampleWeight[4] = {
 			(1.0 - pf.x) * (1.0 - pf.y),

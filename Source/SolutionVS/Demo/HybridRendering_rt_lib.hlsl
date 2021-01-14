@@ -10,6 +10,7 @@ Texture2D<float4>				g_GeometryImage1	: register(t2);
 Texture2D<float4>				g_GeometryImage2	: register(t3);
 RaytracingAccelerationStructure	g_SceneStructure	: register(t4);
 RWTexture2D<uint>				g_ShadowTarget		: register(u0);
+RWTexture2D<uint>				g_TracingInfoTarget	: register(u1);
 
 // common functions
 
@@ -54,6 +55,8 @@ void RayGenDirect()
 {
 	uint3 dispatchIdx = DispatchRaysIndex();
 	uint2 dispatchSize = (uint2)g_SceneCB.LightBufferSize.xy;
+	uint occlusionPerLightPacked = 0xffffffff; // 4 lights x 8 bit shadow factor
+	uint tracingInfo = 0; // sub sample pos
 
 	#if (0)
 	// fetch at dispatch position center
@@ -79,6 +82,7 @@ void RayGenDirect()
 			}
 		}
 		imagePos += imageSubPos;
+		tracingInfo = imageSubPos.x + imageSubPos.y * dispatchDownscale;
 	}
 	#endif
 
@@ -86,7 +90,6 @@ void RayGenDirect()
 	GBufferData gbData = LoadGBufferData(imagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 	bool isSky = (gbData.ClipDepth >= 1.0);
 
-	uint occlusionPerLightPacked = 0xffffffff; // 4 lights x 8 bit shadow factor
 	[branch] if (!isSky)
 	{
 		float3 worldPos = ImagePosToWorldPos(imagePos, g_SceneCB.TargetSize.zw, gbData.ClipDepth, g_SceneCB.ViewProjInv);
@@ -149,6 +152,7 @@ void RayGenDirect()
 
 	// write result
 	g_ShadowTarget[dispatchIdx.xy] = occlusionPerLightPacked;
+	g_TracingInfoTarget[dispatchIdx.xy] = tracingInfo;
 }
 
 // miss: direct light
