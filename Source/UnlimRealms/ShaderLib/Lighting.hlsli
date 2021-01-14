@@ -717,9 +717,17 @@ float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lig
 {
 	// common inputs
 
-	float lightAttenuation = 1.0; // todo
-	float3 lightColor = lightSource.Color * lightSource.Intensity * lightAttenuation;
+	float lightAttenuation = 1.0;
 	float3 lightDir = -lightSource.Direction; // dir towards light source
+	[flatten] if (LightType_Spherical == lightSource.Type)
+	{
+		lightDir = lightSource.Position.xyz - lightingParams.worldPos.xyz;
+		float dist = length(lightDir);
+		lightAttenuation = 1.0 / max(dist * dist, max(lightSource.Size * lightSource.Size, 1.0e-4));
+		lightDir /= dist;
+	}
+	float3 lightColor = lightSource.Color * lightSource.Intensity * lightAttenuation;
+
 	float3 halfV = normalize(lightingParams.viewDir + lightDir);
 	float NoV = abs(dot(lightingParams.normal, lightingParams.viewDir)) + 1.0e-5; // safe NoV, avoids artifacts in visibility function
 	float NoL = saturate(dot(lightingParams.normal, lightDir));

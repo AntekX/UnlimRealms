@@ -34,7 +34,7 @@ float4 CalculateSkyLight(const float3 position, const float3 direction)
 // upsampling
 
 static const int2 QuadSampleOfs[4] = {
-	{ 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 }
+	{ 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 }
 };
 
 // compute lighting
@@ -85,8 +85,8 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		float sampleWeight[4] = {
 			(1.0 - pf.x) * (1.0 - pf.y),
 			pf.x * (1.0 - pf.y),
-			pf.x * pf.y,
-			(1.0 - pf.x) * pf.y
+			(1.0 - pf.x) * pf.y,
+			pf.x * pf.y
 		};
 		[unroll] for (uint i = 0; i < 4; ++i)
 		{
@@ -131,8 +131,9 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 		{
 			LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
+			float3 lightDir = (LightType_Directional == light.Type ? -light.Direction : normalize(light.Position.xyz - worldPos.xyz));
 			float shadowFactor = shadowPerLight[ilight];
-			float NoL = dot(-light.Direction, lightingParams.normal);
+			float NoL = dot(lightDir, lightingParams.normal);
 			shadowFactor *= saturate(NoL  * 10.0); // approximate self shadowing at grazing angles
 			float specularOcclusion = shadowFactor;
 			directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;

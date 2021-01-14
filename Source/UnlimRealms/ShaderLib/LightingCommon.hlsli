@@ -24,7 +24,7 @@ static const CFLOAT(SolarDiskHalfAngleTangent) = 0.004625f; // tan(SolarDiskHalf
 // structures are explicitly aligned to be used in/as constant buffers
 
 static const CUINT(LightType_Directional) = 0;
-static const CUINT(LightType_Point) = 1;
+static const CUINT(LightType_Spherical) = 1;
 static const CUINT(LightType_Spot) = 2;
 
 struct LightDesc

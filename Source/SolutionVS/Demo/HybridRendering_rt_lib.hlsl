@@ -25,16 +25,26 @@ float3 GetDiskSampleDirection(uint sampleId)
 	#endif
 }
 
-float3x3 ComputeDirectLightTBN(const LightDesc lightDesc)
+float3x3 ComputeLightSamplingBasis(const float3 worldPos, const LightDesc lightDesc)
 {
-	float3x3 lightDirTBN;
-	lightDirTBN[2] = -lightDesc.Direction.xyz;
-	lightDirTBN[0] = float3(1, 0, 0);
-	lightDirTBN[1] = normalize(cross(lightDirTBN[2], lightDirTBN[0]));
-	lightDirTBN[0] = cross(lightDirTBN[1], lightDirTBN[2]);
-	lightDirTBN[0] *= lightDesc.Size; // scale by tangent of the visible disk half angle (to transform [-1,1] disk samples)
-	lightDirTBN[1] *= lightDesc.Size;
-	return lightDirTBN;
+	float3 dirToLight = -lightDesc.Direction.xyz;
+	float halfAngleTangent = lightDesc.Size; // tangent of the visible disk half angle (to transform [-1,1] disk samples)
+	[flatten] if (LightType_Spherical == lightDesc.Type)
+	{
+		dirToLight = lightDesc.Position.xyz - worldPos.xyz;
+		float dist = length(dirToLight);
+		dirToLight /= dist;
+		halfAngleTangent = lightDesc.Size / dist;
+	}
+	float3x3 lightTBN;
+	lightTBN[2] = dirToLight;
+	lightTBN[0] = float3(1, 0, 0);
+	lightTBN[1] = normalize(cross(lightTBN[2], lightTBN[0]));
+	lightTBN[0] = cross(lightTBN[1], lightTBN[2]);
+	lightTBN[0] *= halfAngleTangent; 
+	lightTBN[1] *= halfAngleTangent;
+
+	return lightTBN;
 }
 
 // ray generation: direct light
@@ -100,7 +110,7 @@ void RayGenDirect()
 		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 		{
 			LightDesc lightDesc = g_SceneCB.Lighting.LightSources[ilight];
-			float3x3 lightDirTBN = ComputeDirectLightTBN(lightDesc);
+			float3x3 lightDirTBN = ComputeLightSamplingBasis(worldPos, lightDesc);
 			float shadowFactor = 0.0;
 
 			for (uint isample = 0; isample < g_SceneCB.SamplesPerLight; ++isample)

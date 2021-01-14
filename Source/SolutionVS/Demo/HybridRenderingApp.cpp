@@ -1115,10 +1115,16 @@ int HybridRenderingApp::Run()
 	sunLight2.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere * 0.5;
 	sunLight2.Direction = { 0.8018f,-0.26726f,-0.5345f };
 	sunLight2.Size = SolarDiskHalfAngleTangent * 4.0f;
+	LightDesc sphericalLight1 = {}; // main directional light source
+	sphericalLight1.Type = LightType_Spherical;
+	sphericalLight1.Color = { 1.0f, 1.0f, 1.0f };
+	sphericalLight1.Position = { 10.0f, 10.0f, 10.0f };
+	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
+	sphericalLight1.Size = 0.5f;
 	LightingDesc lightingDesc = {};
-	lightingDesc.LightSourceCount = 2;
-	lightingDesc.LightSources[0] = sunLight;
-	lightingDesc.LightSources[1] = sunLight2;
+	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
+	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
+	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sphericalLight1;
 
 	// light source animation
 	ur_float lightCycleTime = 60.0f;
@@ -1213,9 +1219,26 @@ int HybridRenderingApp::Run()
 			sunDir.y = -powf(fabs(sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor)), 2.0f) * SunInclinationScale - SunInclinationBias;
 			sunDir.Normalize();
 			LightDesc& sunLight = lightingDesc.LightSources[0];
-			sunLight.Direction = sunDir;
-			sunLight.Intensity = lerp(SolarIlluminanceEvening, SolarIlluminanceNoon, std::min(1.0f, -sunLight.Direction.y / SunInclinationScale));
-			sunLight.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
+			if (LightType_Directional == sunLight.Type)
+			{
+				// main sun light
+				sunLight.Direction = sunDir;
+				sunLight.Intensity = lerp(SolarIlluminanceEvening, SolarIlluminanceNoon, std::min(1.0f, -sunLight.Direction.y / SunInclinationScale));
+				sunLight.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
+			}
+			for (ur_uint i = 0; i < lightingDesc.LightSourceCount; ++i)
+			{
+				// point light(s)
+				LightDesc& light = lightingDesc.LightSources[i];
+				if (LightType_Spherical == light.Type)
+				{
+					ur_float2 pos2d = ur_float2(light.Position.x, light.Position.z);
+					ur_float dist2d = pos2d.Length();
+					ur_float2 dir2d;
+					light.Position.x = -dist2d * cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
+					light.Position.z = -dist2d * sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
+				}
+			}
 
 			ctx.progress++;
 
