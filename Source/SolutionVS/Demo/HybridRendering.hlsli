@@ -19,7 +19,8 @@ struct SceneConstants
 	uint FrameNumber;
 	uint SamplesPerLight;
 	bool PerFrameJitter;
-	//uint __pad0;
+	float2 LightBufferDownscale; // d, 1/d
+	float2 __pad0;
 	LightingDesc Lighting;
 	AtmosphereDesc Atmosphere;
 	MeshMaterialDesc Material;

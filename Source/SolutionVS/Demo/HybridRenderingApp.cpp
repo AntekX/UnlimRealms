@@ -114,6 +114,11 @@ int HybridRenderingApp::Run()
 		GrafFormat::R8_UINT,
 	};
 
+	static const ur_bool LightingImageGenerateMips[LightingImageCount] = {
+		false,
+		false,
+	};
+
 	static GrafClearValue LightingBufferClearValues[LightingImageCount] = {
 		{ 1.0f, 0.0f, 0.0f, 0.0f },
 		{ 0.0f, 0.0f, 0.0f, 0.0f },
@@ -216,16 +221,18 @@ int HybridRenderingApp::Run()
 		// lighting buffer images
 		ur_uint lightingBufferWidth = width / std::max(1u, g_Settings.LightingBufferDownscale);
 		ur_uint lightingBufferHeight = height / std::max(1u, g_Settings.LightingBufferDownscale);
+		ur_uint lightBufferMipCount = (ur_uint)std::log2f(ur_float(std::max(lightingBufferWidth, lightingBufferHeight))) + 1;
 		lightingBufferSet.reset(new LightingBufferSet());
 		for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
 		{
 			auto& image = lightingBufferSet->images[imageId];
+			ur_uint imageMipCount = (LightingImageGenerateMips[imageId] ? lightBufferMipCount : 1);
 			res = grafSystem->CreateImage(image);
 			if (Failed(res)) return res;
 			GrafImageDesc imageDesc = {
 				GrafImageType::Tex2D,
 				LightingImageFormat[imageId],
-				ur_uint3(lightingBufferWidth, lightingBufferHeight, 1), 1,
+				ur_uint3(lightingBufferWidth, lightingBufferHeight, 1), imageMipCount,
 				ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ShaderInput) | ur_uint(GrafImageUsageFlag::ShaderReadWrite),
 				ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 			};
@@ -314,7 +321,8 @@ int HybridRenderingApp::Run()
 			ur_uint FrameNumber;
 			ur_uint SamplesPerLight;
 			ur_bool PerFrameJitter;
-			//ur_uint __pad0;
+			ur_float2 LightBufferDownscale;
+			ur_float2 __pad0;
 			LightingDesc Lighting;
 			Atmosphere::Desc Atmosphere;
 			MeshMaterialDesc Material;
@@ -961,6 +969,8 @@ int HybridRenderingApp::Run()
 			sceneConstants.LightBufferSize.y = (ur_float)lightBufferSize.y;
 			sceneConstants.LightBufferSize.z = 1.0f / sceneConstants.LightBufferSize.x;
 			sceneConstants.LightBufferSize.w = 1.0f / sceneConstants.LightBufferSize.y;
+			sceneConstants.LightBufferDownscale.x = (ur_float)g_Settings.LightingBufferDownscale;
+			sceneConstants.LightBufferDownscale.y = 1.0f / sceneConstants.LightBufferDownscale.x;
 			sceneConstants.DebugVec0 = this->debugVec0;
 			sceneConstants.Lighting = lightingDesc;
 			sceneConstants.Atmosphere = atmosphereDesc;

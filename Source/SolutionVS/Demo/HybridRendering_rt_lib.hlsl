@@ -58,25 +58,27 @@ void RayGenDirect()
 	uint occlusionPerLightPacked = 0xffffffff; // 4 lights x 8 bit shadow factor
 	uint tracingInfo = 0; // sub sample pos
 
+	// fetch at first sub sample
+	uint2 imagePos = dispatchIdx.xy * g_SceneCB.LightBufferDownscale.x;
 	#if (0)
-	// fetch at dispatch position center
-	uint2 imagePos = (uint2)((float2(dispatchIdx.xy) + 0.5) * g_SceneCB.LightBufferSize.zw * g_SceneCB.TargetSize.xy);
-	#else
-	// find best fitting sub position
-	uint2 imagePos = (uint2)(float2(dispatchIdx.xy) * g_SceneCB.LightBufferSize.zw * g_SceneCB.TargetSize.xy);
-	uint dispatchDownscale = g_SceneCB.TargetSize.x * g_SceneCB.LightBufferSize.z;
+	// find best fitting sub sample
+	uint dispatchDownscale = (uint)g_SceneCB.LightBufferDownscale.x;
 	[branch] if (dispatchDownscale > 1)
 	{
 		uint2 imageSubPos = 0;
-		float clipDepthMax = 0.0;
+		float clipDepthCrnt = 0.0;
 		for (uint iy = 0; iy < dispatchDownscale; ++iy)
 		{
 			for (uint ix = 0; ix < dispatchDownscale; ++ix)
 			{
 				float clipDepth = g_GeometryDepth.Load(int3(imagePos.x + ix, imagePos.y + iy, 0));
-				[flatten] if (clipDepth > clipDepthMax)
+				#if (0)
+				[flatten] if (clipDepth > clipDepthCrnt)
+				#else
+				[flatten] if (clipDepth < clipDepthCrnt)
+				#endif
 				{
-					clipDepthMax = clipDepth;
+					clipDepthCrnt = clipDepth;
 					imageSubPos = uint2(ix, iy);
 				}
 			}
@@ -121,6 +123,7 @@ void RayGenDirect()
 				float3 sampleDir = GetDiskSampleDirection(isample - 1);
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), lightDirTBN);
 				//ray.Direction = -g_SceneCB.Lighting.LightSources[ilight].Direction.xyz;
+				ray.TMax = (LightType_Directional == lightDesc.Type ? 1.0e+4 : length(lightDesc.Position - ray.Origin) - lightDesc.Size);
 
 				RayDataDirect rayData = (RayDataDirect)0;
 				rayData.occluded = true;

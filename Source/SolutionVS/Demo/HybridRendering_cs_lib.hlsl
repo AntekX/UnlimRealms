@@ -1,5 +1,6 @@
 
 #include "HybridRendering.hlsli"
+#include "HDRRender/HDRRender.hlsli"
 
 // common bindings
 
@@ -38,6 +39,15 @@ static const int2 QuadSampleOfs[4] = {
 	{ 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 }
 };
 
+// compute mips
+
+[shader("compute")]
+[numthreads(8, 8, 1)]
+void ComputeMips(const uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+	// TODO
+}
+
 // compute lighting
 
 [shader("compute")]
@@ -45,9 +55,12 @@ static const int2 QuadSampleOfs[4] = {
 void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint2 imagePos = dispatchThreadId.xy;
+	if (imagePos.x >= (uint)g_SceneCB.TargetSize.x || imagePos.y >= (uint)g_SceneCB.TargetSize.y)
+		return;
+
 	float clipDepth = g_GeometryDepth.Load(int3(imagePos.xy, 0));
 	bool isSky = (clipDepth >= 1.0);
-	float2 uvPos = (float2(imagePos)+0.5) * g_SceneCB.TargetSize.zw;
+	float2 uvPos = (float2(imagePos) + 0.5) * g_SceneCB.TargetSize.zw;
 	float3 clipPos = float3(float2(uvPos.x, 1.0 - uvPos.y) * 2.0 - 1.0, clipDepth);
 	float3 worldPos = ClipPosToWorldPos(clipPos, g_SceneCB.ViewProjInv);
 	float3 worldRay = normalize(worldPos - g_SceneCB.CameraPos.xyz);
@@ -66,11 +79,19 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		// read lighting buffer
 
+		float debugWeight = 1.0; // TEMP
 		float shadowPerLight[4] = { 0, 0, 0, 0 };
-		//uint lightBufferDownscale = uint(g_SceneCB.TargetSize.x * g_SceneCB.LightBufferSize.z);
+		float2 lightBufferPos = (float2(imagePos.xy) + 0.5) * g_SceneCB.LightBufferDownscale.y;
+		uint tracingInfo = g_TracingInfo.Load(int3(lightBufferPos.xy, 0));
+		uint2 tracingSamplePos = uint2(tracingInfo % (uint)g_SceneCB.LightBufferDownscale.x, tracingInfo / (uint)g_SceneCB.LightBufferDownscale.x); // sub sample used in ray tracing pass
+		uint2 tracingImagePos = tracingSamplePos + floor(lightBufferPos) * g_SceneCB.LightBufferDownscale.x; // full res position used for tracing
+		//debugWeight = (tracingImagePos.x == imagePos.x && tracingImagePos.y == imagePos.y ? 0.0 : 1.0);// TODO: debug tracing pos
+		GBufferData tracingGBData = LoadGBufferData(tracingImagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
+		float tracingConfidence = 1.0;
+		tracingConfidence *= saturate(dot(tracingGBData.Normal, gbData.Normal));
+		//tracingConfidence *= 1.0 - saturate(abs(tracingGBData.ClipDepth - clipDepth) / (clipDepth * 0.001));
 		#if (0)
 		// point upsampling
-		int2 lightBufferPos = (float2(imagePos.xy) + 0.5) * g_SceneCB.TargetSize.zw * g_SceneCB.LightBufferSize.xy;
 		uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
 		[unroll] for (uint j = 0; j < 4; ++j)
 		{
@@ -81,11 +102,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		/*uint frameHashOfs = g_SceneCB.FrameNumber * (uint)g_SceneCB.TargetSize.x * (uint)g_SceneCB.TargetSize.y * g_SceneCB.PerFrameJitter;
 		uint pixelHash = HashUInt(imagePos.x + imagePos.y * (uint)g_SceneCB.TargetSize.x + frameHashOfs);
 		float2 jitter2d = BlueNoiseDiskLUT64[pixelHash % 64] * 0.5;*/
-		uint lightBufferDownscale = g_SceneCB.TargetSize.x * g_SceneCB.LightBufferSize.z;
-		float2 lightBufferPos = ((float2(imagePos.xy) + 0.5) * g_SceneCB.TargetSize.zw * g_SceneCB.LightBufferSize.xy - 0.5);
-		uint tracingInfo = g_TracingInfo.Load(int3(lightBufferPos.xy, 0));
-		int2 tracingSamplePos = int2(tracingInfo % lightBufferDownscale, tracingInfo / lightBufferDownscale); // sub sample used in ray tracing pass
-		// TODO: use tracingSamplePos to fetch surface info from gbuffer to calculate porper sampleWeight
+		lightBufferPos -= 0.5; // offset to neighbourhood for bilinear filtering
 		float2 pf = frac(lightBufferPos);
 		float sampleWeight[4] = {
 			(1.0 - pf.x) * (1.0 - pf.y),
@@ -153,6 +170,11 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		// final
 
 		lightingResult = directLightColor + indirectLightColor;
+
+		if (g_SceneCB.DebugVec0[0] >= 1)
+		{
+			lightingResult = lerp(float3(1,0,0), float3(0,1,0), debugWeight) * ComputeLuminance(indirectLightColor);
+		}
 	}
 
 	g_LightingTarget[imagePos] = float4(lightingResult, 1.0);
