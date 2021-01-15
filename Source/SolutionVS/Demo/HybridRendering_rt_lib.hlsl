@@ -66,17 +66,13 @@ void RayGenDirect()
 	[branch] if (dispatchDownscale > 1)
 	{
 		uint2 imageSubPos = 0;
-		float clipDepthCrnt = 0.0;
+		float clipDepthCrnt = 1.0;
 		for (uint iy = 0; iy < dispatchDownscale; ++iy)
 		{
 			for (uint ix = 0; ix < dispatchDownscale; ++ix)
 			{
 				float clipDepth = g_GeometryDepth.Load(int3(imagePos.x + ix, imagePos.y + iy, 0));
-				#if (0)
-				[flatten] if (clipDepth > clipDepthCrnt)
-				#else
 				[flatten] if (clipDepth < clipDepthCrnt)
-				#endif
 				{
 					clipDepthCrnt = clipDepth;
 					imageSubPos = uint2(ix, iy);
