@@ -79,17 +79,8 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		// read lighting buffer
 
-		float debugWeight = 1.0; // TEMP
 		float shadowPerLight[4] = { 0, 0, 0, 0 };
 		float2 lightBufferPos = (float2(imagePos.xy) + 0.5) * g_SceneCB.LightBufferDownscale.y;
-		uint tracingInfo = g_TracingInfo.Load(int3(lightBufferPos.xy, 0));
-		uint2 tracingSamplePos = uint2(tracingInfo % (uint)g_SceneCB.LightBufferDownscale.x, tracingInfo / (uint)g_SceneCB.LightBufferDownscale.x); // sub sample used in ray tracing pass
-		uint2 tracingImagePos = tracingSamplePos + floor(lightBufferPos) * g_SceneCB.LightBufferDownscale.x; // full res position used for tracing
-		//debugWeight = (tracingImagePos.x == imagePos.x && tracingImagePos.y == imagePos.y ? 0.0 : 1.0);// TODO: debug tracing pos
-		GBufferData tracingGBData = LoadGBufferData(tracingImagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
-		float tracingConfidence = 1.0;
-		tracingConfidence *= saturate(dot(tracingGBData.Normal, gbData.Normal));
-		//tracingConfidence *= 1.0 - saturate(abs(tracingGBData.ClipDepth - clipDepth) / (clipDepth * 0.001));
 		#if (0)
 		// point upsampling
 		uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
@@ -110,13 +101,40 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			(1.0 - pf.x) * pf.y,
 			pf.x * pf.y
 		};
+		
+		// per light buffer sample weights
+		float weightSum = 0.0;
 		[unroll] for (uint i = 0; i < 4; ++i)
+		{
+			int2 lightSamplePos = int2(clamp(lightBufferPos + QuadSampleOfs[i], float2(0, 0), g_SceneCB.LightBufferSize.xy - 1));
+			uint tracingInfo = g_TracingInfo.Load(int3(lightSamplePos.xy, 0));
+			uint2 tracingSamplePos = uint2(tracingInfo % (uint)g_SceneCB.LightBufferDownscale.x, tracingInfo / (uint)g_SceneCB.LightBufferDownscale.x); // sub sample used in ray tracing pass
+			uint2 tracingImagePos = tracingSamplePos + lightSamplePos * g_SceneCB.LightBufferDownscale.x; // full res position used for tracing
+			GBufferData tracingGBData = LoadGBufferData(tracingImagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
+			float tracingConfidence = 1.0;
+			tracingConfidence *= (g_SceneCB.DebugVec0[0] > 0 ? saturate(dot(tracingGBData.Normal, gbData.Normal)) : 1);
+			tracingConfidence *= (g_SceneCB.DebugVec0[1] > 0 ? 1.0 - saturate(abs(tracingGBData.ClipDepth - clipDepth) / (clipDepth * g_SceneCB.DebugVec0[1])) : 1);
+			sampleWeight[i] *= tracingConfidence;
+			weightSum += sampleWeight[i];
+		}
+		[flatten] if (weightSum > 0)
+		{
+			weightSum = rcp(weightSum);
+		}
+		else
+		{
+			weightSum = 1.0;
+			[unroll] for (i = 0; i < 4; ++i) sampleWeight[i] = 0.25;
+		}
+
+		// blend light buffer results
+		[unroll] for (/*uint */i = 0; i < 4; ++i)
 		{
 			int2 lightSamplePos = int2(clamp(lightBufferPos + QuadSampleOfs[i], float2(0, 0), g_SceneCB.LightBufferSize.xy - 1));
 			uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightSamplePos.xy, 0));
 			[unroll] for (uint j = 0; j < 4; ++j)
 			{
-				shadowPerLight[j] += float((shadowPerLightPacked >> (j * 0x8)) & 0xff) / 255.0 * sampleWeight[i];
+				shadowPerLight[j] += float((shadowPerLightPacked >> (j * 0x8)) & 0xff) / 255.0 * (sampleWeight[i] * weightSum);
 			}
 		}
 		#endif
@@ -170,11 +188,6 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		// final
 
 		lightingResult = directLightColor + indirectLightColor;
-
-		if (g_SceneCB.DebugVec0[0] >= 1)
-		{
-			lightingResult = lerp(float3(1,0,0), float3(0,1,0), debugWeight) * ComputeLuminance(indirectLightColor);
-		}
 	}
 
 	g_LightingTarget[imagePos] = float4(lightingResult, 1.0);
