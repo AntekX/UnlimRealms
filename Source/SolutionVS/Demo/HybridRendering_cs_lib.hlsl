@@ -112,8 +112,8 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			uint2 tracingImagePos = tracingSamplePos + lightSamplePos * g_SceneCB.LightBufferDownscale.x; // full res position used for tracing
 			GBufferData tracingGBData = LoadGBufferData(tracingImagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 			float tracingConfidence = 1.0;
-			tracingConfidence *= (g_SceneCB.DebugVec0[0] > 0 ? saturate(dot(tracingGBData.Normal, gbData.Normal)) : 1);
-			tracingConfidence *= (g_SceneCB.DebugVec0[1] > 0 ? 1.0 - saturate(abs(tracingGBData.ClipDepth - clipDepth) / (clipDepth * g_SceneCB.DebugVec0[1])) : 1);
+			tracingConfidence *= saturate(dot(tracingGBData.Normal, gbData.Normal));
+			tracingConfidence *= 1.0 - saturate(abs(tracingGBData.ClipDepth - clipDepth) / (clipDepth * 1.0e-4));
 			sampleWeight[i] *= tracingConfidence;
 			weightSum += sampleWeight[i];
 		}
