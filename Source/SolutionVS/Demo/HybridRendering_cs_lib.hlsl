@@ -11,7 +11,7 @@ Texture2D<float4>	g_GeometryImage0		: register(t1);
 Texture2D<float4>	g_GeometryImage1		: register(t2);
 Texture2D<float4>	g_GeometryImage2		: register(t3);
 Texture2D<uint>		g_ShadowResult			: register(t4);
-Texture2D<uint>		g_TracingInfo			: register(t5);
+Texture2D<uint2>	g_TracingInfo			: register(t5);
 RWTexture2D<float4>	g_LightingTarget		: register(u0);
 
 // lighting common
@@ -107,8 +107,8 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		[unroll] for (uint i = 0; i < 4; ++i)
 		{
 			int2 lightSamplePos = int2(clamp(lightBufferPos + QuadSampleOfs[i], float2(0, 0), g_SceneCB.LightBufferSize.xy - 1));
-			uint tracingInfo = g_TracingInfo.Load(int3(lightSamplePos.xy, 0));
-			uint2 tracingSamplePos = uint2(tracingInfo % (uint)g_SceneCB.LightBufferDownscale.x, tracingInfo / (uint)g_SceneCB.LightBufferDownscale.x); // sub sample used in ray tracing pass
+			uint tracingSampleId = g_TracingInfo.Load(int3(lightSamplePos.xy, 0)).x;
+			uint2 tracingSamplePos = uint2(tracingSampleId % (uint)g_SceneCB.LightBufferDownscale.x, tracingSampleId / (uint)g_SceneCB.LightBufferDownscale.x); // sub sample used in ray tracing pass
 			uint2 tracingImagePos = tracingSamplePos + lightSamplePos * g_SceneCB.LightBufferDownscale.x; // full res position used for tracing
 			GBufferData tracingGBData = LoadGBufferData(tracingImagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 			#if (1)

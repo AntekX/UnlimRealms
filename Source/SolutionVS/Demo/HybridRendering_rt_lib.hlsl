@@ -8,7 +8,9 @@ Texture2D<float>				g_GeometryDepth		: register(t0);
 Texture2D<float4>				g_GeometryImage0	: register(t1);
 Texture2D<float4>				g_GeometryImage1	: register(t2);
 Texture2D<float4>				g_GeometryImage2	: register(t3);
-RaytracingAccelerationStructure	g_SceneStructure	: register(t4);
+Texture2D<uint>					g_ShadowHistory		: register(t4);
+Texture2D<uint2>				g_TracingHistory	: register(t5);
+RaytracingAccelerationStructure	g_SceneStructure	: register(t6);
 RWTexture2D<uint>				g_ShadowTarget		: register(u0);
 RWTexture2D<uint>				g_TracingInfoTarget	: register(u1);
 
