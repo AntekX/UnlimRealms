@@ -10,6 +10,8 @@ struct SceneConstants
 	float4x4 Proj;
 	float4x4 ViewProj;
 	float4x4 ViewProjInv;
+	float4x4 ViewProjPrev;
+	float4x4 ViewProjInvPrev;
 	float4 CameraPos;
 	float4 CameraDir;
 	float4 TargetSize; // w, h, 1/w, 1/h

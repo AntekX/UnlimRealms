@@ -137,6 +137,7 @@ int HybridRenderingApp::Run()
 	struct LightingBufferSet
 	{
 		std::unique_ptr<GrafImage> images[LightingImageCountWithHistory];
+		ur_bool resetHistory;
 	};
 
 	std::vector<std::unique_ptr<GrafCommandList>> cmdListPerFrame;
@@ -244,6 +245,7 @@ int HybridRenderingApp::Run()
 			res = image->Initialize(grafDevice, { imageDesc });
 			if (Failed(res)) return res;
 		}
+		lightingBufferSet->resetHistory = true;
 
 		return res;
 	};
@@ -317,6 +319,8 @@ int HybridRenderingApp::Run()
 			ur_float4x4 Proj;
 			ur_float4x4 ViewProj;
 			ur_float4x4 ViewProjInv;
+			ur_float4x4 ViewProjPrev;
+			ur_float4x4 ViewProjInvPrev;
 			ur_float4 CameraPos;
 			ur_float4 CameraDir;
 			ur_float4 TargetSize;
@@ -961,6 +965,8 @@ int HybridRenderingApp::Run()
 
 			const ur_uint3& targetSize = renderTargetSet->renderTarget->GetImage(0)->GetDesc().Size;
 			const ur_uint3& lightBufferSize = lightingBufferSet->images[0]->GetDesc().Size;
+			sceneConstants.ViewProjPrev = (lightingBufferSet->resetHistory ? camera.GetViewProj() : sceneConstants.ViewProj);
+			sceneConstants.ViewProjInvPrev = (lightingBufferSet->resetHistory ? camera.GetViewProjInv() : sceneConstants.ViewProjInv);
 			sceneConstants.Proj = camera.GetProj();
 			sceneConstants.ViewProj = camera.GetViewProj();
 			sceneConstants.ViewProjInv = camera.GetViewProjInv();
@@ -1064,6 +1070,7 @@ int HybridRenderingApp::Run()
 			{
 				lightingBufferSet->images[imageId].swap(lightingBufferSet->images[LightingImageHistoryFirst + imageId]);
 			}
+			lightingBufferSet->resetHistory = false;
 		}
 
 		void ShowImgui()
@@ -1362,6 +1369,16 @@ int HybridRenderingApp::Run()
 				{
 					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::RayTracingReadWrite);
 				}
+				for (ur_uint imageId = LightingImageHistoryFirst; imageId < LightingImageCountWithHistory; ++imageId)
+				{
+					if (lightingBufferSet->resetHistory)
+					{
+						ur_uint imageUsage = (imageId % LightingImageCount);
+						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::TransferDst);
+						grafCmdListCrnt->ClearColorImage(lightingBufferSet->images[imageId].get(), LightingBufferClearValues[imageUsage]);
+					}
+					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::RayTracingRead);
+				}
 
 				if (demoScene != ur_null)
 				{
@@ -1379,9 +1396,9 @@ int HybridRenderingApp::Run()
 				}
 				for (ur_uint imageId = 0; imageId < LightingImageCountWithHistory; ++imageId)
 				{
-					ur_uint imageUsage = (imageId % LightingImageCount);
 					if (!grafDeviceDesc->RayTracing.RayTraceSupported)
 					{
+						ur_uint imageUsage = (imageId % LightingImageCount);
 						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::TransferDst);
 						grafCmdListCrnt->ClearColorImage(lightingBufferSet->images[imageId].get(), LightingBufferClearValues[imageUsage]);
 					}

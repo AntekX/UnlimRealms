@@ -12,7 +12,7 @@ Texture2D<uint>					g_ShadowHistory		: register(t4);
 Texture2D<uint2>				g_TracingHistory	: register(t5);
 RaytracingAccelerationStructure	g_SceneStructure	: register(t6);
 RWTexture2D<uint>				g_ShadowTarget		: register(u0);
-RWTexture2D<uint>				g_TracingInfoTarget	: register(u1);
+RWTexture2D<uint2>				g_TracingInfoTarget	: register(u1);
 
 // common functions
 
@@ -58,7 +58,7 @@ void RayGenDirect()
 	uint3 dispatchIdx = DispatchRaysIndex();
 	uint2 dispatchSize = (uint2)g_SceneCB.LightBufferSize.xy;
 	uint occlusionPerLightPacked = 0xffffffff; // 4 lights x 8 bit shadow factor
-	uint tracingInfo = 0; // sub sample pos
+	uint2 tracingInfo = 0; // sub sample pos & counter
 
 	// fetch at first sub sample
 	uint2 imagePos = dispatchIdx.xy * g_SceneCB.LightBufferDownscale.x;
@@ -82,7 +82,7 @@ void RayGenDirect()
 			}
 		}
 		imagePos += imageSubPos;
-		tracingInfo = imageSubPos.x + imageSubPos.y * dispatchDownscale;
+		tracingInfo[0] = imageSubPos.x + imageSubPos.y * dispatchDownscale;
 	}
 	#endif
 
@@ -147,6 +147,23 @@ void RayGenDirect()
 			#if (0)
 			float dbgValue = float(dispatchHash % 64) / 64;
 			occlusionPerLightPacked = 0xff00 + dbgValue * 0xff;
+			#endif
+		}
+
+		// apply accumulatd history
+		float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
+		clipPosPrev.xy /= clipPosPrev.w;
+		if (all(abs(clipPosPrev.xy) < 1.0))
+		{
+			uint2 dispatchPosPrev = uint2((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * dispatchSize.xy);
+			uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
+			uint occlusionPackedPrev = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
+			#if (0)
+			// TEMP: test
+			occlusionPerLightPacked = 0xffffff00 | uint(counter & 0xff);
+			tracingInfo[1] = min(counter + 1, 0xff);
+			#else
+			// TODO
 			#endif
 		}
 	}
