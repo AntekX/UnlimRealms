@@ -79,14 +79,15 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		// read lighting buffer
 
-		float shadowPerLight[4] = { 0, 0, 0, 0 };
+		float shadowPerLight[ShadowBufferEntriesPerPixel];
+		[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j) shadowPerLight[j] = 0.0;
 		float2 lightBufferPos = (float2(imagePos.xy) + 0.5) * g_SceneCB.LightBufferDownscale.y;
 		#if (0)
 		// point upsampling
 		uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
-		[unroll] for (uint j = 0; j < 4; ++j)
+		[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 		{
-			shadowPerLight[j] = float((shadowPerLightPacked >> (j * 0x8)) & 0xff) / 255.0;
+			shadowPerLight[j] = float((shadowPerLightPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask) / ShadowBufferEntryMask;
 		}
 		#else
 		// filtered upsampling
@@ -133,9 +134,9 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		{
 			int2 lightSamplePos = int2(clamp(lightBufferPos + QuadSampleOfs[i], float2(0, 0), g_SceneCB.LightBufferSize.xy - 1));
 			uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightSamplePos.xy, 0));
-			[unroll] for (uint j = 0; j < 4; ++j)
+			[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 			{
-				shadowPerLight[j] += float((shadowPerLightPacked >> (j * 0x8)) & 0xff) / 255.0 * sampleWeight[i];
+				shadowPerLight[j] += float((shadowPerLightPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask) / ShadowBufferEntryMask * sampleWeight[i];
 			}
 		}
 		#endif
@@ -173,7 +174,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		{
 			LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
 			float3 lightDir = (LightType_Directional == light.Type ? -light.Direction : normalize(light.Position.xyz - worldPos.xyz));
-			float shadowFactor = shadowPerLight[ilight];
+			float shadowFactor = (ilight < ShadowBufferEntriesPerPixel ? shadowPerLight[ilight] : 1.0);
 			float NoL = dot(lightDir, lightingParams.normal);
 			shadowFactor *= saturate(NoL  * 10.0); // approximate self shadowing at grazing angles
 			float specularOcclusion = shadowFactor;

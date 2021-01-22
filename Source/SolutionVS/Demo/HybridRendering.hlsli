@@ -54,9 +54,10 @@ struct MeshPixelOutput
 
 // Ray tracing settings
 
-static const uint AccumulatedSamplesCount = 63;
+static const uint AccumulatedSamplesCount = 0xff;
 static const uint ShadowBufferEntriesPerPixel = 4;
-static const uint ShadowBufferEntryBits = 8;
+static const uint ShadowBufferEntryMask = 0xff;
+static const uint ShadowBufferBitsPerEntry = 8;
 
 // Ray tracing shader table
 static const uint RTShaderId_MissDirect = 0;
