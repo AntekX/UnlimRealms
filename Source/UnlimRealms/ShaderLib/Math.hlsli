@@ -162,7 +162,7 @@ float2 Hammersley(const uint sampleId, const uint sampleCount)
 	bits = ((bits & 0x33333333) << 2) | ((bits & 0xCCCCCCCC) >> 2);
 	bits = ((bits & 0x0F0F0F0F) << 4) | ((bits & 0xF0F0F0F0) >> 4);
 	bits = ((bits & 0x00FF00FF) << 8) | ((bits & 0xFF00FF00) >> 8);
-	return float2(sampleId / float(sampleCount), bits / 4294967296u); // / 2^32
+	return float2(sampleId / float(sampleCount), bits / 4294967296.0); // / 2^32
 }
 
 float3 HemisphereSampleUniform(float u, float v)

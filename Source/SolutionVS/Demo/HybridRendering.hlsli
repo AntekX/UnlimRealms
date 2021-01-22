@@ -52,6 +52,12 @@ struct MeshPixelOutput
 	float4 Target2	: SV_Target2;
 };
 
+// Ray tracing settings
+
+static const uint AccumulatedSamplesCount = 63;
+static const uint ShadowBufferEntriesPerPixel = 4;
+static const uint ShadowBufferEntryBits = 8;
+
 // Ray tracing shader table
 static const uint RTShaderId_MissDirect = 0;
 

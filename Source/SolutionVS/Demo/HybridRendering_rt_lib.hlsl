@@ -22,9 +22,10 @@ float3 GetDiskSampleDirection(uint sampleId)
 	float2 dir2d = BlueNoiseDiskLUT64[sampleId % 64]; // [-1, 1]
 	return float3(dir2d.xy, 1.0);
 	#else
-	float2 p2d = Hammersley(sampleId % g_SceneCB.SamplesPerLight, g_SceneCB.SamplesPerLight) * 2.0 - 1.0;
+	const uint SampleCount = g_SceneCB.SamplesPerLight * max(1, g_SceneCB.DebugVec0[3] + 1);
+	float2 p2d = Hammersley(sampleId % SampleCount, SampleCount) * 2.0 - 1.0;
 	float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
-	return float3(dir.xy, 1.0);
+	return float3(p2d.xy, 1.0);
 	#endif
 }
 
@@ -109,8 +110,9 @@ void RayGenDirect()
 		ray.TMax = 1.0e+4;
 
 		// per light
-		occlusionPerLightPacked = 0x0;
-		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
+
+		float4 occlusionPerLight = 0;
+		for (uint ilight = 0; ilight < min(g_SceneCB.Lighting.LightSourceCount, ShadowBufferEntriesPerPixel); ++ilight)
 		{
 			LightDesc lightDesc = g_SceneCB.Lighting.LightSources[ilight];
 			float3x3 lightDirTBN = ComputeLightSamplingBasis(worldPos, lightDesc);
@@ -118,7 +120,7 @@ void RayGenDirect()
 
 			for (uint isample = 0; isample < g_SceneCB.SamplesPerLight; ++isample)
 			{
-				float3 sampleDir = GetDiskSampleDirection(isample - 1);
+				float3 sampleDir = GetDiskSampleDirection(isample + g_SceneCB.FrameNumber * g_SceneCB.SamplesPerLight * g_SceneCB.PerFrameJitter);
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), lightDirTBN);
 				//ray.Direction = -g_SceneCB.Lighting.LightSources[ilight].Direction.xyz;
 				ray.TMax = (LightType_Directional == lightDesc.Type ? 1.0e+4 : length(lightDesc.Position - ray.Origin) - lightDesc.Size);
@@ -142,29 +144,41 @@ void RayGenDirect()
 				shadowFactor += float(rayData.occluded);
 			}
 			shadowFactor = 1.0 - shadowFactor / g_SceneCB.SamplesPerLight;
-			occlusionPerLightPacked |= uint(shadowFactor * 0xff) << (ilight * 0x8);
-
-			#if (0)
-			float dbgValue = float(dispatchHash % 64) / 64;
-			occlusionPerLightPacked = 0xff00 + dbgValue * 0xff;
-			#endif
+			occlusionPerLight[ilight] = shadowFactor;
 		}
 
 		// apply accumulatd history
 		float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
 		clipPosPrev.xy /= clipPosPrev.w;
-		if (all(abs(clipPosPrev.xy) < 1.0))
+		if (all(abs(clipPosPrev.xy) < 1.0) && g_SceneCB.DebugVec0[3] > 0)
 		{
-			uint2 dispatchPosPrev = uint2((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * dispatchSize.xy);
+			float2 imagePosPrev = (clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy;
+			uint2 dispatchPosPrev = clamp(floor(imagePosPrev) * g_SceneCB.LightBufferDownscale.y, float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
+			//dispatchPosPrev = dispatchIdx.xy; // TEMP: exclude preprojection
 			uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
-			uint occlusionPackedPrev = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
-			#if (0)
-			// TEMP: test
-			occlusionPerLightPacked = 0xffffff00 | uint(counter & 0xff);
-			tracingInfo[1] = min(counter + 1, 0xff);
-			#else
-			// TODO
-			#endif
+			uint shadowHistoryPacked = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
+			[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
+			{
+				float occlusionPackedPrev = float((shadowHistoryPacked >> (j * 0x8)) & 0xff);
+				float occlusionAccumulated = occlusionPackedPrev / 0xff;
+				if (g_SceneCB.DebugVec0[2] > 0) occlusionPerLight[j] = g_SceneCB.DebugVec0[2]; // TEMP: override current data
+				occlusionAccumulated = lerp(occlusionPerLight[j], occlusionAccumulated, /*float(counter) / (counter + 1)*/g_SceneCB.DebugVec0[3] / (g_SceneCB.DebugVec0[3] + 1));
+				// note: following code guarantees minimal difference (if any) is applied to quantized result to overcome lack of precision at the end of the accumulation curve
+				float diff = occlusionPerLight[j] - occlusionAccumulated; // calculate difference before quantizing
+				diff = (diff > 0 ? 1.0f : (diff < 0 ? -1.0f : 0.0f));
+				occlusionAccumulated = floor(occlusionAccumulated * 0xff + 0.5); // quantize
+				occlusionAccumulated = occlusionPackedPrev + max(abs(occlusionAccumulated - occlusionPackedPrev), abs(diff)) * diff;
+				occlusionPerLight[j] = occlusionAccumulated / 0xff;
+			}
+			counter = clamp(counter + 1, 0, /*AccumulatedSamplesCount*/g_SceneCB.DebugVec0[3]);
+			tracingInfo[1] = counter;
+		}
+
+		// pack result
+		occlusionPerLightPacked = 0x0;
+		[unroll] for (uint j = 0; j < 4; ++j)
+		{
+			occlusionPerLightPacked |= uint(floor(occlusionPerLight[j] * 0xff + 0.5)) << (j * 0x8);
 		}
 	}
 

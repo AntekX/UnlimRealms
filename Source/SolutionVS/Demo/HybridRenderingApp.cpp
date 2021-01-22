@@ -1037,6 +1037,26 @@ int HybridRenderingApp::Run()
 
 			const ur_uint3& bufferSize = lightingBufferSet->images[0]->GetDesc().Size;
 			grafCmdList->DispatchRays(bufferSize.x, bufferSize.y, 1, &this->rayGenShaderTable, &this->rayMissShaderTable, &this->rayHitShaderTable, ur_null);
+
+			// TEST: check quantized accumulation
+			#if (0)
+			ur_uint dbgValues[256];
+			ur_float dbgSrc = 0.0f;
+			ur_float dbgAccumulated = 1.0f;
+			ur_float accumulatedWeight = 63.0f / 64.0f;
+			for (ur_uint i = 0; i < 256; ++i)
+			{
+				ur_float prevUnpacked = floor(dbgAccumulated * 255.0f + 0.5f);
+				dbgAccumulated = dbgSrc * (1.0f - accumulatedWeight) + dbgAccumulated * accumulatedWeight;
+				ur_float diff = dbgSrc - dbgAccumulated;
+				diff = (diff > 0 ? 1.0f : (diff < 0 ? -1.0f : 0.0f));
+				dbgAccumulated = floor(dbgAccumulated * 0xff + 0.5f);
+				dbgAccumulated = prevUnpacked + std::max(fabs(dbgAccumulated - prevUnpacked), fabs(diff)) * diff;
+				dbgValues[i] = ur_uint(dbgAccumulated);
+				dbgAccumulated = ur_float(dbgValues[i]) / 255.0f;
+			}
+			int t = 0;
+			#endif
 		}
 
 		void ComputeLighting(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet, GrafRenderTarget* lightingTarget)
