@@ -87,7 +87,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
 		[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 		{
-			shadowPerLight[j] = float((shadowPerLightPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask) / ShadowBufferEntryMask;
+			shadowPerLight[j] = ShadowBufferGetLightOcclusion(shadowPerLightPacked, j);
 		}
 		#else
 		// filtered upsampling
@@ -136,7 +136,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightSamplePos.xy, 0));
 			[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 			{
-				shadowPerLight[j] += float((shadowPerLightPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask) / ShadowBufferEntryMask * sampleWeight[i];
+				shadowPerLight[j] += ShadowBufferGetLightOcclusion(shadowPerLightPacked, j) * sampleWeight[i];
 			}
 		}
 		#endif

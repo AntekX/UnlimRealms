@@ -97,9 +97,9 @@ void RayGenDirect()
 		float3 worldPos = ImagePosToWorldPos(imagePos, g_SceneCB.TargetSize.zw, gbData.ClipDepth, g_SceneCB.ViewProjInv);
 		float distBasedEps = length(worldPos - g_SceneCB.CameraPos.xyz) * 5.0e-3;
 
-		uint frameHashOfs = g_SceneCB.FrameNumber * dispatchSize.x * dispatchSize.y * g_SceneCB.PerFrameJitter;
-		uint dispatchHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x + frameHashOfs);
-		float2 dispathNoise2d = BlueNoiseDiskLUT64[dispatchHash % 64];
+		uint dispatchConstHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x);
+		uint dispatchCrntHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x * (1 + g_SceneCB.FrameNumber * g_SceneCB.PerFrameJitter));
+		float2 dispathNoise2d = BlueNoiseDiskLUT64[dispatchCrntHash % 64];
 		float3x3 dispatchSamplingFrame;
 		dispatchSamplingFrame[2] = float3(0.0, 0.0, 1.0);
 		dispatchSamplingFrame[0] = normalize(float3(dispathNoise2d.xy, 0.0));
@@ -110,11 +110,11 @@ void RayGenDirect()
 		ray.TMin = 1.0e-3;
 		ray.TMax = 1.0e+4;
 
-		// per light
-
+		occlusionPerLightPacked = 0x0;
 		float occlusionPerLight[ShadowBufferEntriesPerPixel];
 		[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j) occlusionPerLight[j] = 1.0;
 
+		// per light
 		for (uint ilight = 0; ilight < min(g_SceneCB.Lighting.LightSourceCount, ShadowBufferEntriesPerPixel); ++ilight)
 		{
 			LightDesc lightDesc = g_SceneCB.Lighting.LightSources[ilight];
@@ -123,9 +123,8 @@ void RayGenDirect()
 
 			for (uint isample = 0; isample < g_SceneCB.SamplesPerLight; ++isample)
 			{
-				float3 sampleDir = GetDiskSampleDirection(isample + g_SceneCB.FrameNumber * g_SceneCB.SamplesPerLight * g_SceneCB.PerFrameJitter);
+				float3 sampleDir = GetDiskSampleDirection(isample + g_SceneCB.FrameNumber * g_SceneCB.SamplesPerLight * g_SceneCB.PerFrameJitter + dispatchConstHash);
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), lightDirTBN);
-				//ray.Direction = -g_SceneCB.Lighting.LightSources[ilight].Direction.xyz;
 				ray.TMax = (LightType_Directional == lightDesc.Type ? 1.0e+4 : length(lightDesc.Position - ray.Origin) - lightDesc.Size);
 
 				RayDataDirect rayData = (RayDataDirect)0;
@@ -157,23 +156,21 @@ void RayGenDirect()
 		{
 			float2 imagePosPrev = (clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy;
 			uint2 dispatchPosPrev = clamp(floor(imagePosPrev) * g_SceneCB.LightBufferDownscale.y, float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
-			//dispatchPosPrev = dispatchIdx.xy; // TEMP: exclude preprojection
 			uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
 			uint shadowHistoryPacked = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
 			[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 			{
-				float occlusionPackedPrev = float((shadowHistoryPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask);
-				float occlusionAccumulated = occlusionPackedPrev / ShadowBufferEntryMask;
-				if (g_SceneCB.DebugVec0[2] > 0) occlusionPerLight[j] = g_SceneCB.DebugVec0[2]; // TEMP: override current data
+				uint occlusionPackedPrev = ((shadowHistoryPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask);
+				float occlusionAccumulated = ShadowBufferEntryUnpack(occlusionPackedPrev);
 				occlusionAccumulated = lerp(occlusionPerLight[j], occlusionAccumulated, float(counter) / (counter + 1)/*g_SceneCB.DebugVec0[3] / (g_SceneCB.DebugVec0[3] + 1)*/);
 				#if (1)
 				// note: following code guarantees minimal difference (if any) is applied to quantized result to overcome lack of precision at the end of the accumulation curve
 				const float diffEps = 1.0e-4;
 				float diff = occlusionPerLight[j] - occlusionAccumulated; // calculate difference before quantizing
 				diff = (diff > diffEps ? 1.0f : (diff < -diffEps ? -1.0f : 0.0f));
-				occlusionAccumulated = floor(occlusionAccumulated * ShadowBufferEntryMask + 0.5); // quantize
+				occlusionAccumulated = (float)ShadowBufferEntryPack(occlusionAccumulated); // quantize
 				occlusionAccumulated = occlusionPackedPrev + max(abs(occlusionAccumulated - occlusionPackedPrev), abs(diff)) * diff;
-				occlusionPerLight[j] = occlusionAccumulated / ShadowBufferEntryMask;
+				occlusionPerLight[j] = ShadowBufferEntryUnpack(occlusionAccumulated);
 				#else
 				occlusionPerLight[j] = occlusionAccumulated;
 				#endif
@@ -183,10 +180,9 @@ void RayGenDirect()
 		}
 
 		// pack result
-		occlusionPerLightPacked = 0x0;
 		[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 		{
-			occlusionPerLightPacked |= uint(min(floor(occlusionPerLight[j] * ShadowBufferEntryMask + 0.5), ShadowBufferEntryMask)) << (j * ShadowBufferBitsPerEntry);
+			occlusionPerLightPacked |= ShadowBufferEntryPack(occlusionPerLight[j]) << (j * ShadowBufferBitsPerEntry);
 		}
 	}
 

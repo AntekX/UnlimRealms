@@ -52,12 +52,29 @@ struct MeshPixelOutput
 	float4 Target2	: SV_Target2;
 };
 
-// Ray tracing settings
+// Shadow buffer
+// following setup considers R32_UINT format
 
-static const uint AccumulatedSamplesCount = 0xff;
+static const uint ShadowBufferAccumulatedSamples = 0xff;
 static const uint ShadowBufferEntriesPerPixel = 4;
 static const uint ShadowBufferEntryMask = 0xff;
 static const uint ShadowBufferBitsPerEntry = 8;
+
+float ShadowBufferEntryUnpack(uint entryPacked)
+{
+	return float(entryPacked) / ShadowBufferEntryMask;
+}
+
+uint ShadowBufferEntryPack(float shadowFactor)
+{
+	return (uint)min(floor(shadowFactor * ShadowBufferEntryMask + 0.5), ShadowBufferEntryMask);
+}
+
+float ShadowBufferGetLightOcclusion(uint bufferData, uint lightIdx)
+{
+	uint entryData = (bufferData >> (lightIdx * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask;
+	return ShadowBufferEntryUnpack(entryData);
+}
 
 // Ray tracing shader table
 static const uint RTShaderId_MissDirect = 0;

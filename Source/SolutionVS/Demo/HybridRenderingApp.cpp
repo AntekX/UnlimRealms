@@ -1179,8 +1179,8 @@ int HybridRenderingApp::Run()
 	sphericalLight1.Size = 0.5f;
 	LightingDesc lightingDesc = {};
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
-	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sphericalLight1;
+	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
 
 	// light source animation
 	ur_float lightCycleTime = 60.0f;
