@@ -17,12 +17,14 @@ struct SceneConstants
 	float4 TargetSize; // w, h, 1/w, 1/h
 	float4 LightBufferSize; // w, h, 1/w, 1/h
 	float4 DebugVec0;
-	bool OverrideMaterial;
-	uint FrameNumber;
-	uint SamplesPerLight;
-	bool PerFrameJitter;
 	float2 LightBufferDownscale; // d, 1/d
 	float2 __pad0;
+	uint FrameNumber;
+	uint SamplesPerLight;
+	uint AccumulationFrameCount;
+	bool PerFrameJitter;
+	float3 __pad1;
+	bool OverrideMaterial;
 	LightingDesc Lighting;
 	AtmosphereDesc Atmosphere;
 	MeshMaterialDesc Material;
@@ -53,9 +55,13 @@ struct MeshPixelOutput
 };
 
 // Shadow buffer
-// following setup considers R32_UINT format
 
-static const uint ShadowBufferAccumulatedSamples = 0xff;
+#define SHADOW_BUFFER_ONE_LIGHT_PER_FRAME 0 // enables light sources tracing distribution between multiple frames (requires temporal accumulation enabled)
+#define SHADOW_BUFFER_UINT32 0
+
+#if (SHADOW_BUFFER_UINT32)
+
+// following setup considers R32_UINT format
 static const uint ShadowBufferEntriesPerPixel = 4;
 static const uint ShadowBufferEntryMask = 0xff;
 static const uint ShadowBufferBitsPerEntry = 8;
@@ -75,6 +81,13 @@ float ShadowBufferGetLightOcclusion(uint bufferData, uint lightIdx)
 	uint entryData = (bufferData >> (lightIdx * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask;
 	return ShadowBufferEntryUnpack(entryData);
 }
+
+#else
+
+// 4 channel unorm or float buffer
+static const uint ShadowBufferEntriesPerPixel = 4;
+
+#endif // shadow buffer
 
 // Ray tracing shader table
 static const uint RTShaderId_MissDirect = 0;

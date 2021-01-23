@@ -26,6 +26,7 @@ struct Settings
 {
 	ur_uint LightingBufferDownscale = 2;
 	ur_uint RaytraceSamplesPerLight = 32;
+	ur_uint RaytraceAccumulationFrameCount = 0;
 	ur_bool RaytracePerFrameJitter = false;
 } g_Settings;
 
@@ -114,7 +115,7 @@ int HybridRenderingApp::Run()
 	};
 
 	static const GrafFormat LightingImageFormat[LightingImageCount] = {
-		GrafFormat::R32_UINT,
+		GrafFormat::R16G16B16A16_UNORM,
 		GrafFormat::R8G8_UINT,
 	};
 
@@ -326,12 +327,14 @@ int HybridRenderingApp::Run()
 			ur_float4 TargetSize;
 			ur_float4 LightBufferSize;
 			ur_float4 DebugVec0;
-			ur_bool OverrideMaterial;
-			ur_uint FrameNumber;
-			ur_uint SamplesPerLight;
-			ur_bool PerFrameJitter;
 			ur_float2 LightBufferDownscale;
 			ur_float2 __pad0;
+			ur_uint FrameNumber;
+			ur_uint SamplesPerLight;
+			ur_uint AccumulationFrameCount;
+			ur_bool PerFrameJitter;
+			ur_float3 __pad1;
+			ur_bool OverrideMaterial;
 			LightingDesc Lighting;
 			Atmosphere::Desc Atmosphere;
 			MeshMaterialDesc Material;
@@ -986,6 +989,7 @@ int HybridRenderingApp::Run()
 			sceneConstants.Lighting = lightingDesc;
 			sceneConstants.Atmosphere = atmosphereDesc;
 			sceneConstants.SamplesPerLight = g_Settings.RaytraceSamplesPerLight;
+			sceneConstants.AccumulationFrameCount = g_Settings.RaytraceAccumulationFrameCount;
 			sceneConstants.PerFrameJitter = g_Settings.RaytracePerFrameJitter;
 
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
@@ -1503,6 +1507,9 @@ int HybridRenderingApp::Run()
 						ImGui::InputInt("LightBufferDowncale", &editableInt);
 						g_Settings.LightingBufferDownscale = (ur_uint)std::max(1, std::min(16, editableInt));
 						canvasChanged |= (g_Settings.LightingBufferDownscale != lightingBufferDownscalePrev);
+						editableInt = (ur_int)g_Settings.RaytraceAccumulationFrameCount;
+						ImGui::InputInt("AccumulationFrameCount", &editableInt);
+						g_Settings.RaytraceAccumulationFrameCount = (ur_uint)std::max(0, std::min(1024, editableInt));
 						editableInt = (ur_int)g_Settings.RaytraceSamplesPerLight;
 						ImGui::InputInt("SamplesPerLight", &editableInt);
 						g_Settings.RaytraceSamplesPerLight = (ur_uint)std::max(1, std::min(1024, editableInt));

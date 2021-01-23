@@ -10,7 +10,7 @@ Texture2D<float>	g_GeometryDepth			: register(t0);
 Texture2D<float4>	g_GeometryImage0		: register(t1);
 Texture2D<float4>	g_GeometryImage1		: register(t2);
 Texture2D<float4>	g_GeometryImage2		: register(t3);
-Texture2D<uint>		g_ShadowResult			: register(t4);
+Texture2D<float4>	g_ShadowResult			: register(t4);
 Texture2D<uint2>	g_TracingInfo			: register(t5);
 RWTexture2D<float4>	g_LightingTarget		: register(u0);
 
@@ -79,17 +79,28 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		// read lighting buffer
 
+		#if (SHADOW_BUFFER_UINT32)
 		float shadowPerLight[ShadowBufferEntriesPerPixel];
 		[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j) shadowPerLight[j] = 0.0;
+		#else
+		float4 shadowPerLight = 0.0;
+		#endif
+
 		float2 lightBufferPos = (float2(imagePos.xy) + 0.5) * g_SceneCB.LightBufferDownscale.y;
 		#if (0)
+		
 		// point upsampling
+		#if (SHADOW_BUFFER_UINT32)
 		uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
 		[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 		{
 			shadowPerLight[j] = ShadowBufferGetLightOcclusion(shadowPerLightPacked, j);
 		}
 		#else
+		shadowPerLight = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
+		#endif
+		#else
+		
 		// filtered upsampling
 		/*uint frameHashOfs = g_SceneCB.FrameNumber * (uint)g_SceneCB.TargetSize.x * (uint)g_SceneCB.TargetSize.y * g_SceneCB.PerFrameJitter;
 		uint pixelHash = HashUInt(imagePos.x + imagePos.y * (uint)g_SceneCB.TargetSize.x + frameHashOfs);
@@ -133,11 +144,19 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		[unroll] for (/*uint */i = 0; i < 4; ++i)
 		{
 			int2 lightSamplePos = int2(clamp(lightBufferPos + QuadSampleOfs[i], float2(0, 0), g_SceneCB.LightBufferSize.xy - 1));
+			#if (SHADOW_BUFFER_UINT32)
 			uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightSamplePos.xy, 0));
 			[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 			{
 				shadowPerLight[j] += ShadowBufferGetLightOcclusion(shadowPerLightPacked, j) * sampleWeight[i];
 			}
+			#else
+			float4 shadowResultData = g_ShadowResult.Load(int3(lightSamplePos.xy, 0));
+			[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
+			{
+				shadowPerLight[j] += shadowResultData[j] * sampleWeight[i];
+			}
+			#endif
 		}
 		#endif
 

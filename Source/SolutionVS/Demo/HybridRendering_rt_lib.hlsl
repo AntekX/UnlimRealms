@@ -8,10 +8,10 @@ Texture2D<float>				g_GeometryDepth		: register(t0);
 Texture2D<float4>				g_GeometryImage0	: register(t1);
 Texture2D<float4>				g_GeometryImage1	: register(t2);
 Texture2D<float4>				g_GeometryImage2	: register(t3);
-Texture2D<uint>					g_ShadowHistory		: register(t4);
+Texture2D<float4>				g_ShadowHistory		: register(t4);
 Texture2D<uint2>				g_TracingHistory	: register(t5);
 RaytracingAccelerationStructure	g_SceneStructure	: register(t6);
-RWTexture2D<uint>				g_ShadowTarget		: register(u0);
+RWTexture2D<float4>				g_ShadowTarget		: register(u0);
 RWTexture2D<uint2>				g_TracingInfoTarget	: register(u1);
 
 // common functions
@@ -22,7 +22,7 @@ float3 GetDiskSampleDirection(uint sampleId)
 	float2 dir2d = BlueNoiseDiskLUT64[sampleId % 64]; // [-1, 1]
 	return float3(dir2d.xy, 1.0);
 	#else
-	const uint SampleCount = g_SceneCB.SamplesPerLight * max(1, g_SceneCB.DebugVec0[3] + 1);
+	const uint SampleCount = g_SceneCB.SamplesPerLight * max(1, g_SceneCB.AccumulationFrameCount + 1);
 	float2 p2d = Hammersley(sampleId % SampleCount, SampleCount);
 	//float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
 	float3 dir = normalize(float3(p2d.xy * 2.0 - 1.0, 1.0));
@@ -59,7 +59,11 @@ void RayGenDirect()
 {
 	uint3 dispatchIdx = DispatchRaysIndex();
 	uint2 dispatchSize = (uint2)g_SceneCB.LightBufferSize.xy;
+	#if (SHADOW_BUFFER_UINT32)
 	uint occlusionPerLightPacked = 0xffffffff;
+	#else
+	float4 occlusionPerLight = 1.0;
+	#endif
 	uint2 tracingInfo = 0; // sub sample pos & counter
 
 	// fetch at first sub sample
@@ -110,12 +114,19 @@ void RayGenDirect()
 		ray.TMin = 1.0e-3;
 		ray.TMax = 1.0e+4;
 
+		#if (SHADOW_BUFFER_UINT32)
 		occlusionPerLightPacked = 0x0;
 		float occlusionPerLight[ShadowBufferEntriesPerPixel];
 		[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j) occlusionPerLight[j] = 1.0;
+		#endif
 
 		// per light
-		for (uint ilight = 0; ilight < min(g_SceneCB.Lighting.LightSourceCount, ShadowBufferEntriesPerPixel); ++ilight)
+		uint lightCount = min(g_SceneCB.Lighting.LightSourceCount, ShadowBufferEntriesPerPixel);
+		#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
+		uint ilight = (g_SceneCB.FrameNumber % lightCount);
+		#else
+		for (uint ilight = 0; ilight < lightCount; ++ilight)
+		#endif
 		{
 			LightDesc lightDesc = g_SceneCB.Lighting.LightSources[ilight];
 			float3x3 lightDirTBN = ComputeLightSamplingBasis(worldPos, lightDesc);
@@ -152,17 +163,26 @@ void RayGenDirect()
 		// apply accumulatd history
 		float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
 		clipPosPrev.xy /= clipPosPrev.w;
-		if (all(abs(clipPosPrev.xy) < 1.0) && g_SceneCB.DebugVec0[3] > 0)
+		if (g_SceneCB.AccumulationFrameCount > 0 && all(abs(clipPosPrev.xy) < 1.0))
 		{
 			float2 imagePosPrev = (clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy;
 			uint2 dispatchPosPrev = clamp(floor(imagePosPrev) * g_SceneCB.LightBufferDownscale.y, float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
+			
 			uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
+			float historyWeight = float(counter) / (counter + 1);
+			
+			#if (SHADOW_BUFFER_UINT32)
 			uint shadowHistoryPacked = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
+			#else
+			float4 shadowHistoryData = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
+			#endif
 			[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 			{
+				#if (SHADOW_BUFFER_UINT32)
+				
 				uint occlusionPackedPrev = ((shadowHistoryPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask);
 				float occlusionAccumulated = ShadowBufferEntryUnpack(occlusionPackedPrev);
-				occlusionAccumulated = lerp(occlusionPerLight[j], occlusionAccumulated, float(counter) / (counter + 1)/*g_SceneCB.DebugVec0[3] / (g_SceneCB.DebugVec0[3] + 1)*/);
+				occlusionAccumulated = lerp(occlusionPerLight[j], occlusionAccumulated, historyWeight);
 				#if (1)
 				// note: following code guarantees minimal difference (if any) is applied to quantized result to overcome lack of precision at the end of the accumulation curve
 				const float diffEps = 1.0e-4;
@@ -174,20 +194,38 @@ void RayGenDirect()
 				#else
 				occlusionPerLight[j] = occlusionAccumulated;
 				#endif
+				#else
+
+				#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
+				occlusionPerLight[j] = lerp(occlusionPerLight[j], shadowHistoryData[j], (ilight == j ? historyWeight : 1.0));
+				#else
+				occlusionPerLight[j] = lerp(occlusionPerLight[j], shadowHistoryData[j], historyWeight);
+				#endif
+				#endif
 			}
-			counter = clamp(counter + 1, 0, /*AccumulatedSamplesCount*/g_SceneCB.DebugVec0[3]);
+			
+			#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
+			if (ilight == lightCount - 1)
+			#endif
+			counter = clamp(counter + 1, 0, g_SceneCB.AccumulationFrameCount);
 			tracingInfo[1] = counter;
 		}
 
+		#if (SHADOW_BUFFER_UINT32)
 		// pack result
 		[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 		{
 			occlusionPerLightPacked |= ShadowBufferEntryPack(occlusionPerLight[j]) << (j * ShadowBufferBitsPerEntry);
 		}
+		#endif
 	}
 
 	// write result
+	#if (SHADOW_BUFFER_UINT32)
 	g_ShadowTarget[dispatchIdx.xy] = occlusionPerLightPacked;
+	#else
+	g_ShadowTarget[dispatchIdx.xy] = occlusionPerLight;
+	#endif
 	g_TracingInfoTarget[dispatchIdx.xy] = tracingInfo;
 }
 
