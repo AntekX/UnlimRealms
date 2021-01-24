@@ -63,7 +63,9 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 	float2 uvPos = (float2(imagePos) + 0.5) * g_SceneCB.TargetSize.zw;
 	float3 clipPos = float3(float2(uvPos.x, 1.0 - uvPos.y) * 2.0 - 1.0, clipDepth);
 	float3 worldPos = ClipPosToWorldPos(clipPos, g_SceneCB.ViewProjInv);
-	float3 worldRay = normalize(worldPos - g_SceneCB.CameraPos.xyz);
+	float3 worldRay = worldPos - g_SceneCB.CameraPos.xyz;
+	float worldDist = length(worldRay);
+	worldRay /= worldDist;
 
 	float3 lightingResult = 0.0;
 
@@ -123,19 +125,20 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			uint2 tracingSamplePos = uint2(tracingSampleId % (uint)g_SceneCB.LightBufferDownscale.x, tracingSampleId / (uint)g_SceneCB.LightBufferDownscale.x); // sub sample used in ray tracing pass
 			uint2 tracingImagePos = tracingSamplePos + lightSamplePos * g_SceneCB.LightBufferDownscale.x; // full res position used for tracing
 			GBufferData tracingGBData = LoadGBufferData(tracingImagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
-			#if (1)
-			tracingConfidence[i] *= saturate(dot(tracingGBData.Normal, gbData.Normal));
-			tracingConfidence[i] *= 1.0 - saturate(abs(tracingGBData.ClipDepth - clipDepth) / (clipDepth * 1.0e-4));
+			#if (0)
+			float depthDeltaTolerance = clipDepth * 1.0e-4;
+			tracingConfidence[i] *= 1.0 - saturate(abs(tracingGBData.ClipDepth - clipDepth) / depthDeltaTolerance);
 			#else
+			float surfaceDistTolerance = worldDist * 1.0e-2;
 			float3 tracingOrigin = ImagePosToWorldPos(tracingImagePos, g_SceneCB.TargetSize.zw, tracingGBData.ClipDepth, g_SceneCB.ViewProjInv);
-			tracingConfidence[i] *= saturate(dot(tracingGBData.Normal, gbData.Normal));
-			tracingConfidence[i] *= saturate(abs(dot(tracingOrigin - worldPos, gbData.Normal)));
+			tracingConfidence[i] *= 1.0 - saturate(abs(dot(tracingOrigin - worldPos, gbData.Normal)) / surfaceDistTolerance);
 			#endif
+			tracingConfidence[i] *= saturate(dot(tracingGBData.Normal, gbData.Normal));
 		}
-		float debugValue = max(max(tracingConfidence[0], tracingConfidence[1]), max(tracingConfidence[2], tracingConfidence[3])) > 1.0e-6 ? 1 : 0;
+		float debugValue = max(max(tracingConfidence[0], tracingConfidence[1]), max(tracingConfidence[2], tracingConfidence[3])) > 0.0 ? 1 : 0;
 		tracingConfidence *= sampleWeight;
 		float tracingConfidenceSum = dot(tracingConfidence, 1.0);
-		[flatten] if (tracingConfidenceSum > 1.0e-6)
+		[flatten] if (tracingConfidenceSum > 0.0)
 		{
 			sampleWeight = tracingConfidence * rcp(tracingConfidenceSum);
 		}
