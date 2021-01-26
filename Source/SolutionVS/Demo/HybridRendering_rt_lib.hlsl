@@ -8,9 +8,10 @@ Texture2D<float>				g_GeometryDepth		: register(t0);
 Texture2D<float4>				g_GeometryImage0	: register(t1);
 Texture2D<float4>				g_GeometryImage1	: register(t2);
 Texture2D<float4>				g_GeometryImage2	: register(t3);
-Texture2D<float4>				g_ShadowHistory		: register(t4);
-Texture2D<uint2>				g_TracingHistory	: register(t5);
-RaytracingAccelerationStructure	g_SceneStructure	: register(t6);
+Texture2D<float>				g_DepthHistory		: register(t4);
+Texture2D<float4>				g_ShadowHistory		: register(t5);
+Texture2D<uint2>				g_TracingHistory	: register(t6);
+RaytracingAccelerationStructure	g_SceneStructure	: register(t7);
 RWTexture2D<float4>				g_ShadowTarget		: register(u0);
 RWTexture2D<uint2>				g_TracingInfoTarget	: register(u1);
 
@@ -165,10 +166,25 @@ void RayGenDirect()
 		clipPosPrev.xy /= clipPosPrev.w;
 		if (g_SceneCB.AccumulationFrameCount > 0 && all(abs(clipPosPrev.xy) < 1.0))
 		{
-			float2 imagePosPrev = (clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy;
+			float2 imagePosPrev = clamp((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);
 			uint2 dispatchPosPrev = clamp(floor(imagePosPrev) * g_SceneCB.LightBufferDownscale.y, float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
 			
+			float clipDepthPrev = g_DepthHistory.Load(int3(imagePosPrev.xy, 0));
+			bool isSkyPrev = (clipDepthPrev >= 1.0);
+			#if (1)
+			float depthDeltaTolerance = gbData.ClipDepth * /*1.0e-4*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
+			float surfaceHistoryWeight = 1.0 - saturate(abs(gbData.ClipDepth - clipDepthPrev) / depthDeltaTolerance);
+			#else
+			// TODO
+			float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
+			float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
+			float worldPosTolerance = viewDepth * /*1.0e-2*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
+			float surfaceHistoryWeight = 1.0 - saturate(length(worldPos - worldPosPrev) / worldPosTolerance);
+			#endif
+			occlusionPerLight[3] = any(surfaceHistoryWeight); // TEMP: debug data
+			
 			uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
+			counter = (uint)floor(float(counter) * any(surfaceHistoryWeight) + 0.5);
 			float historyWeight = float(counter) / (counter + 1);
 			
 			#if (SHADOW_BUFFER_UINT32)

@@ -115,7 +115,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			(1.0 - pf.x) * pf.y,
 			pf.x * pf.y
 		};
-		
+
 		// per light buffer sample weights
 		float4 tracingConfidence = 1.0;
 		[unroll] for (uint i = 0; i < 4; ++i)
@@ -216,7 +216,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		// TEMP:
 		if (g_SceneCB.DebugVec0[0] > 0)
 		{
-			lightingResult = lerp(float3(1,0,0), float3(0,1,0), debugValue) * indirectLightColor;
+			lightingResult = lerp(float3(1,0,0), float3(0,1,0), /*debugValue*/shadowPerLight[3]) * indirectLightColor;
 		}
 	}
 

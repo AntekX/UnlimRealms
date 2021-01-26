@@ -86,7 +86,12 @@ int HybridRenderingApp::Run()
 		RenderTargetImageUsage_Geometry1, // xyz: worldNormal; w: unused;
 		RenderTargetImageUsage_Geometry2, // X: roughness; y: reflectance; zw: unused;
 		RenderTargetImageCount,
-		RenderTargetColorImageCount = RenderTargetImageCount - 1
+		RenderTargetColorImageCount = RenderTargetImageCount - 1,
+		
+		RenderTargetHistoryFirst = RenderTargetImageCount,
+		RenderTargetImageUsage_DepthHistory = RenderTargetHistoryFirst,
+		RenderTargetImageCountWithHistory,
+		RenderTargetFrameCount = 2
 	};
 	
 	static const GrafFormat RenderTargetImageFormat[RenderTargetImageCount] = {
@@ -131,14 +136,16 @@ int HybridRenderingApp::Run()
 
 	struct RenderTargetSet
 	{
-		std::unique_ptr<GrafImage> images[RenderTargetImageCount];
-		std::unique_ptr<GrafRenderTarget> renderTarget;
+		std::unique_ptr<GrafImage> imageStorage[RenderTargetImageCountWithHistory];
+		std::unique_ptr<GrafRenderTarget> renderTargetStorage[RenderTargetFrameCount];
+		GrafImage* images[RenderTargetImageCount * RenderTargetFrameCount];
+		GrafRenderTarget* renderTarget;
+		ur_bool resetHistory;
 	};
 
 	struct LightingBufferSet
 	{
 		std::unique_ptr<GrafImage> images[LightingImageCountWithHistory];
-		ur_bool resetHistory;
 	};
 
 	std::vector<std::unique_ptr<GrafCommandList>> cmdListPerFrame;
@@ -186,14 +193,22 @@ int HybridRenderingApp::Run()
 
 		// rasterization buffer images
 		renderTargetSet.reset(new RenderTargetSet());
-		GrafImage* renderTargetImages[RenderTargetImageCount];
-		for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
+		for (ur_uint imageId = 0; imageId < RenderTargetImageCount * RenderTargetFrameCount; ++imageId)
 		{
-			auto& image = renderTargetSet->images[imageId];
+			ur_uint imageUsage = (imageId % RenderTargetImageCount);
+			ur_uint imageFrame = (imageId / RenderTargetImageCount);
+			if (imageId >= RenderTargetImageCountWithHistory)
+			{
+				// no history for this image type, reference image from frame zero
+				renderTargetSet->images[imageUsage + imageFrame * RenderTargetImageCount] = renderTargetSet->imageStorage[imageUsage].get();
+				continue;
+			}
+			
+			auto& image = renderTargetSet->imageStorage[imageId];
 			res = grafSystem->CreateImage(image);
 			if (Failed(res)) return res;
 			ur_uint imageUsageFlags = ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ShaderInput);
-			if (RenderTargetImageUsage_Depth == imageId)
+			if (RenderTargetImageUsage_Depth == imageUsage)
 			{
 				imageUsageFlags |= ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget);
 			}
@@ -203,26 +218,30 @@ int HybridRenderingApp::Run()
 			}
 			GrafImageDesc imageDesc = {
 				GrafImageType::Tex2D,
-				RenderTargetImageFormat[imageId],
+				RenderTargetImageFormat[imageUsage],
 				ur_uint3(width, height, 1), 1,
 				imageUsageFlags,
 				ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 			};
 			res = image->Initialize(grafDevice, { imageDesc });
 			if (Failed(res)) return res;
-			renderTargetImages[imageId] = image.get();
+			renderTargetSet->images[imageUsage + imageFrame * RenderTargetImageCount] = image.get();
 		}
 
-		// rasterization pass render target
-		res = grafSystem->CreateRenderTarget(renderTargetSet->renderTarget);
-		if (Failed(res)) return res;
-		GrafRenderTarget::InitParams renderTargetParams = {
-			rasterRenderPass.get(),
-			renderTargetImages,
-			ur_array_size(renderTargetImages)
-		};
-		res = renderTargetSet->renderTarget->Initialize(grafDevice, renderTargetParams);
-		if (Failed(res)) return res;
+		// rasterization pass render target(s)
+		for (ur_uint frameId = 0; frameId < RenderTargetFrameCount; ++frameId)
+		{
+			res = grafSystem->CreateRenderTarget(renderTargetSet->renderTargetStorage[frameId]);
+			if (Failed(res)) return res;
+			GrafRenderTarget::InitParams renderTargetParams = {
+				rasterRenderPass.get(),
+				&renderTargetSet->images[frameId * RenderTargetImageCount],
+				RenderTargetImageCount
+			};
+			res = renderTargetSet->renderTargetStorage[frameId]->Initialize(grafDevice, renderTargetParams);
+			if (Failed(res)) return res;
+		}
+		renderTargetSet->renderTarget = renderTargetSet->renderTargetStorage[0].get();
 
 		// lighting buffer images
 		ur_uint lightingBufferWidth = width / std::max(1u, g_Settings.LightingBufferDownscale);
@@ -246,7 +265,8 @@ int HybridRenderingApp::Run()
 			res = image->Initialize(grafDevice, { imageDesc });
 			if (Failed(res)) return res;
 		}
-		lightingBufferSet->resetHistory = true;
+
+		renderTargetSet->resetHistory = true;
 
 		return res;
 	};
@@ -320,6 +340,7 @@ int HybridRenderingApp::Run()
 			ur_float4x4 Proj;
 			ur_float4x4 ViewProj;
 			ur_float4x4 ViewProjInv;
+			ur_float4x4 ProjPrev;
 			ur_float4x4 ViewProjPrev;
 			ur_float4x4 ViewProjInvPrev;
 			ur_float4 CameraPos;
@@ -743,8 +764,8 @@ int HybridRenderingApp::Run()
 
 				GrafDescriptorRangeDesc raytraceDescTableLayoutRanges[] = {
 					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-					{ GrafDescriptorType::Texture, 0, 6 },
-					{ GrafDescriptorType::AccelerationStructure, 6, 1},
+					{ GrafDescriptorType::Texture, 0, 7 },
+					{ GrafDescriptorType::AccelerationStructure, 7, 1},
 					{ GrafDescriptorType::RWTexture, 0, 2 },
 				};
 				GrafDescriptorTableLayoutDesc raytraceDescTableLayoutDesc = {
@@ -968,8 +989,9 @@ int HybridRenderingApp::Run()
 
 			const ur_uint3& targetSize = renderTargetSet->renderTarget->GetImage(0)->GetDesc().Size;
 			const ur_uint3& lightBufferSize = lightingBufferSet->images[0]->GetDesc().Size;
-			sceneConstants.ViewProjPrev = (lightingBufferSet->resetHistory ? camera.GetViewProj() : sceneConstants.ViewProj);
-			sceneConstants.ViewProjInvPrev = (lightingBufferSet->resetHistory ? camera.GetViewProjInv() : sceneConstants.ViewProjInv);
+			sceneConstants.ProjPrev = (renderTargetSet->resetHistory ? camera.GetProj() : sceneConstants.Proj);
+			sceneConstants.ViewProjPrev = (renderTargetSet->resetHistory ? camera.GetViewProj() : sceneConstants.ViewProj);
+			sceneConstants.ViewProjInvPrev = (renderTargetSet->resetHistory ? camera.GetViewProjInv() : sceneConstants.ViewProjInv);
 			sceneConstants.Proj = camera.GetProj();
 			sceneConstants.ViewProj = camera.GetViewProj();
 			sceneConstants.ViewProjInv = camera.GetViewProjInv();
@@ -1026,11 +1048,12 @@ int HybridRenderingApp::Run()
 			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 			{
-				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId].get());
+				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
 			}
-			descriptorTable->SetImage(4, lightingBufferSet->images[LightingImageUsage_DirectShadowHistory].get());
-			descriptorTable->SetImage(5, lightingBufferSet->images[LightingImageUsage_TracingInfoHistory].get());
-			descriptorTable->SetAccelerationStructure(6, this->accelerationStructureTL.get());
+			descriptorTable->SetImage(4, renderTargetSet->images[RenderTargetImageUsage_DepthHistory]);
+			descriptorTable->SetImage(5, lightingBufferSet->images[LightingImageUsage_DirectShadowHistory].get());
+			descriptorTable->SetImage(6, lightingBufferSet->images[LightingImageUsage_TracingInfoHistory].get());
+			descriptorTable->SetAccelerationStructure(7, this->accelerationStructureTL.get());
 			descriptorTable->SetRWImage(0, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
 			descriptorTable->SetRWImage(1, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
 
@@ -1073,7 +1096,7 @@ int HybridRenderingApp::Run()
 			descriptorTable->SetSampler(0, this->samplerBilinear.get());
 			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 			{
-				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId].get());
+				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
 			}
 			descriptorTable->SetImage(4, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
 			descriptorTable->SetImage(5, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
@@ -1088,13 +1111,19 @@ int HybridRenderingApp::Run()
 			const ur_uint3& targetSize = lightingTarget->GetImage(0)->GetDesc().Size;
 			grafCmdList->Dispatch((targetSize.x - 1) / groupSize.x + 1, (targetSize.y - 1) / groupSize.y + 1, 1);
 
-			// swap light buffer current and history images
+			// swap current and history render targets and lighting buffers
 
+			renderTargetSet->renderTargetStorage[0].swap(renderTargetSet->renderTargetStorage[1]);
+			renderTargetSet->renderTarget = renderTargetSet->renderTargetStorage[0].get();
+			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
+			{
+				std::swap(renderTargetSet->images[imageId], renderTargetSet->images[RenderTargetHistoryFirst + imageId]);
+			}
 			for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
 			{
 				lightingBufferSet->images[imageId].swap(lightingBufferSet->images[LightingImageHistoryFirst + imageId]);
 			}
-			lightingBufferSet->resetHistory = false;
+			renderTargetSet->resetHistory = false;
 		}
 
 		void ShowImgui()
@@ -1358,20 +1387,21 @@ int HybridRenderingApp::Run()
 				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "RasterizePass", DebugLabelColorPass);
 				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 				{
-					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::TransferDst);
-					if (RenderTargetImageUsage_Depth == imageId)
+					ur_uint imageUsage = (imageId % RenderTargetImageCount);
+					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::TransferDst);
+					if (RenderTargetImageUsage_Depth == imageUsage)
 					{
-						grafCmdListCrnt->ClearDepthStencilImage(renderTargetSet->images[imageId].get(), RenderTargetClearValues[imageId]);
-						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::DepthStencilWrite);
+						grafCmdListCrnt->ClearDepthStencilImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
+						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::DepthStencilWrite);
 					}
 					else
 					{
-						grafCmdListCrnt->ClearColorImage(renderTargetSet->images[imageId].get(), RenderTargetClearValues[imageId]);
-						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ColorWrite);
+						grafCmdListCrnt->ClearColorImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
+						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::ColorWrite);
 					}
 				}
 
-				grafCmdListCrnt->BeginRenderPass(rasterRenderPass.get(), renderTargetSet->renderTarget.get());
+				grafCmdListCrnt->BeginRenderPass(rasterRenderPass.get(), renderTargetSet->renderTarget);
 
 				if (demoScene != ur_null)
 				{
@@ -1387,7 +1417,24 @@ int HybridRenderingApp::Run()
 				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "RayTracePass", DebugLabelColorPass);
 				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 				{
-					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::RayTracingRead);
+					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::RayTracingRead);
+				}
+				for (ur_uint imageId = RenderTargetHistoryFirst; imageId < RenderTargetImageCountWithHistory; ++imageId)
+				{
+					if (renderTargetSet->resetHistory)
+					{
+						ur_uint imageUsage = (imageId % RenderTargetImageCount);
+						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::TransferDst);
+						if (RenderTargetImageUsage_Depth == imageUsage)
+						{
+							grafCmdListCrnt->ClearDepthStencilImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
+						}
+						else
+						{
+							grafCmdListCrnt->ClearColorImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
+						}
+					}
+					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::RayTracingRead);
 				}
 				for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
 				{
@@ -1395,7 +1442,7 @@ int HybridRenderingApp::Run()
 				}
 				for (ur_uint imageId = LightingImageHistoryFirst; imageId < LightingImageCountWithHistory; ++imageId)
 				{
-					if (lightingBufferSet->resetHistory)
+					if (renderTargetSet->resetHistory)
 					{
 						ur_uint imageUsage = (imageId % LightingImageCount);
 						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::TransferDst);
@@ -1414,9 +1461,9 @@ int HybridRenderingApp::Run()
 			if (hdrRender != ur_null)
 			{
 				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "LightingPass", DebugLabelColorPass);
-				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
+				for (ur_uint imageId = 0; imageId < RenderTargetImageCountWithHistory; ++imageId)
 				{
-					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeRead);
+					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::ComputeRead);
 				}
 				for (ur_uint imageId = 0; imageId < LightingImageCountWithHistory; ++imageId)
 				{
