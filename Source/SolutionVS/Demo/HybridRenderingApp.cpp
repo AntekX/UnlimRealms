@@ -412,7 +412,7 @@ int HybridRenderingApp::Run()
 				const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 
 				this->meshId = meshId;
-				this->accelerationStructureHandle = ur_uint64(-1);
+				this->accelerationStructureHandle = 0;
 				this->verticesCount = verticesCount;
 				this->indicesCount = indicesCount;
 				ur_size vertexStride = sizeof(Vertex);
@@ -444,7 +444,7 @@ int HybridRenderingApp::Run()
 					ur_uint(GrafBufferUsageFlag::StorageBuffer) |
 					ur_uint(GrafBufferUsageFlag::RayTracing) |
 					ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
-				IBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
+				IBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 				IBParams.BufferDesc.SizeInBytes = indicesCount * sizeof(Index);
 
 				grafSystem->CreateBuffer(this->indexBuffer);
@@ -459,6 +459,7 @@ int HybridRenderingApp::Run()
 					GrafAccelerationStructureGeometryDesc accelStructGeomDescBL = {};
 					accelStructGeomDescBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
 					accelStructGeomDescBL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
+					accelStructGeomDescBL.VertexStride = ur_uint32(vertexStride);
 					accelStructGeomDescBL.IndexType = indexType;
 					accelStructGeomDescBL.PrimitiveCountMax = ur_uint32(indicesCount / 3);
 					accelStructGeomDescBL.VertexCountMax = ur_uint32(verticesCount);
@@ -478,7 +479,8 @@ int HybridRenderingApp::Run()
 
 					GrafAccelerationStructureTrianglesData trianglesData = {};
 					trianglesData.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
-					trianglesData.VertexStride = vertexStride;
+					trianglesData.VertexStride = ur_uint32(vertexStride);
+					trianglesData.VertexCount = ur_uint32(verticesCount);
 					trianglesData.VerticesDeviceAddress = vertexBuffer->GetDeviceAddress();
 					trianglesData.IndexType = indexType;
 					trianglesData.IndicesDeviceAddress = indexBuffer->GetDeviceAddress();
@@ -818,7 +820,7 @@ int HybridRenderingApp::Run()
 				ur_size sgHandleSize = grafDeviceDesc->RayTracing.ShaderGroupHandleSize;
 				ur_size shaderBufferSize = raytracePipelineParams.ShaderGroupCount * sgHandleSize;
 				GrafBuffer::InitParams shaderBufferParams;
-				shaderBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::TransferSrc);
+				shaderBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress) | ur_uint(GrafBufferUsageFlag::TransferSrc);
 				shaderBufferParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 				shaderBufferParams.BufferDesc.SizeInBytes = shaderBufferSize;
 				grafSystem->CreateBuffer(this->raytraceShaderHandlesBuffer);

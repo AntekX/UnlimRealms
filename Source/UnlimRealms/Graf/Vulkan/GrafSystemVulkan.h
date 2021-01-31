@@ -16,7 +16,7 @@
 #endif
 
 #define UR_GRAF_VULKAN_RAY_TRACING_KHR 0 // enables KHR ray tracing support
-#define UR_GRAF_VULKAN_RAY_TRACING_KHR_PROV 1 // TEMP: enbale provisionary version
+#define UR_GRAF_VULKAN_RAY_TRACING_KHR_PROV 0 // TEMP: enbale provisionary version
 #if (UR_GRAF_VULKAN_RAY_TRACING_KHR_PROV)
 #define VK_ENABLE_BETA_EXTENSIONS
 #endif
@@ -633,12 +633,13 @@ namespace UnlimRealms
 
 		Result Deinitialize();
 
-	#if defined(UR_GRAF_VULKAN_RAY_TRACING_KHR)
+	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		VkAccelerationStructureKHR vkAccelerationStructure;
 	#endif
 		VmaAllocation vmaAllocation;
 		VmaAllocationInfo vmaAllocationInfo;
 		std::unique_ptr<GrafBuffer> grafScratchBuffer;
+		std::unique_ptr<GrafBuffer> grafStorageBuffer;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

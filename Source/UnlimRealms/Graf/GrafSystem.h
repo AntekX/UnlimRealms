@@ -239,7 +239,8 @@ namespace UnlimRealms
 		ConstantBuffer = (1 << 4),
 		StorageBuffer = (1 << 5),
 		ShaderDeviceAddress = (1 << 6),
-		RayTracing = (1 << 7)
+		RayTracing = (1 << 7),
+		AccelerationStructure = (1 << 8)
 	};
 	typedef ur_uint GrafBufferUsageFlags;
 
@@ -654,21 +655,11 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	struct UR_DECL GrafAccelerationStructureGeometryDesc
-	{
-		GrafAccelerationStructureGeometryType GeometryType;
-		GrafFormat VertexFormat;
-		GrafIndexType IndexType;
-		ur_uint32 PrimitiveCountMax;
-		ur_uint32 VertexCountMax;
-		ur_bool TransformsEnabled;
-	};
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GrafAccelerationStructureTrianglesData
 	{
 		GrafFormat VertexFormat;
 		ur_size VertexStride;
+		ur_size VertexCount;
 		ur_uint64 VerticesDeviceAddress;
 		void* VerticesHostAddress;
 		GrafIndexType IndexType;
@@ -706,6 +697,18 @@ namespace UnlimRealms
 		ur_uint32 PrimitivesOffset;
 		ur_uint32 FirstVertexIndex;
 		ur_uint32 TransformsOffset;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafAccelerationStructureGeometryDesc
+	{
+		GrafAccelerationStructureGeometryType GeometryType;
+		GrafFormat VertexFormat;
+		ur_uint32 VertexStride;
+		GrafIndexType IndexType;
+		ur_uint32 PrimitiveCountMax;
+		ur_uint32 VertexCountMax;
+		ur_bool TransformsEnabled;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

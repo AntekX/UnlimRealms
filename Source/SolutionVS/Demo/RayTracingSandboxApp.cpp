@@ -330,6 +330,7 @@ int RayTracingSandboxApp::Run()
 				GrafAccelerationStructureGeometryDesc accelStructGeomDescBL = {};
 				accelStructGeomDescBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
 				accelStructGeomDescBL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
+				accelStructGeomDescBL.VertexStride = ur_uint32(vertexStride);
 				accelStructGeomDescBL.IndexType = indexType;
 				accelStructGeomDescBL.PrimitiveCountMax = ur_uint32(indicesCount / 3);
 				accelStructGeomDescBL.VertexCountMax = ur_uint32(verticesCount);
@@ -349,6 +350,7 @@ int RayTracingSandboxApp::Run()
 				GrafAccelerationStructureTrianglesData trianglesData = {};
 				trianglesData.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
 				trianglesData.VertexStride = vertexStride;
+				trianglesData.VertexCount = ur_uint32(verticesCount);
 				trianglesData.VerticesDeviceAddress = vertexBuffer->GetDeviceAddress() + this->vertexBufferRegion.Offset;
 				trianglesData.IndexType = indexType;
 				trianglesData.IndicesDeviceAddress = indexBuffer->GetDeviceAddress() + this->indexBufferRegion.Offset;
@@ -707,7 +709,7 @@ int RayTracingSandboxApp::Run()
 			ur_size shaderGroupHandleSize = grafDeviceDesc->RayTracing.ShaderGroupHandleSize;
 			ur_size shaderBufferSize = pipelineParams.ShaderGroupCount * shaderGroupHandleSize;
 			GrafBuffer::InitParams shaderBufferParams;
-			shaderBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::TransferSrc);
+			shaderBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress) | ur_uint(GrafBufferUsageFlag::TransferSrc);
 			shaderBufferParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			shaderBufferParams.BufferDesc.SizeInBytes = shaderBufferSize;
 			grafSystem->CreateBuffer(this->shaderHandlesBuffer);
