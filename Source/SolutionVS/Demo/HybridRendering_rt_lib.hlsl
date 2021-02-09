@@ -176,7 +176,7 @@ void RayGenDirect()
 			#if (0)
 			float depthDeltaTolerance = gbData.ClipDepth * /*1.0e-4*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
 			float surfaceHistoryWeight = 1.0 - saturate(abs(gbData.ClipDepth - clipDepthPrev) / depthDeltaTolerance);
-			#elif (1)
+			#elif (0)
 			// history rejection from Ray Tracing Gems "Ray traced Shadows"
 			float3 normalVS = mul(float4(gbData.Normal, 0.0), g_SceneCB.View).xyz;
 			//float depthDeltaTolerance = 0.003 + 0.017 * abs(normalVS.z);
@@ -185,7 +185,7 @@ void RayGenDirect()
 			#else
 			float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
 			float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
-			float worldPosTolerance = viewDepth * /*1.0e-2*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
+			float worldPosTolerance = viewDepth * /*1.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
 			float surfaceHistoryWeight = 1.0 - saturate(length(worldPos - worldPosPrev) / worldPosTolerance);
 			surfaceHistoryWeight = saturate((surfaceHistoryWeight - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
 			#endif
