@@ -167,26 +167,33 @@ void RayGenDirect()
 		if (g_SceneCB.AccumulationFrameCount > 0 && all(abs(clipPosPrev.xy) < 1.0))
 		{
 			float2 imagePosPrev = clamp((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);
-			uint2 dispatchPosPrev = clamp(floor(imagePosPrev) * g_SceneCB.LightBufferDownscale.y, float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
+			uint2 dispatchPosPrev = clamp(floor(imagePosPrev * g_SceneCB.LightBufferDownscale.y), float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
+			imagePosPrev = dispatchPosPrev * g_SceneCB.LightBufferDownscale.x;
 			
 			float clipDepthPrev = g_DepthHistory.Load(int3(imagePosPrev.xy, 0));
 			bool isSkyPrev = (clipDepthPrev >= 1.0);
-			#if (1)
+			// TODO
+			#if (0)
 			float depthDeltaTolerance = gbData.ClipDepth * /*1.0e-4*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
 			float surfaceHistoryWeight = 1.0 - saturate(abs(gbData.ClipDepth - clipDepthPrev) / depthDeltaTolerance);
+			#elif (1)
+			// history rejection from Ray Tracing Gems "Ray traced Shadows"
+			float3 normalVS = mul(float4(gbData.Normal, 0.0), g_SceneCB.View).xyz;
+			//float depthDeltaTolerance = 0.003 + 0.017 * abs(normalVS.z);
+			float depthDeltaTolerance = g_SceneCB.DebugVec0[1] + g_SceneCB.DebugVec0[2] * abs(normalVS.z);
+			float surfaceHistoryWeight = (abs(1.0 - clipDepthPrev / gbData.ClipDepth) < depthDeltaTolerance ? 1.0 : 0.0);
 			#else
-			// TODO
 			float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
 			float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
 			float worldPosTolerance = viewDepth * /*1.0e-2*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
 			float surfaceHistoryWeight = 1.0 - saturate(length(worldPos - worldPosPrev) / worldPosTolerance);
+			surfaceHistoryWeight = saturate((surfaceHistoryWeight - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
 			#endif
-			occlusionPerLight[3] = any(surfaceHistoryWeight); // TEMP: debug data
-			
+
 			uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
-			counter = (uint)floor(float(counter) * any(surfaceHistoryWeight) + 0.5);
+			counter = (uint)floor(float(counter) * surfaceHistoryWeight + 0.5);
 			float historyWeight = float(counter) / (counter + 1);
-			
+
 			#if (SHADOW_BUFFER_UINT32)
 			uint shadowHistoryPacked = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
 			#else
@@ -195,7 +202,6 @@ void RayGenDirect()
 			[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 			{
 				#if (SHADOW_BUFFER_UINT32)
-				
 				uint occlusionPackedPrev = ((shadowHistoryPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask);
 				float occlusionAccumulated = ShadowBufferEntryUnpack(occlusionPackedPrev);
 				occlusionAccumulated = lerp(occlusionPerLight[j], occlusionAccumulated, historyWeight);
@@ -219,7 +225,7 @@ void RayGenDirect()
 				#endif
 				#endif
 			}
-			
+
 			#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
 			if (ilight == lightCount - 1)
 			#endif

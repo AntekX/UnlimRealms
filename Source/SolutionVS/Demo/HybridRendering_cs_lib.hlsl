@@ -216,7 +216,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		// TEMP:
 		if (g_SceneCB.DebugVec0[0] > 0)
 		{
-			lightingResult = lerp(float3(1,0,0), float3(0,1,0), /*debugValue*/shadowPerLight[3]) * indirectLightColor;
+			lightingResult = lerp(float3(1,0,0), float3(0,1,0), /*debugValue*/shadowPerLight[3]) * max(indirectLightColor, 1.0);
 		}
 	}
 

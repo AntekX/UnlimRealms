@@ -7,9 +7,11 @@
 
 struct SceneConstants
 {
+	float4x4 View;
 	float4x4 Proj;
 	float4x4 ViewProj;
 	float4x4 ViewProjInv;
+	float4x4 ViewPrev;
 	float4x4 ProjPrev;
 	float4x4 ViewProjPrev;
 	float4x4 ViewProjInvPrev;

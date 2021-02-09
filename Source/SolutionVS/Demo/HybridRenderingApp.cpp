@@ -337,9 +337,11 @@ int HybridRenderingApp::Run()
 
 		struct SceneConstants
 		{
+			ur_float4x4 View;
 			ur_float4x4 Proj;
 			ur_float4x4 ViewProj;
 			ur_float4x4 ViewProjInv;
+			ur_float4x4 ViewPrev;
 			ur_float4x4 ProjPrev;
 			ur_float4x4 ViewProjPrev;
 			ur_float4x4 ViewProjInvPrev;
@@ -991,12 +993,14 @@ int HybridRenderingApp::Run()
 
 			const ur_uint3& targetSize = renderTargetSet->renderTarget->GetImage(0)->GetDesc().Size;
 			const ur_uint3& lightBufferSize = lightingBufferSet->images[0]->GetDesc().Size;
-			sceneConstants.ProjPrev = (renderTargetSet->resetHistory ? camera.GetProj() : sceneConstants.Proj);
 			sceneConstants.ViewProjPrev = (renderTargetSet->resetHistory ? camera.GetViewProj() : sceneConstants.ViewProj);
 			sceneConstants.ViewProjInvPrev = (renderTargetSet->resetHistory ? camera.GetViewProjInv() : sceneConstants.ViewProjInv);
-			sceneConstants.Proj = camera.GetProj();
+			sceneConstants.ProjPrev = (renderTargetSet->resetHistory ? camera.GetProj() : sceneConstants.Proj);
+			sceneConstants.ViewPrev = (renderTargetSet->resetHistory ? camera.GetView() : sceneConstants.View);
 			sceneConstants.ViewProj = camera.GetViewProj();
 			sceneConstants.ViewProjInv = camera.GetViewProjInv();
+			sceneConstants.Proj = camera.GetProj();
+			sceneConstants.View = camera.GetView();
 			sceneConstants.CameraPos = camera.GetPosition();
 			sceneConstants.CameraDir = camera.GetDirection();
 			sceneConstants.TargetSize.x = (ur_float)targetSize.x;
@@ -1213,9 +1217,9 @@ int HybridRenderingApp::Run()
 	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
 	sphericalLight1.Size = 0.5f;
 	LightingDesc lightingDesc = {};
-	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
+	//lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sphericalLight1;
-	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
+	//lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
 
 	// light source animation
 	ur_float lightCycleTime = 60.0f;
