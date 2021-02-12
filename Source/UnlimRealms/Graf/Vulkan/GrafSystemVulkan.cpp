@@ -484,6 +484,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafSystemVulkan::CreateImageSubresource(std::unique_ptr<GrafImageSubresource>& grafImageSubresource)
+	{
+		grafImageSubresource.reset(new GrafImageSubresourceVulkan(*this));
+		return Result(Success);
+	}
+
 	Result GrafSystemVulkan::CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer)
 	{
 		grafBuffer.reset(new GrafBufferVulkan(*this));
@@ -1345,7 +1351,7 @@ namespace UnlimRealms
 
 		static_cast<GrafBufferVulkan*>(grafBuffer)->SetState(dstState);
 
-		return Result(NotImplemented);
+		return Result(Success);
 	}
 
 	Result GrafCommandListVulkan::ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState)
@@ -1353,10 +1359,27 @@ namespace UnlimRealms
 		if (ur_null == grafImage)
 			return Result(InvalidArgs);
 
-		if (grafImage->GetState() == dstState)
+		GrafImageVulkan* grafImageVulkan = static_cast<GrafImageVulkan*>(grafImage);
+		Result res = this->ImageMemoryBarrier(grafImageVulkan->GetDefaultSubresource(), srcState, dstState);
+		if (Succeeded(res))
+		{
+			// image state = default subresource state (all mips/layers)
+			static_cast<GrafImageVulkan*>(grafImage)->SetState(dstState);
+		}
+
+		return res;
+	}
+
+	Result GrafCommandListVulkan::ImageMemoryBarrier(GrafImageSubresource* grafImageSubresource, GrafImageState srcState, GrafImageState dstState)
+	{
+		if (ur_null == grafImageSubresource)
+			return Result(InvalidArgs);
+
+		const GrafImageVulkan* grafImageVulkan = static_cast<const GrafImageVulkan*>(grafImageSubresource->GetImage());
+		if (ur_null == grafImageVulkan || grafImageVulkan->GetState() == dstState)
 			return Result(Success);
 
-		srcState = (GrafImageState::Current == srcState ? grafImage->GetState() : srcState);
+		srcState = (GrafImageState::Current == srcState ? grafImageSubresource->GetState() : srcState);
 
 		VkImageMemoryBarrier vkImageBarrier = {};
 		vkImageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1366,15 +1389,15 @@ namespace UnlimRealms
 		vkImageBarrier.newLayout = GrafUtilsVulkan::GrafToVkImageLayout(dstState);
 		vkImageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		vkImageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		vkImageBarrier.image = static_cast<GrafImageVulkan*>(grafImage)->GetVkImage();
-		vkImageBarrier.subresourceRange.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(grafImage->GetDesc().Usage);
-		vkImageBarrier.subresourceRange.baseMipLevel = 0;
-		vkImageBarrier.subresourceRange.levelCount = (ur_uint32)grafImage->GetDesc().MipLevels;
-		vkImageBarrier.subresourceRange.baseArrayLayer = 0;
-		vkImageBarrier.subresourceRange.layerCount = 1;
+		vkImageBarrier.image = grafImageVulkan->GetVkImage();
+		vkImageBarrier.subresourceRange.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(grafImageVulkan->GetDesc().Usage);
+		vkImageBarrier.subresourceRange.baseMipLevel = grafImageSubresource->GetDesc().BaseMipLevel;
+		vkImageBarrier.subresourceRange.levelCount = grafImageSubresource->GetDesc().LevelCount;
+		vkImageBarrier.subresourceRange.baseArrayLayer = grafImageSubresource->GetDesc().BaseArrayLayer;
+		vkImageBarrier.subresourceRange.layerCount = grafImageSubresource->GetDesc().LayerCount;
 		VkPipelineStageFlags vkStageSrc = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		VkPipelineStageFlags vkStageDst = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		
+
 		switch (srcState)
 		{
 		case GrafImageState::TransferSrc:
@@ -1477,7 +1500,7 @@ namespace UnlimRealms
 
 		vkCmdPipelineBarrier(this->vkCommandBuffer, vkStageSrc, vkStageDst, VkDependencyFlags(0), 0, ur_null, 0, ur_null, 1, &vkImageBarrier);
 
-		static_cast<GrafImageVulkan*>(grafImage)->SetState(dstState);
+		static_cast<GrafImageSubresourceVulkan*>(grafImageSubresource)->SetState(dstState);
 
 		return Result(Success);
 	}
@@ -1509,14 +1532,25 @@ namespace UnlimRealms
 		if (ur_null == grafImage)
 			return Result(InvalidArgs);
 
-		VkImage vkImage = static_cast<GrafImageVulkan*>(grafImage)->GetVkImage();
-		VkImageLayout vkImageLayout = GrafUtilsVulkan::GrafToVkImageLayout(grafImage->GetState());
+		GrafImageVulkan* grafImageVulkan = static_cast<GrafImageVulkan*>(grafImage);
+		return ClearColorImage(grafImageVulkan->GetDefaultSubresource(), clearValue);
+	}
+
+	Result GrafCommandListVulkan::ClearColorImage(GrafImageSubresource* grafImageSubresource, GrafClearValue clearValue)
+	{
+		if (ur_null == grafImageSubresource)
+			return Result(InvalidArgs);
+
+		const GrafImage* grafImage = grafImageSubresource->GetImage();
+		VkImage vkImage = static_cast<const GrafImageVulkan*>(grafImage)->GetVkImage();
+		VkImageLayout vkImageLayout = GrafUtilsVulkan::GrafToVkImageLayout(grafImageSubresource->GetState());
 		VkClearColorValue& vkClearValue = reinterpret_cast<VkClearColorValue&>(clearValue);
 		VkImageSubresourceRange vkClearRange = {};
 		vkClearRange.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(grafImage->GetDesc().Usage);
-		vkClearRange.levelCount = grafImage->GetDesc().MipLevels;
-		vkClearRange.baseArrayLayer = 0;
-		vkClearRange.layerCount = 1;
+		vkClearRange.baseMipLevel = grafImageSubresource->GetDesc().BaseMipLevel;
+		vkClearRange.levelCount = grafImageSubresource->GetDesc().LevelCount;
+		vkClearRange.baseArrayLayer = grafImageSubresource->GetDesc().BaseArrayLayer;
+		vkClearRange.layerCount = grafImageSubresource->GetDesc().LayerCount;
 
 		vkCmdClearColorImage(this->vkCommandBuffer, vkImage, vkImageLayout, &vkClearValue, 1, &vkClearRange);
 
@@ -1528,16 +1562,28 @@ namespace UnlimRealms
 		if (ur_null == grafImage)
 			return Result(InvalidArgs);
 
-		VkImage vkImage = static_cast<GrafImageVulkan*>(grafImage)->GetVkImage();
-		VkImageLayout vkImageLayout = GrafUtilsVulkan::GrafToVkImageLayout(grafImage->GetState());
+		GrafImageVulkan* grafImageVulkan = static_cast<GrafImageVulkan*>(grafImage);
+		return ClearDepthStencilImage(grafImageVulkan->GetDefaultSubresource(), clearValue);
+	}
+
+	Result GrafCommandListVulkan::ClearDepthStencilImage(GrafImageSubresource* grafImageSubresource, GrafClearValue clearValue)
+	{
+		if (ur_null == grafImageSubresource)
+			return Result(InvalidArgs);
+
+		const GrafImage* grafImage = grafImageSubresource->GetImage();
+
+		VkImage vkImage = static_cast<const GrafImageVulkan*>(grafImage)->GetVkImage();
+		VkImageLayout vkImageLayout = GrafUtilsVulkan::GrafToVkImageLayout(grafImageSubresource->GetState());
 		VkClearDepthStencilValue vkClearValue = {};
 		vkClearValue.depth = clearValue.f32[0];
 		vkClearValue.stencil = clearValue.u32[1];
 		VkImageSubresourceRange vkClearRange = {};
 		vkClearRange.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(grafImage->GetDesc().Usage);
-		vkClearRange.levelCount = grafImage->GetDesc().MipLevels;
-		vkClearRange.baseArrayLayer = 0;
-		vkClearRange.layerCount = 1;
+		vkClearRange.baseMipLevel = grafImageSubresource->GetDesc().BaseMipLevel;
+		vkClearRange.levelCount = grafImageSubresource->GetDesc().LevelCount;
+		vkClearRange.baseArrayLayer = grafImageSubresource->GetDesc().BaseArrayLayer;
+		vkClearRange.layerCount = grafImageSubresource->GetDesc().LayerCount;
 
 		vkCmdClearDepthStencilImage(this->vkCommandBuffer, vkImage, vkImageLayout, &vkClearValue, 1, &vkClearRange);
 
@@ -1702,7 +1748,10 @@ namespace UnlimRealms
 		vkBufferCopy.dstOffset = (VkDeviceSize)dstOffset;
 		vkBufferCopy.size = VkDeviceSize(dataSize > 0 ? dataSize : srcBuffer->GetDesc().SizeInBytes);
 
-		vkCmdCopyBuffer(this->vkCommandBuffer, static_cast<GrafBufferVulkan*>(srcBuffer)->GetVkBuffer(), static_cast<GrafBufferVulkan*>(dstBuffer)->GetVkBuffer(), 1, &vkBufferCopy);
+		vkCmdCopyBuffer(this->vkCommandBuffer,
+			static_cast<GrafBufferVulkan*>(srcBuffer)->GetVkBuffer(),
+			static_cast<GrafBufferVulkan*>(dstBuffer)->GetVkBuffer(),
+			1, &vkBufferCopy);
 
 		return Result(Success);
 	}
@@ -1711,6 +1760,17 @@ namespace UnlimRealms
 	{
 		if (ur_null == srcBuffer || ur_null == dstImage)
 			return Result(InvalidArgs);
+
+		GrafImageVulkan* dstImageVulkan = static_cast<GrafImageVulkan*>(dstImage);
+		return Copy(srcBuffer, dstImageVulkan->GetDefaultSubresource(), bufferOffset, imageRegion);
+	}
+
+	Result GrafCommandListVulkan::Copy(GrafBuffer* srcBuffer, GrafImageSubresource* dstImageSubresource, ur_size bufferOffset, BoxI imageRegion)
+	{
+		if (ur_null == srcBuffer || ur_null == dstImageSubresource)
+			return Result(InvalidArgs);
+
+		const GrafImage* dstImage = dstImageSubresource->GetImage();
 
 		VkBufferImageCopy vkBufferImageCopy = {};
 		vkBufferImageCopy.bufferOffset = bufferOffset;
@@ -1723,12 +1783,14 @@ namespace UnlimRealms
 		vkBufferImageCopy.imageExtent.height = (ur_uint32)(imageRegion.SizeY() > 0 ? imageRegion.SizeY() : dstImage->GetDesc().Size.y);
 		vkBufferImageCopy.imageExtent.depth = (ur_uint32)(imageRegion.SizeZ() > 0 ? imageRegion.SizeZ() : dstImage->GetDesc().Size.z);
 		vkBufferImageCopy.imageSubresource.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(dstImage->GetDesc().Usage);
-		vkBufferImageCopy.imageSubresource.mipLevel = 0;
-		vkBufferImageCopy.imageSubresource.baseArrayLayer = 0;
-		vkBufferImageCopy.imageSubresource.layerCount = 1;
+		vkBufferImageCopy.imageSubresource.mipLevel = dstImageSubresource->GetDesc().BaseMipLevel;
+		vkBufferImageCopy.imageSubresource.baseArrayLayer = dstImageSubresource->GetDesc().BaseArrayLayer;
+		vkBufferImageCopy.imageSubresource.layerCount = dstImageSubresource->GetDesc().LayerCount;
 
-		vkCmdCopyBufferToImage(this->vkCommandBuffer, static_cast<GrafBufferVulkan*>(srcBuffer)->GetVkBuffer(),
-			static_cast<GrafImageVulkan*>(dstImage)->GetVkImage(), GrafUtilsVulkan::GrafToVkImageLayout(dstImage->GetState()),
+		vkCmdCopyBufferToImage(this->vkCommandBuffer,
+			static_cast<const GrafBufferVulkan*>(srcBuffer)->GetVkBuffer(),
+			static_cast<const GrafImageVulkan*>(dstImage)->GetVkImage(),
+			GrafUtilsVulkan::GrafToVkImageLayout(dstImageSubresource->GetState()),
 			1, &vkBufferImageCopy);
 
 		return Result(Success);
@@ -1738,6 +1800,17 @@ namespace UnlimRealms
 	{
 		if (ur_null == srcImage || ur_null == dstBuffer)
 			return Result(InvalidArgs);
+
+		GrafImageVulkan* srcImageVulkan = static_cast<GrafImageVulkan*>(srcImage);
+		return Copy(srcImageVulkan->GetDefaultSubresource(), dstBuffer, bufferOffset, imageRegion);
+	}
+
+	Result GrafCommandListVulkan::Copy(GrafImageSubresource* srcImageSubresource, GrafBuffer* dstBuffer, ur_size bufferOffset, BoxI imageRegion)
+	{
+		if (ur_null == srcImageSubresource || ur_null == dstBuffer)
+			return Result(InvalidArgs);
+
+		const GrafImage* srcImage = srcImageSubresource->GetImage();
 
 		VkBufferImageCopy vkBufferImageCopy = {};
 		vkBufferImageCopy.bufferOffset = bufferOffset;
@@ -1750,12 +1823,14 @@ namespace UnlimRealms
 		vkBufferImageCopy.imageExtent.height = (ur_uint32)(imageRegion.SizeY() > 0 ? imageRegion.SizeY() : srcImage->GetDesc().Size.y);
 		vkBufferImageCopy.imageExtent.depth = (ur_uint32)(imageRegion.SizeZ() > 0 ? imageRegion.SizeZ() : srcImage->GetDesc().Size.z);
 		vkBufferImageCopy.imageSubresource.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(srcImage->GetDesc().Usage);
-		vkBufferImageCopy.imageSubresource.mipLevel = 0;
-		vkBufferImageCopy.imageSubresource.baseArrayLayer = 0;
-		vkBufferImageCopy.imageSubresource.layerCount = 1;
+		vkBufferImageCopy.imageSubresource.mipLevel = srcImageSubresource->GetDesc().BaseMipLevel;
+		vkBufferImageCopy.imageSubresource.baseArrayLayer = srcImageSubresource->GetDesc().BaseArrayLayer;
+		vkBufferImageCopy.imageSubresource.layerCount = srcImageSubresource->GetDesc().LayerCount;
 
-		vkCmdCopyImageToBuffer(this->vkCommandBuffer, static_cast<GrafImageVulkan*>(srcImage)->GetVkImage(), GrafUtilsVulkan::GrafToVkImageLayout(srcImage->GetState()),
-			static_cast<GrafBufferVulkan*>(dstBuffer)->GetVkBuffer(),
+		vkCmdCopyImageToBuffer(this->vkCommandBuffer,
+			static_cast<const GrafImageVulkan*>(srcImage)->GetVkImage(),
+			GrafUtilsVulkan::GrafToVkImageLayout(srcImageSubresource->GetState()),
+			static_cast<const GrafBufferVulkan*>(dstBuffer)->GetVkBuffer(),
 			1, &vkBufferImageCopy);
 
 		return Result(Success);
@@ -1766,23 +1841,36 @@ namespace UnlimRealms
 		if (ur_null == srcImage || ur_null == dstImage)
 			return Result(InvalidArgs);
 
+		GrafImageVulkan* srcImageVulkan = static_cast<GrafImageVulkan*>(srcImage);
+		GrafImageVulkan* dstImageVulkan = static_cast<GrafImageVulkan*>(dstImage);
+		return Copy(srcImageVulkan->GetDefaultSubresource(), dstImageVulkan->GetDefaultSubresource(), srcRegion, dstRegion);
+	}
+
+	Result GrafCommandListVulkan::Copy(GrafImageSubresource* srcImageSubresource, GrafImageSubresource* dstImageSubresource, BoxI srcRegion, BoxI dstRegion)
+	{
+		if (ur_null == srcImageSubresource || ur_null == dstImageSubresource)
+			return Result(InvalidArgs);
+
 		ur_int3 srcSize = srcRegion.Size();
 		ur_int3 dstSize = dstRegion.Size();
 		if (srcSize != dstSize)
 			return Result(InvalidArgs);
 
+		const GrafImage* srcImage = srcImageSubresource->GetImage();
+		const GrafImage* dstImage = dstImageSubresource->GetImage();
+
 		VkImageCopy vkImageCopy = {};
 		vkImageCopy.srcSubresource.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(srcImage->GetDesc().Usage);
-		vkImageCopy.srcSubresource.mipLevel = 0;
-		vkImageCopy.srcSubresource.baseArrayLayer = 0;
-		vkImageCopy.srcSubresource.layerCount = 1;
+		vkImageCopy.srcSubresource.mipLevel = srcImageSubresource->GetDesc().BaseMipLevel;
+		vkImageCopy.srcSubresource.baseArrayLayer = srcImageSubresource->GetDesc().BaseArrayLayer;
+		vkImageCopy.srcSubresource.layerCount = srcImageSubresource->GetDesc().LayerCount;
 		vkImageCopy.srcOffset.x = (ur_int32)srcRegion.Min.x;
 		vkImageCopy.srcOffset.y = (ur_int32)srcRegion.Min.y;
 		vkImageCopy.srcOffset.z = (ur_int32)srcRegion.Min.z;
 		vkImageCopy.dstSubresource.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(dstImage->GetDesc().Usage);
-		vkImageCopy.dstSubresource.mipLevel = 0;
-		vkImageCopy.dstSubresource.baseArrayLayer = 0;
-		vkImageCopy.dstSubresource.layerCount = 1;
+		vkImageCopy.dstSubresource.mipLevel = dstImageSubresource->GetDesc().BaseMipLevel;
+		vkImageCopy.dstSubresource.baseArrayLayer = dstImageSubresource->GetDesc().BaseArrayLayer;
+		vkImageCopy.dstSubresource.layerCount = dstImageSubresource->GetDesc().LayerCount;
 		vkImageCopy.dstOffset.x = (ur_int32)srcRegion.Min.x;
 		vkImageCopy.dstOffset.y = (ur_int32)srcRegion.Min.y;
 		vkImageCopy.dstOffset.z = (ur_int32)srcRegion.Min.z;
@@ -1790,8 +1878,11 @@ namespace UnlimRealms
 		vkImageCopy.extent.height = (ur_uint32)(srcSize.y > 0 ? srcSize.y : srcImage->GetDesc().Size.y);
 		vkImageCopy.extent.depth = (ur_uint32)(srcSize.z > 0 ? srcSize.z : srcImage->GetDesc().Size.z);
 
-		vkCmdCopyImage(this->vkCommandBuffer, static_cast<GrafImageVulkan*>(srcImage)->GetVkImage(), GrafUtilsVulkan::GrafToVkImageLayout(srcImage->GetState()),
-			static_cast<GrafImageVulkan*>(dstImage)->GetVkImage(), GrafUtilsVulkan::GrafToVkImageLayout(dstImage->GetState()),
+		vkCmdCopyImage(this->vkCommandBuffer,
+			static_cast<const GrafImageVulkan*>(srcImage)->GetVkImage(),
+			GrafUtilsVulkan::GrafToVkImageLayout(srcImageSubresource->GetState()),
+			static_cast<const GrafImageVulkan*>(dstImage)->GetVkImage(),
+			GrafUtilsVulkan::GrafToVkImageLayout(dstImageSubresource->GetState()),
 			1, &vkImageCopy);
 
 		return Result(Success);
@@ -2747,11 +2838,9 @@ namespace UnlimRealms
 
 	Result GrafImageVulkan::Deinitialize()
 	{
-		if (this->vkImageView != VK_NULL_HANDLE)
-		{
-			vkDestroyImageView(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkImageView, ur_null);
-			this->vkImageView = VK_NULL_HANDLE;
-		}
+		this->grafDefaultSubresource.reset(ur_null);
+		this->vkImageView = VK_NULL_HANDLE;
+
 		if (this->vkImage != VK_NULL_HANDLE && !this->imageExternalHandle)
 		{
 			vkDestroyImage(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkImage, ur_null);
@@ -2907,9 +2996,9 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafImageVulkan: vkBindImageMemory failed with VkResult = ") + VkResultToString(vkRes));
 		}
 
-		// create views
+		// create default subresource
 
-		Result res = this->CreateVkImageViews();
+		Result res = this->CreateDefaultSubresource();
 		if (Failed(res))
 		{
 			this->Deinitialize();
@@ -3006,7 +3095,7 @@ namespace UnlimRealms
 
 		if (this->vkImage != VK_NULL_HANDLE)
 		{
-			Result res = this->CreateVkImageViews();
+			Result res = this->CreateDefaultSubresource();
 			if (Failed(res))
 				return res;
 		}
@@ -3014,14 +3103,103 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafImageVulkan::CreateVkImageViews()
+	Result GrafImageVulkan::CreateDefaultSubresource()
 	{
 		if (VK_NULL_HANDLE == this->vkImage || this->vkImageView != VK_NULL_HANDLE)
 		{
-			return ResultError(InvalidArgs, std::string("GrafImageVulkan: failed to create image views, invalid parameters"));
+			return ResultError(InvalidArgs, std::string("GrafImageVulkan: failed to create default subresource & view(s), invalid parameters"));
 		}
 
-		VkImageType vkImageType = GrafUtilsVulkan::GrafToVkImageType(this->GetDesc().Type);
+		GrafSystemVulkan& grafSystemVulkan = static_cast<GrafSystemVulkan&>(this->GetGrafSystem());
+		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice()); // at this point device expected to be validate
+		
+		Result res = grafSystemVulkan.CreateImageSubresource(this->grafDefaultSubresource);
+		if (Failed(res))
+		{
+			return ResultError(InvalidArgs, std::string("GrafImageVulkan: failed to create image subresource"));
+		}
+
+		GrafImageSubresource::InitParams grafSubresParams = {};
+		grafSubresParams.Image = this;
+		grafSubresParams.SubresourceDesc.BaseMipLevel = 0;
+		grafSubresParams.SubresourceDesc.LevelCount = this->GetDesc().MipLevels;
+		grafSubresParams.SubresourceDesc.BaseArrayLayer = 0;
+		grafSubresParams.SubresourceDesc.LayerCount = 1;
+		
+		res = this->grafDefaultSubresource->Initialize(grafDeviceVulkan, grafSubresParams);
+		if (Failed(res))
+		{
+			this->grafDefaultSubresource.reset(ur_null);
+			return ResultError(InvalidArgs, std::string("GrafImageVulkan: failed to initialize image subresource"));
+		}
+
+		GrafImageSubresourceVulkan* grafSubresourceVulkan = static_cast<GrafImageSubresourceVulkan*>(this->grafDefaultSubresource.get());
+		this->vkImageView = grafSubresourceVulkan->GetVkImageView(); // shortcut
+
+		return Result(Success);
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GrafImageSubresourceVulkan::GrafImageSubresourceVulkan(GrafSystem &grafSystem) :
+		GrafImageSubresource(grafSystem)
+	{
+		this->vkImageView = VK_NULL_HANDLE;
+	}
+
+	GrafImageSubresourceVulkan::~GrafImageSubresourceVulkan()
+	{
+		this->Deinitialize();
+	}
+
+	Result GrafImageSubresourceVulkan::Deinitialize()
+	{
+		if (this->vkImageView != VK_NULL_HANDLE)
+		{
+			vkDestroyImageView(static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice(), this->vkImageView, ur_null);
+			this->vkImageView = VK_NULL_HANDLE;
+		}
+
+		return Result(Success);
+	}
+
+	Result GrafImageSubresourceVulkan::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	{
+		this->Deinitialize();
+
+		GrafImageSubresource::Initialize(grafDevice, initParams);
+
+		// validate logical device 
+
+		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(grafDevice);
+		if (ur_null == grafDeviceVulkan || VK_NULL_HANDLE == grafDeviceVulkan->GetVkDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafImageSubresourceVulkan: failed to initialize, invalid GrafDevice"));
+		}
+
+		// create view
+		
+		Result res = this->CreateVkImageView();
+		if (Failed(res))
+			return res;
+
+		return Result(Success);
+	}
+
+	Result GrafImageSubresourceVulkan::CreateVkImageView()
+	{
+		// validate image
+
+		const GrafImageVulkan* grafImageVulkan = static_cast<const GrafImageVulkan*>(this->GetImage());
+		if (ur_null == grafImageVulkan || VK_NULL_HANDLE == grafImageVulkan->GetVkImage())
+		{
+			return ResultError(InvalidArgs, std::string("GrafImageSubresourceVulkan: failed to initialize, invalid image"));
+		}
+
+		const GrafImageDesc& grafImageDesc = grafImageVulkan->GetDesc();
+		const GrafImageSubresourceDesc& grafSubresDesc = this->GetDesc();
+
+		VkImageType vkImageType = GrafUtilsVulkan::GrafToVkImageType(grafImageDesc.Type);
 		VkImageViewType vkViewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
 		switch (vkImageType)
 		{
@@ -3034,27 +3212,27 @@ namespace UnlimRealms
 			//VK_IMAGE_VIEW_TYPE_2D_ARRAY;
 			//VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
 		default:
-			return ResultError(InvalidArgs, "GrafImageVulkan: failed to create image views, unsupported image type");
+			return ResultError(InvalidArgs, "GrafImageSubresourceVulkan: failed to create image views, unsupported image type");
 		};
 
 		VkImageViewCreateInfo vkViewInfo = {};
 		vkViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		vkViewInfo.flags = 0;
-		vkViewInfo.image = this->vkImage;
+		vkViewInfo.image = grafImageVulkan->GetVkImage();
 		vkViewInfo.viewType = vkViewType;
-		vkViewInfo.format = GrafUtilsVulkan::GrafToVkFormat(this->GetDesc().Format);
+		vkViewInfo.format = GrafUtilsVulkan::GrafToVkFormat(grafImageDesc.Format);
 		vkViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
 		vkViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 		vkViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
 		vkViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-		vkViewInfo.subresourceRange.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(this->GetDesc().Usage);
-		vkViewInfo.subresourceRange.baseMipLevel = 0;
-		vkViewInfo.subresourceRange.levelCount = this->GetDesc().MipLevels;
-		vkViewInfo.subresourceRange.baseArrayLayer = 0;
-		vkViewInfo.subresourceRange.layerCount = 1;
+		vkViewInfo.subresourceRange.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(grafImageDesc.Usage);
+		vkViewInfo.subresourceRange.baseMipLevel = grafSubresDesc.BaseMipLevel;
+		vkViewInfo.subresourceRange.levelCount = std::max(grafSubresDesc.LevelCount, 1u);
+		vkViewInfo.subresourceRange.baseArrayLayer = grafSubresDesc.BaseArrayLayer;
+		vkViewInfo.subresourceRange.layerCount = std::max(grafSubresDesc.LayerCount, 1u);
 
-		if ((this->GetDesc().Usage & ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget)) &&
-			(this->GetDesc().Usage & ur_uint(GrafImageUsageFlag::ShaderInput)))
+		if ((grafImageDesc.Usage & ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget)) &&
+			(grafImageDesc.Usage & ur_uint(GrafImageUsageFlag::ShaderInput)))
 		{
 			// create depth only view if used as a shader input
 			// TODO: investigate whether separate views required for VkFramebufferCreateInfo and shader input
@@ -3064,7 +3242,7 @@ namespace UnlimRealms
 		GrafDeviceVulkan* grafDeviceVulkan = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice()); // at this point device expected to be validate
 		VkResult res = vkCreateImageView(grafDeviceVulkan->GetVkDevice(), &vkViewInfo, ur_null, &this->vkImageView);
 		if (res != VK_SUCCESS)
-			return ResultError(Failure, std::string("GrafImageVulkan: vkCreateImageView failed with VkResult = ") + VkResultToString(res));
+			return ResultError(Failure, std::string("GrafImageSubresourceVulkan: vkCreateImageView failed with VkResult = ") + VkResultToString(res));
 
 		return Result(Success);
 	}
@@ -4008,11 +4186,17 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableVulkan::SetSampledImage(ur_uint bindingIdx, GrafImage* image, GrafSampler* sampler)
 	{
+		GrafImageVulkan* grafImageVulkan = static_cast<GrafImageVulkan*>(image);
+		return SetSampledImage(bindingIdx, grafImageVulkan->GetDefaultSubresource(), sampler);
+	}
+
+	Result GrafDescriptorTableVulkan::SetSampledImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource, GrafSampler* sampler)
+	{
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
 
 		VkDescriptorImageInfo vkDescriptorImageInfo = {};
 		vkDescriptorImageInfo.sampler = static_cast<GrafSamplerVulkan*>(sampler)->GetVkSampler();
-		vkDescriptorImageInfo.imageView = static_cast<GrafImageVulkan*>(image)->GetVkImageView();
+		vkDescriptorImageInfo.imageView = static_cast<GrafImageSubresourceVulkan*>(imageSubresource)->GetVkImageView();
 		vkDescriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		VkWriteDescriptorSet vkWriteDescriptorSets[2] = { {}, {} };
@@ -4076,11 +4260,17 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableVulkan::SetImage(ur_uint bindingIdx, GrafImage* image)
 	{
+		GrafImageVulkan* grafImageVulkan = static_cast<GrafImageVulkan*>(image);
+		return SetImage(bindingIdx, grafImageVulkan->GetDefaultSubresource());
+	}
+
+	Result GrafDescriptorTableVulkan::SetImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource)
+	{
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
 
 		VkDescriptorImageInfo vkDescriptorImageInfo = {};
 		vkDescriptorImageInfo.sampler = VK_NULL_HANDLE;
-		vkDescriptorImageInfo.imageView = static_cast<GrafImageVulkan*>(image)->GetVkImageView();
+		vkDescriptorImageInfo.imageView = static_cast<GrafImageSubresourceVulkan*>(imageSubresource)->GetVkImageView();
 		vkDescriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		VkWriteDescriptorSet vkWriteDescriptorSet = {};
@@ -4128,11 +4318,17 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableVulkan::SetRWImage(ur_uint bindingIdx, GrafImage* image)
 	{
+		GrafImageVulkan* grafImageVulkan = static_cast<GrafImageVulkan*>(image);
+		return SetRWImage(bindingIdx, grafImageVulkan->GetDefaultSubresource());
+	}
+
+	Result GrafDescriptorTableVulkan::SetRWImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource)
+	{
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
 
 		VkDescriptorImageInfo vkDescriptorImageInfo = {};
 		vkDescriptorImageInfo.sampler = VK_NULL_HANDLE;
-		vkDescriptorImageInfo.imageView = static_cast<GrafImageVulkan*>(image)->GetVkImageView();
+		vkDescriptorImageInfo.imageView = static_cast<GrafImageSubresourceVulkan*>(imageSubresource)->GetVkImageView();
 		vkDescriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
 		VkWriteDescriptorSet vkWriteDescriptorSet = {};

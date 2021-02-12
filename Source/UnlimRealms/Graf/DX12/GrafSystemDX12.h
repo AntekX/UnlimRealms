@@ -40,6 +40,8 @@ namespace UnlimRealms
 
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
 
+		virtual Result CreateImageSubresource(std::unique_ptr<GrafImageSubresource>& grafImageSubresource);
+
 		virtual Result CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer);
 
 		virtual Result CreateSampler(std::unique_ptr<GrafSampler>& grafSampler);
@@ -162,11 +164,17 @@ namespace UnlimRealms
 
 		virtual Result ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState);
 
+		virtual Result ImageMemoryBarrier(GrafImageSubresource* grafImageSubresource, GrafImageState srcState, GrafImageState dstState);
+
 		virtual Result SetFenceState(GrafFence* grafFence, GrafFenceState state);
 
 		virtual Result ClearColorImage(GrafImage* grafImage, GrafClearValue clearValue);
 
+		virtual Result ClearColorImage(GrafImageSubresource* grafImageSubresource, GrafClearValue clearValue);
+
 		virtual Result ClearDepthStencilImage(GrafImage* grafImage, GrafClearValue clearValue);
+
+		virtual Result ClearDepthStencilImage(GrafImageSubresource* grafImageSubresource, GrafClearValue clearValue);
 
 		virtual Result SetViewport(const GrafViewportDesc& grafViewportDesc, ur_bool resetScissorsRect = false);
 
@@ -192,9 +200,15 @@ namespace UnlimRealms
 
 		virtual Result Copy(GrafBuffer* srcBuffer, GrafImage* dstImage, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
 
+		virtual Result Copy(GrafBuffer* srcBuffer, GrafImageSubresource* dstImageSubresource, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
+
 		virtual Result Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
 
+		virtual Result Copy(GrafImageSubresource* srcImageSubresource, GrafBuffer* dstBuffer, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
+
 		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
+
+		virtual Result Copy(GrafImageSubresource* srcImageSubresource, GrafImageSubresource* dstImageSubresource, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
 
 		virtual Result BindComputePipeline(GrafComputePipeline* grafPipeline);
 
@@ -302,6 +316,24 @@ namespace UnlimRealms
 	private:
 
 		Result Deinitialize();
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafImageSubresourceDX12 : public GrafImageSubresource
+	{
+	public:
+
+		GrafImageSubresourceDX12(GrafSystem &grafSystem);
+
+		~GrafImageSubresourceDX12();
+
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+	protected:
+
+		Result Deinitialize();
+
+		Result CreateD3DImageView();
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -421,13 +453,19 @@ namespace UnlimRealms
 
 		virtual Result SetSampledImage(ur_uint bindingIdx, GrafImage* image, GrafSampler* sampler);
 
+		virtual Result SetSampledImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource, GrafSampler* sampler);
+
 		virtual Result SetSampler(ur_uint bindingIdx, GrafSampler* sampler);
 
 		virtual Result SetImage(ur_uint bindingIdx, GrafImage* image);
 
+		virtual Result SetImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource);
+
 		virtual Result SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer);
 
 		virtual Result SetRWImage(ur_uint bindingIdx, GrafImage* image);
+
+		virtual Result SetRWImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource);
 
 		virtual Result SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer);
 

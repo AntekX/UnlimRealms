@@ -110,6 +110,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafSystem::CreateImageSubresource(std::unique_ptr<GrafImageSubresource>& grafImageSubresource)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafSystem::CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer)
 	{
 		return Result(NotImplemented);
@@ -294,6 +299,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandList::ImageMemoryBarrier(GrafImageSubresource* grafImageSubresource, GrafImageState srcState, GrafImageState dstState)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandList::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState)
 	{
 		return Result(NotImplemented);
@@ -309,7 +319,17 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandList::ClearColorImage(GrafImageSubresource* grafImageSubresource, GrafClearValue clearValue)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandList::ClearDepthStencilImage(GrafImage* grafImage, GrafClearValue clearValue)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandList::ClearDepthStencilImage(GrafImageSubresource* grafImageSubresource, GrafClearValue clearValue)
 	{
 		return Result(NotImplemented);
 	}
@@ -374,12 +394,27 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandList::Copy(GrafBuffer* srcBuffer, GrafImageSubresource* dstImageSubresource, ur_size bufferOffset, BoxI imageRegion)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandList::Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset, BoxI imageRegion)
 	{
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandList::Copy(GrafImageSubresource* srcImageSubresource, GrafBuffer* dstBuffer, ur_size bufferOffset, BoxI imageRegion)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandList::Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion, BoxI dstRegion)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandList::Copy(GrafImageSubresource* srcImageSubresource, GrafImageSubresource* dstImageSubresource, BoxI srcRegion, BoxI dstRegion)
 	{
 		return Result(NotImplemented);
 	}
@@ -524,6 +559,25 @@ namespace UnlimRealms
 		GrafDeviceEntity(grafSystem)
 	{
 		this->bufferState = GrafBufferState::Undefined;
+	}
+
+	GrafImageSubresource::GrafImageSubresource(GrafSystem &grafSystem) :
+		GrafDeviceEntity(grafSystem)
+	{
+		this->image = ur_null;
+		this->subresourceState = GrafImageState::Undefined;
+	}
+
+	GrafImageSubresource::~GrafImageSubresource()
+	{
+	}
+
+	Result GrafImageSubresource::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	{
+		GrafDeviceEntity::Initialize(grafDevice);
+		this->image = initParams.Image;
+		this->subresourceDesc = initParams.SubresourceDesc;
+		return Result(NotImplemented);
 	}
 
 	GrafBuffer::~GrafBuffer()
@@ -672,6 +726,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafDescriptorTable::SetSampledImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource, GrafSampler* sampler)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafDescriptorTable::SetSampler(ur_uint bindingIdx, GrafSampler* sampler)
 	{
 		return Result(NotImplemented);
@@ -682,12 +741,22 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafDescriptorTable::SetImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafDescriptorTable::SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
 	{
 		return Result(NotImplemented);
 	}
 
 	Result GrafDescriptorTable::SetRWImage(ur_uint bindingIdx, GrafImage* image)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafDescriptorTable::SetRWImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource)
 	{
 		return Result(NotImplemented);
 	}

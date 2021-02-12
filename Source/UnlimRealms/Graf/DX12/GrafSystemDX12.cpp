@@ -159,6 +159,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafSystemDX12::CreateImageSubresource(std::unique_ptr<GrafImageSubresource>& grafImageSubresource)
+	{
+		grafImageSubresource.reset(new GrafImageSubresourceDX12(*this));
+		return Result(Success);
+	}
+
 	Result GrafSystemDX12::CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer)
 	{
 		grafBuffer.reset(new GrafBufferDX12(*this));
@@ -619,6 +625,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandListDX12::ImageMemoryBarrier(GrafImageSubresource* grafImageSubresource, GrafImageState srcState, GrafImageState dstState)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandListDX12::SetFenceState(GrafFence* grafFence, GrafFenceState state)
 	{
 		return Result(NotImplemented);
@@ -629,7 +640,17 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandListDX12::ClearColorImage(GrafImageSubresource* grafImageSubresource, GrafClearValue clearValue)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandListDX12::ClearDepthStencilImage(GrafImage* grafImage, GrafClearValue clearValue)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandListDX12::ClearDepthStencilImage(GrafImageSubresource* grafImageSubresource, GrafClearValue clearValue)
 	{
 		return Result(NotImplemented);
 	}
@@ -694,12 +715,27 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandListDX12::Copy(GrafBuffer* srcBuffer, GrafImageSubresource* dstImageSubresource, ur_size bufferOffset, BoxI imageRegion)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandListDX12::Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset, BoxI imageRegion)
 	{
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandListDX12::Copy(GrafImageSubresource* srcImageSubresource, GrafBuffer* dstBuffer, ur_size bufferOffset, BoxI imageRegion)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandListDX12::Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion, BoxI dstRegion)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandListDX12::Copy(GrafImageSubresource* srcImageSubresource, GrafImageSubresource* dstImageSubresource, BoxI srcRegion, BoxI dstRegion)
 	{
 		return Result(NotImplemented);
 	}
@@ -872,6 +908,33 @@ namespace UnlimRealms
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	GrafImageSubresourceDX12::GrafImageSubresourceDX12(GrafSystem &grafSystem) :
+		GrafImageSubresource(grafSystem)
+	{
+	}
+
+	GrafImageSubresourceDX12::~GrafImageSubresourceDX12()
+	{
+		this->Deinitialize();
+	}
+
+	Result GrafImageSubresourceDX12::Deinitialize()
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafImageSubresourceDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafImageSubresourceDX12::CreateD3DImageView()
+	{
+		return Result(NotImplemented);
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	GrafBufferDX12::GrafBufferDX12(GrafSystem &grafSystem) :
 		GrafBuffer(grafSystem)
 	{
@@ -1027,6 +1090,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafDescriptorTableDX12::SetSampledImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource, GrafSampler* sampler)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafDescriptorTableDX12::SetSampler(ur_uint bindingIdx, GrafSampler* sampler)
 	{
 		return Result(NotImplemented);
@@ -1037,12 +1105,22 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafDescriptorTableDX12::SetImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafDescriptorTableDX12::SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
 	{
 		return Result(NotImplemented);
 	}
 
 	Result GrafDescriptorTableDX12::SetRWImage(ur_uint bindingIdx, GrafImage* image)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafDescriptorTableDX12::SetRWImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource)
 	{
 		return Result(NotImplemented);
 	}

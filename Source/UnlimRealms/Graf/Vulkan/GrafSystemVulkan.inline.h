@@ -75,9 +75,24 @@ namespace UnlimRealms
 		return this->vkImageView;
 	}
 
+	inline GrafImageSubresource* GrafImageVulkan::GetDefaultSubresource() const
+	{
+		return this->grafDefaultSubresource.get();
+	}
+
 	inline void GrafImageVulkan::SetState(GrafImageState& state)
 	{
 		this->imageState = state;
+	}
+
+	inline void GrafImageSubresourceVulkan::SetState(GrafImageState& state)
+	{
+		this->subresourceState = state;
+	}
+
+	inline VkImageView GrafImageSubresourceVulkan::GetVkImageView() const
+	{
+		return this->vkImageView;
 	}
 
 	inline VkBuffer GrafBufferVulkan::GetVkBuffer() const

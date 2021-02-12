@@ -60,6 +60,21 @@ namespace UnlimRealms
 		return this->imageState;
 	}
 
+	inline const GrafImage* GrafImageSubresource::GetImage() const
+	{
+		return this->image;
+	}
+
+	inline const GrafImageSubresourceDesc& GrafImageSubresource::GetDesc() const
+	{
+		return this->subresourceDesc;
+	}
+
+	inline const GrafImageState& GrafImageSubresource::GetState() const
+	{
+		return this->subresourceState;
+	}
+
 	inline const GrafBufferDesc& GrafBuffer::GetDesc() const
 	{
 		return this->bufferDesc;

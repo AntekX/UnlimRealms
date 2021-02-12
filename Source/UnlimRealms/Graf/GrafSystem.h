@@ -34,6 +34,7 @@ namespace UnlimRealms
 	class GrafFence;
 	class GrafCanvas;
 	class GrafImage;
+	class GrafImageSubresource;
 	class GrafBuffer;
 	class GrafSampler;
 	class GrafShader;
@@ -226,6 +227,15 @@ namespace UnlimRealms
 		ur_uint MipLevels;
 		GrafImageUsageFlags Usage;
 		GrafDeviceMemoryFlags MemoryType;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	struct UR_DECL GrafImageSubresourceDesc
+	{
+		ur_uint32 BaseMipLevel;
+		ur_uint32 LevelCount;
+		ur_uint32 BaseArrayLayer;
+		ur_uint32 LayerCount;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -735,6 +745,8 @@ namespace UnlimRealms
 
 		virtual Result CreateImage(std::unique_ptr<GrafImage>& grafImage);
 
+		virtual Result CreateImageSubresource(std::unique_ptr<GrafImageSubresource>& grafImageSubresource);
+
 		virtual Result CreateBuffer(std::unique_ptr<GrafBuffer>& grafBuffer);
 
 		virtual Result CreateSampler(std::unique_ptr<GrafSampler>& grafSampler);
@@ -857,11 +869,17 @@ namespace UnlimRealms
 
 		virtual Result ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState);
 
+		virtual Result ImageMemoryBarrier(GrafImageSubresource* grafImageSubresource, GrafImageState srcState, GrafImageState dstState);
+
 		virtual Result SetFenceState(GrafFence* grafFence, GrafFenceState state);
 
 		virtual Result ClearColorImage(GrafImage* grafImage, GrafClearValue clearValue);
 
+		virtual Result ClearColorImage(GrafImageSubresource* grafImageSubresource, GrafClearValue clearValue);
+
 		virtual Result ClearDepthStencilImage(GrafImage* grafImage, GrafClearValue clearValue);
+
+		virtual Result ClearDepthStencilImage(GrafImageSubresource* grafImageSubresource, GrafClearValue clearValue);
 
 		virtual Result SetViewport(const GrafViewportDesc& grafViewportDesc, ur_bool resetScissorsRect = false);
 
@@ -887,9 +905,15 @@ namespace UnlimRealms
 
 		virtual Result Copy(GrafBuffer* srcBuffer, GrafImage* dstImage, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
 
+		virtual Result Copy(GrafBuffer* srcBuffer, GrafImageSubresource* dstImageSubresource, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
+
 		virtual Result Copy(GrafImage* srcImage, GrafBuffer* dstBuffer, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
 
+		virtual Result Copy(GrafImageSubresource* srcImageSubresource, GrafBuffer* dstBuffer, ur_size bufferOffset = 0, BoxI imageRegion = BoxI::Zero);
+
 		virtual Result Copy(GrafImage* srcImage, GrafImage* dstImage, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
+
+		virtual Result Copy(GrafImageSubresource* srcImageSubresource, GrafImageSubresource* dstImageSubresource, BoxI srcRegion = BoxI::Zero, BoxI dstRegion = BoxI::Zero);
 
 		virtual Result BindComputePipeline(GrafComputePipeline* grafPipeline);
 
@@ -991,6 +1015,36 @@ namespace UnlimRealms
 
 		GrafImageDesc imageDesc;
 		GrafImageState imageState;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafImageSubresource : public GrafDeviceEntity
+	{
+	public:
+
+		struct UR_DECL InitParams
+		{
+			GrafImage* Image;
+			GrafImageSubresourceDesc SubresourceDesc;
+		};
+
+		GrafImageSubresource(GrafSystem &grafSystem);
+		
+		~GrafImageSubresource();
+		
+		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
+
+		inline const GrafImage* GetImage() const;
+
+		inline const GrafImageSubresourceDesc& GetDesc() const;
+
+		inline const GrafImageState& GetState() const;
+
+	protected:
+
+		GrafImage* image;
+		GrafImageSubresourceDesc subresourceDesc;
+		GrafImageState subresourceState;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1212,13 +1266,19 @@ namespace UnlimRealms
 
 		virtual Result SetSampledImage(ur_uint bindingIdx, GrafImage* image, GrafSampler* sampler);
 
+		virtual Result SetSampledImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource, GrafSampler* sampler);
+
 		virtual Result SetSampler(ur_uint bindingIdx, GrafSampler* sampler);
 
 		virtual Result SetImage(ur_uint bindingIdx, GrafImage* image);
 
+		virtual Result SetImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource);
+
 		virtual Result SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer);
 
 		virtual Result SetRWImage(ur_uint bindingIdx, GrafImage* image);
+
+		virtual Result SetRWImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource);
 
 		virtual Result SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer);
 
