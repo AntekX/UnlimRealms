@@ -25,11 +25,7 @@ namespace UnlimRealms
 	#if defined(UR_GRAF_VULKAN_DEBUG_LAYER)
 	#define UR_GRAF_VULKAN_DEBUG_MSG_SEVIRITY_MIN VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
 	#endif
-
-	#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
-	// TODO: check whether debug layer support KHR ray tracing before enabling
-	#undef UR_GRAF_VULKAN_DEBUG_LAYER
-	#endif
+	#define UR_GRAF_VULKAN_DEBUG_LAYER_ASSERT 0
 
 	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_2
 	#define UR_GRAF_VULKAN_DEBUG_LABLES 1
@@ -446,10 +442,12 @@ namespace UnlimRealms
 				Log* log = reinterpret_cast<Log*>(pUserData);
 				log->WriteLine(std::string("VulkanValidationLayer: ") + pCallbackData->pMessage);
 			}
+			#if (UR_GRAF_VULKAN_DEBUG_LAYER_ASSERT)
 			if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
 			{
 				assert(false);
 			}
+			#endif
 		}
 		return VK_FALSE;
 	}

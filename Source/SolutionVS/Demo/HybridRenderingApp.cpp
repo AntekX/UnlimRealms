@@ -65,7 +65,7 @@ int HybridRenderingApp::Run()
 		GrafRenderer::InitParams grafRendererParams = GrafRenderer::InitParams::Default;
 		grafRendererParams.DeviceId = grafSystem->GetRecommendedDeviceId();
 		grafRendererParams.CanvasParams = GrafCanvas::InitParams::Default;
-		grafRendererParams.CanvasParams.PresentMode = GrafPresentMode::Immediate;
+		grafRendererParams.CanvasParams.PresentMode = GrafPresentMode::VerticalSync;
 		res = grafRenderer->Initialize(std::move(grafSystem), grafRendererParams);
 		if (Failed(res)) break;
 
@@ -124,9 +124,9 @@ int HybridRenderingApp::Run()
 		GrafFormat::R8G8_UINT,
 	};
 
-	static const ur_bool LightingImageGenerateMips[LightingImageCount] = {
-		false,
-		false,
+	static const ur_int LightingImageGenerateMips[LightingImageCount] = {
+		1,// 5,
+		1,
 	};
 
 	static GrafClearValue LightingBufferClearValues[LightingImageCount] = {
@@ -146,6 +146,7 @@ int HybridRenderingApp::Run()
 	struct LightingBufferSet
 	{
 		std::unique_ptr<GrafImage> images[LightingImageCountWithHistory];
+		std::vector<std::unique_ptr<GrafImageSubresource>> subresources[LightingImageCountWithHistory];
 	};
 
 	std::vector<std::unique_ptr<GrafCommandList>> cmdListPerFrame;
@@ -233,6 +234,7 @@ int HybridRenderingApp::Run()
 		{
 			res = grafSystem->CreateRenderTarget(renderTargetSet->renderTargetStorage[frameId]);
 			if (Failed(res)) return res;
+			
 			GrafRenderTarget::InitParams renderTargetParams = {
 				rasterRenderPass.get(),
 				&renderTargetSet->images[frameId * RenderTargetImageCount],
@@ -252,9 +254,11 @@ int HybridRenderingApp::Run()
 		{
 			ur_uint imageUsage = (imageId % LightingImageCount);
 			auto& image = lightingBufferSet->images[imageId];
-			ur_uint imageMipCount = (LightingImageGenerateMips[imageUsage] ? lightBufferMipCount : 1);
+			ur_uint imageMipCount = ur_uint(LightingImageGenerateMips[imageUsage] < 1 ? lightBufferMipCount : std::min((ur_uint)LightingImageGenerateMips[imageUsage], lightBufferMipCount));
+			
 			res = grafSystem->CreateImage(image);
 			if (Failed(res)) return res;
+			
 			GrafImageDesc imageDesc = {
 				GrafImageType::Tex2D,
 				LightingImageFormat[imageUsage],
@@ -264,6 +268,22 @@ int HybridRenderingApp::Run()
 			};
 			res = image->Initialize(grafDevice, { imageDesc });
 			if (Failed(res)) return res;
+
+			// subreources for mip chain generation
+			auto& imageSubresources = lightingBufferSet->subresources[imageId];
+			imageSubresources.resize(imageMipCount);
+			for (ur_uint mipId = 0; mipId < imageMipCount; ++ mipId)
+			{
+				auto& imageMip = imageSubresources[mipId];
+				res = grafSystem->CreateImageSubresource(imageMip);
+				if (Failed(res)) return res;
+
+				GrafImageSubresourceDesc imageMipDesc ={
+					mipId, 1, 0, 1
+				};
+				res = imageMip->Initialize(grafDevice, { image.get(), imageMipDesc });
+				if (Failed(res)) return res;
+			}
 		}
 
 		renderTargetSet->resetHistory = true;
@@ -522,6 +542,12 @@ int HybridRenderingApp::Run()
 		GrafStridedBufferRegionDesc rayGenShaderTable;
 		GrafStridedBufferRegionDesc rayMissShaderTable;
 		GrafStridedBufferRegionDesc rayHitShaderTable;
+		std::unique_ptr<GrafDescriptorTableLayout> shadowMipsDescTableLayout;
+		std::vector<std::unique_ptr<GrafDescriptorTable>> shadowMipsDescTablePerFrame;
+		std::unique_ptr<GrafComputePipeline> shadowMipsPipelineState;
+		std::unique_ptr<GrafDescriptorTableLayout> shadowFilterDescTableLayout;
+		std::vector<std::unique_ptr<GrafDescriptorTable>> shadowFilterDescTablePerFrame;
+		std::unique_ptr<GrafComputePipeline> shadowFilterPipelineState;
 		std::unique_ptr<GrafShaderLib> shaderLib;
 		std::unique_ptr<GrafShaderLib> shaderLibRT;
 		std::unique_ptr<GrafShader> shaderVertex;
@@ -619,9 +645,13 @@ int HybridRenderingApp::Run()
 			enum ShaderLibId
 			{
 				ShaderLibId_ComputeLighting,
+				ShaderLibId_ComputeShadowMips,
+				ShaderLibId_FilterShadowResult,
 			};
 			GrafShaderLib::EntryPoint ShaderLibEntries[] = {
 				{ "ComputeLighting", GrafShaderType::Compute },
+				{ "ComputeShadowMips", GrafShaderType::Compute },
+				{ "FilterShadowResult", GrafShaderType::Compute },
 			};
 			enum RTShaderLibId
 			{
@@ -836,6 +866,70 @@ int HybridRenderingApp::Run()
 				this->rayGenShaderTable		= { this->raytraceShaderHandlesBuffer.get(),	0 * sgHandleSize,	1 * sgHandleSize,	sgHandleSize };
 				this->rayMissShaderTable	= { this->raytraceShaderHandlesBuffer.get(),	1 * sgHandleSize,	1 * sgHandleSize,	sgHandleSize };
 				this->rayHitShaderTable		= { this->raytraceShaderHandlesBuffer.get(),	2 * sgHandleSize,	1 * sgHandleSize,	sgHandleSize };
+
+				// ray tracing result mips generation pipeline
+
+				GrafDescriptorRangeDesc shadowMipsDescTableLayoutRanges[] = {
+					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+					{ GrafDescriptorType::Texture, 4, 1 },
+					{ GrafDescriptorType::RWTexture, 1, 4 },
+				};
+				GrafDescriptorTableLayoutDesc shadowMipsDescTableLayoutDesc = {
+					ur_uint(GrafShaderStageFlag::Compute),
+					shadowMipsDescTableLayoutRanges, ur_array_size(shadowMipsDescTableLayoutRanges)
+				};
+				grafSystem->CreateDescriptorTableLayout(this->shadowMipsDescTableLayout);
+				this->shadowMipsDescTableLayout->Initialize(grafDevice, { shadowMipsDescTableLayoutDesc });
+				this->shadowMipsDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
+				for (auto& descTable : this->shadowMipsDescTablePerFrame)
+				{
+					grafSystem->CreateDescriptorTable(descTable);
+					descTable->Initialize(grafDevice, { this->shadowMipsDescTableLayout.get() });
+				}
+
+				grafSystem->CreateComputePipeline(this->shadowMipsPipelineState);
+				{
+					GrafDescriptorTableLayout* descriptorLayouts[] = {
+						this->shadowMipsDescTableLayout.get()
+					};
+					GrafComputePipeline::InitParams computePipelineParams = GrafComputePipeline::InitParams::Default;
+					computePipelineParams.ShaderStage = this->shaderLib->GetShader(ShaderLibId_ComputeShadowMips);
+					computePipelineParams.DescriptorTableLayouts = descriptorLayouts;
+					computePipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+					this->shadowMipsPipelineState->Initialize(grafDevice, computePipelineParams);
+				}
+
+				// ray tracing result filter pipeline
+
+				GrafDescriptorRangeDesc shadowFilterDescTableLayoutRanges[] = {
+					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+					{ GrafDescriptorType::Texture, 0, 1 },
+					{ GrafDescriptorType::RWTexture, 0, 1 },
+				};
+				GrafDescriptorTableLayoutDesc shadowFilterDescTableLayoutDesc = {
+					ur_uint(GrafShaderStageFlag::Compute),
+					shadowFilterDescTableLayoutRanges, ur_array_size(shadowFilterDescTableLayoutRanges)
+				};
+				grafSystem->CreateDescriptorTableLayout(this->shadowFilterDescTableLayout);
+				this->shadowFilterDescTableLayout->Initialize(grafDevice, { shadowFilterDescTableLayoutDesc });
+				this->shadowFilterDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
+				for (auto& descTable : this->shadowFilterDescTablePerFrame)
+				{
+					grafSystem->CreateDescriptorTable(descTable);
+					descTable->Initialize(grafDevice, { this->shadowFilterDescTableLayout.get() });
+				}
+
+				grafSystem->CreateComputePipeline(this->shadowFilterPipelineState);
+				{
+					GrafDescriptorTableLayout* descriptorLayouts[] = {
+						this->shadowFilterDescTableLayout.get()
+					};
+					GrafComputePipeline::InitParams computePipelineParams = GrafComputePipeline::InitParams::Default;
+					computePipelineParams.ShaderStage = this->shaderLib->GetShader(ShaderLibId_FilterShadowResult);
+					computePipelineParams.DescriptorTableLayouts = descriptorLayouts;
+					computePipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+					this->shadowFilterPipelineState->Initialize(grafDevice, computePipelineParams);
+				}
 			}
 		}
 
@@ -1092,6 +1186,37 @@ int HybridRenderingApp::Run()
 			#endif
 		}
 
+		void ComputeShadowMips(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
+		{
+			ur_uint mipCount = (ur_uint)lightingBufferSet->subresources[LightingImageUsage_DirectShadow].size();
+			ur_uint lastMipId = mipCount - 1;
+			
+			// update descriptor table
+			// common constant buffer is expected to be uploaded during rasterization pass
+
+			GrafDescriptorTable* descriptorTable = this->shadowMipsDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			descriptorTable->SetImage(4, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get());
+			for (ur_uint mipId = 1; mipId < mipCount; ++mipId)
+			{
+				descriptorTable->SetRWImage(1 + mipId, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][std::min(mipId, lastMipId)].get());
+			}
+
+			// compute
+
+			grafCmdList->BindComputePipeline(this->shadowMipsPipelineState.get());
+			grafCmdList->BindComputeDescriptorTable(descriptorTable, this->shadowMipsPipelineState.get());
+
+			static const ur_uint3 groupSize = { 16, 16, 1 };
+			const ur_uint3& bufferSize = lightingBufferSet->images[0]->GetDesc().Size;
+			grafCmdList->Dispatch((bufferSize.x - 1) / groupSize.x + 1, (bufferSize.y - 1) / groupSize.y + 1, 1);
+		}
+
+		void FilterShadowResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
+		{
+			// TODO
+		}
+
 		void ComputeLighting(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet, GrafRenderTarget* lightingTarget)
 		{
 			// update descriptor table
@@ -1128,6 +1253,11 @@ int HybridRenderingApp::Run()
 			for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
 			{
 				lightingBufferSet->images[imageId].swap(lightingBufferSet->images[LightingImageHistoryFirst + imageId]);
+				ur_uint imageMipCount = (ur_uint)lightingBufferSet->subresources[imageId].size();
+				for (ur_uint mipId = 0; mipId < imageMipCount; ++mipId)
+				{
+					lightingBufferSet->subresources[imageId][mipId].swap(lightingBufferSet->subresources[LightingImageHistoryFirst + imageId][mipId]);
+				}
 			}
 			renderTargetSet->resetHistory = false;
 		}
@@ -1214,7 +1344,7 @@ int HybridRenderingApp::Run()
 	sphericalLight1.Type = LightType_Spherical;
 	sphericalLight1.Color = { 1.0f, 1.0f, 1.0f };
 	sphericalLight1.Position = { 10.0f, 10.0f, 10.0f };
-	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
+	sphericalLight1.Intensity = 1.0e+4;//SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
 	sphericalLight1.Size = 0.5f;
 	LightingDesc lightingDesc = {};
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
@@ -1391,6 +1521,7 @@ int HybridRenderingApp::Run()
 			// rasterization pass
 			{
 				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "RasterizePass", DebugLabelColorPass);
+				
 				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 				{
 					ur_uint imageUsage = (imageId % RenderTargetImageCount);
@@ -1421,6 +1552,7 @@ int HybridRenderingApp::Run()
 			if (grafDeviceDesc->RayTracing.RayTraceSupported)
 			{
 				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "RayTracePass", DebugLabelColorPass);
+				
 				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 				{
 					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::RayTracingRead);
@@ -1463,10 +1595,63 @@ int HybridRenderingApp::Run()
 				}
 			}
 
+			// denosing
+			if (grafDeviceDesc->RayTracing.RayTraceSupported)
+			{
+				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "DenoisingPass", DebugLabelColorPass);
+
+				for (ur_uint imageId = 0; imageId < RenderTargetImageCountWithHistory; ++imageId)
+				{
+					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::ComputeRead);
+				}
+
+				// shadow result hierarchy
+				auto& shadowResultMips = lightingBufferSet->subresources[LightingImageUsage_DirectShadow];
+				const ur_size shadowResultMipCount = shadowResultMips.size();
+				if (shadowResultMipCount > 1)
+				{
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowMipsPass", DebugLabelColorPass);
+
+					grafCmdListCrnt->ImageMemoryBarrier(shadowResultMips[0].get(), GrafImageState::RayTracingReadWrite, GrafImageState::ComputeRead);
+					for (ur_uint mipId = 1; mipId < shadowResultMipCount; ++mipId)
+					{
+						grafCmdListCrnt->ImageMemoryBarrier(shadowResultMips[mipId].get(), GrafImageState::RayTracingReadWrite, GrafImageState::ComputeReadWrite);
+					}
+
+					if (demoScene != ur_null)
+					{
+						demoScene->ComputeShadowMips(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
+					}
+
+					for (ur_uint mipId = 1; mipId < shadowResultMipCount; ++mipId)
+					{
+						grafCmdListCrnt->ImageMemoryBarrier(shadowResultMips[mipId].get(), GrafImageState::ComputeReadWrite, GrafImageState::ComputeRead);
+					}
+					// all mips are expected to be in ComputeRead state at this point, following call forces global image state update
+					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[LightingImageUsage_DirectShadow].get(), GrafImageState::ComputeRead, GrafImageState::ComputeRead);
+				}
+
+				// filter
+				{
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowFilterPass", DebugLabelColorPass);
+
+					for (ur_uint imageId = 0; imageId < LightingImageCountWithHistory; ++imageId)
+					{
+						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeRead);
+					}
+
+					if (demoScene != ur_null)
+					{
+						demoScene->FilterShadowResult(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
+					}
+				}
+			}
+
 			// lighting pass
 			if (hdrRender != ur_null)
 			{
 				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "LightingPass", DebugLabelColorPass);
+				
 				for (ur_uint imageId = 0; imageId < RenderTargetImageCountWithHistory; ++imageId)
 				{
 					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::ComputeRead);

@@ -13,6 +13,10 @@ Texture2D<float4>	g_GeometryImage2		: register(t3);
 Texture2D<float4>	g_ShadowResult			: register(t4);
 Texture2D<uint2>	g_TracingInfo			: register(t5);
 RWTexture2D<float4>	g_LightingTarget		: register(u0);
+RWTexture2D<float4>	g_ShadowMip1			: register(u1);
+RWTexture2D<float4>	g_ShadowMip2			: register(u2);
+RWTexture2D<float4>	g_ShadowMip3			: register(u3);
+RWTexture2D<float4>	g_ShadowMip4			: register(u4);
 
 // lighting common
 
@@ -38,15 +42,6 @@ float4 CalculateSkyLight(const float3 position, const float3 direction)
 static const int2 QuadSampleOfs[4] = {
 	{ 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 }
 };
-
-// compute mips
-
-[shader("compute")]
-[numthreads(8, 8, 1)]
-void ComputeMips(const uint3 dispatchThreadId : SV_DispatchThreadID)
-{
-	// TODO
-}
 
 // compute lighting
 
@@ -221,4 +216,122 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 	}
 
 	g_LightingTarget[imagePos] = float4(lightingResult, 1.0);
+}
+
+// compute shadow mips
+
+static const uint g_ShadowMipGroupSize = 16;
+groupshared float4 g_ShadowMipGroupData[g_ShadowMipGroupSize * g_ShadowMipGroupSize];
+
+[shader("compute")]
+[numthreads(g_ShadowMipGroupSize, g_ShadowMipGroupSize, 1)]
+void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const uint3 groupThreadId : SV_GroupThreadID, const uint groupThreadIdx : SV_GroupIndex)
+{
+	uint2 imagePos = dispatchThreadId.xy;
+	uint2 imageSize = uint2(g_SceneCB.LightBufferSize.xy);
+	if (imagePos.x >= imageSize.x || imagePos.y >= imageSize.y)
+		return;
+
+	// fetch data into shared memeory
+
+	float4 dataMip0 = g_ShadowResult.Load(int3(imagePos.xy, 0));
+	g_ShadowMipGroupData[groupThreadIdx] = dataMip0;
+	GroupMemoryBarrier();
+
+	// mip 1
+
+	if (imagePos.x % 2 != 0 || imagePos.y % 2 != 0)
+		return;
+
+	uint2 dstSize = imageSize / 2;
+	uint2 dstPos = imagePos.xy / 2;
+	if (dstPos.x >= dstSize.x || dstPos.y >= dstSize.y)
+		return;
+
+	uint2 srcSize = imageSize;
+	uint2 srcPos = imagePos.xy;
+	float4 mipData = 0;
+	[unroll] for (uint i = 0; i < 4; ++i)
+	{
+		uint2 subPos = (min(srcPos.xy + uint2(QuadSampleOfs[i].xy), srcSize.xy)) % g_ShadowMipGroupSize;
+		mipData += g_ShadowMipGroupData[subPos.x + subPos.y * g_ShadowMipGroupSize];
+	}
+	g_ShadowMip1[dstPos] = mipData * 0.25;
+	g_ShadowMipGroupData[groupThreadIdx] = mipData;
+	GroupMemoryBarrier();
+
+	// mip 2
+
+	if (imagePos.x % 4 != 0 || imagePos.y % 4 != 0)
+		return;
+
+	dstSize = imageSize / 4;
+	dstPos = imagePos.xy / 4;
+	if (dstPos.x >= dstSize.x || dstPos.y >= dstSize.y)
+		return;
+
+	srcSize = imageSize / 2;
+	srcPos = imagePos.xy / 2;
+	mipData = 0;
+	[unroll] for (i = 0; i < 4; ++i)
+	{
+		uint2 subPos = (min(srcPos.xy + uint2(QuadSampleOfs[i].xy), srcSize.xy) * 2) % g_ShadowMipGroupSize;
+		mipData += g_ShadowMipGroupData[subPos.x + subPos.y * g_ShadowMipGroupSize];
+	}
+	g_ShadowMip2[dstPos] = mipData * 0.25;
+	g_ShadowMipGroupData[groupThreadIdx] = mipData;
+	GroupMemoryBarrier();
+
+	// mip 3
+
+	if (imagePos.x % 8 != 0 || imagePos.y % 8 != 0)
+		return;
+
+	dstSize = imageSize / 8;
+	dstPos = imagePos.xy / 8;
+	if (dstPos.x >= dstSize.x || dstPos.y >= dstSize.y)
+		return;
+
+	srcSize = imageSize / 4;
+	srcPos = imagePos.xy / 4;
+	mipData = 0;
+	[unroll] for (i = 0; i < 4; ++i)
+	{
+		uint2 subPos = (min(srcPos.xy + uint2(QuadSampleOfs[i].xy), srcSize.xy) * 4) % g_ShadowMipGroupSize;
+		mipData += g_ShadowMipGroupData[subPos.x + subPos.y * g_ShadowMipGroupSize];
+	}
+	g_ShadowMip3[dstPos] = mipData * 0.25;
+	g_ShadowMipGroupData[groupThreadIdx] = mipData;
+	GroupMemoryBarrier();
+
+	// mip 4
+
+	if (imagePos.x % 16 != 0 || imagePos.y % 16 != 0)
+		return;
+
+	dstSize = imageSize / 16;
+	dstPos = imagePos.xy / 16;
+	if (dstPos.x >= dstSize.x || dstPos.y >= dstSize.y)
+		return;
+
+	srcSize = imageSize / 8;
+	srcPos = imagePos.xy / 8;
+	mipData = 0;
+	[unroll] for (i = 0; i < 4; ++i)
+	{
+		uint2 subPos = (min(srcPos.xy + uint2(QuadSampleOfs[i].xy), srcSize.xy) * 8) % g_ShadowMipGroupSize;
+		mipData += g_ShadowMipGroupData[subPos.x + subPos.y * g_ShadowMipGroupSize];
+	}
+	g_ShadowMip4[dstPos] = mipData * 0.25;
+	g_ShadowMipGroupData[groupThreadIdx] = mipData;
+	GroupMemoryBarrier();
+}
+
+// apply filter(s) to shadow result
+
+[shader("compute")]
+[numthreads(8, 8, 1)]
+void FilterShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+	// TODO
 }
