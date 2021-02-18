@@ -125,7 +125,7 @@ int HybridRenderingApp::Run()
 	};
 
 	static const ur_int LightingImageGenerateMips[LightingImageCount] = {
-		1,// 5,
+		5,
 		1,
 	};
 
@@ -1199,7 +1199,7 @@ int HybridRenderingApp::Run()
 			descriptorTable->SetImage(4, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get());
 			for (ur_uint mipId = 1; mipId < mipCount; ++mipId)
 			{
-				descriptorTable->SetRWImage(1 + mipId, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][std::min(mipId, lastMipId)].get());
+				descriptorTable->SetRWImage(mipId, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][std::min(mipId, lastMipId)].get());
 			}
 
 			// compute
@@ -1344,7 +1344,7 @@ int HybridRenderingApp::Run()
 	sphericalLight1.Type = LightType_Spherical;
 	sphericalLight1.Color = { 1.0f, 1.0f, 1.0f };
 	sphericalLight1.Position = { 10.0f, 10.0f, 10.0f };
-	sphericalLight1.Intensity = 1.0e+4;//SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
+	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
 	sphericalLight1.Size = 0.5f;
 	LightingDesc lightingDesc = {};
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;

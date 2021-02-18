@@ -236,7 +236,7 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 
 	float4 dataMip0 = g_ShadowResult.Load(int3(imagePos.xy, 0));
 	g_ShadowMipGroupData[groupThreadIdx] = dataMip0;
-	GroupMemoryBarrier();
+	GroupMemoryBarrierWithGroupSync();
 
 	// mip 1
 
@@ -256,9 +256,10 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 		uint2 subPos = (min(srcPos.xy + uint2(QuadSampleOfs[i].xy), srcSize.xy)) % g_ShadowMipGroupSize;
 		mipData += g_ShadowMipGroupData[subPos.x + subPos.y * g_ShadowMipGroupSize];
 	}
-	g_ShadowMip1[dstPos] = mipData * 0.25;
+	mipData *= 0.25;
+	g_ShadowMip1[dstPos] = mipData;
 	g_ShadowMipGroupData[groupThreadIdx] = mipData;
-	GroupMemoryBarrier();
+	GroupMemoryBarrierWithGroupSync();
 
 	// mip 2
 
@@ -278,9 +279,10 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 		uint2 subPos = (min(srcPos.xy + uint2(QuadSampleOfs[i].xy), srcSize.xy) * 2) % g_ShadowMipGroupSize;
 		mipData += g_ShadowMipGroupData[subPos.x + subPos.y * g_ShadowMipGroupSize];
 	}
-	g_ShadowMip2[dstPos] = mipData * 0.25;
+	mipData *= 0.25;
+	g_ShadowMip2[dstPos] = mipData;
 	g_ShadowMipGroupData[groupThreadIdx] = mipData;
-	GroupMemoryBarrier();
+	GroupMemoryBarrierWithGroupSync();
 
 	// mip 3
 
@@ -300,9 +302,10 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 		uint2 subPos = (min(srcPos.xy + uint2(QuadSampleOfs[i].xy), srcSize.xy) * 4) % g_ShadowMipGroupSize;
 		mipData += g_ShadowMipGroupData[subPos.x + subPos.y * g_ShadowMipGroupSize];
 	}
-	g_ShadowMip3[dstPos] = mipData * 0.25;
+	mipData *= 0.25;
+	g_ShadowMip3[dstPos] = mipData;
 	g_ShadowMipGroupData[groupThreadIdx] = mipData;
-	GroupMemoryBarrier();
+	GroupMemoryBarrierWithGroupSync();
 
 	// mip 4
 
@@ -322,9 +325,10 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 		uint2 subPos = (min(srcPos.xy + uint2(QuadSampleOfs[i].xy), srcSize.xy) * 8) % g_ShadowMipGroupSize;
 		mipData += g_ShadowMipGroupData[subPos.x + subPos.y * g_ShadowMipGroupSize];
 	}
-	g_ShadowMip4[dstPos] = mipData * 0.25;
+	mipData *= 0.25;
+	g_ShadowMip4[dstPos] = mipData;
 	g_ShadowMipGroupData[groupThreadIdx] = mipData;
-	GroupMemoryBarrier();
+	GroupMemoryBarrierWithGroupSync();
 }
 
 // apply filter(s) to shadow result
