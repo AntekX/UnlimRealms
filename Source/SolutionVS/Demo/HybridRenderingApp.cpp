@@ -147,6 +147,7 @@ int HybridRenderingApp::Run()
 	{
 		std::unique_ptr<GrafImage> images[LightingImageCountWithHistory];
 		std::vector<std::unique_ptr<GrafImageSubresource>> subresources[LightingImageCountWithHistory];
+		//std::unique_ptr<GrafImageSubresource> mipsSubresource[LightingImageCountWithHistory];
 	};
 
 	std::vector<std::unique_ptr<GrafCommandList>> cmdListPerFrame;
@@ -255,10 +256,10 @@ int HybridRenderingApp::Run()
 			ur_uint imageUsage = (imageId % LightingImageCount);
 			auto& image = lightingBufferSet->images[imageId];
 			ur_uint imageMipCount = ur_uint(LightingImageGenerateMips[imageUsage] < 1 ? lightBufferMipCount : std::min((ur_uint)LightingImageGenerateMips[imageUsage], lightBufferMipCount));
-			
+
 			res = grafSystem->CreateImage(image);
 			if (Failed(res)) return res;
-			
+
 			GrafImageDesc imageDesc = {
 				GrafImageType::Tex2D,
 				LightingImageFormat[imageUsage],
@@ -272,18 +273,31 @@ int HybridRenderingApp::Run()
 			// subreources for mip chain generation
 			auto& imageSubresources = lightingBufferSet->subresources[imageId];
 			imageSubresources.resize(imageMipCount);
-			for (ur_uint mipId = 0; mipId < imageMipCount; ++ mipId)
+			for (ur_uint mipId = 0; mipId < imageMipCount; ++mipId)
 			{
 				auto& imageMip = imageSubresources[mipId];
 				res = grafSystem->CreateImageSubresource(imageMip);
 				if (Failed(res)) return res;
 
-				GrafImageSubresourceDesc imageMipDesc ={
+				GrafImageSubresourceDesc imageMipDesc = {
 					mipId, 1, 0, 1
 				};
 				res = imageMip->Initialize(grafDevice, { image.get(), imageMipDesc });
 				if (Failed(res)) return res;
 			}
+
+			// common subresources for all mips (except zero)
+			/*if (imageMipCount > 1)
+			{
+				auto& mipsSubresource = lightingBufferSet->mipsSubresource[imageId];
+				res = grafSystem->CreateImageSubresource(mipsSubresource);
+				if (Failed(res)) return res;
+				GrafImageSubresourceDesc subresourceDesc = {
+					1, imageMipCount - 1, 0, 1
+				};
+				res = mipsSubresource->Initialize(grafDevice, { image.get(), subresourceDesc });
+				if (Failed(res)) return res;
+			}*/
 		}
 
 		renderTargetSet->resetHistory = true;
@@ -553,6 +567,7 @@ int HybridRenderingApp::Run()
 		std::unique_ptr<GrafShader> shaderVertex;
 		std::unique_ptr<GrafShader> shaderPixel;
 		std::unique_ptr<GrafSampler> samplerBilinear;
+		std::unique_ptr<GrafSampler> samplerTrilinear;
 		SceneConstants sceneConstants;
 		Allocation sceneCBCrntFrameAlloc;
 		ur_float4 debugVec0;
@@ -671,12 +686,19 @@ int HybridRenderingApp::Run()
 
 			// samplers
 
-			GrafSamplerDesc samplerDesc = {
+			GrafSamplerDesc samplerBilinearDesc = {
 				GrafFilterType::Linear, GrafFilterType::Linear, GrafFilterType::Nearest,
 				GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp
 			};
 			grafSystem->CreateSampler(this->samplerBilinear);
-			this->samplerBilinear->Initialize(grafDevice, { samplerDesc });
+			this->samplerBilinear->Initialize(grafDevice, { samplerBilinearDesc });
+
+			GrafSamplerDesc samplerTrilinearDesc = {
+				GrafFilterType::Linear, GrafFilterType::Linear, GrafFilterType::Linear,
+				GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp
+			};
+			grafSystem->CreateSampler(this->samplerTrilinear);
+			this->samplerTrilinear->Initialize(grafDevice, { samplerTrilinearDesc });
 
 			// rasterization descriptor table
 
@@ -746,7 +768,7 @@ int HybridRenderingApp::Run()
 
 			GrafDescriptorRangeDesc lightingDescTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-				{ GrafDescriptorType::Sampler, 0, 1 },
+				{ GrafDescriptorType::Sampler, 0, 2 },
 				{ GrafDescriptorType::Texture, 0, 6 },
 				{ GrafDescriptorType::RWTexture, 0, 1 },
 			};
@@ -903,8 +925,10 @@ int HybridRenderingApp::Run()
 
 				GrafDescriptorRangeDesc shadowFilterDescTableLayoutRanges[] = {
 					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-					{ GrafDescriptorType::Texture, 0, 1 },
-					{ GrafDescriptorType::RWTexture, 0, 1 },
+					{ GrafDescriptorType::Sampler, 0, 2 },
+					{ GrafDescriptorType::Texture, 0, 4 },
+					{ GrafDescriptorType::Texture, 6, /*4*/3 }, // todo: mipsSubresource
+					{ GrafDescriptorType::RWTexture, 5, 2 },
 				};
 				GrafDescriptorTableLayoutDesc shadowFilterDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::Compute),
@@ -1214,7 +1238,32 @@ int HybridRenderingApp::Run()
 
 		void FilterShadowResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
 		{
-			// TODO
+			// update descriptor table
+			// common constant buffer is expected to be uploaded during rasterization pass
+
+			GrafDescriptorTable* descriptorTable = this->shadowFilterDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			descriptorTable->SetSampler(0, this->samplerBilinear.get());
+			descriptorTable->SetSampler(1, this->samplerTrilinear.get());
+			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
+			{
+				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
+			}
+			descriptorTable->SetImage(6, renderTargetSet->images[RenderTargetImageUsage_DepthHistory]);
+			descriptorTable->SetImage(7, lightingBufferSet->images[LightingImageUsage_DirectShadowHistory].get());
+			descriptorTable->SetImage(8, lightingBufferSet->images[LightingImageUsage_TracingInfoHistory].get());
+			//descriptorTable->SetImage(9, lightingBufferSet->mipsSubresource[LightingImageUsage_DirectShadow].get());
+			descriptorTable->SetRWImage(5, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
+			descriptorTable->SetRWImage(6, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
+			
+			// compute
+
+			grafCmdList->BindComputePipeline(this->shadowFilterPipelineState.get());
+			grafCmdList->BindComputeDescriptorTable(descriptorTable, this->shadowFilterPipelineState.get());
+
+			static const ur_uint3 groupSize = { 8, 8, 1 };
+			const ur_uint3& bufferSize = lightingBufferSet->images[0]->GetDesc().Size;
+			grafCmdList->Dispatch((bufferSize.x - 1) / groupSize.x + 1, (bufferSize.y - 1) / groupSize.y + 1, 1);
 		}
 
 		void ComputeLighting(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet, GrafRenderTarget* lightingTarget)
@@ -1225,6 +1274,7 @@ int HybridRenderingApp::Run()
 			GrafDescriptorTable* descriptorTable = this->lightingDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 			descriptorTable->SetSampler(0, this->samplerBilinear.get());
+			descriptorTable->SetSampler(1, this->samplerTrilinear.get());
 			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 			{
 				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
@@ -1635,9 +1685,40 @@ int HybridRenderingApp::Run()
 				{
 					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowFilterPass", DebugLabelColorPass);
 
-					for (ur_uint imageId = 0; imageId < LightingImageCountWithHistory; ++imageId)
+					for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 					{
+						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::ComputeRead);
+					}
+					for (ur_uint imageId = RenderTargetHistoryFirst; imageId < RenderTargetImageCountWithHistory; ++imageId)
+					{
+						if (renderTargetSet->resetHistory)
+						{
+							ur_uint imageUsage = (imageId % RenderTargetImageCount);
+							grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::TransferDst);
+							if (RenderTargetImageUsage_Depth == imageUsage)
+							{
+								grafCmdListCrnt->ClearDepthStencilImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
+							}
+							else
+							{
+								grafCmdListCrnt->ClearColorImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
+							}
+						}
+						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::ComputeRead);
+					}
+					for (ur_uint imageId = LightingImageHistoryFirst; imageId < LightingImageCountWithHistory; ++imageId)
+					{
+						if (renderTargetSet->resetHistory)
+						{
+							ur_uint imageUsage = (imageId % LightingImageCount);
+							grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::TransferDst);
+							grafCmdListCrnt->ClearColorImage(lightingBufferSet->images[imageId].get(), LightingBufferClearValues[imageUsage]);
+						}
 						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeRead);
+					}
+					for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
+					{
+						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
 					}
 
 					if (demoScene != ur_null)

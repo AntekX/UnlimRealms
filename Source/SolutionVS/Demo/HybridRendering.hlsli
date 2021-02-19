@@ -59,6 +59,7 @@ struct MeshPixelOutput
 
 // Shadow buffer
 
+#define SHADOW_BUFFER_APPLY_HISTORY_IN_RAYGEN 0 // allows to apply temporal accumulation without separate filter pass
 #define SHADOW_BUFFER_ONE_LIGHT_PER_FRAME 0 // enables light sources tracing distribution between multiple frames (requires temporal accumulation enabled)
 #define SHADOW_BUFFER_UINT32 0
 

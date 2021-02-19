@@ -6,17 +6,25 @@
 
 ConstantBuffer<SceneConstants> g_SceneCB	: register(b0);
 sampler				g_SamplerBilinear		: register(s0);
+sampler				g_SamplerTrilinear		: register(s1);
 Texture2D<float>	g_GeometryDepth			: register(t0);
 Texture2D<float4>	g_GeometryImage0		: register(t1);
 Texture2D<float4>	g_GeometryImage1		: register(t2);
 Texture2D<float4>	g_GeometryImage2		: register(t3);
 Texture2D<float4>	g_ShadowResult			: register(t4);
 Texture2D<uint2>	g_TracingInfo			: register(t5);
+Texture2D<float>	g_DepthHistory			: register(t6);
+Texture2D<float4>	g_ShadowHistory			: register(t7);
+Texture2D<uint2>	g_TracingHistory		: register(t8);
+Texture2D<float4>	g_ShadowMips			: register(t9);
 RWTexture2D<float4>	g_LightingTarget		: register(u0);
 RWTexture2D<float4>	g_ShadowMip1			: register(u1);
 RWTexture2D<float4>	g_ShadowMip2			: register(u2);
 RWTexture2D<float4>	g_ShadowMip3			: register(u3);
 RWTexture2D<float4>	g_ShadowMip4			: register(u4);
+RWTexture2D<float4>	g_ShadowTarget			: register(u5);
+RWTexture2D<uint2>	g_TracingInfoTarget		: register(u6);
+
 
 // lighting common
 
@@ -337,5 +345,138 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 [numthreads(8, 8, 1)]
 void FilterShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-	// TODO
+	uint2 lightBufferPos = dispatchThreadId.xy;
+	if (lightBufferPos.x >= (uint)g_SceneCB.LightBufferSize.x || lightBufferPos.y >= (uint)g_SceneCB.LightBufferSize.y)
+		return;
+
+	// tracing info (sub sample pos & counter)
+
+	uint2 tracingInfo = g_TracingInfoTarget[lightBufferPos.xy];
+	uint tracingSampleId = tracingInfo.x;
+	uint2 tracingSamplePos = uint2(tracingSampleId % (uint)g_SceneCB.LightBufferDownscale.x, tracingSampleId / (uint)g_SceneCB.LightBufferDownscale.x);
+
+	// read geometry buffer
+
+	uint2 imagePos = lightBufferPos * g_SceneCB.LightBufferDownscale.x + tracingSamplePos;
+	GBufferData gbData = LoadGBufferData(imagePos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
+	bool isSky = (gbData.ClipDepth >= 1.0);
+	if (isSky)
+		return;
+
+	// read lighting result
+
+	float4 shadowPerLight = 0.0;
+	#if (SHADOW_BUFFER_UINT32)
+	uint shadowPerLightPacked = g_ShadowTarget[lightBufferPos.xy];
+	[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
+	{
+		shadowPerLight[j] = ShadowBufferGetLightOcclusion(shadowPerLightPacked, j);
+	}
+	#else
+	shadowPerLight = g_ShadowTarget[lightBufferPos.xy];
+	#endif
+
+	// apply filter
+
+	float2 lightBufferUV = (float2(lightBufferPos.xy) + 0.5) * g_SceneCB.LightBufferSize.zw;
+	float2 uvPos = (float2(imagePos) + 0.5) * g_SceneCB.TargetSize.zw;
+	float3 clipPos = float3(float2(uvPos.x, 1.0 - uvPos.y) * 2.0 - 1.0, gbData.ClipDepth);
+	float3 worldPos = ClipPosToWorldPos(clipPos, g_SceneCB.ViewProjInv);
+	float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
+	clipPosPrev.xy /= clipPosPrev.w;
+	if (g_SceneCB.AccumulationFrameCount > 0 && all(abs(clipPosPrev.xy) < 1.0))
+	{
+		float2 imagePosPrev = clamp((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);
+		uint2 dispatchPosPrev = clamp(floor(imagePosPrev * g_SceneCB.LightBufferDownscale.y), float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
+		imagePosPrev = dispatchPosPrev * g_SceneCB.LightBufferDownscale.x;
+
+		float clipDepthPrev = g_DepthHistory.Load(int3(imagePosPrev.xy, 0));
+		bool isSkyPrev = (clipDepthPrev >= 1.0);
+		// TODO
+		#if (0)
+		float depthDeltaTolerance = gbData.ClipDepth * /*1.0e-4*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
+		float surfaceHistoryWeight = 1.0 - saturate(abs(gbData.ClipDepth - clipDepthPrev) / depthDeltaTolerance);
+		#elif (0)
+		// history rejection from Ray Tracing Gems "Ray traced Shadows"
+		float3 normalVS = mul(float4(gbData.Normal, 0.0), g_SceneCB.View).xyz;
+		//float depthDeltaTolerance = 0.003 + 0.017 * abs(normalVS.z);
+		float depthDeltaTolerance = g_SceneCB.DebugVec0[1] + g_SceneCB.DebugVec0[2] * abs(normalVS.z);
+		float surfaceHistoryWeight = (abs(1.0 - clipDepthPrev / gbData.ClipDepth) < depthDeltaTolerance ? 1.0 : 0.0);
+		#else
+		float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
+		float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
+		float worldPosTolerance = viewDepth * /*1.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
+		float surfaceHistoryWeight = 1.0 - saturate(length(worldPos - worldPosPrev) / worldPosTolerance);
+		surfaceHistoryWeight = saturate((surfaceHistoryWeight - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
+		#endif
+
+		uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
+		counter = (uint)floor(float(counter) * surfaceHistoryWeight + 0.5);
+		float historyWeight = float(counter) / (counter + 1);
+
+		#if (SHADOW_BUFFER_UINT32)
+		uint shadowHistoryPacked = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
+		#else
+		float4 shadowHistoryData = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
+		#endif
+		[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
+		{
+			#if (SHADOW_BUFFER_UINT32)
+			uint shadowPackedPrev = ((shadowHistoryPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask);
+			float shadowAccumulated = ShadowBufferEntryUnpack(shadowPackedPrev);
+			shadowAccumulated = lerp(shadowPerLight[j], shadowAccumulated, historyWeight);
+			#if (1)
+			// note: following code guarantees minimal difference (if any) is applied to quantized result to overcome lack of precision at the end of the accumulation curve
+			const float diffEps = 1.0e-4;
+			float diff = shadowPerLight[j] - shadowAccumulated; // calculate difference before quantizing
+			diff = (diff > diffEps ? 1.0f : (diff < -diffEps ? -1.0f : 0.0f));
+			shadowAccumulated = (float)ShadowBufferEntryPack(shadowAccumulated); // quantize
+			shadowAccumulated = shadowPackedPrev + max(abs(shadowAccumulated - shadowPackedPrev), abs(diff)) * diff;
+			shadowPerLight[j] = ShadowBufferEntryUnpack(shadowAccumulated);
+			#else
+			shadowPerLight[j] = shadowAccumulated;
+			#endif
+			#else
+
+			#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
+			shadowPerLight[j] = lerp(shadowPerLight[j], shadowHistoryData[j], (ilight == j ? historyWeight : 1.0));
+			#else
+			shadowPerLight[j] = lerp(shadowPerLight[j], shadowHistoryData[j], historyWeight);
+			#endif
+			#endif
+		}
+
+		#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
+		if (ilight == lightCount - 1)
+		#endif
+		counter = clamp(counter + 1, 0, g_SceneCB.AccumulationFrameCount);
+		tracingInfo[1] = counter;
+	}
+	else
+	{
+		// no history available, fallback to higher mip
+		#if (SHADOW_BUFFER_UINT32)
+		// not supported
+		#else
+		// TODO
+		//shadowPerLight = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, 2);
+		#endif
+	}
+
+	#if (SHADOW_BUFFER_UINT32)
+	// pack result
+	shadowPerLightPacked = 0x0;
+	[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
+	{
+		shadowPerLightPacked |= ShadowBufferEntryPack(shadowPerLight[j]) << (j * ShadowBufferBitsPerEntry);
+	}
+	#endif
+
+	// write result
+	#if (SHADOW_BUFFER_UINT32)
+	g_ShadowTarget[lightBufferPos.xy] = shadowPerLightPacked;
+	#else
+	g_ShadowTarget[lightBufferPos.xy] = shadowPerLight;
+	#endif
+	g_TracingInfoTarget[lightBufferPos.xy] = tracingInfo;
 }

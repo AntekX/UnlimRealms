@@ -15,6 +15,7 @@ RaytracingAccelerationStructure	g_SceneStructure	: register(t7);
 RWTexture2D<float4>				g_ShadowTarget		: register(u0);
 RWTexture2D<uint2>				g_TracingInfoTarget	: register(u1);
 
+
 // common functions
 
 float3 GetDiskSampleDirection(uint sampleId)
@@ -161,6 +162,7 @@ void RayGenDirect()
 			occlusionPerLight[ilight] = shadowFactor;
 		}
 
+		#if (SHADOW_BUFFER_APPLY_HISTORY_IN_RAYGEN)
 		// apply accumulatd history
 		float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
 		clipPosPrev.xy /= clipPosPrev.w;
@@ -232,6 +234,7 @@ void RayGenDirect()
 			counter = clamp(counter + 1, 0, g_SceneCB.AccumulationFrameCount);
 			tracingInfo[1] = counter;
 		}
+		#endif
 
 		#if (SHADOW_BUFFER_UINT32)
 		// pack result
