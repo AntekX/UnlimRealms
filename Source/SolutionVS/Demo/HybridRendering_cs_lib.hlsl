@@ -415,6 +415,16 @@ void FilterShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		float historyWeight = float(counter) / (counter + 1);
 
 		#if (SHADOW_BUFFER_UINT32)
+		// not supported
+		#else
+		// TODO
+		//float shadowMip = 5 * pow(1.0 - float(counter + 1) / g_SceneCB.AccumulationFrameCount, 0.5);
+		//float4 shadowMipData = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, shadowMip);
+		//shadowPerLight = (shadowMip < 1 ? lerp(shadowPerLight, shadowMipData, shadowMip) : shadowMipData);
+		//shadowPerLight = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, g_SceneCB.DebugVec0[3]);
+		#endif
+
+		#if (SHADOW_BUFFER_UINT32)
 		uint shadowHistoryPacked = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
 		#else
 		float4 shadowHistoryData = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
@@ -458,8 +468,7 @@ void FilterShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		#if (SHADOW_BUFFER_UINT32)
 		// not supported
 		#else
-		// TODO
-		//shadowPerLight = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, 2);
+		shadowPerLight = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, 2);
 		#endif
 	}
 

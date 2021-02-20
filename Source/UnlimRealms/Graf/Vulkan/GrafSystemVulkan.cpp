@@ -1374,8 +1374,8 @@ namespace UnlimRealms
 			return Result(InvalidArgs);
 
 		const GrafImageVulkan* grafImageVulkan = static_cast<const GrafImageVulkan*>(grafImageSubresource->GetImage());
-		if (ur_null == grafImageVulkan || grafImageVulkan->GetState() == dstState)
-			return Result(Success);
+		if (ur_null == grafImageVulkan)
+			return Result(InvalidArgs);
 
 		srcState = (GrafImageState::Current == srcState ? grafImageSubresource->GetState() : srcState);
 

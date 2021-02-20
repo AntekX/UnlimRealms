@@ -147,7 +147,7 @@ int HybridRenderingApp::Run()
 	{
 		std::unique_ptr<GrafImage> images[LightingImageCountWithHistory];
 		std::vector<std::unique_ptr<GrafImageSubresource>> subresources[LightingImageCountWithHistory];
-		//std::unique_ptr<GrafImageSubresource> mipsSubresource[LightingImageCountWithHistory];
+		std::unique_ptr<GrafImageSubresource> mipsSubresource[LightingImageCountWithHistory];
 	};
 
 	std::vector<std::unique_ptr<GrafCommandList>> cmdListPerFrame;
@@ -287,7 +287,7 @@ int HybridRenderingApp::Run()
 			}
 
 			// common subresources for all mips (except zero)
-			/*if (imageMipCount > 1)
+			if (imageMipCount > 1)
 			{
 				auto& mipsSubresource = lightingBufferSet->mipsSubresource[imageId];
 				res = grafSystem->CreateImageSubresource(mipsSubresource);
@@ -297,7 +297,7 @@ int HybridRenderingApp::Run()
 				};
 				res = mipsSubresource->Initialize(grafDevice, { image.get(), subresourceDesc });
 				if (Failed(res)) return res;
-			}*/
+			}
 		}
 
 		renderTargetSet->resetHistory = true;
@@ -927,7 +927,7 @@ int HybridRenderingApp::Run()
 					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 					{ GrafDescriptorType::Sampler, 0, 2 },
 					{ GrafDescriptorType::Texture, 0, 4 },
-					{ GrafDescriptorType::Texture, 6, /*4*/3 }, // todo: mipsSubresource
+					{ GrafDescriptorType::Texture, 6, 4 },
 					{ GrafDescriptorType::RWTexture, 5, 2 },
 				};
 				GrafDescriptorTableLayoutDesc shadowFilterDescTableLayoutDesc = {
@@ -1252,8 +1252,8 @@ int HybridRenderingApp::Run()
 			descriptorTable->SetImage(6, renderTargetSet->images[RenderTargetImageUsage_DepthHistory]);
 			descriptorTable->SetImage(7, lightingBufferSet->images[LightingImageUsage_DirectShadowHistory].get());
 			descriptorTable->SetImage(8, lightingBufferSet->images[LightingImageUsage_TracingInfoHistory].get());
-			//descriptorTable->SetImage(9, lightingBufferSet->mipsSubresource[LightingImageUsage_DirectShadow].get());
-			descriptorTable->SetRWImage(5, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
+			descriptorTable->SetImage(9, lightingBufferSet->mipsSubresource[LightingImageUsage_DirectShadow].get());
+			descriptorTable->SetRWImage(5, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get());
 			descriptorTable->SetRWImage(6, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
 			
 			// compute
@@ -1308,6 +1308,7 @@ int HybridRenderingApp::Run()
 				{
 					lightingBufferSet->subresources[imageId][mipId].swap(lightingBufferSet->subresources[LightingImageHistoryFirst + imageId][mipId]);
 				}
+				lightingBufferSet->mipsSubresource[imageId].swap(lightingBufferSet->mipsSubresource[LightingImageHistoryFirst + imageId]);
 			}
 			renderTargetSet->resetHistory = false;
 		}
@@ -1720,11 +1721,16 @@ int HybridRenderingApp::Run()
 					{
 						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
 					}
+					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get(), lightingBufferSet->images[LightingImageUsage_DirectShadow]->GetState(), GrafImageState::ComputeReadWrite);
+					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->mipsSubresource[LightingImageUsage_DirectShadow].get(), lightingBufferSet->images[LightingImageUsage_DirectShadow]->GetState(), GrafImageState::ComputeRead);
 
 					if (demoScene != ur_null)
 					{
 						demoScene->FilterShadowResult(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
 					}
+
+					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get(), GrafImageState::Current, GrafImageState::ComputeRead);
+					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[LightingImageUsage_DirectShadow].get(), GrafImageState::ComputeRead, GrafImageState::ComputeRead);
 				}
 			}
 
