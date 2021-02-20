@@ -104,6 +104,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		#else
 		shadowPerLight = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
 		#endif
+		
 		#else
 		
 		// filtered upsampling
@@ -418,10 +419,9 @@ void FilterShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		// not supported
 		#else
 		// TODO
-		//float shadowMip = 5 * pow(1.0 - float(counter + 1) / g_SceneCB.AccumulationFrameCount, 0.5);
+		//float shadowMip = 3 * pow(1.0 - float(counter + 1) / g_SceneCB.AccumulationFrameCount, 1.0);
 		//float4 shadowMipData = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, shadowMip);
 		//shadowPerLight = (shadowMip < 1 ? lerp(shadowPerLight, shadowMipData, shadowMip) : shadowMipData);
-		//shadowPerLight = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, g_SceneCB.DebugVec0[3]);
 		#endif
 
 		#if (SHADOW_BUFFER_UINT32)
@@ -468,7 +468,7 @@ void FilterShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		#if (SHADOW_BUFFER_UINT32)
 		// not supported
 		#else
-		shadowPerLight = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, 2);
+		//shadowPerLight = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, 3);
 		#endif
 	}
 

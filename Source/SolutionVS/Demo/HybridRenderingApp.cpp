@@ -688,14 +688,16 @@ int HybridRenderingApp::Run()
 
 			GrafSamplerDesc samplerBilinearDesc = {
 				GrafFilterType::Linear, GrafFilterType::Linear, GrafFilterType::Nearest,
-				GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp
+				GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp,
+				false, 1.0f, 0.0f, 0.0f, 128.0f
 			};
 			grafSystem->CreateSampler(this->samplerBilinear);
 			this->samplerBilinear->Initialize(grafDevice, { samplerBilinearDesc });
 
 			GrafSamplerDesc samplerTrilinearDesc = {
 				GrafFilterType::Linear, GrafFilterType::Linear, GrafFilterType::Linear,
-				GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp
+				GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp,
+				false, 1.0f, 0.0f, 0.0f, 128.0f
 			};
 			grafSystem->CreateSampler(this->samplerTrilinear);
 			this->samplerTrilinear->Initialize(grafDevice, { samplerTrilinearDesc });
