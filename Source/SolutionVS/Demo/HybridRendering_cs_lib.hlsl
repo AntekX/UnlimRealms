@@ -417,11 +417,39 @@ void FilterShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		#if (SHADOW_BUFFER_UINT32)
 		// not supported
-		#else
-		// TODO
-		//float shadowMip = 3 * pow(1.0 - float(counter + 1) / g_SceneCB.AccumulationFrameCount, 1.0);
-		//float4 shadowMipData = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, shadowMip);
-		//shadowPerLight = (shadowMip < 1 ? lerp(shadowPerLight, shadowMipData, shadowMip) : shadowMipData);
+		#elif (0)
+		// fallback to higher mip at low history counter
+		float shadowMip = g_SceneCB.DebugVec0[3] * pow(1.0 - float(counter) / g_SceneCB.AccumulationFrameCount, 1.0);
+		float4 shadowMipData = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, shadowMip - 1);
+		shadowPerLight = (shadowMip < 1 ? lerp(shadowPerLight, shadowMipData, shadowMip) : shadowMipData);
+		#elif (1)
+		// blur input
+		const uint BlurKernelSize = 5;
+		const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
+			0.023528,	0.033969,	0.038393,	0.033969,	0.023528,
+			0.033969,	0.049045,	0.055432,	0.049045,	0.033969,
+			0.038393,	0.055432,	0.062651,	0.055432,	0.038393,
+			0.033969,	0.049045,	0.055432,	0.049045,	0.033969,
+			0.023528,	0.033969,	0.038393,	0.033969,	0.023528,
+		};
+		float blurDepthDeltaTolerance = gbData.ClipDepth * 4.0e-4;
+		int2 blurStartPos = int2(lightBufferPos.xy) - int(BlurKernelSize / 2);
+		float4 shadowBlured = 0.0;
+		float blurWeightSum = 0.0;
+		for (int iy = 0; iy < BlurKernelSize; ++iy)
+		{
+			for (int ix = 0; ix < BlurKernelSize; ++ix)
+			{
+				int2 blurSamsplePos = clamp(blurStartPos.xy + int2(ix, iy), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+				float blurSampleWeight = BlurKernelWeight[ix + iy * BlurKernelSize];
+				float blurSampleDepth = g_GeometryDepth[blurSamsplePos * g_SceneCB.LightBufferDownscale.x]; // sample sub pos from tracing info ommited here because currently always 0
+				blurSampleWeight *= 1.0 - saturate(abs(gbData.ClipDepth - blurSampleDepth) / blurDepthDeltaTolerance); // discontinuities rejection
+				shadowBlured += g_ShadowTarget[blurSamsplePos.xy] * blurSampleWeight;
+				blurWeightSum += blurSampleWeight;
+			}
+		}
+		shadowBlured /= max(blurWeightSum, 1.0e-5);
+		shadowPerLight = lerp(shadowPerLight, shadowBlured, g_SceneCB.DebugVec0[3]);
 		#endif
 
 		#if (SHADOW_BUFFER_UINT32)
