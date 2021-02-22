@@ -424,13 +424,15 @@ void FilterShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		shadowPerLight = (shadowMip < 1 ? lerp(shadowPerLight, shadowMipData, shadowMip) : shadowMipData);
 		#elif (1)
 		// blur input
-		const uint BlurKernelSize = 5;
+		const uint BlurKernelSize = 7;
 		const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
-			0.023528,	0.033969,	0.038393,	0.033969,	0.023528,
-			0.033969,	0.049045,	0.055432,	0.049045,	0.033969,
-			0.038393,	0.055432,	0.062651,	0.055432,	0.038393,
-			0.033969,	0.049045,	0.055432,	0.049045,	0.033969,
-			0.023528,	0.033969,	0.038393,	0.033969,	0.023528,
+			0.005084,	0.009377,	0.013539,	0.015302,	0.013539,	0.009377,	0.005084,
+			0.009377,	0.017296,	0.024972,	0.028224,	0.024972,	0.017296,	0.009377,
+			0.013539,	0.024972,	0.036054,	0.040749,	0.036054,	0.024972,	0.013539,
+			0.015302,	0.028224,	0.040749,	0.046056,	0.040749,	0.028224,	0.015302,
+			0.013539,	0.024972,	0.036054,	0.040749,	0.036054,	0.024972,	0.013539,
+			0.009377,	0.017296,	0.024972,	0.028224,	0.024972,	0.017296,	0.009377,
+			0.005084,	0.009377,	0.013539,	0.015302,	0.013539,	0.009377,	0.005084,
 		};
 		float blurDepthDeltaTolerance = gbData.ClipDepth * 4.0e-4;
 		int2 blurStartPos = int2(lightBufferPos.xy) - int(BlurKernelSize / 2);
