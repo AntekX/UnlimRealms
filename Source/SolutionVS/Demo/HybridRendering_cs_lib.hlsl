@@ -340,11 +340,66 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 	GroupMemoryBarrierWithGroupSync();
 }
 
-// apply filter(s) to shadow result
+// shadow result blur filter
+
+static const uint BlurKernelSize = 7;
+static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
+	0.005084,	0.009377,	0.013539,	0.015302,	0.013539,	0.009377,	0.005084,
+	0.009377,	0.017296,	0.024972,	0.028224,	0.024972,	0.017296,	0.009377,
+	0.013539,	0.024972,	0.036054,	0.040749,	0.036054,	0.024972,	0.013539,
+	0.015302,	0.028224,	0.040749,	0.046056,	0.040749,	0.028224,	0.015302,
+	0.013539,	0.024972,	0.036054,	0.040749,	0.036054,	0.024972,	0.013539,
+	0.009377,	0.017296,	0.024972,	0.028224,	0.024972,	0.017296,	0.009377,
+	0.005084,	0.009377,	0.013539,	0.015302,	0.013539,	0.009377,	0.005084,
+};
+
+void BlurShadowResult(const uint3 dispatchThreadId, const bool isVerticalPass)
+{
+	uint2 lightBufferPos = dispatchThreadId.xy;
+	if (lightBufferPos.x >= (uint)g_SceneCB.LightBufferSize.x || lightBufferPos.y >= (uint)g_SceneCB.LightBufferSize.y)
+		return;
+
+	uint2 subSamplePos = 0; // sample sub pos from tracing info ommited here because currently always 0
+	float clipDepth = g_GeometryDepth[lightBufferPos * g_SceneCB.LightBufferDownscale.x + subSamplePos];
+	float blurDepthDeltaTolerance = clipDepth * 4.0e-4;
+	int2 blurStartPos = int2(lightBufferPos.xy) - int(BlurKernelSize / 2);
+	float4 shadowBlured = 0.0;
+	float blurWeightSum = 0.0;
+	for (int iy = 0; iy < BlurKernelSize; ++iy)
+	{
+		for (int ix = 0; ix < BlurKernelSize; ++ix)
+		{
+			int2 blurSamsplePos = clamp(blurStartPos.xy + int2(ix, iy), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+			float blurSampleWeight = BlurKernelWeight[ix + iy * BlurKernelSize];
+			float blurSampleDepth = g_GeometryDepth[blurSamsplePos * g_SceneCB.LightBufferDownscale.x + subSamplePos];
+			blurSampleWeight *= 1.0 - saturate(abs(clipDepth - blurSampleDepth) / blurDepthDeltaTolerance); // discontinuities rejection
+			shadowBlured += g_ShadowResult[blurSamsplePos.xy] * blurSampleWeight;
+			blurWeightSum += blurSampleWeight;
+		}
+	}
+	shadowBlured /= max(blurWeightSum, 1.0e-5);
+	g_ShadowTarget[lightBufferPos.xy] = shadowBlured;
+}
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
-void FilterShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
+void BlurXShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+	BlurShadowResult(dispatchThreadId, false);
+}
+
+[shader("compute")]
+[numthreads(8, 8, 1)]
+void BlurYShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+	BlurShadowResult(dispatchThreadId, true);
+}
+
+// shadow result combined denoising filter
+
+[shader("compute")]
+[numthreads(8, 8, 1)]
+void DenoiseShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint2 lightBufferPos = dispatchThreadId.xy;
 	if (lightBufferPos.x >= (uint)g_SceneCB.LightBufferSize.x || lightBufferPos.y >= (uint)g_SceneCB.LightBufferSize.y)
@@ -423,17 +478,7 @@ void FilterShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		float4 shadowMipData = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, shadowMip - 1);
 		shadowPerLight = (shadowMip < 1 ? lerp(shadowPerLight, shadowMipData, shadowMip) : shadowMipData);
 		#elif (1)
-		// blur input
-		const uint BlurKernelSize = 7;
-		const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
-			0.005084,	0.009377,	0.013539,	0.015302,	0.013539,	0.009377,	0.005084,
-			0.009377,	0.017296,	0.024972,	0.028224,	0.024972,	0.017296,	0.009377,
-			0.013539,	0.024972,	0.036054,	0.040749,	0.036054,	0.024972,	0.013539,
-			0.015302,	0.028224,	0.040749,	0.046056,	0.040749,	0.028224,	0.015302,
-			0.013539,	0.024972,	0.036054,	0.040749,	0.036054,	0.024972,	0.013539,
-			0.009377,	0.017296,	0.024972,	0.028224,	0.024972,	0.017296,	0.009377,
-			0.005084,	0.009377,	0.013539,	0.015302,	0.013539,	0.009377,	0.005084,
-		};
+		// TEMP: blur input right here (can produce invalid results as we read/write the same RW texture)
 		float blurDepthDeltaTolerance = gbData.ClipDepth * 4.0e-4;
 		int2 blurStartPos = int2(lightBufferPos.xy) - int(BlurKernelSize / 2);
 		float4 shadowBlured = 0.0;

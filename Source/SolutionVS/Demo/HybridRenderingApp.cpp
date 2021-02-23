@@ -112,26 +112,31 @@ int HybridRenderingApp::Run()
 	{
 		LightingImageUsage_DirectShadow = 0,
 		LightingImageUsage_TracingInfo, // x = sub sample pos
+		LightingImageUsage_DirectShadowBlur,
 		LightingImageCount,
 		LightingImageHistoryFirst = LightingImageCount,
 		LightingImageUsage_DirectShadowHistory = LightingImageHistoryFirst,
 		LightingImageUsage_TracingInfoHistory,
+		LightingImageUsage_DirectShadowBlurHistory,
 		LightingImageCountWithHistory,
 	};
 
 	static const GrafFormat LightingImageFormat[LightingImageCount] = {
 		GrafFormat::R16G16B16A16_UNORM,
 		GrafFormat::R8G8_UINT,
+		GrafFormat::R16G16B16A16_UNORM,
 	};
 
 	static const ur_int LightingImageGenerateMips[LightingImageCount] = {
 		5,
 		1,
+		1,
 	};
 
 	static GrafClearValue LightingBufferClearValues[LightingImageCount] = {
-		{ 1.0f, 0.0f, 0.0f, 0.0f },
+		{ 1.0f, 1.0f, 1.0f, 1.0f },
 		{ 0.0f, 0.0f, 0.0f, 0.0f },
+		{ 1.0f, 1.0f, 1.0f, 1.0f },
 	};
 
 	struct RenderTargetSet
@@ -661,12 +666,16 @@ int HybridRenderingApp::Run()
 			{
 				ShaderLibId_ComputeLighting,
 				ShaderLibId_ComputeShadowMips,
-				ShaderLibId_FilterShadowResult,
+				ShaderLibId_BlurXShadowResult,
+				ShaderLibId_BlurYShadowResult,
+				ShaderLibId_DenoiseShadowResult,
 			};
 			GrafShaderLib::EntryPoint ShaderLibEntries[] = {
 				{ "ComputeLighting", GrafShaderType::Compute },
 				{ "ComputeShadowMips", GrafShaderType::Compute },
-				{ "FilterShadowResult", GrafShaderType::Compute },
+				{ "BlurXShadowResult", GrafShaderType::Compute },
+				{ "BlurYShadowResult", GrafShaderType::Compute },
+				{ "DenoiseShadowResult", GrafShaderType::Compute },
 			};
 			enum RTShaderLibId
 			{
@@ -951,7 +960,7 @@ int HybridRenderingApp::Run()
 						this->shadowFilterDescTableLayout.get()
 					};
 					GrafComputePipeline::InitParams computePipelineParams = GrafComputePipeline::InitParams::Default;
-					computePipelineParams.ShaderStage = this->shaderLib->GetShader(ShaderLibId_FilterShadowResult);
+					computePipelineParams.ShaderStage = this->shaderLib->GetShader(ShaderLibId_DenoiseShadowResult);
 					computePipelineParams.DescriptorTableLayouts = descriptorLayouts;
 					computePipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
 					this->shadowFilterPipelineState->Initialize(grafDevice, computePipelineParams);
