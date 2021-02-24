@@ -374,11 +374,18 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	// TODO:
 	// * modify kernel size by estimated penumbra width;
-	// * fetch normals to better detect discontinuities;
+	// * increase rejection tolerance closer to grazing angles;
 
 	uint2 subSamplePos = 0; // sample sub pos from tracing info ommited here because currently always 0
-	float clipDepth = g_GeometryDepth[lightBufferPos * g_SceneCB.LightBufferDownscale.x + subSamplePos];
-	float blurDepthDeltaTolerance = clipDepth * 4.0e-4;
+	uint2 gbufferPos = lightBufferPos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
+	GBufferData gbData = LoadGBufferData(gbufferPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
+	bool isSky = (gbData.ClipDepth >= 1.0);
+	if (isSky)
+		return;
+
+	//float blurDepthDeltaTolerance = gbData.ClipDepth * 1.0e-4;
+	float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
+	float blurDepthDeltaTolerance = viewDepth * 0.008;
 	int2 blurStartPos = int2(lightBufferPos.xy) - int(BlurKernelSize / 2);
 	float4 shadowBlured = 0.0;
 	float blurWeightSum = 0.0;
@@ -388,8 +395,14 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		{
 			int2 blurSamsplePos = clamp(blurStartPos.xy + int2(ix, iy), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 			float blurSampleWeight = BlurKernelWeight[ix + iy * BlurKernelSize];
-			float blurSampleDepth = g_GeometryDepth[blurSamsplePos * g_SceneCB.LightBufferDownscale.x + subSamplePos];
-			blurSampleWeight *= 1.0 - saturate(abs(clipDepth - blurSampleDepth) / blurDepthDeltaTolerance); // discontinuities rejection
+			int2 blurSampleGBPos = blurSamsplePos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
+			
+			// gbuffer based discontinuities rejection
+			GBufferData blurSampleGBData = LoadGBufferData(blurSampleGBPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
+			//blurSampleWeight *= 1.0 - saturate(abs(gbData.ClipDepth - blurSampleGBData.ClipDepth) / blurDepthDeltaTolerance);
+			float blurSampleViewDepth = ClipDepthToViewDepth(blurSampleGBData.ClipDepth, g_SceneCB.Proj);
+			blurSampleWeight *= 1.0 - saturate(abs(viewDepth - blurSampleViewDepth) / blurDepthDeltaTolerance);
+
 			shadowBlured += g_ShadowResult[blurSamsplePos.xy] * blurSampleWeight;
 			blurWeightSum += blurSampleWeight;
 		}
@@ -402,7 +415,7 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
-void DenoiseShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
+void AccumulateShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint2 lightBufferPos = dispatchThreadId.xy;
 	if (lightBufferPos.x >= (uint)g_SceneCB.LightBufferSize.x || lightBufferPos.y >= (uint)g_SceneCB.LightBufferSize.y)
@@ -453,8 +466,10 @@ void DenoiseShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		bool isSkyPrev = (clipDepthPrev >= 1.0);
 		// TODO
 		#if (0)
-		float depthDeltaTolerance = gbData.ClipDepth * /*1.0e-4*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
-		float surfaceHistoryWeight = 1.0 - saturate(abs(gbData.ClipDepth - clipDepthPrev) / depthDeltaTolerance);
+		float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
+		float viewDepthPrev = ClipDepthToViewDepth(clipDepthPrev, g_SceneCB.ProjPrev);
+		float depthDeltaTolerance = viewDepth * /*0.01*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
+		float surfaceHistoryWeight = 1.0 - saturate(abs(viewDepth - viewDepthPrev) / depthDeltaTolerance);
 		#elif (0)
 		// history rejection from Ray Tracing Gems "Ray traced Shadows"
 		float3 normalVS = mul(float4(gbData.Normal, 0.0), g_SceneCB.View).xyz;
@@ -464,7 +479,8 @@ void DenoiseShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		#else
 		float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
 		float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
-		float worldPosTolerance = viewDepth * /*1.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
+		float viewDepthPrev = ClipDepthToViewDepth(clipDepthPrev, g_SceneCB.ProjPrev);
+		float worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
 		float surfaceHistoryWeight = 1.0 - saturate(length(worldPos - worldPosPrev) / worldPosTolerance);
 		surfaceHistoryWeight = saturate((surfaceHistoryWeight - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
 		#endif

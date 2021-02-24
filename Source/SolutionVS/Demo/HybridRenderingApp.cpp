@@ -673,13 +673,13 @@ int HybridRenderingApp::Run()
 				ShaderLibId_ComputeLighting,
 				ShaderLibId_ComputeShadowMips,
 				ShaderLibId_BlurShadowResult,
-				ShaderLibId_DenoiseShadowResult,
+				ShaderLibId_AccumulateShadowResult,
 			};
 			GrafShaderLib::EntryPoint ShaderLibEntries[] = {
 				{ "ComputeLighting", GrafShaderType::Compute },
 				{ "ComputeShadowMips", GrafShaderType::Compute },
 				{ "BlurShadowResult", GrafShaderType::Compute },
-				{ "DenoiseShadowResult", GrafShaderType::Compute },
+				{ "AccumulateShadowResult", GrafShaderType::Compute },
 			};
 			enum RTShaderLibId
 			{
@@ -968,7 +968,7 @@ int HybridRenderingApp::Run()
 					this->shadowBlurPipelineState->Initialize(grafDevice, computePipelineParams);
 				}
 
-				// ray tracing result combined denoising filter
+				// ray tracing result temporal accumulation filter
 
 				GrafDescriptorRangeDesc shadowFilterDescTableLayoutRanges[] = {
 					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
@@ -996,7 +996,7 @@ int HybridRenderingApp::Run()
 						this->shadowFilterDescTableLayout.get()
 					};
 					GrafComputePipeline::InitParams computePipelineParams = GrafComputePipeline::InitParams::Default;
-					computePipelineParams.ShaderStage = this->shaderLib->GetShader(ShaderLibId_DenoiseShadowResult);
+					computePipelineParams.ShaderStage = this->shaderLib->GetShader(ShaderLibId_AccumulateShadowResult);
 					computePipelineParams.DescriptorTableLayouts = descriptorLayouts;
 					computePipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
 					this->shadowFilterPipelineState->Initialize(grafDevice, computePipelineParams);
@@ -1306,7 +1306,7 @@ int HybridRenderingApp::Run()
 			}
 		}
 
-		void DenoiseShadowResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
+		void AccumulateShadowResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
 		{
 			// update descriptor table
 			// common constant buffer is expected to be uploaded during rasterization pass
@@ -1769,9 +1769,9 @@ int HybridRenderingApp::Run()
 					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[LightingImageUsage_DirectShadow].get(), GrafImageState::ComputeRead, GrafImageState::ComputeRead);
 				}
 
-				// filter
+				// apply temporal accumulation filter
 				{
-					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowFilterPass", DebugLabelColorPass);
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowAccumulationPass", DebugLabelColorPass);
 
 					for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 					{
@@ -1813,7 +1813,7 @@ int HybridRenderingApp::Run()
 
 					if (demoScene != ur_null)
 					{
-						demoScene->DenoiseShadowResult(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
+						demoScene->AccumulateShadowResult(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
 					}
 
 					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get(), GrafImageState::Current, GrafImageState::ComputeRead);
