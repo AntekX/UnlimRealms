@@ -26,6 +26,7 @@ struct Settings
 {
 	ur_uint LightingBufferDownscale = 2;
 	ur_uint RaytraceSamplesPerLight = 32;
+	ur_uint RaytraceBlurPassCount = 0;
 	ur_uint RaytraceAccumulationFrameCount = 0;
 	ur_bool RaytracePerFrameJitter = false;
 } g_Settings;
@@ -112,12 +113,12 @@ int HybridRenderingApp::Run()
 	{
 		LightingImageUsage_DirectShadow = 0,
 		LightingImageUsage_TracingInfo, // x = sub sample pos
-		LightingImageUsage_DirectShadowBlur,
+		LightingImageUsage_DirectShadowBlured,
 		LightingImageCount,
 		LightingImageHistoryFirst = LightingImageCount,
 		LightingImageUsage_DirectShadowHistory = LightingImageHistoryFirst,
 		LightingImageUsage_TracingInfoHistory,
-		LightingImageUsage_DirectShadowBlurHistory,
+		LightingImageUsage_DirectShadowBluredHistory,
 		LightingImageCountWithHistory,
 	};
 
@@ -154,6 +155,8 @@ int HybridRenderingApp::Run()
 		std::vector<std::unique_ptr<GrafImageSubresource>> subresources[LightingImageCountWithHistory];
 		std::unique_ptr<GrafImageSubresource> mipsSubresource[LightingImageCountWithHistory];
 	};
+
+	static const ur_uint BlurPassCountMax = 16; // reserved descriptor tables per frame
 
 	std::vector<std::unique_ptr<GrafCommandList>> cmdListPerFrame;
 	std::unique_ptr<GrafRenderPass> rasterRenderPass;
@@ -564,6 +567,9 @@ int HybridRenderingApp::Run()
 		std::unique_ptr<GrafDescriptorTableLayout> shadowMipsDescTableLayout;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> shadowMipsDescTablePerFrame;
 		std::unique_ptr<GrafComputePipeline> shadowMipsPipelineState;
+		std::unique_ptr<GrafDescriptorTableLayout> shadowBlurDescTableLayout;
+		std::vector<std::unique_ptr<GrafDescriptorTable>> shadowBlurDescTablePerFrame;
+		std::unique_ptr<GrafComputePipeline> shadowBlurPipelineState;
 		std::unique_ptr<GrafDescriptorTableLayout> shadowFilterDescTableLayout;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> shadowFilterDescTablePerFrame;
 		std::unique_ptr<GrafComputePipeline> shadowFilterPipelineState;
@@ -666,15 +672,13 @@ int HybridRenderingApp::Run()
 			{
 				ShaderLibId_ComputeLighting,
 				ShaderLibId_ComputeShadowMips,
-				ShaderLibId_BlurXShadowResult,
-				ShaderLibId_BlurYShadowResult,
+				ShaderLibId_BlurShadowResult,
 				ShaderLibId_DenoiseShadowResult,
 			};
 			GrafShaderLib::EntryPoint ShaderLibEntries[] = {
 				{ "ComputeLighting", GrafShaderType::Compute },
 				{ "ComputeShadowMips", GrafShaderType::Compute },
-				{ "BlurXShadowResult", GrafShaderType::Compute },
-				{ "BlurYShadowResult", GrafShaderType::Compute },
+				{ "BlurShadowResult", GrafShaderType::Compute },
 				{ "DenoiseShadowResult", GrafShaderType::Compute },
 			};
 			enum RTShaderLibId
@@ -932,7 +936,39 @@ int HybridRenderingApp::Run()
 					this->shadowMipsPipelineState->Initialize(grafDevice, computePipelineParams);
 				}
 
-				// ray tracing result filter pipeline
+				// ray tracing result blur filter
+
+				GrafDescriptorRangeDesc shadowBlurDescTableLayoutRanges[] = {
+					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+					{ GrafDescriptorType::Texture, 0, 6 },
+					{ GrafDescriptorType::RWTexture, 5, 1 },
+				};
+				GrafDescriptorTableLayoutDesc shadowBlurDescTableLayoutDesc = {
+					ur_uint(GrafShaderStageFlag::Compute),
+					shadowBlurDescTableLayoutRanges, ur_array_size(shadowBlurDescTableLayoutRanges)
+				};
+				grafSystem->CreateDescriptorTableLayout(this->shadowBlurDescTableLayout);
+				this->shadowBlurDescTableLayout->Initialize(grafDevice, { shadowBlurDescTableLayoutDesc });
+				this->shadowBlurDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount() * BlurPassCountMax);
+				for (auto& descTable : this->shadowBlurDescTablePerFrame)
+				{
+					grafSystem->CreateDescriptorTable(descTable);
+					descTable->Initialize(grafDevice, { this->shadowBlurDescTableLayout.get() });
+				}
+
+				grafSystem->CreateComputePipeline(this->shadowBlurPipelineState);
+				{
+					GrafDescriptorTableLayout* descriptorLayouts[] = {
+						this->shadowBlurDescTableLayout.get()
+					};
+					GrafComputePipeline::InitParams computePipelineParams = GrafComputePipeline::InitParams::Default;
+					computePipelineParams.ShaderStage = this->shaderLib->GetShader(ShaderLibId_BlurShadowResult);
+					computePipelineParams.DescriptorTableLayouts = descriptorLayouts;
+					computePipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+					this->shadowBlurPipelineState->Initialize(grafDevice, computePipelineParams);
+				}
+
+				// ray tracing result combined denoising filter
 
 				GrafDescriptorRangeDesc shadowFilterDescTableLayoutRanges[] = {
 					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
@@ -1199,26 +1235,6 @@ int HybridRenderingApp::Run()
 
 			const ur_uint3& bufferSize = lightingBufferSet->images[0]->GetDesc().Size;
 			grafCmdList->DispatchRays(bufferSize.x, bufferSize.y, 1, &this->rayGenShaderTable, &this->rayMissShaderTable, &this->rayHitShaderTable, ur_null);
-
-			// TEST: check quantized accumulation
-			#if (0)
-			ur_uint dbgValues[256];
-			ur_float dbgSrc = 0.0f;
-			ur_float dbgAccumulated = 1.0f;
-			ur_float accumulatedWeight = 63.0f / 64.0f;
-			for (ur_uint i = 0; i < 256; ++i)
-			{
-				ur_float prevUnpacked = floor(dbgAccumulated * 255.0f + 0.5f);
-				dbgAccumulated = dbgSrc * (1.0f - accumulatedWeight) + dbgAccumulated * accumulatedWeight;
-				ur_float diff = dbgSrc - dbgAccumulated;
-				diff = (diff > 0 ? 1.0f : (diff < 0 ? -1.0f : 0.0f));
-				dbgAccumulated = floor(dbgAccumulated * 0xff + 0.5f);
-				dbgAccumulated = prevUnpacked + std::max(fabs(dbgAccumulated - prevUnpacked), fabs(diff)) * diff;
-				dbgValues[i] = ur_uint(dbgAccumulated);
-				dbgAccumulated = ur_float(dbgValues[i]) / 255.0f;
-			}
-			int t = 0;
-			#endif
 		}
 
 		void ComputeShadowMips(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
@@ -1247,7 +1263,50 @@ int HybridRenderingApp::Run()
 			grafCmdList->Dispatch((bufferSize.x - 1) / groupSize.x + 1, (bufferSize.y - 1) / groupSize.y + 1, 1);
 		}
 
-		void FilterShadowResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
+		void BlurShadowResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
+		{
+			GrafImage* workImages[] = {
+				lightingBufferSet->images[LightingImageUsage_DirectShadow].get(),
+				lightingBufferSet->images[LightingImageUsage_DirectShadowBlured].get()
+			};
+			ur_uint srcImageId = 0;
+			ur_uint dstImageId = 1;
+			ur_uint passCount = (g_Settings.RaytraceBlurPassCount / 2) * 2; // multiple of 2 to avoid coping blured image back to source
+			for (ur_uint ipass = 0; ipass < passCount; ++ipass)
+			{
+				grafCmdList->ImageMemoryBarrier(workImages[srcImageId], GrafImageState::Current, GrafImageState::ComputeRead);
+				grafCmdList->ImageMemoryBarrier(workImages[dstImageId], GrafImageState::Current, GrafImageState::ComputeReadWrite);
+
+				// update descriptor table
+				// common constant buffer is expected to be uploaded during rasterization pass
+
+				ur_uint descriptorTableId = this->grafRenderer->GetCurrentFrameId() * BlurPassCountMax + ipass;
+				GrafDescriptorTable* descriptorTable = this->shadowBlurDescTablePerFrame[descriptorTableId].get();
+				descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
+				{
+					descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
+				}
+				descriptorTable->SetImage(4, workImages[srcImageId]);
+				descriptorTable->SetImage(5, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
+				descriptorTable->SetRWImage(5, workImages[dstImageId]);
+
+				// compute
+
+				grafCmdList->BindComputePipeline(this->shadowBlurPipelineState.get());
+				grafCmdList->BindComputeDescriptorTable(descriptorTable, this->shadowBlurPipelineState.get());
+
+				static const ur_uint3 groupSize = { 8, 8, 1 };
+				const ur_uint3& bufferSize = lightingBufferSet->images[0]->GetDesc().Size;
+				grafCmdList->Dispatch((bufferSize.x - 1) / groupSize.x + 1, (bufferSize.y - 1) / groupSize.y + 1, 1);
+
+				// swap
+				srcImageId = !srcImageId;
+				dstImageId = !dstImageId;
+			}
+		}
+
+		void DenoiseShadowResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
 		{
 			// update descriptor table
 			// common constant buffer is expected to be uploaded during rasterization pass
@@ -1667,17 +1726,34 @@ int HybridRenderingApp::Run()
 					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::ComputeRead);
 				}
 
-				// shadow result hierarchy
+				// blur current frame result
+				if (g_Settings.RaytraceBlurPassCount > 0)
+				{
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowBlurPass", DebugLabelColorPass);
+
+					for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
+					{
+						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeRead);
+					}
+					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[LightingImageUsage_DirectShadowBlured].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
+
+					if (demoScene != ur_null)
+					{
+						demoScene->BlurShadowResult(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
+					}
+				}
+
+				// compute mips hierarchy
 				auto& shadowResultMips = lightingBufferSet->subresources[LightingImageUsage_DirectShadow];
 				const ur_size shadowResultMipCount = shadowResultMips.size();
 				if (shadowResultMipCount > 1)
 				{
 					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowMipsPass", DebugLabelColorPass);
 
-					grafCmdListCrnt->ImageMemoryBarrier(shadowResultMips[0].get(), GrafImageState::RayTracingReadWrite, GrafImageState::ComputeRead);
+					grafCmdListCrnt->ImageMemoryBarrier(shadowResultMips[0].get(), shadowResultMips[0]->GetImage()->GetState(), GrafImageState::ComputeRead);
 					for (ur_uint mipId = 1; mipId < shadowResultMipCount; ++mipId)
 					{
-						grafCmdListCrnt->ImageMemoryBarrier(shadowResultMips[mipId].get(), GrafImageState::RayTracingReadWrite, GrafImageState::ComputeReadWrite);
+						grafCmdListCrnt->ImageMemoryBarrier(shadowResultMips[mipId].get(), shadowResultMips[0]->GetImage()->GetState(), GrafImageState::ComputeReadWrite);
 					}
 
 					if (demoScene != ur_null)
@@ -1737,7 +1813,7 @@ int HybridRenderingApp::Run()
 
 					if (demoScene != ur_null)
 					{
-						demoScene->FilterShadowResult(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
+						demoScene->DenoiseShadowResult(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
 					}
 
 					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get(), GrafImageState::Current, GrafImageState::ComputeRead);
@@ -1843,6 +1919,9 @@ int HybridRenderingApp::Run()
 						ImGui::InputInt("LightBufferDowncale", &editableInt);
 						g_Settings.LightingBufferDownscale = (ur_uint)std::max(1, std::min(16, editableInt));
 						canvasChanged |= (g_Settings.LightingBufferDownscale != lightingBufferDownscalePrev);
+						editableInt = (ur_int)g_Settings.RaytraceBlurPassCount;
+						ImGui::InputInt("BlurPassCount", &editableInt);
+						g_Settings.RaytraceBlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountMax), editableInt));
 						editableInt = (ur_int)g_Settings.RaytraceAccumulationFrameCount;
 						ImGui::InputInt("AccumulationFrameCount", &editableInt);
 						g_Settings.RaytraceAccumulationFrameCount = (ur_uint)std::max(0, std::min(1024, editableInt));
