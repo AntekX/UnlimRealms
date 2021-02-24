@@ -342,6 +342,16 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 
 // shadow result blur filter
 
+#if (1)
+static const uint BlurKernelSize = 5;
+static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
+	0.023528,	0.033969,	0.038393,	0.033969,	0.023528,
+	0.033969,	0.049045,	0.055432,	0.049045,	0.033969,
+	0.038393,	0.055432,	0.062651,	0.055432,	0.038393,
+	0.033969,	0.049045,	0.055432,	0.049045,	0.033969,
+	0.023528,	0.033969,	0.038393,	0.033969,	0.023528,
+};
+#else
 static const uint BlurKernelSize = 7;
 static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 	0.005084,	0.009377,	0.013539,	0.015302,	0.013539,	0.009377,	0.005084,
@@ -352,6 +362,7 @@ static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 	0.009377,	0.017296,	0.024972,	0.028224,	0.024972,	0.017296,	0.009377,
 	0.005084,	0.009377,	0.013539,	0.015302,	0.013539,	0.009377,	0.005084,
 };
+#endif
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
