@@ -24,11 +24,21 @@ using namespace UnlimRealms;
 
 struct Settings
 {
+#if (1)
+	// reference: many rays no filtering
 	ur_uint LightingBufferDownscale = 2;
 	ur_uint RaytraceSamplesPerLight = 32;
 	ur_uint RaytraceBlurPassCount = 0;
 	ur_uint RaytraceAccumulationFrameCount = 0;
 	ur_bool RaytracePerFrameJitter = false;
+#else
+	// real time: few rays lots of filtering
+	ur_uint LightingBufferDownscale = 2;
+	ur_uint RaytraceSamplesPerLight = 2;
+	ur_uint RaytraceBlurPassCount = 4;
+	ur_uint RaytraceAccumulationFrameCount = 8;
+	ur_bool RaytracePerFrameJitter = true;
+#endif
 } g_Settings;
 
 int HybridRenderingApp::Run()
@@ -585,13 +595,14 @@ int HybridRenderingApp::Run()
 
 		std::vector<Instance> sampleInstances;
 		ur_uint sampleInstanceCount;
+		ur_float sampleInstanceScatterRadius;
 		ur_bool animationEnabled;
 		ur_float animationCycleTime;
 		ur_float animationElapsedTime;
 
 		DemoScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
 		{
-			this->debugVec0 = ur_float4::Zero;
+			this->debugVec0 = ur_float4(0.0f, 0.0f, 0.005f, 0.0f);
 			memset(&this->sceneConstants, 0, sizeof(SceneConstants));
 			
 			// default material override
@@ -602,6 +613,7 @@ int HybridRenderingApp::Run()
 			this->sceneConstants.Material.Reflectance = 0.04f;
 
 			this->sampleInstanceCount = 16;
+			this->sampleInstanceScatterRadius = 40.0f;
 			this->animationEnabled = true;
 			this->animationCycleTime = 30.0f;
 			this->animationElapsedTime = 0.0f;
@@ -1114,7 +1126,7 @@ int HybridRenderingApp::Run()
 				instanceBufferOfs += instanceCount;
 			};
 			std::srand(58911192);
-			ScatterMeshInstances(this->meshes[MeshId_MedievalBuilding].get(), this->sampleInstanceCount, 40.0f, 2.0f, 0.0f, false);
+			ScatterMeshInstances(this->meshes[MeshId_MedievalBuilding].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 2.0f, 0.0f, false);
 
 			// upload instances
 
@@ -1390,10 +1402,11 @@ int HybridRenderingApp::Run()
 			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
 			if (ImGui::CollapsingHeader("DemoScene"))
 			{
+				ImGui::Checkbox("InstancesAnimationEnabled", &this->animationEnabled);
 				editableInt = (int)this->sampleInstanceCount;
 				ImGui::InputInt("InstanceCount", &editableInt);
 				this->sampleInstanceCount = (ur_size)std::max(0, editableInt);
-				ImGui::Checkbox("InstancesAnimationEnabled", &this->animationEnabled);
+				ImGui::InputFloat("InstancesScatterRadius", &this->sampleInstanceScatterRadius);
 				ImGui::InputFloat("InstancesCycleTime", &this->animationCycleTime);
 				ImGui::InputFloat4("DebugVec0", &this->debugVec0.x);
 				if (ImGui::CollapsingHeader("Material"))

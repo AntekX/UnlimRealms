@@ -384,8 +384,10 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		return;
 
 	//float blurDepthDeltaTolerance = gbData.ClipDepth * 1.0e-4;
+	float3 worldPos = ImagePosToWorldPos(int2(gbufferPos.xy), g_SceneCB.TargetSize.zw, gbData.ClipDepth, g_SceneCB.ViewProjInv);
+	float3 worldToEyeDir = normalize(g_SceneCB.CameraPos.xyz - worldPos.xyz);
 	float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
-	float blurDepthDeltaTolerance = viewDepth * 0.008;
+	float blurDepthDeltaTolerance = viewDepth * lerp(0.02, 0.008, dot(gbData.Normal.xyz, worldToEyeDir));
 	int2 blurStartPos = int2(lightBufferPos.xy) - int(BlurKernelSize / 2);
 	float4 shadowBlured = 0.0;
 	float blurWeightSum = 0.0;
@@ -483,6 +485,7 @@ void AccumulateShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		float worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
 		float surfaceHistoryWeight = 1.0 - saturate(length(worldPos - worldPosPrev) / worldPosTolerance);
 		surfaceHistoryWeight = saturate((surfaceHistoryWeight - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
+		shadowPerLight[3] = surfaceHistoryWeight; // TEMP: for debug output
 		#endif
 
 		uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
