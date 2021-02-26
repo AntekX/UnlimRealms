@@ -343,6 +343,19 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 // shadow result blur filter
 
 #if (1)
+// kernel size = 5
+#if (1)
+// sigma = 1.0
+static const uint BlurKernelSize = 5;
+static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
+	0.003765,	0.015019,	0.023792,	0.015019,	0.003765,
+	0.015019,	0.059912,	0.094907,	0.059912,	0.015019,
+	0.023792,	0.094907,	0.150342,	0.094907,	0.023792,
+	0.015019,	0.059912,	0.094907,	0.059912,	0.015019,
+	0.003765,	0.015019,	0.023792,	0.015019,	0.003765,
+};
+#else
+// sigma = 2.0
 static const uint BlurKernelSize = 5;
 static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 	0.023528,	0.033969,	0.038393,	0.033969,	0.023528,
@@ -351,7 +364,10 @@ static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 	0.033969,	0.049045,	0.055432,	0.049045,	0.033969,
 	0.023528,	0.033969,	0.038393,	0.033969,	0.023528,
 };
+#endif
 #else
+// kernel size = 7
+// sigma = 2.0
 static const uint BlurKernelSize = 7;
 static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 	0.005084,	0.009377,	0.013539,	0.015302,	0.013539,	0.009377,	0.005084,
@@ -364,9 +380,15 @@ static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 };
 #endif
 
+static const uint g_ShadowBlurGroupBorder = BlurKernelSize / 2;
+static const uint g_ShadowBlurGroupSize = 8;
+static const uint g_ShadowBlurGroupSizeWithBorder = g_ShadowBlurGroupSize + g_ShadowBlurGroupBorder;
+groupshared float4 g_ShadowBlurGroupData[g_ShadowBlurGroupSizeWithBorder * g_ShadowBlurGroupSizeWithBorder];
+#define SHADOW_BLUR_PREFETCH 0
+
 [shader("compute")]
-[numthreads(8, 8, 1)]
-void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
+[numthreads(g_ShadowBlurGroupSize, g_ShadowBlurGroupSize, 1)]
+void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const uint3 groupThreadId : SV_GroupThreadID, const uint groupThreadIdx : SV_GroupIndex)
 {
 	uint2 lightBufferPos = dispatchThreadId.xy;
 	if (lightBufferPos.x >= (uint)g_SceneCB.LightBufferSize.x || lightBufferPos.y >= (uint)g_SceneCB.LightBufferSize.y)
@@ -374,7 +396,24 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	// TODO:
 	// * modify kernel size by estimated penumbra width;
-	// * increase rejection tolerance closer to grazing angles;
+
+	// prefetch shadow data in shared memory
+	// TODO
+	#if (SHADOW_BLUR_PREFETCH)
+	int2 prefetchFrom = int2(dispatchThreadId.xy) - g_ShadowBlurGroupBorder * int2(groupThreadId.x == 0, groupThreadId.y == 0);
+	int2 prefetchTo = int2(dispatchThreadId.xy) + g_ShadowBlurGroupBorder * int2(groupThreadId.x + 1 == g_ShadowBlurGroupSize, groupThreadId.y + 1 == g_ShadowBlurGroupSize);
+	prefetchFrom = clamp(prefetchFrom, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+	prefetchTo = clamp(prefetchTo, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+	for (int py = prefetchFrom.y; py <= prefetchTo.y; ++py)
+	{
+		for (int px = prefetchFrom.x; px <= prefetchTo.x; ++px)
+		{
+			int groupDataOfs = (px - prefetchFrom.x) + (py - prefetchFrom.y) * g_ShadowBlurGroupSizeWithBorder;
+			g_ShadowBlurGroupData[groupDataOfs] = g_ShadowResult[int2(px, py)];
+		}
+	}
+	GroupMemoryBarrierWithGroupSync();
+	#endif
 
 	uint2 subSamplePos = 0; // sample sub pos from tracing info ommited here because currently always 0
 	uint2 gbufferPos = lightBufferPos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
@@ -405,7 +444,12 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			float blurSampleViewDepth = ClipDepthToViewDepth(blurSampleGBData.ClipDepth, g_SceneCB.Proj);
 			blurSampleWeight *= 1.0 - saturate(abs(viewDepth - blurSampleViewDepth) / blurDepthDeltaTolerance);
 
+			#if (SHADOW_BLUR_PREFETCH)
+			int groupDataOfs = (blurSamsplePos.x - prefetchFrom.x) + (blurSamsplePos.y - prefetchFrom.y) * g_ShadowBlurGroupSizeWithBorder;
+			shadowBlured += g_ShadowBlurGroupData[groupDataOfs] * blurSampleWeight;
+			#else
 			shadowBlured += g_ShadowResult[blurSamsplePos.xy] * blurSampleWeight;
+			#endif
 			blurWeightSum += blurSampleWeight;
 		}
 	}
