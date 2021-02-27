@@ -384,7 +384,9 @@ static const uint g_ShadowBlurGroupSize = 8;
 static const uint g_ShadowBlurGroupBorder = BlurKernelSize / 2;
 static const uint g_ShadowBlurGroupSizeWithBorders = g_ShadowBlurGroupSize + g_ShadowBlurGroupBorder * 2;
 groupshared float4 g_ShadowBlurGroupData[g_ShadowBlurGroupSizeWithBorders * g_ShadowBlurGroupSizeWithBorders];
-#define SHADOW_BLUR_PREFETCH 1 // near 40% better performance
+groupshared float g_ShadowBlurGroupDepth[g_ShadowBlurGroupSizeWithBorders * g_ShadowBlurGroupSizeWithBorders];
+#define SHADOW_BLUR_PREFETCH 1 // -40% time
+#define SHADOW_BLUR_PREFETCH_DEPTH 1 // additional -20% time (-50% total)
 
 [shader("compute")]
 [numthreads(g_ShadowBlurGroupSize, g_ShadowBlurGroupSize, 1)]
@@ -396,6 +398,8 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 
 	// TODO:
 	// * modify kernel size by estimated penumbra width;
+
+	uint2 subSamplePos = 0; // sample sub pos from tracing info ommited here because currently always 0
 
 	// prefetch shadow data in shared memory
 	#if (SHADOW_BLUR_PREFETCH)
@@ -412,14 +416,21 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 		{
 			int groupDataOfs = (px - groupFrom.x) + (py - groupFrom.y) * groupSize.x;
 			g_ShadowBlurGroupData[groupDataOfs] = g_ShadowResult[int2(px, py)];
+			#if (SHADOW_BLUR_PREFETCH_DEPTH)
+			g_ShadowBlurGroupDepth[groupDataOfs] = g_GeometryDepth[int2(px, py) * g_SceneCB.LightBufferDownscale.x + subSamplePos];
+			#endif
 		}
 	}
 	GroupMemoryBarrierWithGroupSync();
 	#endif
 
-	uint2 subSamplePos = 0; // sample sub pos from tracing info ommited here because currently always 0
 	uint2 gbufferPos = lightBufferPos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
+	#if (SHADOW_BLUR_PREFETCH_DEPTH)
+	GBufferData gbData = (GBufferData)0;
+	gbData.ClipDepth = g_ShadowBlurGroupDepth[(lightBufferPos.x - groupFrom.x) + (lightBufferPos.y - groupFrom.y) * groupSize.x];
+	#else
 	GBufferData gbData = LoadGBufferData(gbufferPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
+	#endif
 	bool isSky = (gbData.ClipDepth >= 1.0);
 	if (isSky)
 		return;
@@ -441,7 +452,12 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 			int2 blurSampleGBPos = blurSamplePos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
 			
 			// gbuffer based discontinuities rejection
+			#if (SHADOW_BLUR_PREFETCH_DEPTH)
+			GBufferData blurSampleGBData = (GBufferData)0;
+			blurSampleGBData.ClipDepth = g_ShadowBlurGroupDepth[(blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x];
+			#else
 			GBufferData blurSampleGBData = LoadGBufferData(blurSampleGBPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
+			#endif
 			//blurSampleWeight *= 1.0 - saturate(abs(gbData.ClipDepth - blurSampleGBData.ClipDepth) / blurDepthDeltaTolerance);
 			float blurSampleViewDepth = ClipDepthToViewDepth(blurSampleGBData.ClipDepth, g_SceneCB.Proj);
 			blurSampleWeight *= 1.0 - saturate(abs(viewDepth - blurSampleViewDepth) / blurDepthDeltaTolerance);
