@@ -342,7 +342,7 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 
 // shadow result blur filter
 
-#if (1)
+#if (0)
 // kernel size = 5
 #if (1)
 // sigma = 1.0
@@ -387,6 +387,7 @@ groupshared float4 g_ShadowBlurGroupData[g_ShadowBlurGroupSizeWithBorders * g_Sh
 groupshared float g_ShadowBlurGroupDepth[g_ShadowBlurGroupSizeWithBorders * g_ShadowBlurGroupSizeWithBorders];
 #define SHADOW_BLUR_PREFETCH 1 // -40% time
 #define SHADOW_BLUR_PREFETCH_DEPTH 1 // additional -20% time (-50% total)
+#define SHADOW_BLUR_COMPUTE_VARIANCE 0
 
 [shader("compute")]
 [numthreads(g_ShadowBlurGroupSize, g_ShadowBlurGroupSize, 1)]
@@ -395,9 +396,6 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 	uint2 lightBufferPos = dispatchThreadId.xy;
 	if (lightBufferPos.x >= (uint)g_SceneCB.LightBufferSize.x || lightBufferPos.y >= (uint)g_SceneCB.LightBufferSize.y)
 		return;
-
-	// TODO:
-	// * modify kernel size by estimated penumbra width;
 
 	uint2 subSamplePos = 0; // sample sub pos from tracing info ommited here because currently always 0
 
@@ -435,12 +433,33 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 	if (isSky)
 		return;
 
+	int2 blurStartPos = int2(lightBufferPos.xy) - int(BlurKernelSize / 2);
+
+	#if (SHADOW_BLUR_COMPUTE_VARIANCE)
+	// TODO:
+	// * compute variance from the prefetched group data;
+	// * modify kernel size by estimated penumbra width;
+	float4 shadowAverage = 0.0;
+	for (py = 0; py < BlurKernelSize; ++py)
+	{
+		for (int px = 0; px < BlurKernelSize; ++px)
+		{
+			int2 blurSamplePos = clamp(blurStartPos.xy + int2(px, py), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+			int groupDataOfs = (blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x;
+			shadowAverage += g_ShadowBlurGroupData[groupDataOfs];
+		}
+	}
+	shadowAverage /= BlurKernelSize * BlurKernelSize;
+	float4 shadow = g_ShadowBlurGroupData[(lightBufferPos.x - groupFrom.x) + (lightBufferPos.y - groupFrom.y) * groupSize.x];
+	float4 variance = (shadow - shadowAverage);
+	variance *= variance;
+	#endif
+
 	//float blurDepthDeltaTolerance = gbData.ClipDepth * 1.0e-4;
 	float3 worldPos = ImagePosToWorldPos(int2(gbufferPos.xy), g_SceneCB.TargetSize.zw, gbData.ClipDepth, g_SceneCB.ViewProjInv);
 	float3 worldToEyeDir = normalize(g_SceneCB.CameraPos.xyz - worldPos.xyz);
 	float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
 	float blurDepthDeltaTolerance = viewDepth * lerp(0.02, 0.008, dot(gbData.Normal.xyz, worldToEyeDir));
-	int2 blurStartPos = int2(lightBufferPos.xy) - int(BlurKernelSize / 2);
 	float4 shadowBlured = 0.0;
 	float blurWeightSum = 0.0;
 	for (int iy = 0; iy < BlurKernelSize; ++iy)
@@ -472,6 +491,9 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 		}
 	}
 	shadowBlured /= max(blurWeightSum, 1.0e-5);
+	#if (SHADOW_BLUR_COMPUTE_VARIANCE)
+	shadowBlured[3] = (max(max(variance.x, variance.y), variance.z));
+	#endif
 	g_ShadowTarget[lightBufferPos.xy] = shadowBlured;
 }
 
@@ -547,7 +569,7 @@ void AccumulateShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		float worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
 		float surfaceHistoryWeight = 1.0 - saturate(length(worldPos - worldPosPrev) / worldPosTolerance);
 		surfaceHistoryWeight = saturate((surfaceHistoryWeight - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
-		shadowPerLight[3] = surfaceHistoryWeight; // TEMP: for debug output
+		//shadowPerLight[3] = surfaceHistoryWeight; // TEMP: for debug output
 		#endif
 
 		uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
