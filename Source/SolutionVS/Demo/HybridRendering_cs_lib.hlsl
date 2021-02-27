@@ -380,15 +380,15 @@ static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 };
 #endif
 
-static const uint g_ShadowBlurGroupBorder = BlurKernelSize / 2;
 static const uint g_ShadowBlurGroupSize = 8;
-static const uint g_ShadowBlurGroupSizeWithBorder = g_ShadowBlurGroupSize + g_ShadowBlurGroupBorder;
-groupshared float4 g_ShadowBlurGroupData[g_ShadowBlurGroupSizeWithBorder * g_ShadowBlurGroupSizeWithBorder];
-#define SHADOW_BLUR_PREFETCH 0
+static const uint g_ShadowBlurGroupBorder = BlurKernelSize / 2;
+static const uint g_ShadowBlurGroupSizeWithBorders = g_ShadowBlurGroupSize + g_ShadowBlurGroupBorder * 2;
+groupshared float4 g_ShadowBlurGroupData[g_ShadowBlurGroupSizeWithBorders * g_ShadowBlurGroupSizeWithBorders];
+#define SHADOW_BLUR_PREFETCH 1 // near 40% better performance
 
 [shader("compute")]
 [numthreads(g_ShadowBlurGroupSize, g_ShadowBlurGroupSize, 1)]
-void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const uint3 groupThreadId : SV_GroupThreadID, const uint groupThreadIdx : SV_GroupIndex)
+void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const uint3 groupId : SV_GroupID, const uint3 groupThreadId : SV_GroupThreadID, const uint groupThreadIdx : SV_GroupIndex)
 {
 	uint2 lightBufferPos = dispatchThreadId.xy;
 	if (lightBufferPos.x >= (uint)g_SceneCB.LightBufferSize.x || lightBufferPos.y >= (uint)g_SceneCB.LightBufferSize.y)
@@ -398,17 +398,19 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 	// * modify kernel size by estimated penumbra width;
 
 	// prefetch shadow data in shared memory
-	// TODO
 	#if (SHADOW_BLUR_PREFETCH)
-	int2 prefetchFrom = int2(dispatchThreadId.xy) - g_ShadowBlurGroupBorder * int2(groupThreadId.x == 0, groupThreadId.y == 0);
-	int2 prefetchTo = int2(dispatchThreadId.xy) + g_ShadowBlurGroupBorder * int2(groupThreadId.x + 1 == g_ShadowBlurGroupSize, groupThreadId.y + 1 == g_ShadowBlurGroupSize);
+	int2 groupFrom = max(int2(groupId.xy) * g_ShadowBlurGroupSize.xx - g_ShadowBlurGroupBorder.xx, int2(0, 0));
+	int2 groupTo = min(int2(groupId.xy + 1) * g_ShadowBlurGroupSize.xx - 1 + g_ShadowBlurGroupBorder.xx, int2(g_SceneCB.LightBufferSize.xy - 1));
+	int2 groupSize = (groupTo - groupFrom + 1);
+	int2 prefetchFrom = int2(lightBufferPos.xy) - int2(groupThreadId.x == 0, groupThreadId.y == 0) * g_ShadowBlurGroupBorder;
+	int2 prefetchTo = int2(lightBufferPos.xy) + int2(groupThreadId.x + 1 == g_ShadowBlurGroupSize, groupThreadId.y + 1 == g_ShadowBlurGroupSize) * g_ShadowBlurGroupBorder;
 	prefetchFrom = clamp(prefetchFrom, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 	prefetchTo = clamp(prefetchTo, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 	for (int py = prefetchFrom.y; py <= prefetchTo.y; ++py)
 	{
 		for (int px = prefetchFrom.x; px <= prefetchTo.x; ++px)
 		{
-			int groupDataOfs = (px - prefetchFrom.x) + (py - prefetchFrom.y) * g_ShadowBlurGroupSizeWithBorder;
+			int groupDataOfs = (px - groupFrom.x) + (py - groupFrom.y) * groupSize.x;
 			g_ShadowBlurGroupData[groupDataOfs] = g_ShadowResult[int2(px, py)];
 		}
 	}
@@ -434,9 +436,9 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 	{
 		for (int ix = 0; ix < BlurKernelSize; ++ix)
 		{
-			int2 blurSamsplePos = clamp(blurStartPos.xy + int2(ix, iy), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+			int2 blurSamplePos = clamp(blurStartPos.xy + int2(ix, iy), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 			float blurSampleWeight = BlurKernelWeight[ix + iy * BlurKernelSize];
-			int2 blurSampleGBPos = blurSamsplePos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
+			int2 blurSampleGBPos = blurSamplePos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
 			
 			// gbuffer based discontinuities rejection
 			GBufferData blurSampleGBData = LoadGBufferData(blurSampleGBPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
@@ -445,10 +447,10 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 			blurSampleWeight *= 1.0 - saturate(abs(viewDepth - blurSampleViewDepth) / blurDepthDeltaTolerance);
 
 			#if (SHADOW_BLUR_PREFETCH)
-			int groupDataOfs = (blurSamsplePos.x - prefetchFrom.x) + (blurSamsplePos.y - prefetchFrom.y) * g_ShadowBlurGroupSizeWithBorder;
+			int groupDataOfs = (blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x;
 			shadowBlured += g_ShadowBlurGroupData[groupDataOfs] * blurSampleWeight;
 			#else
-			shadowBlured += g_ShadowResult[blurSamsplePos.xy] * blurSampleWeight;
+			shadowBlured += g_ShadowResult[blurSamplePos.xy] * blurSampleWeight;
 			#endif
 			blurWeightSum += blurSampleWeight;
 		}
