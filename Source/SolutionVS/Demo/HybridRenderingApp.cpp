@@ -24,7 +24,7 @@ using namespace UnlimRealms;
 
 struct Settings
 {
-#if (1)
+#if (0)
 	// reference: many rays no filtering
 	ur_uint LightingBufferDownscale = 2;
 	ur_uint RaytraceSamplesPerLight = 32;

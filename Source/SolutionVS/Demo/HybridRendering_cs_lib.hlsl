@@ -343,10 +343,19 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 // shadow result blur filter
 
 #if (0)
-// kernel size = 5
-#if (1)
+// kernel size = 3
 // sigma = 1.0
+static const uint BlurKernelSize = 3;
+static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
+	0.077847,	0.123317,	0.077847,
+	0.123317,	0.195346,	0.123317,
+	0.077847,	0.123317,	0.077847,
+};
+#elif (1)
+// kernel size = 5
 static const uint BlurKernelSize = 5;
+#if (0)
+// sigma = 1.0
 static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 	0.003765,	0.015019,	0.023792,	0.015019,	0.003765,
 	0.015019,	0.059912,	0.094907,	0.059912,	0.015019,
@@ -356,7 +365,6 @@ static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 };
 #else
 // sigma = 2.0
-static const uint BlurKernelSize = 5;
 static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 	0.023528,	0.033969,	0.038393,	0.033969,	0.023528,
 	0.033969,	0.049045,	0.055432,	0.049045,	0.033969,
@@ -365,7 +373,15 @@ static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 	0.023528,	0.033969,	0.038393,	0.033969,	0.023528,
 };
 #endif
-#else
+// sigma = 0.5
+static const float BlurKernelWeightLow[BlurKernelSize * BlurKernelSize] = {
+	0.000002,	0.000212,	0.000922,	0.000212,	0.000002,
+	0.000212,	0.024745,	0.107391,	0.024745,	0.000212,
+	0.000922,	0.107391,	0.466066,	0.107391,	0.000922,
+	0.000212,	0.024745,	0.107391,	0.024745,	0.000212,
+	0.000002,	0.000212,	0.000922,	0.000212,	0.000002,
+};
+#elif (0)
 // kernel size = 7
 // sigma = 2.0
 static const uint BlurKernelSize = 7;
@@ -436,9 +452,6 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 	int2 blurStartPos = int2(lightBufferPos.xy) - int(BlurKernelSize / 2);
 
 	#if (SHADOW_BLUR_COMPUTE_VARIANCE)
-	// TODO:
-	// * compute variance from the prefetched group data;
-	// * modify kernel size by estimated penumbra width;
 	float4 shadowAverage = 0.0;
 	for (py = 0; py < BlurKernelSize; ++py)
 	{
@@ -452,7 +465,8 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 	shadowAverage /= BlurKernelSize * BlurKernelSize;
 	float4 shadow = g_ShadowBlurGroupData[(lightBufferPos.x - groupFrom.x) + (lightBufferPos.y - groupFrom.y) * groupSize.x];
 	float4 variance = (shadow - shadowAverage);
-	variance *= variance;
+	variance = saturate(variance * variance * g_SceneCB.DebugVec0[3]);
+	float varianceMax = max(max(variance.x, variance.y), variance.z);
 	#endif
 
 	//float blurDepthDeltaTolerance = gbData.ClipDepth * 1.0e-4;
@@ -467,7 +481,11 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 		for (int ix = 0; ix < BlurKernelSize; ++ix)
 		{
 			int2 blurSamplePos = clamp(blurStartPos.xy + int2(ix, iy), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
-			float blurSampleWeight = BlurKernelWeight[ix + iy * BlurKernelSize];
+			int blurKernelPos = ix + iy * BlurKernelSize;
+			float blurSampleWeight = BlurKernelWeight[blurKernelPos];
+			#if (SHADOW_BLUR_COMPUTE_VARIANCE)
+			blurSampleWeight = lerp(BlurKernelWeightLow[blurKernelPos], blurSampleWeight, varianceMax);
+			#endif
 			int2 blurSampleGBPos = blurSamplePos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
 			
 			// gbuffer based discontinuities rejection
@@ -492,7 +510,7 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 	}
 	shadowBlured /= max(blurWeightSum, 1.0e-5);
 	#if (SHADOW_BLUR_COMPUTE_VARIANCE)
-	shadowBlured[3] = (max(max(variance.x, variance.y), variance.z));
+	shadowBlured[3] = varianceMax;
 	#endif
 	g_ShadowTarget[lightBufferPos.xy] = shadowBlured;
 }
