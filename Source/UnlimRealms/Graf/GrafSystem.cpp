@@ -1244,6 +1244,7 @@ namespace UnlimRealms
 			dstMat.SheenColor.z = (ur_float)srcMat.sheen;
 
 			dstMat.ColorTexName = srcMat.diffuse_texname;
+			dstMat.MaskTexName = srcMat.alpha_texname;
 			dstMat.NormalTexName = srcMat.normal_texname;
 			dstMat.DisplacementTexName = srcMat.displacement_texname;
 			dstMat.RoughnessTexName = srcMat.roughness_texname;

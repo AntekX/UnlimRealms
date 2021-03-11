@@ -17,7 +17,7 @@ namespace UnlimRealms
 
 	inline ur_float Camera::GetMaxViewDist() const
 	{
-		return this->minViewDist;
+		return this->maxViewDist;
 	}
 
 	inline ur_float Camera::GetFieldOFView() const

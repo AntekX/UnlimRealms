@@ -19,6 +19,10 @@
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
+#define SCENE_TYPE_MEDIEVAL_BUILDINGS 0
+#define SCENE_TYPE_SPONZA 1
+#define SCENE_TYPE SCENE_TYPE_SPONZA
+
 #define UPDATE_ASYNC 1
 #define RENDER_ASYNC 1
 
@@ -423,6 +427,7 @@ int HybridRenderingApp::Run()
 			MeshId_Sphere,
 			MeshId_Wuson,
 			MeshId_MedievalBuilding,
+			MeshId_Sponza,
 			MeshCount
 		};
 
@@ -612,7 +617,12 @@ int HybridRenderingApp::Run()
 			this->sceneConstants.Material.Roughness = 0.5f;
 			this->sceneConstants.Material.Reflectance = 0.04f;
 
+			this->sampleInstanceCount = 0;
+			#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 			this->sampleInstanceCount = 16;
+			#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
+			this->sampleInstanceCount = 1;
+			#endif
 			this->sampleInstanceScatterRadius = 40.0f;
 			this->animationEnabled = true;
 			this->animationCycleTime = 30.0f;
@@ -648,6 +658,7 @@ int HybridRenderingApp::Run()
 				{ MeshId_Sphere, "../Res/Models/Sphere.obj" },
 				{ MeshId_Wuson, "../Res/Models/Wuson.obj" },
 				{ MeshId_MedievalBuilding, "../Res/Models/Medieval_building.obj" },
+				{ MeshId_Sponza, "../Res/Models/Sponza/sponza.obj" },
 			};
 			for (ur_size ires = 0; ires < ur_array_size(meshResDesc); ++ires)
 			{
@@ -1126,7 +1137,11 @@ int HybridRenderingApp::Run()
 				instanceBufferOfs += instanceCount;
 			};
 			std::srand(58911192);
+			#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 			ScatterMeshInstances(this->meshes[MeshId_MedievalBuilding].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 2.0f, 0.0f, false);
+			#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
+			ScatterMeshInstances(this->meshes[MeshId_Sponza].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 0.02f, 0.0f, false);
+			#endif
 
 			// upload instances
 
@@ -1346,6 +1361,44 @@ int HybridRenderingApp::Run()
 			static const ur_uint3 groupSize = { 8, 8, 1 };
 			const ur_uint3& bufferSize = lightingBufferSet->images[0]->GetDesc().Size;
 			grafCmdList->Dispatch((bufferSize.x - 1) / groupSize.x + 1, (bufferSize.y - 1) / groupSize.y + 1, 1);
+
+			// TEMP
+			#if (0)
+			static float clipDepth = 0.12f;
+			static ur_int2 imagePos = ur_int2(25, 37);
+			for (ur_int iy = 0; iy < (ur_int)sceneConstants.TargetSize.y; ++iy)
+			{
+				for (ur_int ix = 0; ix < (ur_int)sceneConstants.TargetSize.x; ++ix)
+				{
+					imagePos.x = ix;
+					imagePos.y = iy;
+					ur_float2 uvPos;
+					uvPos.x = (ur_float(imagePos.x) + 0.5f) * sceneConstants.TargetSize.z;
+					uvPos.y = (ur_float(imagePos.y) + 0.5f) * sceneConstants.TargetSize.w;
+					ur_float4 clipPos;
+					clipPos.x = uvPos.x * 2.0f - 1.0f;
+					clipPos.y = (1.0f - uvPos.y) * 2.0f - 1.0f;
+					clipPos.z = clipDepth;
+					clipPos.w = 1.0f;
+					ur_float4 worldPos;
+					worldPos = sceneConstants.ViewProjInv.Multiply(clipPos);
+					worldPos /= worldPos.w;
+					ur_float4 clipPosPrev;
+					clipPosPrev = sceneConstants.ViewProjPrev.Multiply(worldPos);
+					clipPosPrev /= clipPosPrev.w;
+					ur_float2 imagePosPrev;
+					imagePosPrev.x = (clipPosPrev.x + 1.0f) * 0.5f * sceneConstants.TargetSize.x;
+					imagePosPrev.y = (clipPosPrev.y * -1.0f + 1.0f) * 0.5f * sceneConstants.TargetSize.y;
+					ur_int2 imagePos2;
+					imagePos2.x = (ur_int)imagePosPrev.x;
+					imagePos2.y = (ur_int)imagePosPrev.y;
+					if (imagePos.x != imagePos2.x || imagePos.y != imagePos2.y)
+					{
+						int h = 0;
+					}
+				}
+			}
+			#endif
 		}
 
 		void ComputeLighting(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet, GrafRenderTarget* lightingTarget)
@@ -1477,7 +1530,11 @@ int HybridRenderingApp::Run()
 	LightDesc sphericalLight1 = {}; // main directional light source
 	sphericalLight1.Type = LightType_Spherical;
 	sphericalLight1.Color = { 1.0f, 1.0f, 1.0f };
+	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 	sphericalLight1.Position = { 10.0f, 10.0f, 10.0f };
+	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
+	sphericalLight1.Position = { 2.0f, 2.0f, 2.0f };
+	#endif
 	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
 	sphericalLight1.Size = 0.5f;
 	LightingDesc lightingDesc = {};
@@ -1509,7 +1566,11 @@ int HybridRenderingApp::Run()
 	cameraControl.SetTargetPoint(ur_float3(0.0f, 2.0f, 0.0f));
 	cameraControl.SetSpeed(4.0);
 	camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
+	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 	camera.SetPosition(ur_float3(9.541f, 5.412f, -12.604f));
+	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
+	camera.SetPosition(ur_float3(9.541f, 1.8f, -12.604f));
+	#endif
 	camera.SetLookAt(cameraControl.GetTargetPoint(), cameraControl.GetWorldUp());
 
 	// Main message loop:

@@ -1461,6 +1461,7 @@ namespace UnlimRealms
 			ur_float3 SheenColor;
 
 			std::string ColorTexName;
+			std::string MaskTexName;
 			std::string NormalTexName;
 			std::string DisplacementTexName;
 			std::string RoughnessTexName;
