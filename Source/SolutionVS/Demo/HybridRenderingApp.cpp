@@ -539,18 +539,39 @@ int HybridRenderingApp::Run()
 					if (Failed(result))
 						return result;
 						
-					grafDevice->GetGrafSystem().CreateImage(resImage);
-					imageData->Desc.MipLevels = 1; // only first mip for now
+					grafSystem->CreateImage(resImage);
 					result = resImage->Initialize(grafDevice, { imageData->Desc });
 					if (Failed(result))
 					{
 						resImage.reset();
 						return result;
 					}
-						
-					uploadCmdList->ImageMemoryBarrier(resImage.get(), GrafImageState::Current, GrafImageState::TransferDst);
-					uploadCmdList->Copy(imageData->MipBuffers[0].get(), resImage.get(), 0);
-					uploadCmdList->ImageMemoryBarrier(resImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
+					
+					std::vector<std::unique_ptr<GrafImageSubresource>> resImageMips;
+					resImageMips.resize(imageData->Desc.MipLevels);
+					for (ur_uint imip = 0; imip < imageData->Desc.MipLevels; ++imip)
+					{
+						auto& imageMip = resImageMips[imip];
+						GrafImageSubresourceDesc mipDesc = {
+							imip, 1, 0, 1
+						};
+						grafSystem->CreateImageSubresource(imageMip);
+						imageMip->Initialize(grafDevice, { resImage.get(), mipDesc });
+					}
+
+					ur_uint3 mipSize = imageData->Desc.Size;
+					for (ur_uint imip = 0; imip < imageData->Desc.MipLevels; ++imip)
+					{
+						auto& imageMip = resImageMips[imip];
+						BoxI mipRegion;
+						mipRegion.Min = ur_int3(0, 0, 0);
+						mipRegion.Max = ur_int3(mipSize.x, mipSize.y, 1);
+						mipSize.x = std::max(mipSize.x / 2, 1u);
+						mipSize.y = std::max(mipSize.y / 2, 1u);
+						uploadCmdList->ImageMemoryBarrier(imageMip.get(), GrafImageState::Current, GrafImageState::TransferDst);
+						uploadCmdList->Copy(imageData->MipBuffers[imip].get(), imageMip.get(), 0, mipRegion);
+					}
+					uploadCmdList->ImageMemoryBarrier(resImage.get(), GrafImageState::TransferDst, GrafImageState::ShaderRead);
 					GrafUtils::ImageData* imageDataPtr = imageData.release();
 					grafRenderer->AddCommandListCallback(uploadCmdList, { imageDataPtr }, [](GrafCallbackContext& ctx) -> Result
 					{
@@ -561,6 +582,7 @@ int HybridRenderingApp::Run()
 
 					return result;
 				};
+
 				GrafCommandList* uploadCmdList = grafRenderer->GetTransientCommandList();
 				uploadCmdList->Begin();
 				subMeshes.resize(meshData.Surfaces.size());
@@ -1644,7 +1666,7 @@ int HybridRenderingApp::Run()
 	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 	sphericalLight1.Position = { 2.0f, 2.0f, 2.0f };
 	#endif
-	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 4; // match illuminance to day light
+	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
 	sphericalLight1.Size = 0.5f;
 	LightingDesc lightingDesc = {};
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;

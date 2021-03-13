@@ -1100,6 +1100,10 @@ namespace UnlimRealms
 
 			mipRowPitch = std::max(mipRowPitch / 2, 1u);
 			mipHeight = std::max(mipHeight / 2, 1u);
+			if (ilDXTFormat != IL_DXT_NO_COMP && mipRowPitch < 4)
+			{
+				outputImageData.Desc.MipLevels = imip + 1;
+			}
 		}
 
 		// release IL resources

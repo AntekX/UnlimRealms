@@ -10,7 +10,7 @@ MeshPixelOutput main(MeshPixelInput input)
 {
 	MeshPixelOutput output;
 
-	float3 baseColor = SRGBToLinear(g_ColorTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xyz);
+	float3 baseColor = g_ColorTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xyz;
 	//float3 normal = g_ColorTexture.Sample(g_SamplerTrilinear, input.TexCoord.xy).xyz;
 	//float mask = g_ColorTexture.Sample(g_SamplerTrilinear, input.TexCoord.xy).x;
 
