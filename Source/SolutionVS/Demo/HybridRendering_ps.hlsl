@@ -11,11 +11,28 @@ MeshPixelOutput main(MeshPixelInput input)
 	MeshPixelOutput output;
 
 	float3 baseColor = g_ColorTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xyz;
-	//float3 normal = g_ColorTexture.Sample(g_SamplerTrilinear, input.TexCoord.xy).xyz;
-	//float mask = g_ColorTexture.Sample(g_SamplerTrilinear, input.TexCoord.xy).x;
+	float3 bumpNormal = g_NormalTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xyz;
+	float mask = g_MaskTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).x;
+	
+	if (!any(baseColor)) baseColor.xyz = float3(0.5, 0.5, 0.5);
+	if (!any(bumpNormal)) bumpNormal.xyz = float3(0.0, 0.0, 1.0);
+	if (!any(mask)) mask = 1.0;
+
+	float3 normal = input.Norm.xyz;
+	float3 bitangent = float3(0.0, 0.0, 1.0);
+	if (normal.z + Eps >= 1.0) bitangent = float3(0.0, -1.0, 0.0);
+	if (normal.z - Eps <= -1.0) bitangent = float3(0.0, 1.0, 0.0);
+	float3 tangent = normalize(cross(bitangent, normal));
+	bitangent = cross(normal, tangent);
+	float3x3 surfaceTBN = {
+		tangent,
+		bitangent,
+		normal
+	};
+	normal = mul(bumpNormal, surfaceTBN);
 
 	output.Target0 = float4(baseColor.xyz, 1);
-	output.Target1 = float4(input.Norm.xyz, 0);
+	output.Target1 = float4(normal.xyz, 0);
 	output.Target2 = float4(input.TexCoord.xy, 0, 0);
 
 	return output;

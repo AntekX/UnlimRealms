@@ -40,7 +40,7 @@ struct Settings
 	ur_uint LightingBufferDownscale = 2;
 	ur_uint RaytraceSamplesPerLight = 2;
 	ur_uint RaytraceBlurPassCount = 4;
-	ur_uint RaytraceAccumulationFrameCount = 8;
+	ur_uint RaytraceAccumulationFrameCount = 16;
 	ur_bool RaytracePerFrameJitter = true;
 #endif
 } g_Settings;
@@ -1356,8 +1356,8 @@ int HybridRenderingApp::Run()
 					descriptorTable->SetBuffer(0, this->instanceBuffer.get());
 					descriptorTable->SetSampler(0, this->samplerTrilinearWrap.get());
 					if (subMesh.colorImage.get()) descriptorTable->SetImage(1, subMesh.colorImage.get());
-					if (subMesh.maskImage.get()) descriptorTable->SetImage(2, subMesh.maskImage.get());
-					if (subMesh.normalImage.get()) descriptorTable->SetImage(3, subMesh.normalImage.get());
+					if (subMesh.normalImage.get()) descriptorTable->SetImage(2, subMesh.normalImage.get());
+					if (subMesh.maskImage.get()) descriptorTable->SetImage(3, subMesh.maskImage.get());
 
 					// draw
 					grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());

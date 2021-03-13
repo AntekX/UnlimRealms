@@ -182,7 +182,6 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		{
 			// TODO: read mesh material
 			material.baseColor.xyz = gbData.BaseColor.xyz;
-			if (!any(material.baseColor.xyz)) material.baseColor.xyz = g_SceneCB.Material.BaseColor;
 			material.roughness = g_SceneCB.Material.Roughness;
 			material.metallic = g_SceneCB.Material.Metallic;
 			material.reflectance = g_SceneCB.Material.Reflectance;

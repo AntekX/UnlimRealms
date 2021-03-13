@@ -1251,6 +1251,7 @@ namespace UnlimRealms
 			dstMat.ColorTexName = (srcMat.diffuse_texname.empty() ? "" : texturesPath + srcMat.diffuse_texname);
 			dstMat.MaskTexName = (srcMat.alpha_texname.empty() ? "" : texturesPath + srcMat.alpha_texname);
 			dstMat.NormalTexName = (srcMat.normal_texname.empty() ? "" : texturesPath + srcMat.normal_texname);
+			dstMat.NormalTexName = (srcMat.bump_texname.empty() ? dstMat.NormalTexName : texturesPath + srcMat.bump_texname);
 			dstMat.DisplacementTexName = (srcMat.displacement_texname.empty() ? "" : texturesPath + srcMat.displacement_texname);
 			dstMat.RoughnessTexName = (srcMat.roughness_texname.empty() ? "" : texturesPath + srcMat.roughness_texname);
 			dstMat.MetallicTexName = (srcMat.metallic_texname.empty() ? "" : texturesPath + srcMat.metallic_texname);
