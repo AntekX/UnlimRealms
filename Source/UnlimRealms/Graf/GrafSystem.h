@@ -193,7 +193,7 @@ namespace UnlimRealms
 		TransferDst = (1 << 1),
 		ColorRenderTarget = (1 << 2),
 		DepthStencilRenderTarget = (1 << 3),
-		ShaderInput = (1 << 4),
+		ShaderRead = (1 << 4),
 		ShaderReadWrite = (1 << 5)
 	};
 	typedef ur_uint GrafImageUsageFlags;

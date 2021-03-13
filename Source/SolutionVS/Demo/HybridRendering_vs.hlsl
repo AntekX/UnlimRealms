@@ -22,7 +22,7 @@ MeshPixelInput main(MeshVertexInput input, uint instanceId : SV_InstanceID)
 	// output
 	output.Pos = mul(float4(worldPos, 1.0), g_SceneCB.ViewProj);
 	output.Norm = worldNorm;
-	output.TexCoord = input.TexCoord;
+	output.TexCoord = float2(input.TexCoord.x, 1.0 - input.TexCoord.y);
 
 	return output;
 }

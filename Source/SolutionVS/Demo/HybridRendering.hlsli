@@ -3,6 +3,7 @@
 
 #include "LogDepth.hlsli"
 #include "Lighting.hlsli"
+#include "HDRRender/HDRRender.hlsli"
 #include "Atmosphere/AtmosphericScattering.hlsli"
 
 struct SceneConstants
@@ -108,6 +109,7 @@ struct GBufferData
 {
 	float ClipDepth;
 	float3 Normal;
+	float3 BaseColor;
 };
 
 struct GBufferPacked
@@ -124,6 +126,7 @@ GBufferData UnpackGBufferData(in GBufferPacked gbPacked)
 
 	gbData.ClipDepth = gbPacked.Depth;
 	gbData.Normal = gbPacked.Image1.xyz;
+	gbData.BaseColor = gbPacked.Image0.xyz;
 
 	return gbData;
 }

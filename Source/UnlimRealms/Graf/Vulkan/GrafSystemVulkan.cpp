@@ -3230,7 +3230,7 @@ namespace UnlimRealms
 		vkViewInfo.subresourceRange.layerCount = std::max(grafSubresDesc.LayerCount, 1u);
 
 		if ((grafImageDesc.Usage & ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget)) &&
-			(grafImageDesc.Usage & ur_uint(GrafImageUsageFlag::ShaderInput)))
+			(grafImageDesc.Usage & ur_uint(GrafImageUsageFlag::ShaderRead)))
 		{
 			// create depth only view if used as a shader input
 			// TODO: investigate whether separate views required for VkFramebufferCreateInfo and shader input
@@ -5332,8 +5332,8 @@ namespace UnlimRealms
 			vkImageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		if (usage & (ur_uint)GrafImageUsageFlag::TransferDst)
 			vkImageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-		if (usage & (ur_uint)GrafImageUsageFlag::ShaderInput)
-			vkImageUsage |= (VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		if (usage & (ur_uint)GrafImageUsageFlag::ShaderRead)
+			vkImageUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
 		if (usage & (ur_uint)GrafImageUsageFlag::ShaderReadWrite)
 			vkImageUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
 		return vkImageUsage;
@@ -5342,7 +5342,7 @@ namespace UnlimRealms
 	GrafImageUsageFlags GrafUtilsVulkan::VkToGrafImageUsage(VkImageUsageFlags usage)
 	{
 		GrafImageUsageFlags grafUsage = (ur_uint)GrafImageUsageFlag::Undefined;
-		if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+		if ((usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) || (usage & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT))
 			grafUsage |= (ur_uint)GrafImageUsageFlag::ColorRenderTarget;
 		if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
 			grafUsage |= (ur_uint)GrafImageUsageFlag::DepthStencilRenderTarget;
@@ -5350,10 +5350,8 @@ namespace UnlimRealms
 			grafUsage |= (ur_uint)GrafImageUsageFlag::TransferSrc;
 		if (VK_IMAGE_USAGE_TRANSFER_DST_BIT & usage)
 			grafUsage |= (ur_uint)GrafImageUsageFlag::TransferDst;
-		if (usage & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT)
-			grafUsage |= (ur_uint)GrafImageUsageFlag::ShaderInput;
 		if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
-			grafUsage |= (ur_uint)GrafImageUsageFlag::ShaderInput;
+			grafUsage |= (ur_uint)GrafImageUsageFlag::ShaderRead;
 		if (usage & VK_IMAGE_USAGE_STORAGE_BIT)
 			grafUsage |= (ur_uint)GrafImageUsageFlag::ShaderReadWrite;
 		return grafUsage;

@@ -780,7 +780,7 @@ namespace UnlimRealms
 				GrafImageType::Tex2D,
 				GrafFormat::R16G16B16A16_SFLOAT,
 				ur_uint3(width, height, 1), 1,
-				ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderInput) | ur_uint(GrafImageUsageFlag::ShaderReadWrite),
+				ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderRead) | ur_uint(GrafImageUsageFlag::ShaderReadWrite),
 				ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 			};
 			res = grafRTObjects->hdrRTImage->Initialize(grafDevice, { hdrRTImageDesc });
@@ -811,7 +811,7 @@ namespace UnlimRealms
 			GrafImageType::Tex2D,
 			GrafFormat::R16_SFLOAT,
 			ur_uint3((ur_uint)pow(2.0f, widthLevels - 1), (ur_uint)pow(2.0f, heightLevels - 1), 1), 1,
-			ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderInput),
+			ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderRead),
 			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 		};
 		grafRTObjects->lumRTChainImages.resize(lumRTChainSize);
@@ -866,7 +866,7 @@ namespace UnlimRealms
 			GrafImageType::Tex2D,
 			GrafFormat::R16G16B16A16_SFLOAT,
 			ur_uint3((ur_uint)std::max(ur_uint(1), width / BloomImageDenom), (ur_uint)std::max(ur_uint(1), height / BloomImageDenom), 1), 1,
-			ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderInput),
+			ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderRead),
 			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 		};
 		for (ur_size iimg = 0; iimg < 2; ++iimg)

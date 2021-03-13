@@ -554,7 +554,7 @@ namespace UnlimRealms
 		fontImageDesc.Size.y = (ur_uint)height;
 		fontImageDesc.Size.z = 1;
 		fontImageDesc.MipLevels = 1;
-		fontImageDesc.Usage = (ur_uint)GrafImageUsageFlag::TransferDst | (ur_uint)GrafImageUsageFlag::ShaderInput;
+		fontImageDesc.Usage = (ur_uint)GrafImageUsageFlag::TransferDst | (ur_uint)GrafImageUsageFlag::ShaderRead;
 		fontImageDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 
 		// create font image in gpu local memory

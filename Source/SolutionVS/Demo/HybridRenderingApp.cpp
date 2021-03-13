@@ -231,7 +231,7 @@ int HybridRenderingApp::Run()
 			auto& image = renderTargetSet->imageStorage[imageId];
 			res = grafSystem->CreateImage(image);
 			if (Failed(res)) return res;
-			ur_uint imageUsageFlags = ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ShaderInput);
+			ur_uint imageUsageFlags = ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ShaderRead);
 			if (RenderTargetImageUsage_Depth == imageUsage)
 			{
 				imageUsageFlags |= ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget);
@@ -286,7 +286,7 @@ int HybridRenderingApp::Run()
 				GrafImageType::Tex2D,
 				LightingImageFormat[imageUsage],
 				ur_uint3(lightingBufferWidth, lightingBufferHeight, 1), imageMipCount,
-				ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ShaderInput) | ur_uint(GrafImageUsageFlag::ShaderReadWrite),
+				ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ShaderRead) | ur_uint(GrafImageUsageFlag::ShaderReadWrite),
 				ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 			};
 			res = image->Initialize(grafDevice, { imageDesc });
@@ -444,6 +444,16 @@ int HybridRenderingApp::Run()
 
 			typedef ur_uint32 Index;
 
+			struct SubMesh
+			{
+				ur_uint primtivesOffset;
+				ur_uint primtivesCount;
+				std::unique_ptr<GrafImage> colorImage;
+				std::unique_ptr<GrafImage> maskImage;
+				std::unique_ptr<GrafImage> normalImage;
+				std::vector<std::unique_ptr<GrafDescriptorTable>> descTablePerFrame;
+			};
+
 			struct DrawData
 			{
 				ur_uint instanceCount;
@@ -457,25 +467,27 @@ int HybridRenderingApp::Run()
 			ur_uint64 accelerationStructureHandle;
 			ur_uint verticesCount;
 			ur_uint indicesCount;
+			std::vector<SubMesh> subMeshes;
 			DrawData drawData;
 
 			Mesh(GrafSystem &grafSystem) : GrafEntity(grafSystem) {}
 			~Mesh() {}
 
-			void Initialize(GrafRenderer* grafRenderer, MeshId meshId,
-				const Vertex* vertices, ur_uint verticesCount,
-				const Index* indices, ur_uint indicesCount)
+			void Initialize(DemoScene* demoScene, MeshId meshId, const GrafUtils::MeshData& meshData)
 			{
+				GrafRenderer* grafRenderer = demoScene->grafRenderer;
 				GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
 				GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
 				const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 
 				this->meshId = meshId;
 				this->accelerationStructureHandle = 0;
-				this->verticesCount = verticesCount;
-				this->indicesCount = indicesCount;
+				this->verticesCount = ur_uint(meshData.Vertices.size() / sizeof(Mesh::Vertex));
+				this->indicesCount = ur_uint(meshData.Indices.size() / sizeof(Mesh::Index));
 				ur_size vertexStride = sizeof(Vertex);
 				GrafIndexType indexType = (sizeof(Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32);
+				Mesh::Vertex* vertices = (Mesh::Vertex*)meshData.Vertices.data();
+				Mesh::Index* indices = (Mesh::Index*)meshData.Indices.data();
 
 				// vertex attributes buffer
 
@@ -510,6 +522,74 @@ int HybridRenderingApp::Run()
 				this->indexBuffer->Initialize(grafDevice, IBParams);
 
 				grafRenderer->Upload((ur_byte*)indices, this->indexBuffer.get(), IBParams.BufferDesc.SizeInBytes);
+
+				// per material sub mesh data
+
+				auto initializeGrafImage = [](GrafRenderer* grafRenderer, GrafCommandList* uploadCmdList,
+					const std::string& resName, std::unique_ptr<GrafImage>& resImage) -> Result
+				{
+					GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
+					GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
+
+					if (resName.empty())
+						return Result(InvalidArgs);
+
+					std::unique_ptr<GrafUtils::ImageData> imageData(new GrafUtils::ImageData());
+					Result result = GrafUtils::LoadImageFromFile(*grafDevice, resName, *imageData);
+					if (Failed(result))
+						return result;
+						
+					grafDevice->GetGrafSystem().CreateImage(resImage);
+					imageData->Desc.MipLevels = 1; // only first mip for now
+					result = resImage->Initialize(grafDevice, { imageData->Desc });
+					if (Failed(result))
+					{
+						resImage.reset();
+						return result;
+					}
+						
+					uploadCmdList->ImageMemoryBarrier(resImage.get(), GrafImageState::Current, GrafImageState::TransferDst);
+					uploadCmdList->Copy(imageData->MipBuffers[0].get(), resImage.get(), 0);
+					uploadCmdList->ImageMemoryBarrier(resImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
+					GrafUtils::ImageData* imageDataPtr = imageData.release();
+					grafRenderer->AddCommandListCallback(uploadCmdList, { imageDataPtr }, [](GrafCallbackContext& ctx) -> Result
+					{
+						GrafUtils::ImageData* imageDataPtr = reinterpret_cast<GrafUtils::ImageData*>(ctx.DataPtr);
+						delete imageDataPtr;
+						return Result(Success);
+					});
+
+					return result;
+				};
+				GrafCommandList* uploadCmdList = grafRenderer->GetTransientCommandList();
+				uploadCmdList->Begin();
+				subMeshes.resize(meshData.Surfaces.size());
+				for (ur_size surfaceIdx = 0; surfaceIdx < meshData.Surfaces.size(); ++surfaceIdx)
+				{
+					auto& surfaceData = meshData.Surfaces[surfaceIdx];
+					auto& subMesh = subMeshes[surfaceIdx];
+					auto& materialDesc = meshData.Materials[surfaceData.MaterialID];
+					
+					subMesh.primtivesOffset = surfaceData.PrimtivesOffset;
+					subMesh.primtivesCount = surfaceData.PrimtivesCount;
+
+					// textures
+					initializeGrafImage(grafRenderer, uploadCmdList, materialDesc.ColorTexName, subMesh.colorImage);
+					initializeGrafImage(grafRenderer, uploadCmdList, materialDesc.MaskTexName, subMesh.maskImage);
+					initializeGrafImage(grafRenderer, uploadCmdList, materialDesc.NormalTexName, subMesh.normalImage);
+					
+					// descriptor table
+					subMesh.descTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
+					for (auto& descTable : subMesh.descTablePerFrame)
+					{
+						grafSystem->CreateDescriptorTable(descTable);
+						descTable->Initialize(grafDevice, { demoScene->rasterDescTableLayout.get() });
+					}
+				}
+				uploadCmdList->End();
+				grafDevice->Record(uploadCmdList);
+
+				// ray tracing data
 
 				if (grafDeviceDesc->RayTracing.RayTraceSupported)
 				{
@@ -594,6 +674,7 @@ int HybridRenderingApp::Run()
 		std::unique_ptr<GrafShader> shaderPixel;
 		std::unique_ptr<GrafSampler> samplerBilinear;
 		std::unique_ptr<GrafSampler> samplerTrilinear;
+		std::unique_ptr<GrafSampler> samplerTrilinearWrap;
 		SceneConstants sceneConstants;
 		Allocation sceneCBCrntFrameAlloc;
 		ur_float4 debugVec0;
@@ -641,41 +722,6 @@ int HybridRenderingApp::Run()
 			GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
 			GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
 			const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
-
-			// load mesh(es)
-
-			GrafUtils::MeshVertexElementFlags meshVertexMask = // must be compatible with Mesh::Vertex
-				ur_uint(GrafUtils::MeshVertexElementFlag::Position) |
-				ur_uint(GrafUtils::MeshVertexElementFlag::Normal) |
-				ur_uint(GrafUtils::MeshVertexElementFlag::TexCoord);
-			struct MeshResDesc
-			{
-				MeshId Id;
-				std::string Name;
-			};
-			MeshResDesc meshResDesc[] = {
-				{ MeshId_Plane, "../Res/Models/Plane.obj" },
-				{ MeshId_Sphere, "../Res/Models/Sphere.obj" },
-				{ MeshId_Wuson, "../Res/Models/Wuson.obj" },
-				{ MeshId_MedievalBuilding, "../Res/Models/Medieval_building.obj" },
-				{ MeshId_Sponza, "../Res/Models/Sponza/sponza.obj" },
-			};
-			for (ur_size ires = 0; ires < ur_array_size(meshResDesc); ++ires)
-			{
-				GrafUtils::ModelData modelData;
-				if (GrafUtils::LoadModelFromFile(*grafDevice, meshResDesc[ires].Name, modelData, meshVertexMask) == Success && modelData.Meshes.size() > 0)
-				{
-					const GrafUtils::MeshData& meshData = *modelData.Meshes[0];
-					if (meshData.VertexElementFlags & meshVertexMask) // make sure all masked attributes available in the mesh
-					{
-						std::unique_ptr<Mesh> mesh(new Mesh(*grafSystem));
-						mesh->Initialize(this->grafRenderer, meshResDesc[ires].Id,
-							(Mesh::Vertex*)meshData.Vertices.data(), ur_uint(meshData.Vertices.size() / sizeof(Mesh::Vertex)),
-							(Mesh::Index*)meshData.Indices.data(), ur_uint(meshData.Indices.size() / sizeof(Mesh::Index)));
-						this->meshes.emplace_back(std::move(mesh));
-					}
-				}
-			}
 
 			// instance buffer
 
@@ -738,11 +784,21 @@ int HybridRenderingApp::Run()
 			grafSystem->CreateSampler(this->samplerTrilinear);
 			this->samplerTrilinear->Initialize(grafDevice, { samplerTrilinearDesc });
 
+			GrafSamplerDesc samplerTrilinearWrapDesc = {
+				GrafFilterType::Linear, GrafFilterType::Linear, GrafFilterType::Linear,
+				GrafAddressMode::Wrap, GrafAddressMode::Wrap, GrafAddressMode::Wrap,
+				false, 1.0f, 0.0f, 0.0f, 128.0f
+			};
+			grafSystem->CreateSampler(this->samplerTrilinearWrap);
+			this->samplerTrilinearWrap->Initialize(grafDevice, { samplerTrilinearWrapDesc });
+
 			// rasterization descriptor table
 
 			GrafDescriptorRangeDesc rasterDescTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 				{ GrafDescriptorType::Buffer, 0, 1 },
+				{ GrafDescriptorType::Sampler, 0, 1 },
+				{ GrafDescriptorType::Texture, 1, 3 },
 			};
 			GrafDescriptorTableLayoutDesc rasterDescTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::Vertex) |
@@ -1025,6 +1081,39 @@ int HybridRenderingApp::Run()
 					this->shadowFilterPipelineState->Initialize(grafDevice, computePipelineParams);
 				}
 			}
+
+			// load mesh(es)
+
+			GrafUtils::MeshVertexElementFlags meshVertexMask = // must be compatible with Mesh::Vertex
+				ur_uint(GrafUtils::MeshVertexElementFlag::Position) |
+				ur_uint(GrafUtils::MeshVertexElementFlag::Normal) |
+				ur_uint(GrafUtils::MeshVertexElementFlag::TexCoord);
+			struct MeshResDesc
+			{
+				MeshId Id;
+				std::string Name;
+			};
+			MeshResDesc meshResDesc[] = {
+				{ MeshId_Plane, "../Res/Models/Plane.obj" },
+				{ MeshId_Sphere, "../Res/Models/Sphere.obj" },
+				{ MeshId_Wuson, "../Res/Models/Wuson.obj" },
+				{ MeshId_MedievalBuilding, "../Res/Models/Medieval_building.obj" },
+				{ MeshId_Sponza, "../Res/Models/Sponza/sponza.obj" },
+			};
+			for (ur_size ires = 0; ires < ur_array_size(meshResDesc); ++ires)
+			{
+				GrafUtils::ModelData modelData;
+				if (GrafUtils::LoadModelFromFile(*grafDevice, meshResDesc[ires].Name, modelData, meshVertexMask) == Success && modelData.Meshes.size() > 0)
+				{
+					const GrafUtils::MeshData& meshData = *modelData.Meshes[0];
+					if (meshData.VertexElementFlags & meshVertexMask) // make sure all masked attributes available in the mesh
+					{
+						std::unique_ptr<Mesh> mesh(new Mesh(*grafSystem));
+						mesh->Initialize(this, meshResDesc[ires].Id, meshData);
+						this->meshes.emplace_back(std::move(mesh));
+					}
+				}
+			}
 		}
 
 		void Update(ur_float elapsedSeconds)
@@ -1216,16 +1305,17 @@ int HybridRenderingApp::Run()
 			this->sceneCBCrntFrameAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
 			dynamicCB->Write((ur_byte*)&sceneConstants, sizeof(sceneConstants), 0, this->sceneCBCrntFrameAlloc.Offset);
 
+			#if (0)
 			// update descriptor table
-
 			GrafDescriptorTable* descriptorTable = this->rasterDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(0, dynamicCB, this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 			descriptorTable->SetBuffer(0, this->instanceBuffer.get());
+			grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
+			#endif
 
 			// rasterize meshes
 
 			grafCmdList->BindPipeline(this->rasterPipelineState.get());
-			grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
 			for (auto& mesh : this->meshes)
 			{
 				if (0 == mesh->drawData.instanceCount)
@@ -1233,7 +1323,26 @@ int HybridRenderingApp::Run()
 
 				grafCmdList->BindVertexBuffer(mesh->vertexBuffer.get(), 0);
 				grafCmdList->BindIndexBuffer(mesh->indexBuffer.get(), (sizeof(Mesh::Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32));
+				#if (0)
 				grafCmdList->DrawIndexed(mesh->indicesCount, mesh->drawData.instanceCount, 0, 0, mesh->drawData.instanceOfs);
+				#else
+				for (auto& subMesh : mesh->subMeshes)
+				{
+					// update descriptor table
+					GrafDescriptorTable* descriptorTable = subMesh.descTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+					descriptorTable->SetConstantBuffer(0, dynamicCB, this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+					descriptorTable->SetBuffer(0, this->instanceBuffer.get());
+					descriptorTable->SetSampler(0, this->samplerTrilinearWrap.get());
+					if (subMesh.colorImage.get()) descriptorTable->SetImage(1, subMesh.colorImage.get());
+					if (subMesh.maskImage.get()) descriptorTable->SetImage(2, subMesh.maskImage.get());
+					if (subMesh.normalImage.get()) descriptorTable->SetImage(3, subMesh.normalImage.get());
+
+					// draw
+					grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
+					grafCmdList->DrawIndexed(subMesh.primtivesCount * 3, mesh->drawData.instanceCount,
+						subMesh.primtivesOffset, 0, mesh->drawData.instanceOfs);
+				}
+				#endif
 			}
 		}
 
@@ -1535,7 +1644,7 @@ int HybridRenderingApp::Run()
 	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 	sphericalLight1.Position = { 2.0f, 2.0f, 2.0f };
 	#endif
-	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
+	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 4; // match illuminance to day light
 	sphericalLight1.Size = 0.5f;
 	LightingDesc lightingDesc = {};
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
@@ -1657,6 +1766,9 @@ int HybridRenderingApp::Run()
 					ur_float2 dir2d;
 					light.Position.x = -dist2d * cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
 					light.Position.z = -dist2d * sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
+					#if (SCENE_TYPE_SPONZA == SCENE_TYPE)
+					light.Position.y = 2.0f + (cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor) + 1.0f) * 4.0f;
+					#endif
 				}
 			}
 

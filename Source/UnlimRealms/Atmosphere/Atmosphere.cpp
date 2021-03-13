@@ -826,7 +826,7 @@ namespace UnlimRealms
 					GrafImageType::Tex2D,
 					GrafFormat::R16G16B16A16_SFLOAT,
 					renderTarget.GetImage(0)->GetDesc().Size, 1,
-					ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderInput),
+					ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::ShaderRead),
 					ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 				};
 				res = this->grafObjects->lightShaftsRTImage->Initialize(this->grafRenderer->GetGrafDevice(), { lightShaftsImageDesc });

@@ -181,7 +181,7 @@ namespace UnlimRealms
 		imageDesc.Size.y = 1;
 		imageDesc.Size.z = 1;
 		imageDesc.MipLevels = 1;
-		imageDesc.Usage = (ur_uint)GrafImageUsageFlag::TransferDst | (ur_uint)GrafImageUsageFlag::ShaderInput;
+		imageDesc.Usage = (ur_uint)GrafImageUsageFlag::TransferDst | (ur_uint)GrafImageUsageFlag::ShaderRead;
 		imageDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 		res = grafSystem->CreateImage(this->grafObjects->texture);
 		if (Succeeded(res))

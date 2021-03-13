@@ -1,6 +1,5 @@
 
 #include "HybridRendering.hlsli"
-#include "HDRRender/HDRRender.hlsli"
 
 // common bindings
 
@@ -182,10 +181,11 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		else
 		{
 			// TODO: read mesh material
-			material.baseColor.xyz = 0.5;
-			material.roughness = 0.5;
-			material.metallic = 0.0;
-			material.reflectance = 0.04;
+			material.baseColor.xyz = gbData.BaseColor.xyz;
+			if (!any(material.baseColor.xyz)) material.baseColor.xyz = g_SceneCB.Material.BaseColor;
+			material.roughness = g_SceneCB.Material.Roughness;
+			material.metallic = g_SceneCB.Material.Metallic;
+			material.reflectance = g_SceneCB.Material.Reflectance;
 		}
 
 		// lighting params

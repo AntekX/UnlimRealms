@@ -1047,7 +1047,7 @@ namespace UnlimRealms
 		outputImageData.Desc.Size.y = (ur_uint)ilHeight;
 		outputImageData.Desc.Size.z = 1;
 		outputImageData.Desc.MipLevels = (ur_uint)ilMips + 1;
-		outputImageData.Desc.Usage = (ur_uint)GrafImageUsageFlag::TransferDst | (ur_uint)GrafImageUsageFlag::ShaderInput;
+		outputImageData.Desc.Usage = (ur_uint)GrafImageUsageFlag::TransferDst | (ur_uint)GrafImageUsageFlag::ShaderRead;
 		outputImageData.Desc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 		outputImageData.RowPitch = (ur_uint)ilWidth * ilBpp * ilBpc;
 		switch (ilDXTFormat)
@@ -1098,8 +1098,8 @@ namespace UnlimRealms
 
 			outputImageData.MipBuffers.push_back(std::move(mipBuffer));
 
-			mipRowPitch /= 2;
-			mipHeight /= 2;
+			mipRowPitch = std::max(mipRowPitch / 2, 1u);
+			mipHeight = std::max(mipHeight / 2, 1u);
 		}
 
 		// release IL resources
@@ -1137,6 +1137,7 @@ namespace UnlimRealms
 		ur_size delimPos = resName.rfind("/");
 		if (std::string::npos == delimPos) delimPos = resName.rfind("\\");
 		std::string resPath = resName.substr(0, delimPos);
+		std::string texturesPath = (resPath.empty() ? "" : resPath + "/");
 
 		tinyobj::attrib_t attribs;
 		std::vector<tinyobj::shape_t> shapes;
@@ -1243,13 +1244,13 @@ namespace UnlimRealms
 			dstMat.SheenColor.y = (ur_float)srcMat.sheen;
 			dstMat.SheenColor.z = (ur_float)srcMat.sheen;
 
-			dstMat.ColorTexName = srcMat.diffuse_texname;
-			dstMat.MaskTexName = srcMat.alpha_texname;
-			dstMat.NormalTexName = srcMat.normal_texname;
-			dstMat.DisplacementTexName = srcMat.displacement_texname;
-			dstMat.RoughnessTexName = srcMat.roughness_texname;
-			dstMat.MetallicTexName = srcMat.metallic_texname;
-			dstMat.EmissiveTexName = srcMat.emissive_texname;
+			dstMat.ColorTexName = (srcMat.diffuse_texname.empty() ? "" : texturesPath + srcMat.diffuse_texname);
+			dstMat.MaskTexName = (srcMat.alpha_texname.empty() ? "" : texturesPath + srcMat.alpha_texname);
+			dstMat.NormalTexName = (srcMat.normal_texname.empty() ? "" : texturesPath + srcMat.normal_texname);
+			dstMat.DisplacementTexName = (srcMat.displacement_texname.empty() ? "" : texturesPath + srcMat.displacement_texname);
+			dstMat.RoughnessTexName = (srcMat.roughness_texname.empty() ? "" : texturesPath + srcMat.roughness_texname);
+			dstMat.MetallicTexName = (srcMat.metallic_texname.empty() ? "" : texturesPath + srcMat.metallic_texname);
+			dstMat.EmissiveTexName = (srcMat.emissive_texname.empty() ? "" : texturesPath + srcMat.emissive_texname);
 		}
 
 		// precalculate per vertex smooth normals
@@ -1280,121 +1281,141 @@ namespace UnlimRealms
 			}
 		}
 
-		// TODO: optimize shared attributes usage, pack indices
-		// currectly all primtives vertices are unique to simplify loading logic
+		// group valid/supported shapes by material ID
+		// compute total size(s) to pre-allocate buffers
+		// TODO: optimize shared attributes usage, pack indices (currectly all primtives vertices are unique to simplify loading logic)
 		ur_size totalMeshIndicesCount = 0;
-		for (auto& shape : shapes)
+		typedef std::vector<ur_size> ShapeIdArray;
+		typedef std::unique_ptr<ShapeIdArray> ShapeIdArrayUPtr;
+		std::unordered_map<ur_uint, ShapeIdArrayUPtr> perMaterialShapeIds;
+		for (ur_size shapeIdx = 0; shapeIdx < shapes.size(); ++shapeIdx)
 		{
+			auto& shape = shapes[shapeIdx];
 			if (shapeToUse && shapeToUse != &shape)
 				continue;
+			if (shape.mesh.indices.empty())
+				continue; // mesh shapes accepted only
+			
 			totalMeshIndicesCount += shape.mesh.indices.size();
+
+			// update per material array of shapes
+			ur_int shapeMaterialID = shape.mesh.material_ids[0];
+			shapeMaterialID = (ur_uint)(shapeMaterialID >= 0 && shapeMaterialID < (ur_int)meshData.Materials.size() ? shapeMaterialID : defaultMaterialID); // consider all faces in one shape share the same material
+			auto& materialShapesIter = perMaterialShapeIds.find(shapeMaterialID);
+			if (materialShapesIter == perMaterialShapeIds.end())
+			{
+				ShapeIdArrayUPtr materialShapeArray(new ShapeIdArray);
+				perMaterialShapeIds.insert(std::pair<ur_uint, ShapeIdArrayUPtr>(shapeMaterialID, std::move(materialShapeArray)));
+				materialShapesIter = perMaterialShapeIds.find(shapeMaterialID);
+			}
+			materialShapesIter->second->emplace_back(shapeIdx);
 		}
 		meshData.Indices.resize(totalMeshIndicesCount * indexStride);
 		meshData.Vertices.resize(totalMeshIndicesCount * vertexStride);
 		ur_size indicesOffset = 0;
 		ur_size verticesOffset = 0;
 
-		for (ur_size ishape = 0; ishape < shapes.size(); ++ishape)
+		// creaate MeshSurfaceData per material shape group
+		meshData.Surfaces.resize(perMaterialShapeIds.size());
+		auto materialShapeIdsIter = perMaterialShapeIds.begin();
+		for (ur_size surfaceIdx = 0; surfaceIdx < meshData.Surfaces.size(); ++surfaceIdx, ++materialShapeIdsIter)
 		{
-			const tinyobj::shape_t& shape = shapes[ishape];
-			if (shapeToUse && shapeToUse != &shape)
-				continue;
-			if (shape.mesh.indices.empty())
-				continue; // mesh shapes accepted only
-
-			meshData.Surfaces.emplace_back(MeshSurfaceData());
-			MeshSurfaceData& surfaceData = meshData.Surfaces.back();
-			ur_int shapeMaterialID = shape.mesh.material_ids[0];
-			surfaceData.MaterialID = (ur_uint)(shapeMaterialID >= 0 && shapeMaterialID < (ur_int)meshData.Materials.size() ? shapeMaterialID : defaultMaterialID); // consider all faces in one shape share the same material
+			MeshSurfaceData& surfaceData = meshData.Surfaces[surfaceIdx];
+			surfaceData.MaterialID = materialShapeIdsIter->first;
 			surfaceData.PrimtivesOffset = (ur_uint)indicesOffset;
-			surfaceData.PrimtivesCount = (ur_uint)shape.mesh.indices.size() / 3;
-
-			ur_byte* indicesPtr = meshData.Indices.data() + indicesOffset * indexStride;
-			ur_uint32* typedIndexPtr = (ur_uint32*)indicesPtr;
-			ur_size indicesCount = shape.mesh.indices.size();
-			for (ur_size ii = 0; ii < indicesCount; ++ii)
+			surfaceData.PrimtivesCount = 0;
+			for (auto& shapeId : *materialShapeIdsIter->second)
 			{
-				*typedIndexPtr++ = ur_uint32(ii + indicesOffset);
-			}
+				auto& shape = shapes[shapeId];
+				surfaceData.PrimtivesCount += (ur_uint)shape.mesh.indices.size() / 3;
 
-			ur_byte* verticesPtr = meshData.Vertices.data() + verticesOffset * vertexStride;
-			if (!attribs.vertices.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Position)))
-			{
-				ur_byte* vertexElementPtr = (verticesPtr + vertexPositionOfs);
-				ur_float* typedElementPtr;
-				ur_size attribIdx;
+				ur_byte* indicesPtr = meshData.Indices.data() + indicesOffset * indexStride;
+				ur_uint32* typedIndexPtr = (ur_uint32*)indicesPtr;
+				ur_size indicesCount = shape.mesh.indices.size();
 				for (ur_size ii = 0; ii < indicesCount; ++ii)
 				{
-					attribIdx = shape.mesh.indices[ii].vertex_index * 3;
-					typedElementPtr = (ur_float*)vertexElementPtr;
-					typedElementPtr[0] = attribs.vertices[attribIdx + 0];
-					typedElementPtr[1] = attribs.vertices[attribIdx + 1];
-					typedElementPtr[2] = attribs.vertices[attribIdx + 2];
-					vertexElementPtr += vertexStride;
+					*typedIndexPtr++ = ur_uint32(ii + indicesOffset);
 				}
-			}
-			if (!attribs.normals.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Normal)))
-			{
-				ur_byte* vertexElementPtr = (verticesPtr + vertexNormalOfs);
-				ur_float* typedElementPtr;
-				if (smoothNormals.empty())
+
+				ur_byte* verticesPtr = meshData.Vertices.data() + verticesOffset * vertexStride;
+				if (!attribs.vertices.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Position)))
 				{
+					ur_byte* vertexElementPtr = (verticesPtr + vertexPositionOfs);
+					ur_float* typedElementPtr;
 					ur_size attribIdx;
 					for (ur_size ii = 0; ii < indicesCount; ++ii)
 					{
-						attribIdx = shape.mesh.indices[ii].normal_index * 3;
+						attribIdx = shape.mesh.indices[ii].vertex_index * 3;
 						typedElementPtr = (ur_float*)vertexElementPtr;
-						typedElementPtr[0] = attribs.normals[attribIdx + 0];
-						typedElementPtr[1] = attribs.normals[attribIdx + 1];
-						typedElementPtr[2] = attribs.normals[attribIdx + 2];
+						typedElementPtr[0] = attribs.vertices[attribIdx + 0];
+						typedElementPtr[1] = attribs.vertices[attribIdx + 1];
+						typedElementPtr[2] = attribs.vertices[attribIdx + 2];
 						vertexElementPtr += vertexStride;
 					}
 				}
-				else
+				if (!attribs.normals.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Normal)))
 				{
+					ur_byte* vertexElementPtr = (verticesPtr + vertexNormalOfs);
+					ur_float* typedElementPtr;
+					if (smoothNormals.empty())
+					{
+						ur_size attribIdx;
+						for (ur_size ii = 0; ii < indicesCount; ++ii)
+						{
+							attribIdx = shape.mesh.indices[ii].normal_index * 3;
+							typedElementPtr = (ur_float*)vertexElementPtr;
+							typedElementPtr[0] = attribs.normals[attribIdx + 0];
+							typedElementPtr[1] = attribs.normals[attribIdx + 1];
+							typedElementPtr[2] = attribs.normals[attribIdx + 2];
+							vertexElementPtr += vertexStride;
+						}
+					}
+					else
+					{
+						for (ur_size ii = 0; ii < indicesCount; ++ii)
+						{
+							ur_float3& sn = smoothNormals[shape.mesh.indices[ii].vertex_index];
+							typedElementPtr = (ur_float*)vertexElementPtr;
+							typedElementPtr[0] = sn.x;
+							typedElementPtr[1] = sn.y;
+							typedElementPtr[2] = sn.z;
+							vertexElementPtr += vertexStride;
+						}
+					}
+				}
+				if (!attribs.colors.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Color)))
+				{
+					ur_byte* vertexElementPtr = (verticesPtr + vertexColorOfs);
+					ur_float* typedElementPtr;
+					ur_size attribIdx;
 					for (ur_size ii = 0; ii < indicesCount; ++ii)
 					{
-						ur_float3& sn = smoothNormals[shape.mesh.indices[ii].vertex_index];
+						attribIdx = shape.mesh.indices[ii].vertex_index * 3;
 						typedElementPtr = (ur_float*)vertexElementPtr;
-						typedElementPtr[0] = sn.x;
-						typedElementPtr[1] = sn.y;
-						typedElementPtr[2] = sn.z;
+						typedElementPtr[0] = attribs.colors[attribIdx + 0];
+						typedElementPtr[1] = attribs.colors[attribIdx + 1];
+						typedElementPtr[2] = attribs.colors[attribIdx + 2];
 						vertexElementPtr += vertexStride;
 					}
 				}
-			}
-			if (!attribs.colors.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Color)))
-			{
-				ur_byte* vertexElementPtr = (verticesPtr + vertexColorOfs);
-				ur_float* typedElementPtr;
-				ur_size attribIdx;
-				for (ur_size ii = 0; ii < indicesCount; ++ii)
+				if (!attribs.texcoords.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::TexCoord)))
 				{
-					attribIdx = shape.mesh.indices[ii].vertex_index * 3;
-					typedElementPtr = (ur_float*)vertexElementPtr;
-					typedElementPtr[0] = attribs.colors[attribIdx + 0];
-					typedElementPtr[1] = attribs.colors[attribIdx + 1];
-					typedElementPtr[2] = attribs.colors[attribIdx + 2];
-					vertexElementPtr += vertexStride;
+					ur_byte* vertexElementPtr = (verticesPtr + vertexTexcoordOfs);
+					ur_float* typedElementPtr;
+					ur_size attribIdx;
+					for (ur_size ii = 0; ii < indicesCount; ++ii)
+					{
+						attribIdx = shape.mesh.indices[ii].texcoord_index * 2;
+						typedElementPtr = (ur_float*)vertexElementPtr;
+						typedElementPtr[0] = attribs.texcoords[attribIdx + 0];
+						typedElementPtr[1] = attribs.texcoords[attribIdx + 1];
+						vertexElementPtr += vertexStride;
+					}
 				}
-			}
-			if (!attribs.texcoords.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::TexCoord)))
-			{
-				ur_byte* vertexElementPtr = (verticesPtr + vertexTexcoordOfs);
-				ur_float* typedElementPtr;
-				ur_size attribIdx;
-				for (ur_size ii = 0; ii < indicesCount; ++ii)
-				{
-					attribIdx = shape.mesh.indices[ii].texcoord_index * 2;
-					typedElementPtr = (ur_float*)vertexElementPtr;
-					typedElementPtr[0] = attribs.texcoords[attribIdx + 0];
-					typedElementPtr[1] = attribs.texcoords[attribIdx + 1];
-					vertexElementPtr += vertexStride;
-				}
-			}
 
-			indicesOffset += indicesCount;
-			verticesOffset += indicesCount;
+				indicesOffset += indicesCount;
+				verticesOffset += indicesCount;
+			}
 		}
 
 		return Result(Success);
