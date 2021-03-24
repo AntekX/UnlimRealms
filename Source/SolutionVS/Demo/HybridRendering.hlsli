@@ -20,6 +20,7 @@ struct SceneConstants
 	float4 CameraDir;
 	float4 TargetSize; // w, h, 1/w, 1/h
 	float4 LightBufferSize; // w, h, 1/w, 1/h
+	float4 PrecomputedSkySize;
 	float4 DebugVec0;
 	float2 LightBufferDownscale; // d, 1/d
 	float2 __pad0;

@@ -3,26 +3,29 @@
 
 // common bindings
 
-ConstantBuffer<SceneConstants> g_SceneCB	: register(b0);
-sampler				g_SamplerBilinear		: register(s0);
-sampler				g_SamplerTrilinear		: register(s1);
-Texture2D<float>	g_GeometryDepth			: register(t0);
-Texture2D<float4>	g_GeometryImage0		: register(t1);
-Texture2D<float4>	g_GeometryImage1		: register(t2);
-Texture2D<float4>	g_GeometryImage2		: register(t3);
-Texture2D<float4>	g_ShadowResult			: register(t4);
-Texture2D<uint2>	g_TracingInfo			: register(t5);
-Texture2D<float>	g_DepthHistory			: register(t6);
-Texture2D<float4>	g_ShadowHistory			: register(t7);
-Texture2D<uint2>	g_TracingHistory		: register(t8);
-Texture2D<float4>	g_ShadowMips			: register(t9);
-RWTexture2D<float4>	g_LightingTarget		: register(u0);
-RWTexture2D<float4>	g_ShadowMip1			: register(u1);
-RWTexture2D<float4>	g_ShadowMip2			: register(u2);
-RWTexture2D<float4>	g_ShadowMip3			: register(u3);
-RWTexture2D<float4>	g_ShadowMip4			: register(u4);
-RWTexture2D<float4>	g_ShadowTarget			: register(u5);
-RWTexture2D<uint2>	g_TracingInfoTarget		: register(u6);
+ConstantBuffer<SceneConstants>	g_SceneCB		: register(b0);
+sampler				g_SamplerBilinear			: register(s0);
+sampler				g_SamplerTrilinear			: register(s1);
+sampler				g_SamplerTrilinearWrap		: register(s2);
+Texture2D<float>	g_GeometryDepth				: register(t0);
+Texture2D<float4>	g_GeometryImage0			: register(t1);
+Texture2D<float4>	g_GeometryImage1			: register(t2);
+Texture2D<float4>	g_GeometryImage2			: register(t3);
+Texture2D<float4>	g_ShadowResult				: register(t4);
+Texture2D<uint2>	g_TracingInfo				: register(t5);
+Texture2D<float>	g_DepthHistory				: register(t6);
+Texture2D<float4>	g_ShadowHistory				: register(t7);
+Texture2D<uint2>	g_TracingHistory			: register(t8);
+Texture2D<float4>	g_ShadowMips				: register(t9);
+Texture2D<float4>	g_PrecomputedSky			: register(t10);
+RWTexture2D<float4>	g_LightingTarget			: register(u0);
+RWTexture2D<float4>	g_ShadowMip1				: register(u1);
+RWTexture2D<float4>	g_ShadowMip2				: register(u2);
+RWTexture2D<float4>	g_ShadowMip3				: register(u3);
+RWTexture2D<float4>	g_ShadowMip4				: register(u4);
+RWTexture2D<float4>	g_ShadowTarget				: register(u5);
+RWTexture2D<uint2>	g_TracingInfoTarget			: register(u6);
+RWTexture2D<float4>	g_PrecomputedSkyTarget		: register(u7);
 
 
 // lighting common
@@ -44,11 +47,59 @@ float4 CalculateSkyLight(const float3 position, const float3 direction)
 	return color;
 }
 
+float3 SkyImagePosToDirection(const uint2 imagePos)
+{
+	float2 imageUV = (float2(imagePos) + 0.5) * g_SceneCB.PrecomputedSkySize.zw;
+	float azimuth = imageUV.x * TwoPi;
+	float inclination = imageUV.y * Pi - HalfPi;
+	float3 direction;
+	float inclinationCos = cos(inclination);
+	direction.x = cos(azimuth) * inclinationCos;
+	direction.z = sin(azimuth) * inclinationCos;
+	direction.y = sin(inclination);
+	return direction;
+}
+
+float2 SkyImageUVFromDirection(const float3 direction)
+{
+	float inclination = asin(direction.y) + HalfPi;
+	float azimuth = atan2(direction.z, direction.x);
+	if (azimuth < 0) azimuth = TwoPi + azimuth;
+	float2 imageUV;
+	imageUV.x = azimuth * OneOverTwoPi;
+	imageUV.y = inclination * OneOverPi;
+	return imageUV;
+}
+
+float4 GetSkyLight(const float3 position, const float3 direction)
+{
+	float2 skyUV = SkyImageUVFromDirection(direction);
+	float4 skyLight = g_PrecomputedSky.SampleLevel(g_SamplerTrilinearWrap, skyUV, 0);
+	return skyLight;
+}
+
 // upsampling
 
 static const int2 QuadSampleOfs[4] = {
 	{ 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 }
 };
+
+// sky precompute
+
+[shader("compute")]
+[numthreads(8, 8, 1)]
+void ComputeSky(const uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+	uint2 imagePos = dispatchThreadId.xy;
+	if (imagePos.x >= (uint)g_SceneCB.PrecomputedSkySize.x || imagePos.y >= (uint)g_SceneCB.PrecomputedSkySize.y)
+		return;
+
+	float3 groundPos = 0.0;
+	float3 direction = SkyImagePosToDirection(imagePos);
+	float4 skyLight = CalculateSkyLight(groundPos, direction);
+
+	g_PrecomputedSkyTarget[imagePos] = skyLight;
+}
 
 // compute lighting
 
@@ -73,7 +124,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	[branch] if (isSky)
 	{
-		lightingResult = CalculateSkyLight(g_SceneCB.CameraPos.xyz, worldRay).xyz;
+		lightingResult = GetSkyLight(g_SceneCB.CameraPos.xyz, worldRay).xyz;
 	}
 	else
 	{
@@ -209,8 +260,8 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		// indirect light
 
 		float3 envDir = float3(lightingParams.normal.x, max(lightingParams.normal.y, 0.0), lightingParams.normal.z);
-		float3 envColor = CalculateSkyLight(worldPos, normalize(envDir * 0.5 + WorldUp)).xyz; // simplified sky light
-		float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor; // no indirect spec
+		float3 envColor = GetSkyLight(worldPos, normalize(envDir * 0.5 + WorldUp)).xyz; // simplified sky light
+		float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor*0.02; // no indirect spec
 
 		// final
 

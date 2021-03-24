@@ -43,6 +43,7 @@ struct Settings
 	ur_uint RaytraceAccumulationFrameCount = 16;
 	ur_bool RaytracePerFrameJitter = true;
 #endif
+	ur_uint3 SkyImageSize = ur_uint3(512, 512, 1);
 } g_Settings;
 
 int HybridRenderingApp::Run()
@@ -126,7 +127,7 @@ int HybridRenderingApp::Run()
 	enum LightingImageUsage
 	{
 		LightingImageUsage_DirectShadow = 0,
-		LightingImageUsage_TracingInfo, // x = sub sample pos
+		LightingImageUsage_TracingInfo, // x = sub sample pos, y = counter
 		LightingImageUsage_DirectShadowBlured,
 		LightingImageCount,
 		LightingImageHistoryFirst = LightingImageCount,
@@ -405,6 +406,7 @@ int HybridRenderingApp::Run()
 			ur_float4 CameraDir;
 			ur_float4 TargetSize;
 			ur_float4 LightBufferSize;
+			ur_float4 PrecomputedSkySize;
 			ur_float4 DebugVec0;
 			ur_float2 LightBufferDownscale;
 			ur_float2 __pad0;
@@ -426,8 +428,11 @@ int HybridRenderingApp::Run()
 			MeshId_Plane = 0,
 			MeshId_Sphere,
 			MeshId_Wuson,
+			#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 			MeshId_MedievalBuilding,
+			#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 			MeshId_Sponza,
+			#endif
 			MeshCount
 		};
 
@@ -599,7 +604,7 @@ int HybridRenderingApp::Run()
 					initializeGrafImage(grafRenderer, uploadCmdList, materialDesc.ColorTexName, subMesh.colorImage);
 					initializeGrafImage(grafRenderer, uploadCmdList, materialDesc.MaskTexName, subMesh.maskImage);
 					initializeGrafImage(grafRenderer, uploadCmdList, materialDesc.NormalTexName, subMesh.normalImage);
-					
+
 					// descriptor table
 					subMesh.descTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
 					for (auto& descTable : subMesh.descTablePerFrame)
@@ -667,9 +672,16 @@ int HybridRenderingApp::Run()
 		GrafRenderer* grafRenderer;
 		std::vector<std::unique_ptr<Mesh>> meshes;
 		std::unique_ptr<GrafBuffer> instanceBuffer;
+		std::unique_ptr<GrafImage> defaultImageWhite;
+		std::unique_ptr<GrafImage> defaultImageBlack;
+		std::unique_ptr<GrafImage> defaultImageNormal;
 		std::unique_ptr<GrafDescriptorTableLayout> rasterDescTableLayout;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> rasterDescTablePerFrame;
 		std::unique_ptr<GrafPipeline> rasterPipelineState;
+		std::unique_ptr<GrafImage> skyImage;
+		std::unique_ptr<GrafDescriptorTableLayout> skyPrecomputeDescTableLayout;
+		std::vector<std::unique_ptr<GrafDescriptorTable>> skyPrecomputeDescTablePerFrame;
+		std::unique_ptr<GrafComputePipeline> skyPrecomputePipelineState;
 		std::unique_ptr<GrafDescriptorTableLayout> lightingDescTableLayout;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> lightingDescTablePerFrame;
 		std::unique_ptr<GrafComputePipeline> lightingPipelineState;
@@ -761,12 +773,14 @@ int HybridRenderingApp::Run()
 
 			enum ShaderLibId
 			{
+				ShaderLibId_ComputeSky,
 				ShaderLibId_ComputeLighting,
 				ShaderLibId_ComputeShadowMips,
 				ShaderLibId_BlurShadowResult,
 				ShaderLibId_AccumulateShadowResult,
 			};
 			GrafShaderLib::EntryPoint ShaderLibEntries[] = {
+				{ "ComputeSky", GrafShaderType::Compute },
 				{ "ComputeLighting", GrafShaderType::Compute },
 				{ "ComputeShadowMips", GrafShaderType::Compute },
 				{ "BlurShadowResult", GrafShaderType::Compute },
@@ -880,12 +894,46 @@ int HybridRenderingApp::Run()
 				this->rasterPipelineState->Initialize(grafDevice, pipelineParams);
 			}
 
+			// sky precompute descriptor table
+
+			GrafDescriptorRangeDesc skyPrecomputeDescTableLayoutRanges[] = {
+				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
+				{ GrafDescriptorType::RWTexture, 7, 1 },
+			};
+			GrafDescriptorTableLayoutDesc skyPrecomputeDescTableLayoutDesc = {
+				ur_uint(GrafShaderStageFlag::Compute),
+				skyPrecomputeDescTableLayoutRanges, ur_array_size(skyPrecomputeDescTableLayoutRanges)
+			};
+			grafSystem->CreateDescriptorTableLayout(this->skyPrecomputeDescTableLayout);
+			this->skyPrecomputeDescTableLayout->Initialize(grafDevice, { skyPrecomputeDescTableLayoutDesc });
+			this->skyPrecomputeDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
+			for (auto& descTable : this->skyPrecomputeDescTablePerFrame)
+			{
+				grafSystem->CreateDescriptorTable(descTable);
+				descTable->Initialize(grafDevice, { this->skyPrecomputeDescTableLayout.get() });
+			}
+
+			// sky precompute pipeline configuration
+
+			grafSystem->CreateComputePipeline(this->skyPrecomputePipelineState);
+			{
+				GrafDescriptorTableLayout* descriptorLayouts[] = {
+					this->skyPrecomputeDescTableLayout.get()
+				};
+				GrafComputePipeline::InitParams computePipelineParams = GrafComputePipeline::InitParams::Default;
+				computePipelineParams.ShaderStage = this->shaderLib->GetShader(ShaderLibId_ComputeSky);
+				computePipelineParams.DescriptorTableLayouts = descriptorLayouts;
+				computePipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+				this->skyPrecomputePipelineState->Initialize(grafDevice, computePipelineParams);
+			}
+
 			// lighting descriptor table
 
 			GrafDescriptorRangeDesc lightingDescTableLayoutRanges[] = {
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-				{ GrafDescriptorType::Sampler, 0, 2 },
+				{ GrafDescriptorType::Sampler, 0, 3 },
 				{ GrafDescriptorType::Texture, 0, 6 },
+				{ GrafDescriptorType::Texture, 10, 1 },
 				{ GrafDescriptorType::RWTexture, 0, 1 },
 			};
 			GrafDescriptorTableLayoutDesc lightingDescTableLayoutDesc = {
@@ -1104,6 +1152,38 @@ int HybridRenderingApp::Run()
 				}
 			}
 
+			// default images
+
+			{
+				GrafCommandList* cmdList = grafRenderer->GetTransientCommandList();
+				cmdList->Begin();
+				auto createDefaultImage = [&grafSystem, &grafDevice, &cmdList]
+				(std::unique_ptr<GrafImage>& defaultImage, GrafFormat format, GrafClearValue fillColor) -> Result
+				{
+					GrafImageDesc imageDesc = {
+						GrafImageType::Tex2D,
+						format,
+						ur_uint3(4, 4, 1), 1,
+						ur_uint(GrafImageUsageFlag::ShaderRead) | ur_uint(GrafImageUsageFlag::TransferDst),
+						ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+					};
+					grafSystem->CreateImage(defaultImage);
+					Result res = defaultImage->Initialize(grafDevice, { imageDesc });
+					if (Succeeded(res))
+					{
+						cmdList->ImageMemoryBarrier(defaultImage.get(), GrafImageState::Current, GrafImageState::TransferDst);
+						cmdList->ClearColorImage(defaultImage.get(), fillColor);
+						cmdList->ImageMemoryBarrier(defaultImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
+					}
+					return res;
+				};
+				createDefaultImage(defaultImageWhite, GrafFormat::R8G8B8A8_UNORM, { 1.0f, 1.0f, 1.0f, 1.0f });
+				createDefaultImage(defaultImageBlack, GrafFormat::R8G8B8A8_UNORM, { 0.0f, 0.0f, 0.0f, 0.0f });
+				createDefaultImage(defaultImageNormal, GrafFormat::R8G8B8A8_UNORM, { 0.0f, 0.0f, 1.0f, 0.0f });
+				cmdList->End();
+				grafDevice->Record(cmdList);
+			}
+
 			// load mesh(es)
 
 			GrafUtils::MeshVertexElementFlags meshVertexMask = // must be compatible with Mesh::Vertex
@@ -1119,8 +1199,11 @@ int HybridRenderingApp::Run()
 				{ MeshId_Plane, "../Res/Models/Plane.obj" },
 				{ MeshId_Sphere, "../Res/Models/Sphere.obj" },
 				{ MeshId_Wuson, "../Res/Models/Wuson.obj" },
+				#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 				{ MeshId_MedievalBuilding, "../Res/Models/Medieval_building.obj" },
+				#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 				{ MeshId_Sponza, "../Res/Models/Sponza/sponza.obj" },
+				#endif
 			};
 			for (ur_size ires = 0; ires < ur_array_size(meshResDesc); ++ires)
 			{
@@ -1314,6 +1397,10 @@ int HybridRenderingApp::Run()
 			sceneConstants.LightBufferSize.y = (ur_float)lightBufferSize.y;
 			sceneConstants.LightBufferSize.z = 1.0f / sceneConstants.LightBufferSize.x;
 			sceneConstants.LightBufferSize.w = 1.0f / sceneConstants.LightBufferSize.y;
+			sceneConstants.PrecomputedSkySize.x = (ur_float)g_Settings.SkyImageSize.x;
+			sceneConstants.PrecomputedSkySize.y = (ur_float)g_Settings.SkyImageSize.y;
+			sceneConstants.PrecomputedSkySize.z = 1.0f / sceneConstants.PrecomputedSkySize.x;
+			sceneConstants.PrecomputedSkySize.w = 1.0f / sceneConstants.PrecomputedSkySize.y;
 			sceneConstants.LightBufferDownscale.x = (ur_float)g_Settings.LightingBufferDownscale;
 			sceneConstants.LightBufferDownscale.y = 1.0f / sceneConstants.LightBufferDownscale.x;
 			sceneConstants.DebugVec0 = this->debugVec0;
@@ -1351,13 +1438,16 @@ int HybridRenderingApp::Run()
 				for (auto& subMesh : mesh->subMeshes)
 				{
 					// update descriptor table
+					GrafImage* colorImage = (subMesh.colorImage.get() ? subMesh.colorImage.get() : this->defaultImageWhite.get());
+					GrafImage* normalImage = (subMesh.normalImage.get() ? subMesh.normalImage.get() : this->defaultImageNormal.get());
+					GrafImage* maskImage = (subMesh.maskImage.get() ? subMesh.maskImage.get() : this->defaultImageWhite.get());
 					GrafDescriptorTable* descriptorTable = subMesh.descTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 					descriptorTable->SetConstantBuffer(0, dynamicCB, this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 					descriptorTable->SetBuffer(0, this->instanceBuffer.get());
 					descriptorTable->SetSampler(0, this->samplerTrilinearWrap.get());
-					if (subMesh.colorImage.get()) descriptorTable->SetImage(1, subMesh.colorImage.get());
-					if (subMesh.normalImage.get()) descriptorTable->SetImage(2, subMesh.normalImage.get());
-					if (subMesh.maskImage.get()) descriptorTable->SetImage(3, subMesh.maskImage.get());
+					descriptorTable->SetImage(1, colorImage);
+					descriptorTable->SetImage(2, normalImage);
+					descriptorTable->SetImage(3, maskImage);
 
 					// draw
 					grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
@@ -1366,6 +1456,52 @@ int HybridRenderingApp::Run()
 				}
 				#endif
 			}
+		}
+
+		void UpdatePrecomputedSkyResources(GrafCommandList* grafCmdList)
+		{
+			GrafSystem* grafSystem = this->grafRenderer->GetGrafSystem();
+			GrafDevice* grafDevice = this->grafRenderer->GetGrafDevice();
+
+			// (re)initialize image if required
+
+			if (ur_null == this->skyImage.get() || this->skyImage->GetDesc().Size != g_Settings.SkyImageSize)
+			{
+				GrafImage* prevImagePtr = this->skyImage.release();
+				if (prevImagePtr != ur_null)
+				{
+					this->grafRenderer->SafeDelete(prevImagePtr, grafCmdList);
+				}
+
+				GrafImageDesc imageDesc = {
+					GrafImageType::Tex2D,
+					GrafFormat::R16G16B16A16_SFLOAT,
+					ur_uint3(g_Settings.SkyImageSize.x, g_Settings.SkyImageSize.y, 1), 1,
+					ur_uint(GrafImageUsageFlag::ShaderRead) | ur_uint(GrafImageUsageFlag::ShaderReadWrite),
+					ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+				};
+				grafSystem->CreateImage(this->skyImage);
+				this->skyImage->Initialize(grafDevice, { imageDesc });
+			}
+		}
+
+		void PrecomputeSky(GrafCommandList * grafCmdList)
+		{
+			// update descriptor table
+			// common constant buffer is expected to be uploaded during rasterization pass
+
+			GrafDescriptorTable* descriptorTable = this->skyPrecomputeDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			descriptorTable->SetRWImage(7, this->skyImage.get());
+
+			// compute
+
+			grafCmdList->BindComputePipeline(this->skyPrecomputePipelineState.get());
+			grafCmdList->BindComputeDescriptorTable(descriptorTable, this->skyPrecomputePipelineState.get());
+
+			static const ur_uint3 groupSize = { 8, 8, 1 };
+			const ur_uint3& targetSize = this->skyImage->GetDesc().Size;
+			grafCmdList->Dispatch((targetSize.x - 1) / groupSize.x + 1, (targetSize.y - 1) / groupSize.y + 1, 1);
 		}
 
 		void RayTrace(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
@@ -1493,7 +1629,7 @@ int HybridRenderingApp::Run()
 			const ur_uint3& bufferSize = lightingBufferSet->images[0]->GetDesc().Size;
 			grafCmdList->Dispatch((bufferSize.x - 1) / groupSize.x + 1, (bufferSize.y - 1) / groupSize.y + 1, 1);
 
-			// TEMP
+			// TEMP: reprojection precision test
 			#if (0)
 			static float clipDepth = 0.12f;
 			static ur_int2 imagePos = ur_int2(25, 37);
@@ -1541,12 +1677,14 @@ int HybridRenderingApp::Run()
 			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 			descriptorTable->SetSampler(0, this->samplerBilinear.get());
 			descriptorTable->SetSampler(1, this->samplerTrilinear.get());
+			descriptorTable->SetSampler(2, this->samplerTrilinearWrap.get());
 			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 			{
 				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
 			}
 			descriptorTable->SetImage(4, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
 			descriptorTable->SetImage(5, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
+			descriptorTable->SetImage(10, this->skyImage.get());
 			descriptorTable->SetRWImage(0, lightingTarget->GetImage(0));
 
 			// compute
@@ -1663,10 +1801,11 @@ int HybridRenderingApp::Run()
 	sphericalLight1.Color = { 1.0f, 1.0f, 1.0f };
 	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 	sphericalLight1.Position = { 10.0f, 10.0f, 10.0f };
+	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
 	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 	sphericalLight1.Position = { 2.0f, 2.0f, 2.0f };
+	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 1;
 	#endif
-	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
 	sphericalLight1.Size = 0.5f;
 	LightingDesc lightingDesc = {};
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
@@ -1877,6 +2016,20 @@ int HybridRenderingApp::Run()
 				grafCmdListCrnt->EndRenderPass();
 			}
 
+			// sky precompute pass
+			{
+				GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "SkyPrecomputePass", DebugLabelColorPass);
+
+				if (demoScene != ur_null)
+				{
+					demoScene->UpdatePrecomputedSkyResources(grafCmdListCrnt);
+
+					grafCmdListCrnt->ImageMemoryBarrier(demoScene->skyImage.get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
+
+					demoScene->PrecomputeSky(grafCmdListCrnt);
+				}
+			}
+
 			// ray tracing pass
 			if (grafDeviceDesc->RayTracing.RayTraceSupported)
 			{
@@ -2052,6 +2205,8 @@ int HybridRenderingApp::Run()
 
 				if (demoScene != ur_null)
 				{
+					grafCmdListCrnt->ImageMemoryBarrier(demoScene->skyImage.get(), GrafImageState::Current, GrafImageState::ComputeRead);
+
 					demoScene->ComputeLighting(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get(), hdrRender->GetHDRRenderTarget());
 				}
 			}
@@ -2108,6 +2263,13 @@ int HybridRenderingApp::Run()
 					}
 					if (ImGui::CollapsingHeader("Atmosphere"))
 					{
+						ur_int editableInt;
+						editableInt = (ur_int)g_Settings.SkyImageSize.x;
+						ImGui::InputInt("PrecomputeWidth", &editableInt);
+						g_Settings.SkyImageSize.x = ur_uint(std::max(0, std::min(4096, editableInt)));
+						editableInt = (ur_int)g_Settings.SkyImageSize.y;
+						ImGui::InputInt("PrecomputeHeight", &editableInt);
+						g_Settings.SkyImageSize.y = ur_uint(std::max(0, std::min(4096, editableInt)));
 						ImGui::InputFloat("InnerRadius", &atmosphereDesc.InnerRadius);
 						ImGui::InputFloat("OuterRadius", &atmosphereDesc.OuterRadius);
 						ImGui::DragFloat("ScaleDepth", &atmosphereDesc.ScaleDepth, 0.01f, 0.0f, 1.0f);
