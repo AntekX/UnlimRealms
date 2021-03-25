@@ -147,3 +147,92 @@ GBufferData LoadGBufferData(in int2 imagePos,
 
 	return UnpackGBufferData(gbPacked);
 }
+
+// Lighting common
+
+MaterialInputs GetMaterial(const SceneConstants sceneCB, const GBufferData gbData)
+{
+	MaterialInputs material = (MaterialInputs)0;
+	
+	initMaterial(material);
+	material.normal = gbData.Normal;
+	if (sceneCB.OverrideMaterial)
+	{
+		material.baseColor.xyz = sceneCB.Material.BaseColor;
+		material.roughness = sceneCB.Material.Roughness;
+		material.metallic = sceneCB.Material.Metallic;
+		material.reflectance = sceneCB.Material.Reflectance;
+	}
+	else
+	{
+		material.baseColor.xyz = gbData.BaseColor.xyz;
+		material.roughness = sceneCB.Material.Roughness;
+		material.metallic = sceneCB.Material.Metallic;
+		material.reflectance = sceneCB.Material.Reflectance;
+	}
+
+	return material;
+}
+
+LightingParams GetMaterialLightingParams(const SceneConstants sceneCB, const GBufferData gbData, const float3 worldPos)
+{
+	MaterialInputs material = GetMaterial(sceneCB, gbData);
+	LightingParams lightingParams;
+	getLightingParams(worldPos, sceneCB.CameraPos.xyz, material, lightingParams);
+	return lightingParams;
+}
+
+float4 CalculateSkyLight(const SceneConstants sceneCB, const float3 position, const float3 direction)
+{
+	float height = lerp(sceneCB.Atmosphere.InnerRadius, sceneCB.Atmosphere.OuterRadius, 0.05);
+	float4 color = 0.0;
+	for (uint ilight = 0; ilight < sceneCB.Lighting.LightSourceCount; ++ilight)
+	{
+		LightDesc light = sceneCB.Lighting.LightSources[ilight];
+		if (LightType_Directional != light.Type)
+			continue;
+		float3 worldFrom = position + float3(0.0, height, 0.0);
+		float3 worldTo = worldFrom + direction;
+		color += AtmosphericScatteringSky(sceneCB.Atmosphere, light, worldTo, worldFrom);
+	}
+	color.w = min(1.0, color.w);
+	return color;
+}
+
+float3 SkyImagePosToDirection(const SceneConstants sceneCB, const uint2 imagePos)
+{
+	float2 imageUV = (float2(imagePos)+0.5) * sceneCB.PrecomputedSkySize.zw;
+	float azimuth = imageUV.x * TwoPi;
+	float inclination = imageUV.y * Pi - HalfPi;
+	float3 direction;
+	float inclinationCos = cos(inclination);
+	direction.x = cos(azimuth) * inclinationCos;
+	direction.z = sin(azimuth) * inclinationCos;
+	direction.y = sin(inclination);
+	return direction;
+}
+
+float2 SkyImageUVFromDirection(const SceneConstants sceneCB, const float3 direction)
+{
+	float inclination = asin(direction.y) + HalfPi;
+	float azimuth = atan2(direction.z, direction.x);
+	if (azimuth < 0) azimuth = TwoPi + azimuth;
+	float2 imageUV;
+	imageUV.x = azimuth * OneOverTwoPi;
+	imageUV.y = inclination * OneOverPi;
+	return imageUV;
+}
+
+float4 GetSkyLight(const SceneConstants sceneCB, const Texture2D<float4> precomputedSky, sampler skySampler,
+	const float3 position, const float3 direction)
+{
+	float2 skyUV = SkyImageUVFromDirection(sceneCB, direction);
+	float4 skyLight = precomputedSky.SampleLevel(skySampler, skyUV, 0);
+	return skyLight;
+}
+
+// Sampling
+
+static const int2 QuadSampleOfs[4] = {
+	{ 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 }
+};

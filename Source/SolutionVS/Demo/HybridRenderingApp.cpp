@@ -129,11 +129,15 @@ int HybridRenderingApp::Run()
 		LightingImageUsage_DirectShadow = 0,
 		LightingImageUsage_TracingInfo, // x = sub sample pos, y = counter
 		LightingImageUsage_DirectShadowBlured,
+		LightingImageUsage_IndirectLight,
+		LightingImageUsage_IndirectLightBlured,
 		LightingImageCount,
 		LightingImageHistoryFirst = LightingImageCount,
 		LightingImageUsage_DirectShadowHistory = LightingImageHistoryFirst,
 		LightingImageUsage_TracingInfoHistory,
 		LightingImageUsage_DirectShadowBluredHistory,
+		LightingImageUsage_IndirectLightHistory,
+		LightingImageUsage_IndirectLightBluredHistory,
 		LightingImageCountWithHistory,
 	};
 
@@ -141,10 +145,14 @@ int HybridRenderingApp::Run()
 		GrafFormat::R16G16B16A16_UNORM,
 		GrafFormat::R8G8_UINT,
 		GrafFormat::R16G16B16A16_UNORM,
+		GrafFormat::R16G16B16A16_SFLOAT,
+		GrafFormat::R16G16B16A16_SFLOAT,
 	};
 
 	static const ur_int LightingImageGenerateMips[LightingImageCount] = {
 		5,
+		1,
+		1,
 		1,
 		1,
 	};
@@ -153,6 +161,8 @@ int HybridRenderingApp::Run()
 		{ 1.0f, 1.0f, 1.0f, 1.0f },
 		{ 0.0f, 0.0f, 0.0f, 0.0f },
 		{ 1.0f, 1.0f, 1.0f, 1.0f },
+		{ 0.0f, 0.0f, 0.0f, 0.0f },
+		{ 0.0f, 0.0f, 0.0f, 0.0f },
 	};
 
 	struct RenderTargetSet
@@ -727,7 +737,7 @@ int HybridRenderingApp::Run()
 			
 			// default material override
 			this->sceneConstants.FrameNumber = 0;
-			this->sceneConstants.OverrideMaterial = true;
+			this->sceneConstants.OverrideMaterial = false;
 			this->sceneConstants.Material.BaseColor = { 0.5f, 0.5f, 0.5f };
 			this->sceneConstants.Material.Roughness = 0.5f;
 			this->sceneConstants.Material.Reflectance = 0.04f;
@@ -933,7 +943,7 @@ int HybridRenderingApp::Run()
 				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
 				{ GrafDescriptorType::Sampler, 0, 3 },
 				{ GrafDescriptorType::Texture, 0, 6 },
-				{ GrafDescriptorType::Texture, 10, 1 },
+				{ GrafDescriptorType::Texture, 10, 2 },
 				{ GrafDescriptorType::RWTexture, 0, 1 },
 			};
 			GrafDescriptorTableLayoutDesc lightingDescTableLayoutDesc = {
@@ -984,9 +994,10 @@ int HybridRenderingApp::Run()
 
 				GrafDescriptorRangeDesc raytraceDescTableLayoutRanges[] = {
 					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-					{ GrafDescriptorType::Texture, 0, 7 },
-					{ GrafDescriptorType::AccelerationStructure, 7, 1},
-					{ GrafDescriptorType::RWTexture, 0, 2 },
+					{ GrafDescriptorType::Sampler, 0, 1 },
+					{ GrafDescriptorType::Texture, 0, 8 },
+					{ GrafDescriptorType::AccelerationStructure, 8, 1},
+					{ GrafDescriptorType::RWTexture, 0, 3 },
 				};
 				GrafDescriptorTableLayoutDesc raytraceDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::AllRayTracing),
@@ -1511,6 +1522,7 @@ int HybridRenderingApp::Run()
 
 			GrafDescriptorTable* descriptorTable = this->raytraceDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			descriptorTable->SetSampler(0, this->samplerTrilinearWrap.get());
 			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 			{
 				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
@@ -1518,9 +1530,11 @@ int HybridRenderingApp::Run()
 			descriptorTable->SetImage(4, renderTargetSet->images[RenderTargetImageUsage_DepthHistory]);
 			descriptorTable->SetImage(5, lightingBufferSet->images[LightingImageUsage_DirectShadowHistory].get());
 			descriptorTable->SetImage(6, lightingBufferSet->images[LightingImageUsage_TracingInfoHistory].get());
-			descriptorTable->SetAccelerationStructure(7, this->accelerationStructureTL.get());
+			descriptorTable->SetImage(7, this->skyImage.get());
+			descriptorTable->SetAccelerationStructure(8, this->accelerationStructureTL.get());
 			descriptorTable->SetRWImage(0, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
 			descriptorTable->SetRWImage(1, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
+			descriptorTable->SetRWImage(2, lightingBufferSet->images[LightingImageUsage_IndirectLight].get());
 
 			// trace rays
 
@@ -1685,6 +1699,7 @@ int HybridRenderingApp::Run()
 			descriptorTable->SetImage(4, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
 			descriptorTable->SetImage(5, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
 			descriptorTable->SetImage(10, this->skyImage.get());
+			descriptorTable->SetImage(11, lightingBufferSet->images[LightingImageUsage_IndirectLight].get());
 			descriptorTable->SetRWImage(0, lightingTarget->GetImage(0));
 
 			// compute
@@ -2073,6 +2088,8 @@ int HybridRenderingApp::Run()
 
 				if (demoScene != ur_null)
 				{
+					grafCmdListCrnt->ImageMemoryBarrier(demoScene->skyImage.get(), GrafImageState::Current, GrafImageState::RayTracingRead);
+
 					demoScene->RayTrace(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
 				}
 			}

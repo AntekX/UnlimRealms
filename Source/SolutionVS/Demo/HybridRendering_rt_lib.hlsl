@@ -3,18 +3,20 @@
 
 // common bindings
 
-ConstantBuffer<SceneConstants>	g_SceneCB			: register(b0);
-Texture2D<float>				g_GeometryDepth		: register(t0);
-Texture2D<float4>				g_GeometryImage0	: register(t1);
-Texture2D<float4>				g_GeometryImage1	: register(t2);
-Texture2D<float4>				g_GeometryImage2	: register(t3);
-Texture2D<float>				g_DepthHistory		: register(t4);
-Texture2D<float4>				g_ShadowHistory		: register(t5);
-Texture2D<uint2>				g_TracingHistory	: register(t6);
-RaytracingAccelerationStructure	g_SceneStructure	: register(t7);
-RWTexture2D<float4>				g_ShadowTarget		: register(u0);
-RWTexture2D<uint2>				g_TracingInfoTarget	: register(u1);
-
+ConstantBuffer<SceneConstants>	g_SceneCB				: register(b0);
+sampler							g_SamplerTrilinearWrap	: register(s0);
+Texture2D<float>				g_GeometryDepth			: register(t0);
+Texture2D<float4>				g_GeometryImage0		: register(t1);
+Texture2D<float4>				g_GeometryImage1		: register(t2);
+Texture2D<float4>				g_GeometryImage2		: register(t3);
+Texture2D<float>				g_DepthHistory			: register(t4);
+Texture2D<float4>				g_ShadowHistory			: register(t5);
+Texture2D<uint2>				g_TracingHistory		: register(t6);
+Texture2D<float4>				g_PrecomputedSky		: register(t7);
+RaytracingAccelerationStructure	g_SceneStructure		: register(t8);
+RWTexture2D<float4>				g_ShadowTarget			: register(u0);
+RWTexture2D<uint2>				g_TracingInfoTarget		: register(u1);
+RWTexture2D<float4>				g_IndirectLightTarget	: register(u2);
 
 // common functions
 
@@ -67,6 +69,7 @@ void RayGenDirect()
 	float4 occlusionPerLight = 1.0;
 	#endif
 	uint2 tracingInfo = 0; // sub sample pos & counter
+	float3 indirectLight = 0.0;
 
 	// fetch at first sub sample
 	uint2 imagePos = dispatchIdx.xy * g_SceneCB.LightBufferDownscale.x;
@@ -110,6 +113,8 @@ void RayGenDirect()
 		dispatchSamplingFrame[2] = float3(0.0, 0.0, 1.0);
 		dispatchSamplingFrame[0] = normalize(float3(dispathNoise2d.xy, 0.0));
 		dispatchSamplingFrame[1] = cross(dispatchSamplingFrame[2], dispatchSamplingFrame[0]);
+
+		// Direct Shadow
 
 		RayDesc ray;
 		ray.Origin = worldPos + gbData.Normal * distBasedEps;
@@ -243,6 +248,17 @@ void RayGenDirect()
 			occlusionPerLightPacked |= ShadowBufferEntryPack(occlusionPerLight[j]) << (j * ShadowBufferBitsPerEntry);
 		}
 		#endif
+
+		// Indirect Light
+
+		LightingParams lightingParams = GetMaterialLightingParams(g_SceneCB, gbData, worldPos);
+
+		// TODO
+		// TEST: sample some sky light from upper hemisphere
+		float3 skyDir = float3(gbData.Normal.x, max(gbData.Normal.y, 0.0), gbData.Normal.z);
+		skyDir = normalize(skyDir * 0.5 + WorldUp);
+		float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz;
+		indirectLight = lightingParams.diffuseColor.xyz * skyLight * 0.02;
 	}
 
 	// write result
@@ -252,6 +268,7 @@ void RayGenDirect()
 	g_ShadowTarget[dispatchIdx.xy] = occlusionPerLight;
 	#endif
 	g_TracingInfoTarget[dispatchIdx.xy] = tracingInfo;
+	g_IndirectLightTarget[dispatchIdx.xy] = float4(indirectLight.xyz, 0.0);
 }
 
 // miss: direct light

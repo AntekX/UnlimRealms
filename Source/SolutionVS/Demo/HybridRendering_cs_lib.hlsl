@@ -18,6 +18,7 @@ Texture2D<float4>	g_ShadowHistory				: register(t7);
 Texture2D<uint2>	g_TracingHistory			: register(t8);
 Texture2D<float4>	g_ShadowMips				: register(t9);
 Texture2D<float4>	g_PrecomputedSky			: register(t10);
+Texture2D<float4>	g_IndirectLight				: register(t11);
 RWTexture2D<float4>	g_LightingTarget			: register(u0);
 RWTexture2D<float4>	g_ShadowMip1				: register(u1);
 RWTexture2D<float4>	g_ShadowMip2				: register(u2);
@@ -26,63 +27,6 @@ RWTexture2D<float4>	g_ShadowMip4				: register(u4);
 RWTexture2D<float4>	g_ShadowTarget				: register(u5);
 RWTexture2D<uint2>	g_TracingInfoTarget			: register(u6);
 RWTexture2D<float4>	g_PrecomputedSkyTarget		: register(u7);
-
-
-// lighting common
-
-float4 CalculateSkyLight(const float3 position, const float3 direction)
-{
-	float height = lerp(g_SceneCB.Atmosphere.InnerRadius, g_SceneCB.Atmosphere.OuterRadius, 0.05);
-	float4 color = 0.0;
-	for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
-	{
-		LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
-		if (LightType_Directional != light.Type)
-			continue;
-		float3 worldFrom = position + float3(0.0, height, 0.0);
-		float3 worldTo = worldFrom + direction;
-		color += AtmosphericScatteringSky(g_SceneCB.Atmosphere, light, worldTo, worldFrom);
-	}
-	color.w = min(1.0, color.w);
-	return color;
-}
-
-float3 SkyImagePosToDirection(const uint2 imagePos)
-{
-	float2 imageUV = (float2(imagePos) + 0.5) * g_SceneCB.PrecomputedSkySize.zw;
-	float azimuth = imageUV.x * TwoPi;
-	float inclination = imageUV.y * Pi - HalfPi;
-	float3 direction;
-	float inclinationCos = cos(inclination);
-	direction.x = cos(azimuth) * inclinationCos;
-	direction.z = sin(azimuth) * inclinationCos;
-	direction.y = sin(inclination);
-	return direction;
-}
-
-float2 SkyImageUVFromDirection(const float3 direction)
-{
-	float inclination = asin(direction.y) + HalfPi;
-	float azimuth = atan2(direction.z, direction.x);
-	if (azimuth < 0) azimuth = TwoPi + azimuth;
-	float2 imageUV;
-	imageUV.x = azimuth * OneOverTwoPi;
-	imageUV.y = inclination * OneOverPi;
-	return imageUV;
-}
-
-float4 GetSkyLight(const float3 position, const float3 direction)
-{
-	float2 skyUV = SkyImageUVFromDirection(direction);
-	float4 skyLight = g_PrecomputedSky.SampleLevel(g_SamplerTrilinearWrap, skyUV, 0);
-	return skyLight;
-}
-
-// upsampling
-
-static const int2 QuadSampleOfs[4] = {
-	{ 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 }
-};
 
 // sky precompute
 
@@ -95,8 +39,8 @@ void ComputeSky(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		return;
 
 	float3 groundPos = 0.0;
-	float3 direction = SkyImagePosToDirection(imagePos);
-	float4 skyLight = CalculateSkyLight(groundPos, direction);
+	float3 direction = SkyImagePosToDirection(g_SceneCB, imagePos);
+	float4 skyLight = CalculateSkyLight(g_SceneCB, groundPos, direction);
 
 	g_PrecomputedSkyTarget[imagePos] = skyLight;
 }
@@ -124,7 +68,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	[branch] if (isSky)
 	{
-		lightingResult = GetSkyLight(g_SceneCB.CameraPos.xyz, worldRay).xyz;
+		lightingResult = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, g_SceneCB.CameraPos.xyz, worldRay).xyz;
 	}
 	else
 	{
@@ -140,6 +84,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		#else
 		float4 shadowPerLight = 0.0;
 		#endif
+		float3 indirectLight = 0.0;
 
 		float2 lightBufferPos = (float2(imagePos.xy) + 0.5) * g_SceneCB.LightBufferDownscale.y;
 		#if (0)
@@ -154,6 +99,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		#else
 		shadowPerLight = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
 		#endif
+		indirectLight = g_IndirectLisght.Load(int3(lightBufferPos.xy, 0)).xyz;
 		
 		#else
 		
@@ -214,38 +160,15 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 				shadowPerLight[j] += shadowResultData[j] * sampleWeight[i];
 			}
 			#endif
+			indirectLight.xyz += g_IndirectLight.Load(int3(lightSamplePos.xy, 0)).xyz * sampleWeight[i];
 		}
 		#endif
 
-		// material params
-
-		MaterialInputs material = (MaterialInputs)0;
-		initMaterial(material);
-		material.normal = gbData.Normal;
-		if (g_SceneCB.OverrideMaterial)
-		{
-			material.baseColor.xyz = g_SceneCB.Material.BaseColor;
-			material.roughness = g_SceneCB.Material.Roughness;
-			material.metallic = g_SceneCB.Material.Metallic;
-			material.reflectance = g_SceneCB.Material.Reflectance;
-		}
-		else
-		{
-			// TODO: read mesh material
-			material.baseColor.xyz = gbData.BaseColor.xyz;
-			material.roughness = g_SceneCB.Material.Roughness;
-			material.metallic = g_SceneCB.Material.Metallic;
-			material.reflectance = g_SceneCB.Material.Reflectance;
-		}
-
-		// lighting params
-
-		LightingParams lightingParams;
-		getLightingParams(worldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
-
 		// direct light
 
-		float3 directLightColor = 0;
+		LightingParams lightingParams = GetMaterialLightingParams(g_SceneCB, gbData, worldPos);
+
+		float3 directLight = 0;
 		for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
 		{
 			LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
@@ -254,23 +177,24 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			float NoL = dot(lightDir, lightingParams.normal);
 			shadowFactor *= saturate(NoL  * 10.0); // approximate self shadowing at grazing angles
 			float specularOcclusion = shadowFactor;
-			directLightColor += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
+			directLight += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 		}
 
-		// indirect light
-
+		#if (0)
+		// simplified indirect light from sky only
 		float3 envDir = float3(lightingParams.normal.x, max(lightingParams.normal.y, 0.0), lightingParams.normal.z);
-		float3 envColor = GetSkyLight(worldPos, normalize(envDir * 0.5 + WorldUp)).xyz; // simplified sky light
-		float3 indirectLightColor = lightingParams.diffuseColor.xyz * envColor*0.02; // no indirect spec
+		float3 envColor = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, normalize(envDir * 0.5 + WorldUp)).xyz;
+		indirectLight = lightingParams.diffuseColor.xyz * envColor*0.02; // no indirect spec
+		#endif
 
 		// final
 
-		lightingResult = directLightColor + indirectLightColor;
+		lightingResult = directLight + indirectLight;
 
 		// TEMP:
 		if (g_SceneCB.DebugVec0[0] > 0)
 		{
-			lightingResult = lerp(float3(1,0,0), float3(0,1,0), /*debugValue*/shadowPerLight[3]) * max(indirectLightColor, 1.0);
+			lightingResult = lerp(float3(1,0,0), float3(0,1,0), /*debugValue*/shadowPerLight[3]) * max(indirectLight, 1.0);
 		}
 	}
 

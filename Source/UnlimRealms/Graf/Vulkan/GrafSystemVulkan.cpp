@@ -384,6 +384,7 @@ namespace UnlimRealms
 			grafDeviceDesc.RayTracing.RayTraceSupported = (ur_bool)vkDeviceRayTracingFeatures.rayTracingPipeline;
 			grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)vkDeviceRayQueryFeatures.rayQuery;
 			grafDeviceDesc.RayTracing.ShaderGroupHandleSize = vkDeviceRayTracingProperties.shaderGroupHandleSize;
+			grafDeviceDesc.RayTracing.ShaderGroupBaseAlignment = vkDeviceRayTracingProperties.shaderGroupBaseAlignment;
 			grafDeviceDesc.RayTracing.RecursionDepthMax = vkDeviceRayTracingProperties.maxRayRecursionDepth;
 			grafDeviceDesc.RayTracing.GeometryCountMax = ur_uint64(-1); // TODO: reconsider, no longer part of properties
 			grafDeviceDesc.RayTracing.InstanceCountMax = ur_uint64(-1);
