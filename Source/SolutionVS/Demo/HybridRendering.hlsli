@@ -23,13 +23,16 @@ struct SceneConstants
 	float4 PrecomputedSkySize;
 	float4 DebugVec0;
 	float2 LightBufferDownscale; // d, 1/d
-	float2 __pad0;
+	float DirectLightFactor;
+	float IndirectLightFactor;
 	uint FrameNumber;
 	uint SamplesPerLight;
+	uint IndirectSamplesPerFrame;
 	uint AccumulationFrameCount;
-	bool PerFrameJitter;
-	float3 __pad1;
-	bool OverrideMaterial;
+	uint PerFrameJitter;
+	uint OverrideMaterial;
+	uint __pad1;
+	uint __pad2;
 	LightingDesc Lighting;
 	AtmosphereDesc Atmosphere;
 	MeshMaterialDesc Material;
@@ -100,8 +103,8 @@ static const uint RTShaderId_MissDirect = 0;
 
 struct RayDataDirect
 {
-	// TODO
 	bool occluded;
+	float hitDist; // TEMP: struct is shared with AO
 };
 
 // Gemotry buffer utils

@@ -186,7 +186,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		// final
 
-		lightingResult = directLight + indirectLight;
+		lightingResult = directLight * g_SceneCB.DirectLightFactor + indirectLight * g_SceneCB.IndirectLightFactor;
 
 		// TEMP:
 		if (g_SceneCB.DebugVec0[0] > 0)

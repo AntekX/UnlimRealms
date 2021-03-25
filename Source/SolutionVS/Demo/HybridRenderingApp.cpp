@@ -32,6 +32,7 @@ struct Settings
 	// reference: many rays no filtering
 	ur_uint LightingBufferDownscale = 2;
 	ur_uint RaytraceSamplesPerLight = 32;
+	ur_uint RaytraceIndirectSamplesPerFrame = 0;
 	ur_uint RaytraceBlurPassCount = 0;
 	ur_uint RaytraceAccumulationFrameCount = 0;
 	ur_bool RaytracePerFrameJitter = false;
@@ -39,6 +40,7 @@ struct Settings
 	// real time: few rays lots of filtering
 	ur_uint LightingBufferDownscale = 2;
 	ur_uint RaytraceSamplesPerLight = 2;
+	ur_uint RaytraceIndirectSamplesPerFrame = 0;
 	ur_uint RaytraceBlurPassCount = 4;
 	ur_uint RaytraceAccumulationFrameCount = 16;
 	ur_bool RaytracePerFrameJitter = true;
@@ -419,13 +421,16 @@ int HybridRenderingApp::Run()
 			ur_float4 PrecomputedSkySize;
 			ur_float4 DebugVec0;
 			ur_float2 LightBufferDownscale;
-			ur_float2 __pad0;
+			ur_float DirectLightFactor;
+			ur_float IndirectLightFactor;
 			ur_uint FrameNumber;
 			ur_uint SamplesPerLight;
+			ur_uint IndirectSamplesPerFrame;
 			ur_uint AccumulationFrameCount;
-			ur_bool PerFrameJitter;
-			ur_float3 __pad1;
-			ur_bool OverrideMaterial;
+			ur_uint PerFrameJitter;
+			ur_uint OverrideMaterial;
+			ur_uint __pad1;
+			ur_uint __pad2;
 			LightingDesc Lighting;
 			Atmosphere::Desc Atmosphere;
 			MeshMaterialDesc Material;
@@ -732,8 +737,10 @@ int HybridRenderingApp::Run()
 
 		DemoScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
 		{
-			this->debugVec0 = ur_float4(0.0f, 0.0f, 0.005f, 0.0f);
 			memset(&this->sceneConstants, 0, sizeof(SceneConstants));
+			this->sceneConstants.DirectLightFactor = 1.0f;
+			this->sceneConstants.IndirectLightFactor = 1.0f;
+			this->debugVec0 = ur_float4(0.0f, 0.0f, 0.005f, 0.0f);
 			
 			// default material override
 			this->sceneConstants.FrameNumber = 0;
@@ -1418,6 +1425,7 @@ int HybridRenderingApp::Run()
 			sceneConstants.Lighting = lightingDesc;
 			sceneConstants.Atmosphere = atmosphereDesc;
 			sceneConstants.SamplesPerLight = g_Settings.RaytraceSamplesPerLight;
+			sceneConstants.IndirectSamplesPerFrame = g_Settings.RaytraceIndirectSamplesPerFrame;
 			sceneConstants.AccumulationFrameCount = g_Settings.RaytraceAccumulationFrameCount;
 			sceneConstants.PerFrameJitter = g_Settings.RaytracePerFrameJitter;
 
@@ -1745,10 +1753,14 @@ int HybridRenderingApp::Run()
 				this->sampleInstanceCount = (ur_size)std::max(0, editableInt);
 				ImGui::InputFloat("InstancesScatterRadius", &this->sampleInstanceScatterRadius);
 				ImGui::InputFloat("InstancesCycleTime", &this->animationCycleTime);
+				ImGui::DragFloat("DirectLightFactor", &this->sceneConstants.DirectLightFactor, 0.01f, 0.0f, 1.0f);
+				ImGui::DragFloat("IndirectLightFactor", &this->sceneConstants.IndirectLightFactor, 0.01f, 0.0f, 1.0f);
 				ImGui::InputFloat4("DebugVec0", &this->debugVec0.x);
 				if (ImGui::CollapsingHeader("Material"))
 				{
-					ImGui::Checkbox("Override", &this->sceneConstants.OverrideMaterial);
+					ur_bool editableBool = (ur_bool)this->sceneConstants.OverrideMaterial;
+					ImGui::Checkbox("Override", &editableBool);
+					this->sceneConstants.OverrideMaterial = (ur_uint)editableBool;
 					memcpy(editableFloat3, &this->sceneConstants.Material.BaseColor, sizeof(ur_float3));
 					ImGui::InputFloat3("BaseColor", editableFloat3);
 					this->sceneConstants.Material.BaseColor = editableFloat3;
@@ -2316,6 +2328,9 @@ int HybridRenderingApp::Run()
 						editableInt = (ur_int)g_Settings.RaytraceSamplesPerLight;
 						ImGui::InputInt("SamplesPerLight", &editableInt);
 						g_Settings.RaytraceSamplesPerLight = (ur_uint)std::max(1, std::min(1024, editableInt));
+						editableInt = (ur_int)g_Settings.RaytraceIndirectSamplesPerFrame;
+						ImGui::InputInt("IndirectSamplesPerFrame", &editableInt);
+						g_Settings.RaytraceIndirectSamplesPerFrame = (ur_uint)std::max(0, std::min(1024, editableInt));
 						ImGui::Checkbox("PerFrameJitter", &g_Settings.RaytracePerFrameJitter);
 					}
 					if (ImGui::CollapsingHeader("Canvas"))

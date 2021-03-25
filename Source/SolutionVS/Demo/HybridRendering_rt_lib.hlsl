@@ -26,12 +26,21 @@ float3 GetDiskSampleDirection(uint sampleId)
 	float2 dir2d = BlueNoiseDiskLUT64[sampleId % 64]; // [-1, 1]
 	return float3(dir2d.xy, 1.0);
 	#else
-	const uint SampleCount = g_SceneCB.SamplesPerLight * max(1, g_SceneCB.AccumulationFrameCount + 1);
-	float2 p2d = Hammersley(sampleId % SampleCount, SampleCount);
+	uint sampleCount = g_SceneCB.SamplesPerLight * max(1, g_SceneCB.AccumulationFrameCount + 1);
+	float2 p2d = Hammersley(sampleId % sampleCount, sampleCount);
 	//float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
 	float3 dir = normalize(float3(p2d.xy * 2.0 - 1.0, 1.0));
 	return dir.xyz;
 	#endif
+}
+
+float3 GetHemisphereSampleDirection(uint sampleId)
+{
+	uint sampleCount = g_SceneCB.IndirectSamplesPerFrame;// *max(1, g_SceneCB.AccumulationFrameCount + 1); // temporal accumulation not yet done
+	float2 p2d = Hammersley(sampleId % sampleCount, sampleCount);
+	float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
+	//float3 dir = normalize(float3(p2d.xy * 2.0 - 1.0, 1.0));
+	return dir.xyz;
 }
 
 float3x3 ComputeLightSamplingBasis(const float3 worldPos, const LightDesc lightDesc)
@@ -54,6 +63,16 @@ float3x3 ComputeLightSamplingBasis(const float3 worldPos, const LightDesc lightD
 	lightTBN[1] *= halfAngleTangent;
 
 	return lightTBN;
+}
+
+float3x3 ComputeSamplingBasis(const float3 direction)
+{
+	float3x3 sampleTBN;
+	sampleTBN[2] = direction;
+	sampleTBN[0] = float3(1, 0, 0);
+	sampleTBN[1] = normalize(cross(sampleTBN[2], sampleTBN[0]));
+	sampleTBN[0] = cross(sampleTBN[1], sampleTBN[2]);
+	return sampleTBN;
 }
 
 // ray generation: direct light
@@ -104,7 +123,8 @@ void RayGenDirect()
 	[branch] if (!isSky)
 	{
 		float3 worldPos = ImagePosToWorldPos(imagePos, g_SceneCB.TargetSize.zw, gbData.ClipDepth, g_SceneCB.ViewProjInv);
-		float distBasedEps = length(worldPos - g_SceneCB.CameraPos.xyz) * 5.0e-3;
+		float worldDist = length(worldPos - g_SceneCB.CameraPos.xyz);
+		float distBasedEps = worldDist * 5.0e-3;
 
 		uint dispatchConstHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x);
 		uint dispatchCrntHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x * (1 + g_SceneCB.FrameNumber * g_SceneCB.PerFrameJitter));
@@ -147,6 +167,7 @@ void RayGenDirect()
 
 				RayDataDirect rayData = (RayDataDirect)0;
 				rayData.occluded = true;
+				rayData.hitDist = ray.TMax;
 
 				// ray trace
 				uint instanceInclusionMask = 0xff;
@@ -251,12 +272,54 @@ void RayGenDirect()
 
 		// Indirect Light
 
-		// TODO
-		// TEST: sample some sky light from upper hemisphere
-		float3 skyDir = float3(gbData.Normal.x, max(gbData.Normal.y, 0.0), gbData.Normal.z);
-		skyDir = normalize(skyDir * 0.5 + WorldUp);
-		float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz;
-		indirectLight = skyLight * 0.02;
+		if (g_SceneCB.IndirectSamplesPerFrame > 0)
+		{
+			// sky light with ambient occlusion
+			float3x3 surfaceTBN = ComputeSamplingBasis(gbData.Normal);
+			float ambientOcclusion = 0.0;
+			float3 skyLight = 0.0;
+			for (uint isample = 0; isample < g_SceneCB.IndirectSamplesPerFrame; ++isample)
+			{
+				float3 sampleDir = GetHemisphereSampleDirection(isample + 0*g_SceneCB.FrameNumber * g_SceneCB.IndirectSamplesPerFrame * g_SceneCB.PerFrameJitter + dispatchConstHash);
+				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
+				ray.TMax = worldDist * 20.0;
+				ray.TMin = ray.TMax * 1.0e-4;
+
+				RayDataDirect rayData = (RayDataDirect)0;
+				rayData.occluded = true;
+				rayData.hitDist = ray.TMax;
+
+				// ray trace
+				uint instanceInclusionMask = 0xff;
+				uint rayContributionToHitGroupIndex = 0;
+				uint multiplierForGeometryContributionToShaderIndex = 1;
+				uint missShaderIndex = RTShaderId_MissDirect;
+				TraceRay(g_SceneStructure,
+					RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
+					instanceInclusionMask,
+					rayContributionToHitGroupIndex,
+					multiplierForGeometryContributionToShaderIndex,
+					missShaderIndex,
+					ray, rayData);
+
+				float sampleOcclusion = float(rayData.occluded) * saturate(1.0 - rayData.hitDist / ray.TMax);
+				ambientOcclusion += sampleOcclusion;
+
+				float3 skyDir = float3(ray.Direction.x, max(ray.Direction.y, 0.0), ray.Direction.z);
+				skyDir = normalize(skyDir * 0.5 + WorldUp);
+				skyLight += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz * (1.0 - float(rayData.occluded) * saturate(1.0 - rayData.hitDist / ray.TMax));
+			}
+			ambientOcclusion = 1.0 - ambientOcclusion / g_SceneCB.IndirectSamplesPerFrame;
+			indirectLight = skyLight / g_SceneCB.IndirectSamplesPerFrame;
+		}
+		else
+		{
+			// simplified ambient
+			float3 skyDir = float3(gbData.Normal.x, max(gbData.Normal.y, 0.0), gbData.Normal.z);
+			skyDir = normalize(skyDir * 0.5 + WorldUp);
+			float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz;
+			indirectLight = skyLight * 0.025;
+		}
 	}
 
 	// write result
@@ -282,5 +345,5 @@ void MissDirect(inout RayDataDirect rayData)
 [shader("closesthit")]
 void ClosestHitDirect(inout RayDataDirect rayData, in BuiltInTriangleIntersectionAttributes attribs)
 {
-	// noting to do
+	rayData.hitDist = RayTCurrent();
 }
