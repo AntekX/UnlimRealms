@@ -251,14 +251,12 @@ void RayGenDirect()
 
 		// Indirect Light
 
-		LightingParams lightingParams = GetMaterialLightingParams(g_SceneCB, gbData, worldPos);
-
 		// TODO
 		// TEST: sample some sky light from upper hemisphere
 		float3 skyDir = float3(gbData.Normal.x, max(gbData.Normal.y, 0.0), gbData.Normal.z);
 		skyDir = normalize(skyDir * 0.5 + WorldUp);
 		float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz;
-		indirectLight = lightingParams.diffuseColor.xyz * skyLight * 0.02;
+		indirectLight = skyLight * 0.02;
 	}
 
 	// write result

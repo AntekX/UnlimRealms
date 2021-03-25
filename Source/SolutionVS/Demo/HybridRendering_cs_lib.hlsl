@@ -180,12 +180,9 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			directLight += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 		}
 
-		#if (0)
-		// simplified indirect light from sky only
-		float3 envDir = float3(lightingParams.normal.x, max(lightingParams.normal.y, 0.0), lightingParams.normal.z);
-		float3 envColor = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, normalize(envDir * 0.5 + WorldUp)).xyz;
-		indirectLight = lightingParams.diffuseColor.xyz * envColor*0.02; // no indirect spec
-		#endif
+		// indirect light
+
+		indirectLight = indirectLight * lightingParams.diffuseColor.xyz;
 
 		// final
 

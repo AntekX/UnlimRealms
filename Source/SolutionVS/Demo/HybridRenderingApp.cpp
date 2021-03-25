@@ -1785,6 +1785,7 @@ int HybridRenderingApp::Run()
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
 		hdrParams.LumWhite = 1.0f;
+		hdrParams.LumAdaptationMin = 400.0;
 		hdrParams.BloomThreshold = 4.0f;
 		hdrParams.BloomIntensity = 0.5f;
 		hdrRender->SetParams(hdrParams);
