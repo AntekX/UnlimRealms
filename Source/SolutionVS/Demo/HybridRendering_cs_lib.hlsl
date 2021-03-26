@@ -19,6 +19,8 @@ Texture2D<uint2>	g_TracingHistory			: register(t8);
 Texture2D<float4>	g_ShadowMips				: register(t9);
 Texture2D<float4>	g_PrecomputedSky			: register(t10);
 Texture2D<float4>	g_IndirectLight				: register(t11);
+Texture2D<float4>	g_IndirectLightHistory		: register(t12);
+Texture2D<float4>	g_BlurSource				: register(t13);
 RWTexture2D<float4>	g_LightingTarget			: register(u0);
 RWTexture2D<float4>	g_ShadowMip1				: register(u1);
 RWTexture2D<float4>	g_ShadowMip2				: register(u2);
@@ -27,6 +29,8 @@ RWTexture2D<float4>	g_ShadowMip4				: register(u4);
 RWTexture2D<float4>	g_ShadowTarget				: register(u5);
 RWTexture2D<uint2>	g_TracingInfoTarget			: register(u6);
 RWTexture2D<float4>	g_PrecomputedSkyTarget		: register(u7);
+RWTexture2D<float4>	g_IndirectLightTarget		: register(u8);
+RWTexture2D<float4>	g_BlurTarget				: register(u9);
 
 // sky precompute
 
@@ -311,7 +315,7 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 	GroupMemoryBarrierWithGroupSync();
 }
 
-// shadow result blur filter
+// blur filter
 
 #if (0)
 // kernel size = 3
@@ -367,32 +371,32 @@ static const float BlurKernelWeight[BlurKernelSize * BlurKernelSize] = {
 };
 #endif
 
-static const uint g_ShadowBlurGroupSize = 8;
-static const uint g_ShadowBlurGroupBorder = BlurKernelSize / 2;
-static const uint g_ShadowBlurGroupSizeWithBorders = g_ShadowBlurGroupSize + g_ShadowBlurGroupBorder * 2;
-groupshared float4 g_ShadowBlurGroupData[g_ShadowBlurGroupSizeWithBorders * g_ShadowBlurGroupSizeWithBorders];
-groupshared float g_ShadowBlurGroupDepth[g_ShadowBlurGroupSizeWithBorders * g_ShadowBlurGroupSizeWithBorders];
-#define SHADOW_BLUR_PREFETCH 1 // -40% time
-#define SHADOW_BLUR_PREFETCH_DEPTH 1 // additional -20% time (-50% total)
-#define SHADOW_BLUR_COMPUTE_VARIANCE 0
+static const uint g_BlurGroupSize = 8;
+static const uint g_BlurGroupBorder = BlurKernelSize / 2;
+static const uint g_BlurGroupSizeWithBorders = g_BlurGroupSize + g_BlurGroupBorder * 2;
+groupshared float4 g_BlurGroupData[g_BlurGroupSizeWithBorders * g_BlurGroupSizeWithBorders];
+groupshared float g_BlurGroupDepth[g_BlurGroupSizeWithBorders * g_BlurGroupSizeWithBorders];
+#define BLUR_PREFETCH 1 // -40% time
+#define BLUR_PREFETCH_DEPTH 1 // additional -20% time (-50% total)
+#define BLUR_COMPUTE_VARIANCE 0
 
 [shader("compute")]
-[numthreads(g_ShadowBlurGroupSize, g_ShadowBlurGroupSize, 1)]
-void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const uint3 groupId : SV_GroupID, const uint3 groupThreadId : SV_GroupThreadID, const uint groupThreadIdx : SV_GroupIndex)
+[numthreads(g_BlurGroupSize, g_BlurGroupSize, 1)]
+void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const uint3 groupId : SV_GroupID, const uint3 groupThreadId : SV_GroupThreadID, const uint groupThreadIdx : SV_GroupIndex)
 {
-	uint2 lightBufferPos = dispatchThreadId.xy;
-	if (lightBufferPos.x >= (uint)g_SceneCB.LightBufferSize.x || lightBufferPos.y >= (uint)g_SceneCB.LightBufferSize.y)
+	uint2 bufferPos = dispatchThreadId.xy;
+	if (bufferPos.x >= (uint)g_SceneCB.LightBufferSize.x || bufferPos.y >= (uint)g_SceneCB.LightBufferSize.y)
 		return;
 
 	uint2 subSamplePos = 0; // sample sub pos from tracing info ommited here because currently always 0
 
-	// prefetch shadow data in shared memory
-	#if (SHADOW_BLUR_PREFETCH)
-	int2 groupFrom = max(int2(groupId.xy) * g_ShadowBlurGroupSize.xx - g_ShadowBlurGroupBorder.xx, int2(0, 0));
-	int2 groupTo = min(int2(groupId.xy + 1) * g_ShadowBlurGroupSize.xx - 1 + g_ShadowBlurGroupBorder.xx, int2(g_SceneCB.LightBufferSize.xy - 1));
+	// prefetch data in shared memory
+	#if (BLUR_PREFETCH)
+	int2 groupFrom = max(int2(groupId.xy) * g_BlurGroupSize.xx - g_BlurGroupBorder.xx, int2(0, 0));
+	int2 groupTo = min(int2(groupId.xy + 1) * g_BlurGroupSize.xx - 1 + g_BlurGroupBorder.xx, int2(g_SceneCB.LightBufferSize.xy - 1));
 	int2 groupSize = (groupTo - groupFrom + 1);
-	int2 prefetchFrom = int2(lightBufferPos.xy) - int2(groupThreadId.x == 0, groupThreadId.y == 0) * g_ShadowBlurGroupBorder;
-	int2 prefetchTo = int2(lightBufferPos.xy) + int2(groupThreadId.x + 1 == g_ShadowBlurGroupSize, groupThreadId.y + 1 == g_ShadowBlurGroupSize) * g_ShadowBlurGroupBorder;
+	int2 prefetchFrom = int2(bufferPos.xy) - int2(groupThreadId.x == 0, groupThreadId.y == 0) * g_BlurGroupBorder;
+	int2 prefetchTo = int2(bufferPos.xy) + int2(groupThreadId.x + 1 == g_BlurGroupSize, groupThreadId.y + 1 == g_BlurGroupSize) * g_BlurGroupBorder;
 	prefetchFrom = clamp(prefetchFrom, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 	prefetchTo = clamp(prefetchTo, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 	for (int py = prefetchFrom.y; py <= prefetchTo.y; ++py)
@@ -400,19 +404,19 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 		for (int px = prefetchFrom.x; px <= prefetchTo.x; ++px)
 		{
 			int groupDataOfs = (px - groupFrom.x) + (py - groupFrom.y) * groupSize.x;
-			g_ShadowBlurGroupData[groupDataOfs] = g_ShadowResult[int2(px, py)];
-			#if (SHADOW_BLUR_PREFETCH_DEPTH)
-			g_ShadowBlurGroupDepth[groupDataOfs] = g_GeometryDepth[int2(px, py) * g_SceneCB.LightBufferDownscale.x + subSamplePos];
+			g_BlurGroupData[groupDataOfs] = g_BlurSource[int2(px, py)];
+			#if (BLUR_PREFETCH_DEPTH)
+			g_BlurGroupDepth[groupDataOfs] = g_GeometryDepth[int2(px, py) * g_SceneCB.LightBufferDownscale.x + subSamplePos];
 			#endif
 		}
 	}
 	GroupMemoryBarrierWithGroupSync();
 	#endif
 
-	uint2 gbufferPos = lightBufferPos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
-	#if (SHADOW_BLUR_PREFETCH_DEPTH)
+	uint2 gbufferPos = bufferPos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
+	#if (BLUR_PREFETCH_DEPTH)
 	GBufferData gbData = (GBufferData)0;
-	gbData.ClipDepth = g_ShadowBlurGroupDepth[(lightBufferPos.x - groupFrom.x) + (lightBufferPos.y - groupFrom.y) * groupSize.x];
+	gbData.ClipDepth = g_BlurGroupDepth[(bufferPos.x - groupFrom.x) + (bufferPos.y - groupFrom.y) * groupSize.x];
 	#else
 	GBufferData gbData = LoadGBufferData(gbufferPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 	#endif
@@ -420,22 +424,22 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 	if (isSky)
 		return;
 
-	int2 blurStartPos = int2(lightBufferPos.xy) - int(BlurKernelSize / 2);
+	int2 blurStartPos = int2(bufferPos.xy) - int(BlurKernelSize / 2);
 
-	#if (SHADOW_BLUR_COMPUTE_VARIANCE)
-	float4 shadowAverage = 0.0;
+	#if (BLUR_COMPUTE_VARIANCE)
+	float4 averageValue = 0.0;
 	for (py = 0; py < BlurKernelSize; ++py)
 	{
 		for (int px = 0; px < BlurKernelSize; ++px)
 		{
 			int2 blurSamplePos = clamp(blurStartPos.xy + int2(px, py), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 			int groupDataOfs = (blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x;
-			shadowAverage += g_ShadowBlurGroupData[groupDataOfs];
+			averageValue += g_BlurGroupData[groupDataOfs];
 		}
 	}
-	shadowAverage /= BlurKernelSize * BlurKernelSize;
-	float4 shadow = g_ShadowBlurGroupData[(lightBufferPos.x - groupFrom.x) + (lightBufferPos.y - groupFrom.y) * groupSize.x];
-	float4 variance = (shadow - shadowAverage);
+	averageValue /= BlurKernelSize * BlurKernelSize;
+	float4 crntValue = g_BlurGroupData[(bufferPos.x - groupFrom.x) + (bufferPos.y - groupFrom.y) * groupSize.x];
+	float4 variance = (crntValue - averageValue);
 	variance = saturate(variance * variance * g_SceneCB.DebugVec0[3]);
 	float varianceMax = max(max(variance.x, variance.y), variance.z);
 	#endif
@@ -445,8 +449,8 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 	float3 worldToEyeDir = normalize(g_SceneCB.CameraPos.xyz - worldPos.xyz);
 	float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
 	float blurDepthDeltaTolerance = viewDepth * lerp(0.02, 0.008, dot(gbData.Normal.xyz, worldToEyeDir));
-	float4 shadowBlured = 0.0;
 	float blurWeightSum = 0.0;
+	float4 bluredResult = 0.0;
 	for (int iy = 0; iy < BlurKernelSize; ++iy)
 	{
 		for (int ix = 0; ix < BlurKernelSize; ++ix)
@@ -454,15 +458,15 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 			int2 blurSamplePos = clamp(blurStartPos.xy + int2(ix, iy), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 			int blurKernelPos = ix + iy * BlurKernelSize;
 			float blurSampleWeight = BlurKernelWeight[blurKernelPos];
-			#if (SHADOW_BLUR_COMPUTE_VARIANCE)
+			#if (BLUR_COMPUTE_VARIANCE)
 			blurSampleWeight = lerp(BlurKernelWeightLow[blurKernelPos], blurSampleWeight, varianceMax);
 			#endif
 			int2 blurSampleGBPos = blurSamplePos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
-			
+
 			// gbuffer based discontinuities rejection
-			#if (SHADOW_BLUR_PREFETCH_DEPTH)
+			#if (BLUR_PREFETCH_DEPTH)
 			GBufferData blurSampleGBData = (GBufferData)0;
-			blurSampleGBData.ClipDepth = g_ShadowBlurGroupDepth[(blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x];
+			blurSampleGBData.ClipDepth = g_BlurGroupDepth[(blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x];
 			#else
 			GBufferData blurSampleGBData = LoadGBufferData(blurSampleGBPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 			#endif
@@ -470,27 +474,28 @@ void BlurShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const 
 			float blurSampleViewDepth = ClipDepthToViewDepth(blurSampleGBData.ClipDepth, g_SceneCB.Proj);
 			blurSampleWeight *= 1.0 - saturate(abs(viewDepth - blurSampleViewDepth) / blurDepthDeltaTolerance);
 
-			#if (SHADOW_BLUR_PREFETCH)
+			#if (BLUR_PREFETCH)
 			int groupDataOfs = (blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x;
-			shadowBlured += g_ShadowBlurGroupData[groupDataOfs] * blurSampleWeight;
+			bluredResult += g_BlurGroupData[groupDataOfs] * blurSampleWeight;
 			#else
-			shadowBlured += g_ShadowResult[blurSamplePos.xy] * blurSampleWeight;
+			bluredResult += sourceBuffer[blurSamplePos.xy] * blurSampleWeight;
 			#endif
 			blurWeightSum += blurSampleWeight;
 		}
 	}
-	shadowBlured /= max(blurWeightSum, 1.0e-5);
-	#if (SHADOW_BLUR_COMPUTE_VARIANCE)
-	shadowBlured[3] = varianceMax;
+	bluredResult /= max(blurWeightSum, 1.0e-5);
+	#if (BLUR_COMPUTE_VARIANCE)
+	bluredResult[3] = varianceMax; // TEMO: used as debug output
 	#endif
-	g_ShadowTarget[lightBufferPos.xy] = shadowBlured;
+
+	g_BlurTarget[bufferPos.xy] = bluredResult;
 }
 
-// shadow result combined denoising filter
+// lighting result temporal accumulation filter
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
-void AccumulateShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
+void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint2 lightBufferPos = dispatchThreadId.xy;
 	if (lightBufferPos.x >= (uint)g_SceneCB.LightBufferSize.x || lightBufferPos.y >= (uint)g_SceneCB.LightBufferSize.y)
@@ -522,6 +527,7 @@ void AccumulateShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 	#else
 	shadowPerLight = g_ShadowTarget[lightBufferPos.xy];
 	#endif
+	float4 indirectLight = g_IndirectLightTarget[lightBufferPos.xy];
 
 	// apply filter
 
@@ -565,6 +571,8 @@ void AccumulateShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		counter = (uint)floor(float(counter) * surfaceHistoryWeight + 0.5);
 		float historyWeight = float(counter) / (counter + 1);
 
+		// direct shadow
+
 		#if (SHADOW_BUFFER_UINT32)
 		// not supported
 		#elif (0)
@@ -606,8 +614,15 @@ void AccumulateShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			#endif
 		}
 
+		// indirect light
+
+		float4 indirectLightHistory = g_IndirectLightHistory.Load(int3(dispatchPosPrev.xy, 0));
+		indirectLight = lerp(indirectLight, indirectLightHistory, historyWeight);
+
+		// counter
+
 		#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
-		if (ilight == lightCount - 1)
+		if (ilight == lightCount - 1) // note: counter is currently shared with indirect light accumulation, so this option will break it
 		#endif
 		counter = clamp(counter + 1, 0, g_SceneCB.AccumulationFrameCount);
 		tracingInfo[1] = counter;
@@ -638,4 +653,5 @@ void AccumulateShadowResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
 	g_ShadowTarget[lightBufferPos.xy] = shadowPerLight;
 	#endif
 	g_TracingInfoTarget[lightBufferPos.xy] = tracingInfo;
+	g_IndirectLightTarget[lightBufferPos.xy] = indirectLight;
 }

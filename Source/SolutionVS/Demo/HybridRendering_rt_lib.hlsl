@@ -20,26 +20,22 @@ RWTexture2D<float4>				g_IndirectLightTarget	: register(u2);
 
 // common functions
 
-float3 GetDiskSampleDirection(uint sampleId)
+float3 GetDiskSampleDirection(uint sampleId, uint sampleCount)
 {
 	#if (1)
 	float2 dir2d = BlueNoiseDiskLUT64[sampleId % 64]; // [-1, 1]
 	return float3(dir2d.xy, 1.0);
 	#else
-	uint sampleCount = g_SceneCB.SamplesPerLight * max(1, g_SceneCB.AccumulationFrameCount + 1);
 	float2 p2d = Hammersley(sampleId % sampleCount, sampleCount);
-	//float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
-	float3 dir = normalize(float3(p2d.xy * 2.0 - 1.0, 1.0));
+	float3 dir = HemisphereSampleUniform(p2d.x, p2d.y);
 	return dir.xyz;
 	#endif
 }
 
-float3 GetHemisphereSampleDirection(uint sampleId)
+float3 GetHemisphereSampleDirection(uint sampleId, uint sampleCount)
 {
-	uint sampleCount = g_SceneCB.IndirectSamplesPerFrame;// *max(1, g_SceneCB.AccumulationFrameCount + 1); // temporal accumulation not yet done
 	float2 p2d = Hammersley(sampleId % sampleCount, sampleCount);
 	float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
-	//float3 dir = normalize(float3(p2d.xy * 2.0 - 1.0, 1.0));
 	return dir.xyz;
 }
 
@@ -159,9 +155,11 @@ void RayGenDirect()
 			float3x3 lightDirTBN = ComputeLightSamplingBasis(worldPos, lightDesc);
 			float shadowFactor = 0.0;
 
-			for (uint isample = 0; isample < g_SceneCB.SamplesPerLight; ++isample)
+			uint sampleCount = g_SceneCB.ShadowSamplesPerLight * max(1, g_SceneCB.AccumulationFrameCount);
+			uint sampleIdOfs = g_SceneCB.FrameNumber * g_SceneCB.ShadowSamplesPerLight * g_SceneCB.PerFrameJitter + dispatchConstHash;
+			for (uint isample = 0; isample < g_SceneCB.ShadowSamplesPerLight; ++isample)
 			{
-				float3 sampleDir = GetDiskSampleDirection(isample + g_SceneCB.FrameNumber * g_SceneCB.SamplesPerLight * g_SceneCB.PerFrameJitter + dispatchConstHash);
+				float3 sampleDir = GetDiskSampleDirection(isample + sampleIdOfs, sampleCount);
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), lightDirTBN);
 				ray.TMax = (LightType_Directional == lightDesc.Type ? 1.0e+4 : length(lightDesc.Position - ray.Origin) - lightDesc.Size);
 
@@ -184,7 +182,7 @@ void RayGenDirect()
 
 				shadowFactor += float(rayData.occluded);
 			}
-			shadowFactor = 1.0 - shadowFactor / g_SceneCB.SamplesPerLight;
+			shadowFactor = 1.0 - shadowFactor / g_SceneCB.ShadowSamplesPerLight;
 			occlusionPerLight[ilight] = shadowFactor;
 		}
 
@@ -278,9 +276,11 @@ void RayGenDirect()
 			float3x3 surfaceTBN = ComputeSamplingBasis(gbData.Normal);
 			float ambientOcclusion = 0.0;
 			float3 skyLight = 0.0;
+			uint sampleCount = g_SceneCB.IndirectSamplesPerFrame * (g_SceneCB.AccumulationFrameCount + 1);
+			uint sampleIdOfs = g_SceneCB.FrameNumber * g_SceneCB.IndirectSamplesPerFrame * g_SceneCB.PerFrameJitter + dispatchConstHash;
 			for (uint isample = 0; isample < g_SceneCB.IndirectSamplesPerFrame; ++isample)
 			{
-				float3 sampleDir = GetHemisphereSampleDirection(isample + 0*g_SceneCB.FrameNumber * g_SceneCB.IndirectSamplesPerFrame * g_SceneCB.PerFrameJitter + dispatchConstHash);
+				float3 sampleDir = GetHemisphereSampleDirection(isample + sampleIdOfs, sampleCount);
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
 				ray.TMax = worldDist * 20.0;
 				ray.TMin = ray.TMax * 1.0e-4;
@@ -307,7 +307,8 @@ void RayGenDirect()
 
 				float3 skyDir = float3(ray.Direction.x, max(ray.Direction.y, 0.0), ray.Direction.z);
 				skyDir = normalize(skyDir * 0.5 + WorldUp);
-				skyLight += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz * (1.0 - float(rayData.occluded) * saturate(1.0 - rayData.hitDist / ray.TMax));
+				float NdotL = saturate(dot(gbData.Normal, ray.Direction));
+				skyLight += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz * NdotL * (1.0 - float(rayData.occluded) * saturate(1.0 - rayData.hitDist / ray.TMax));
 			}
 			ambientOcclusion = 1.0 - ambientOcclusion / g_SceneCB.IndirectSamplesPerFrame;
 			indirectLight = skyLight / g_SceneCB.IndirectSamplesPerFrame;

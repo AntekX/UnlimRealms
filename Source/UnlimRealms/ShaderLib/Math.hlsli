@@ -167,10 +167,24 @@ float2 Hammersley(const uint sampleId, const uint sampleCount)
 	return float2(sampleId / float(sampleCount), bits / 4294967296.0); // / 2^32
 }
 
+static const float2 Coprimes = { 2.0, 3.0 };
+float2 Halton(const uint sampleId)
+{
+	float2 s = float2(sampleId, sampleId);
+	float4 a = float4(1, 1, 0, 0);
+	while (s.x > 0. && s.y > 0.)
+	{
+		a.xy = a.xy / Coprimes;
+		a.zw += a.xy * fmod(s, Coprimes);
+		s = floor(s / Coprimes);
+	}
+	return a.zw;
+}
+
 float3 HemisphereSampleUniform(float u, float v)
 {
 	float phi = v * TwoPi;
-	float cosTheta = 1.0 - u;
+	float cosTheta = u;
 	float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
 	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }
@@ -178,7 +192,7 @@ float3 HemisphereSampleUniform(float u, float v)
 float3 HemisphereSampleCosine(float u, float v)
 {
 	float phi = v * TwoPi;
-	float cosTheta = sqrt(1.0 - u);
+	float cosTheta = sqrt(u);
 	float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
 	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }

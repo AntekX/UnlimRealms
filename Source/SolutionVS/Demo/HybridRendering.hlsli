@@ -26,7 +26,7 @@ struct SceneConstants
 	float DirectLightFactor;
 	float IndirectLightFactor;
 	uint FrameNumber;
-	uint SamplesPerLight;
+	uint ShadowSamplesPerLight;
 	uint IndirectSamplesPerFrame;
 	uint AccumulationFrameCount;
 	uint PerFrameJitter;
