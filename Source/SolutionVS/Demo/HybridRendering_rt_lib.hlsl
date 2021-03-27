@@ -155,7 +155,7 @@ void RayGenDirect()
 			float3x3 lightDirTBN = ComputeLightSamplingBasis(worldPos, lightDesc);
 			float shadowFactor = 0.0;
 
-			uint sampleCount = g_SceneCB.ShadowSamplesPerLight * max(1, g_SceneCB.AccumulationFrameCount);
+			uint sampleCount = g_SceneCB.ShadowSamplesPerLight * max(1, g_SceneCB.ShadowAccumulationFrames);
 			uint sampleIdOfs = g_SceneCB.FrameNumber * g_SceneCB.ShadowSamplesPerLight * g_SceneCB.PerFrameJitter + dispatchConstHash;
 			for (uint isample = 0; isample < g_SceneCB.ShadowSamplesPerLight; ++isample)
 			{
@@ -190,7 +190,7 @@ void RayGenDirect()
 		// apply accumulatd history
 		float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
 		clipPosPrev.xy /= clipPosPrev.w;
-		if (g_SceneCB.AccumulationFrameCount > 0 && all(abs(clipPosPrev.xy) < 1.0))
+		if (g_SceneCB.ShadowAccumulationFrames > 0 && all(abs(clipPosPrev.xy) < 1.0))
 		{
 			float2 imagePosPrev = clamp((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);
 			uint2 dispatchPosPrev = clamp(floor(imagePosPrev * g_SceneCB.LightBufferDownscale.y), float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
@@ -255,7 +255,7 @@ void RayGenDirect()
 			#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
 			if (ilight == lightCount - 1)
 			#endif
-			counter = clamp(counter + 1, 0, g_SceneCB.AccumulationFrameCount);
+			counter = clamp(counter + 1, 0, g_SceneCB.ShadowAccumulationFrames);
 			tracingInfo[1] = counter;
 		}
 		#endif
@@ -276,7 +276,7 @@ void RayGenDirect()
 			float3x3 surfaceTBN = ComputeSamplingBasis(gbData.Normal);
 			float ambientOcclusion = 0.0;
 			float3 skyLight = 0.0;
-			uint sampleCount = g_SceneCB.IndirectSamplesPerFrame * (g_SceneCB.AccumulationFrameCount + 1);
+			uint sampleCount = g_SceneCB.IndirectSamplesPerFrame * (g_SceneCB.IndirectAccumulationFrames + 1);
 			uint sampleIdOfs = g_SceneCB.FrameNumber * g_SceneCB.IndirectSamplesPerFrame * g_SceneCB.PerFrameJitter + dispatchConstHash;
 			for (uint isample = 0; isample < g_SceneCB.IndirectSamplesPerFrame; ++isample)
 			{

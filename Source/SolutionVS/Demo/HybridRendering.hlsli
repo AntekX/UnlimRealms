@@ -28,12 +28,12 @@ struct SceneConstants
 	float IndirectLightFactor;
 	uint FrameNumber;
 	uint ShadowSamplesPerLight;
+	uint ShadowAccumulationFrames;
 	uint IndirectSamplesPerFrame;
-	uint AccumulationFrameCount;
+	uint IndirectAccumulationFrames;
 	uint PerFrameJitter;
 	uint OverrideMaterial;
 	uint __pad1;
-	uint __pad2;
 	LightingDesc Lighting;
 	AtmosphereDesc Atmosphere;
 	MeshMaterialDesc Material;

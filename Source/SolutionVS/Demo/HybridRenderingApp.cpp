@@ -26,27 +26,26 @@ using namespace UnlimRealms;
 #define UPDATE_ASYNC 1
 #define RENDER_ASYNC 1
 
+struct DirectShadowSettings
+{
+	ur_uint SamplesPerLight = 2;
+	ur_uint BlurPassCount = 4;
+	ur_uint AccumulationFrames = 16;
+};
+
+struct IndirectLightSettings
+{
+	ur_uint SamplesPerFrame = 4;
+	ur_uint BlurPassCount = 4;
+	ur_uint AccumulationFrames = 64;
+};
+
 struct RayTracingSettings
 {
-	#if (0)
-	// reference: many rays no filtering
 	ur_uint LightingBufferDownscale = 2;
-	ur_uint ShadowSamplesPerLight = 32;
-	ur_uint ShadowBlurPassCount = 0;
-	ur_uint IndirectSamplesPerFrame = 0;
-	ur_uint IndirectBlurPassCount = 4;
-	ur_uint AccumulationFrameCount = 0;
-	ur_bool PerFrameJitter = false;
-	#else
-	// real time: few rays lots of filtering
-	ur_uint LightingBufferDownscale = 2;
-	ur_uint ShadowSamplesPerLight = 2;
-	ur_uint ShadowBlurPassCount = 4;
-	ur_uint IndirectSamplesPerFrame = 0;
-	ur_uint IndirectBlurPassCount = 4;
-	ur_uint AccumulationFrameCount = 16;
 	ur_bool PerFrameJitter = true;
-	#endif
+	DirectShadowSettings Shadow;
+	IndirectLightSettings IndirectLight;
 };
 
 struct Settings
@@ -433,12 +432,12 @@ int HybridRenderingApp::Run()
 			ur_float IndirectLightFactor;
 			ur_uint FrameNumber;
 			ur_uint ShadowSamplesPerLight;
+			ur_uint ShadowAccumulationFrames;
 			ur_uint IndirectSamplesPerFrame;
-			ur_uint AccumulationFrameCount;
+			ur_uint IndirectAccumulationFrames;
 			ur_uint PerFrameJitter;
 			ur_uint OverrideMaterial;
 			ur_uint __pad1;
-			ur_uint __pad2;
 			LightingDesc Lighting;
 			Atmosphere::Desc Atmosphere;
 			MeshMaterialDesc Material;
@@ -752,7 +751,7 @@ int HybridRenderingApp::Run()
 			this->sceneConstants.IndirectLightFactor = 1.0f;
 			this->blurDescTableIdx = 0;
 			this->debugVec0 = ur_float4(0.0f, 0.0f, 0.005f, 0.0f);
-			this->debugVec1 = ur_float4(0.0f, 0.0f, 0.1f, 1.0f);
+			this->debugVec1 = ur_float4(0.0f, 0.0f, 0.1f, 4.0f);
 			
 			// default material override
 			this->sceneConstants.FrameNumber = 0;
@@ -1440,9 +1439,10 @@ int HybridRenderingApp::Run()
 			sceneConstants.DebugVec1 = this->debugVec1;
 			sceneConstants.Lighting = lightingDesc;
 			sceneConstants.Atmosphere = atmosphereDesc;
-			sceneConstants.ShadowSamplesPerLight = g_Settings.RayTracing.ShadowSamplesPerLight;
-			sceneConstants.IndirectSamplesPerFrame = g_Settings.RayTracing.IndirectSamplesPerFrame;
-			sceneConstants.AccumulationFrameCount = g_Settings.RayTracing.AccumulationFrameCount;
+			sceneConstants.ShadowSamplesPerLight = g_Settings.RayTracing.Shadow.SamplesPerLight;
+			sceneConstants.ShadowAccumulationFrames = g_Settings.RayTracing.Shadow.AccumulationFrames;
+			sceneConstants.IndirectSamplesPerFrame = g_Settings.RayTracing.IndirectLight.SamplesPerFrame;
+			sceneConstants.IndirectAccumulationFrames = g_Settings.RayTracing.IndirectLight.AccumulationFrames;
 			sceneConstants.PerFrameJitter = g_Settings.RayTracing.PerFrameJitter;
 
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
@@ -1643,7 +1643,7 @@ int HybridRenderingApp::Run()
 			BlurLightingResult(grafCmdList, renderTargetSet,
 				lightingBufferSet->images[LightingImageUsage_DirectShadow].get(),
 				lightingBufferSet->images[LightingImageUsage_DirectShadowBlured].get(),
-				g_Settings.RayTracing.ShadowBlurPassCount);
+				g_Settings.RayTracing.Shadow.BlurPassCount);
 		}
 
 		void BlurIndirectLight(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
@@ -1651,7 +1651,7 @@ int HybridRenderingApp::Run()
 			BlurLightingResult(grafCmdList, renderTargetSet,
 				lightingBufferSet->images[LightingImageUsage_IndirectLight].get(),
 				lightingBufferSet->images[LightingImageUsage_IndirectLightBlured].get(),
-				g_Settings.RayTracing.IndirectBlurPassCount);
+				g_Settings.RayTracing.IndirectLight.BlurPassCount);
 		}
 
 		void AccumulateLightingResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
@@ -2153,7 +2153,6 @@ int HybridRenderingApp::Run()
 				}
 
 				// blur current frame result
-				if (g_Settings.RayTracing.ShadowBlurPassCount > 0)
 				{
 					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowBlurPass", DebugLabelColorPass);
 
@@ -2248,8 +2247,7 @@ int HybridRenderingApp::Run()
 					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[LightingImageUsage_DirectShadow].get(), GrafImageState::ComputeRead, GrafImageState::ComputeRead);
 				}
 
-				// blur current frame result
-				if (g_Settings.RayTracing.ShadowBlurPassCount > 0)
+				// blur accumulated result
 				{
 					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowBlurPass", DebugLabelColorPass);
 
@@ -2374,22 +2372,31 @@ int HybridRenderingApp::Run()
 						ImGui::InputInt("LightBufferDowncale", &editableInt);
 						g_Settings.RayTracing.LightingBufferDownscale = (ur_uint)std::max(1, std::min(16, editableInt));
 						canvasChanged |= (g_Settings.RayTracing.LightingBufferDownscale != lightingBufferDownscalePrev);
-						editableInt = (ur_int)g_Settings.RayTracing.AccumulationFrameCount;
-						ImGui::InputInt("AccumulationFrameCount", &editableInt);
 						ImGui::Checkbox("PerFrameJitter", &g_Settings.RayTracing.PerFrameJitter);
-						g_Settings.RayTracing.AccumulationFrameCount = (ur_uint)std::max(0, std::min(1024, editableInt));
-						editableInt = (ur_int)g_Settings.RayTracing.ShadowSamplesPerLight;
-						ImGui::InputInt("ShadowSamplesPerLight", &editableInt);
-						g_Settings.RayTracing.ShadowSamplesPerLight = (ur_uint)std::max(1, std::min(1024, editableInt));
-						editableInt = (ur_int)g_Settings.RayTracing.ShadowBlurPassCount;
-						ImGui::InputInt("ShadowBlurPassCount", &editableInt);
-						g_Settings.RayTracing.ShadowBlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
-						editableInt = (ur_int)g_Settings.RayTracing.IndirectSamplesPerFrame;
-						ImGui::InputInt("IndirectSamplesPerFrame", &editableInt);
-						g_Settings.RayTracing.IndirectSamplesPerFrame = (ur_uint)std::max(0, std::min(1024, editableInt));
-						editableInt = (ur_int)g_Settings.RayTracing.IndirectBlurPassCount;
-						ImGui::InputInt("IndirectBlurPassCount", &editableInt);
-						g_Settings.RayTracing.IndirectBlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
+						if (ImGui::CollapsingHeader("Shadow"))
+						{
+							editableInt = (ur_int)g_Settings.RayTracing.Shadow.SamplesPerLight;
+							ImGui::InputInt("SamplesPerLight", &editableInt);
+							g_Settings.RayTracing.Shadow.SamplesPerLight = (ur_uint)std::max(1, std::min(1024, editableInt));
+							editableInt = (ur_int)g_Settings.RayTracing.Shadow.BlurPassCount;
+							ImGui::InputInt("BlurPassCount", &editableInt);
+							g_Settings.RayTracing.Shadow.BlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
+							editableInt = (ur_int)g_Settings.RayTracing.Shadow.AccumulationFrames;
+							ImGui::InputInt("AccumulationFrames", &editableInt);
+							g_Settings.RayTracing.Shadow.AccumulationFrames = (ur_uint)std::max(0, std::min(1024, editableInt));
+						}
+						if (ImGui::CollapsingHeader("IndirectLight"))
+						{
+							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.SamplesPerFrame;
+							ImGui::InputInt("SamplesPerFrame", &editableInt);
+							g_Settings.RayTracing.IndirectLight.SamplesPerFrame = (ur_uint)std::max(0, std::min(1024, editableInt));
+							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.BlurPassCount;
+							ImGui::InputInt("BlurPassCount", &editableInt);
+							g_Settings.RayTracing.IndirectLight.BlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
+							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.AccumulationFrames;
+							ImGui::InputInt("AccumulationFrames", &editableInt);
+							g_Settings.RayTracing.IndirectLight.AccumulationFrames = (ur_uint)std::max(0, std::min(1024, editableInt));
+						}
 					}
 					if (ImGui::CollapsingHeader("Canvas"))
 					{

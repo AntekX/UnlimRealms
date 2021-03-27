@@ -376,8 +376,9 @@ static const uint g_BlurGroupBorder = BlurKernelSize / 2;
 static const uint g_BlurGroupSizeWithBorders = g_BlurGroupSize + g_BlurGroupBorder * 2;
 groupshared float4 g_BlurGroupData[g_BlurGroupSizeWithBorders * g_BlurGroupSizeWithBorders];
 groupshared float g_BlurGroupDepth[g_BlurGroupSizeWithBorders * g_BlurGroupSizeWithBorders];
+groupshared float3 g_BlurGroupNormal[g_BlurGroupSizeWithBorders * g_BlurGroupSizeWithBorders];
 #define BLUR_PREFETCH 1 // -40% time
-#define BLUR_PREFETCH_DEPTH 1 // additional -20% time (-50% total)
+#define BLUR_PREFETCH_GBDATA 1 // additional -20% time (-50% total)
 #define BLUR_COMPUTE_VARIANCE 0
 
 [shader("compute")]
@@ -405,8 +406,9 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 		{
 			int groupDataOfs = (px - groupFrom.x) + (py - groupFrom.y) * groupSize.x;
 			g_BlurGroupData[groupDataOfs] = g_BlurSource[int2(px, py)];
-			#if (BLUR_PREFETCH_DEPTH)
+			#if (BLUR_PREFETCH_GBDATA)
 			g_BlurGroupDepth[groupDataOfs] = g_GeometryDepth[int2(px, py) * g_SceneCB.LightBufferDownscale.x + subSamplePos];
+			g_BlurGroupNormal[groupDataOfs] = g_GeometryImage1[int2(px, py) * g_SceneCB.LightBufferDownscale.x + subSamplePos].xyz;
 			#endif
 		}
 	}
@@ -414,9 +416,11 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 	#endif
 
 	uint2 gbufferPos = bufferPos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
-	#if (BLUR_PREFETCH_DEPTH)
+	#if (BLUR_PREFETCH_GBDATA)
+	uint groupDataPos = (bufferPos.x - groupFrom.x) + (bufferPos.y - groupFrom.y) * groupSize.x;
 	GBufferData gbData = (GBufferData)0;
-	gbData.ClipDepth = g_BlurGroupDepth[(bufferPos.x - groupFrom.x) + (bufferPos.y - groupFrom.y) * groupSize.x];
+	gbData.ClipDepth = g_BlurGroupDepth[groupDataPos];
+	gbData.Normal = g_BlurGroupNormal[groupDataPos];
 	#else
 	GBufferData gbData = LoadGBufferData(gbufferPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 	#endif
@@ -464,20 +468,26 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 			int2 blurSampleGBPos = blurSamplePos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
 
 			// gbuffer based discontinuities rejection
-			#if (BLUR_PREFETCH_DEPTH)
+			#if (BLUR_PREFETCH_GBDATA)
+			groupDataPos = (blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x;
 			GBufferData blurSampleGBData = (GBufferData)0;
-			blurSampleGBData.ClipDepth = g_BlurGroupDepth[(blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x];
+			blurSampleGBData.ClipDepth = g_BlurGroupDepth[groupDataPos];
+			blurSampleGBData.Normal = g_BlurGroupNormal[groupDataPos];
 			#else
 			GBufferData blurSampleGBData = LoadGBufferData(blurSampleGBPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 			#endif
 			//blurSampleWeight *= 1.0 - saturate(abs(gbData.ClipDepth - blurSampleGBData.ClipDepth) / blurDepthDeltaTolerance);
 			float blurSampleViewDepth = ClipDepthToViewDepth(blurSampleGBData.ClipDepth, g_SceneCB.Proj);
 			blurSampleWeight *= 1.0 - saturate(abs(viewDepth - blurSampleViewDepth) / blurDepthDeltaTolerance);
-			// TODO: surface normal is a must for wide recurrent GI blur
+			blurSampleWeight *= pow(saturate(dot(blurSampleGBData.Normal, gbData.Normal)), g_SceneCB.DebugVec1[3]);
+			//float normalWeight = saturate(dot(blurSampleGBData.Normal, gbData.Normal)) >= g_SceneCB.DebugVec1[3] ? 1.0 : 0.0;
+			//blurSampleWeight *= normalWeight;
+			// TODO: debug why normal map details are blured
 
 			#if (BLUR_PREFETCH)
 			int groupDataOfs = (blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x;
 			bluredResult += g_BlurGroupData[groupDataOfs] * blurSampleWeight;
+			//bluredResult += float4(lerp(float3(1,0,0), float3(0,1,0), normalWeight), 0);
 			#else
 			bluredResult += sourceBuffer[blurSamplePos.xy] * blurSampleWeight;
 			#endif
@@ -538,7 +548,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 	float3 worldPos = ClipPosToWorldPos(clipPos, g_SceneCB.ViewProjInv);
 	float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
 	clipPosPrev.xy /= clipPosPrev.w;
-	if (g_SceneCB.AccumulationFrameCount > 0 && all(abs(clipPosPrev.xy) < 1.0))
+	if (all(abs(clipPosPrev.xy) < 1.0))
 	{
 		float2 imagePosPrev = clamp((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);
 		uint2 dispatchPosPrev = clamp(floor(imagePosPrev * g_SceneCB.LightBufferDownscale.y), float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
@@ -584,7 +594,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		// not supported
 		#elif (0)
 		// fallback to higher mip at low history counter
-		float shadowMip = g_SceneCB.DebugVec0[3] * pow(1.0 - float(shadowCounter) / g_SceneCB.AccumulationFrameCount, 1.0);
+		float shadowMip = g_SceneCB.DebugVec0[3] * pow(1.0 - float(shadowCounter) / g_SceneCB.ShadowAccumulationFrames, 1.0);
 		float4 shadowMipData = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, shadowMip - 1);
 		shadowPerLight = (shadowMip < 1 ? lerp(shadowPerLight, shadowMipData, shadowMip) : shadowMipData);
 		#endif
@@ -631,8 +641,8 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
 		if (ilight == lightCount - 1) // note: counter is currently shared with indirect light accumulation, so this option will break it
 		#endif
-		shadowCounter = clamp(shadowCounter + 1, 0, g_SceneCB.AccumulationFrameCount);
-		indirectLightCounter = clamp(indirectLightCounter + 1, 0, g_SceneCB.AccumulationFrameCount);
+		shadowCounter = clamp(shadowCounter + 1, 0, g_SceneCB.ShadowAccumulationFrames);
+		indirectLightCounter = clamp(indirectLightCounter + 1, 0, g_SceneCB.IndirectAccumulationFrames);
 		tracingInfo[1] = shadowCounter;
 		tracingInfo[2] = indirectLightCounter;
 	}
