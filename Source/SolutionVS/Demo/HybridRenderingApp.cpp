@@ -36,7 +36,8 @@ struct DirectShadowSettings
 struct IndirectLightSettings
 {
 	ur_uint SamplesPerFrame = 4;
-	ur_uint BlurPassCount = 4;
+	ur_uint PreBlurPassCount = 4;
+	ur_uint PostBlurPassCount = 4;
 	ur_uint AccumulationFrames = 64;
 };
 
@@ -750,8 +751,8 @@ int HybridRenderingApp::Run()
 			this->sceneConstants.DirectLightFactor = 1.0f;
 			this->sceneConstants.IndirectLightFactor = 1.0f;
 			this->blurDescTableIdx = 0;
-			this->debugVec0 = ur_float4(0.0f, 0.0f, 0.005f, 0.0f);
-			this->debugVec1 = ur_float4(0.0f, 0.0f, 0.1f, 4.0f);
+			this->debugVec0 = ur_float4(0.0f, 0.0f, 0.01f, 0.0f);
+			this->debugVec1 = ur_float4(20.0f, 0.0f, 0.1f, 16.0f);
 			
 			// default material override
 			this->sceneConstants.FrameNumber = 0;
@@ -1211,7 +1212,7 @@ int HybridRenderingApp::Run()
 				};
 				createDefaultImage(defaultImageWhite, GrafFormat::R8G8B8A8_UNORM, { 1.0f, 1.0f, 1.0f, 1.0f });
 				createDefaultImage(defaultImageBlack, GrafFormat::R8G8B8A8_UNORM, { 0.0f, 0.0f, 0.0f, 0.0f });
-				createDefaultImage(defaultImageNormal, GrafFormat::R8G8B8A8_UNORM, { 0.0f, 0.0f, 1.0f, 0.0f });
+				createDefaultImage(defaultImageNormal, GrafFormat::R8G8B8A8_UNORM, { 0.5f, 0.5f, 0.0f, 0.0f });
 				cmdList->End();
 				grafDevice->Record(cmdList);
 			}
@@ -1636,22 +1637,6 @@ int HybridRenderingApp::Run()
 				srcImageId = !srcImageId;
 				dstImageId = !dstImageId;
 			}
-		}
-
-		void BlurShadowResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
-		{
-			BlurLightingResult(grafCmdList, renderTargetSet,
-				lightingBufferSet->images[LightingImageUsage_DirectShadow].get(),
-				lightingBufferSet->images[LightingImageUsage_DirectShadowBlured].get(),
-				g_Settings.RayTracing.Shadow.BlurPassCount);
-		}
-
-		void BlurIndirectLight(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
-		{
-			BlurLightingResult(grafCmdList, renderTargetSet,
-				lightingBufferSet->images[LightingImageUsage_IndirectLight].get(),
-				lightingBufferSet->images[LightingImageUsage_IndirectLightBlured].get(),
-				g_Settings.RayTracing.IndirectLight.BlurPassCount);
 		}
 
 		void AccumulateLightingResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
@@ -2154,7 +2139,7 @@ int HybridRenderingApp::Run()
 
 				// blur current frame result
 				{
-					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowBlurPass", DebugLabelColorPass);
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "BlurPass", DebugLabelColorPass);
 
 					for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
 					{
@@ -2165,8 +2150,14 @@ int HybridRenderingApp::Run()
 
 					if (demoScene != ur_null)
 					{
-						demoScene->BlurShadowResult(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
-						demoScene->BlurIndirectLight(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
+						demoScene->BlurLightingResult(grafCmdListCrnt, renderTargetSet.get(),
+							lightingBufferSet->images[LightingImageUsage_DirectShadow].get(),
+							lightingBufferSet->images[LightingImageUsage_DirectShadowBlured].get(),
+							g_Settings.RayTracing.Shadow.BlurPassCount);
+						demoScene->BlurLightingResult(grafCmdListCrnt, renderTargetSet.get(),
+							lightingBufferSet->images[LightingImageUsage_IndirectLight].get(),
+							lightingBufferSet->images[LightingImageUsage_IndirectLightBlured].get(),
+							g_Settings.RayTracing.IndirectLight.PreBlurPassCount);
 					}
 				}
 
@@ -2249,7 +2240,7 @@ int HybridRenderingApp::Run()
 
 				// blur accumulated result
 				{
-					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowBlurPass", DebugLabelColorPass);
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "BlurPass", DebugLabelColorPass);
 
 					for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
 					{
@@ -2260,7 +2251,10 @@ int HybridRenderingApp::Run()
 
 					if (demoScene != ur_null)
 					{
-						demoScene->BlurIndirectLight(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
+						demoScene->BlurLightingResult(grafCmdListCrnt, renderTargetSet.get(),
+							lightingBufferSet->images[LightingImageUsage_IndirectLight].get(),
+							lightingBufferSet->images[LightingImageUsage_IndirectLightBlured].get(),
+							g_Settings.RayTracing.IndirectLight.PostBlurPassCount);
 					}
 				}
 			}
@@ -2390,9 +2384,12 @@ int HybridRenderingApp::Run()
 							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.SamplesPerFrame;
 							ImGui::InputInt("SamplesPerFrame", &editableInt);
 							g_Settings.RayTracing.IndirectLight.SamplesPerFrame = (ur_uint)std::max(0, std::min(1024, editableInt));
-							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.BlurPassCount;
-							ImGui::InputInt("BlurPassCount", &editableInt);
-							g_Settings.RayTracing.IndirectLight.BlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
+							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.PreBlurPassCount;
+							ImGui::InputInt("PreBlurPassCount", &editableInt);
+							g_Settings.RayTracing.IndirectLight.PreBlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
+							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.PostBlurPassCount;
+							ImGui::InputInt("PostBlurPassCount", &editableInt);
+							g_Settings.RayTracing.IndirectLight.PostBlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
 							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.AccumulationFrames;
 							ImGui::InputInt("AccumulationFrames", &editableInt);
 							g_Settings.RayTracing.IndirectLight.AccumulationFrames = (ur_uint)std::max(0, std::min(1024, editableInt));

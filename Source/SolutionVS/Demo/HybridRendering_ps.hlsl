@@ -11,12 +11,16 @@ MeshPixelOutput main(MeshPixelInput input)
 	MeshPixelOutput output;
 
 	float3 baseColor = g_ColorTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xyz;
-	float3 bumpNormal = g_NormalTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xyz;
+	float2 bumpPacked = g_NormalTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xy;
 	float mask = g_MaskTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).x;
-	
+
 	if (!any(baseColor)) baseColor.xyz = float3(0.5, 0.5, 0.5);
-	if (!any(bumpNormal)) bumpNormal.xyz = float3(0.0, 0.0, 1.0);
+	if (!any(bumpPacked)) bumpPacked.xy = float2(0.5, 0.5);
 	if (!any(mask)) mask = 1.0;
+
+	float3 bumpNormal;
+	bumpNormal.xy = float2(bumpPacked.x, bumpPacked.y) * 2.0 - 1.0;
+	bumpNormal.z = sqrt(saturate(1.0 - dot(bumpNormal.xy, bumpNormal.xy)));
 
 	float3 normal = input.Norm.xyz;
 	float3 bitangent = float3(0.0, 0.0, 1.0);

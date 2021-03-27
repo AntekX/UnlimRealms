@@ -480,14 +480,10 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 			float blurSampleViewDepth = ClipDepthToViewDepth(blurSampleGBData.ClipDepth, g_SceneCB.Proj);
 			blurSampleWeight *= 1.0 - saturate(abs(viewDepth - blurSampleViewDepth) / blurDepthDeltaTolerance);
 			blurSampleWeight *= pow(saturate(dot(blurSampleGBData.Normal, gbData.Normal)), g_SceneCB.DebugVec1[3]);
-			//float normalWeight = saturate(dot(blurSampleGBData.Normal, gbData.Normal)) >= g_SceneCB.DebugVec1[3] ? 1.0 : 0.0;
-			//blurSampleWeight *= normalWeight;
-			// TODO: debug why normal map details are blured
 
 			#if (BLUR_PREFETCH)
 			int groupDataOfs = (blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x;
 			bluredResult += g_BlurGroupData[groupDataOfs] * blurSampleWeight;
-			//bluredResult += float4(lerp(float3(1,0,0), float3(0,1,0), normalWeight), 0);
 			#else
 			bluredResult += sourceBuffer[blurSamplePos.xy] * blurSampleWeight;
 			#endif
@@ -548,6 +544,8 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 	float3 worldPos = ClipPosToWorldPos(clipPos, g_SceneCB.ViewProjInv);
 	float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
 	clipPosPrev.xy /= clipPosPrev.w;
+	// TODO: experimental, always reproject, even on borders, prefer ghosting over disocclusion
+	clipPosPrev.xy = clamp(clipPosPrev.xy, float2(-1.0 + g_SceneCB.TargetSize.zw * 0.5), 1.0 - float2(g_SceneCB.TargetSize.zw * 0.5));
 	if (all(abs(clipPosPrev.xy) < 1.0))
 	{
 		float2 imagePosPrev = clamp((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);

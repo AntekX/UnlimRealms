@@ -282,7 +282,7 @@ void RayGenDirect()
 			{
 				float3 sampleDir = GetHemisphereSampleDirection(isample + sampleIdOfs, sampleCount);
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
-				ray.TMax = worldDist * 20.0;
+				ray.TMax = worldDist * g_SceneCB.DebugVec1[0];// 20.0;
 				ray.TMin = ray.TMax * 1.0e-4;
 
 				RayDataDirect rayData = (RayDataDirect)0;
@@ -305,10 +305,16 @@ void RayGenDirect()
 				float sampleOcclusion = float(rayData.occluded) * saturate(1.0 - rayData.hitDist / ray.TMax);
 				ambientOcclusion += sampleOcclusion;
 
-				float3 skyDir = float3(ray.Direction.x, max(ray.Direction.y, 0.0), ray.Direction.z);
-				skyDir = normalize(skyDir * 0.5 + WorldUp);
+				float3 skyDir = ray.Direction;
 				float NdotL = saturate(dot(gbData.Normal, ray.Direction));
-				skyLight += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz * NdotL * (1.0 - float(rayData.occluded) * saturate(1.0 - rayData.hitDist / ray.TMax));
+				float3 absorption = 1.0;
+				if (skyDir.z <= 0.0)
+				{
+					// bounced sky light approximation
+					skyDir = reflect(skyDir, gbData.Normal);
+					absorption = g_SceneCB.Material.BaseColor;
+				}
+				skyLight += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz * absorption * NdotL * (1.0 - sampleOcclusion);
 			}
 			ambientOcclusion = 1.0 - ambientOcclusion / g_SceneCB.IndirectSamplesPerFrame;
 			indirectLight = skyLight / g_SceneCB.IndirectSamplesPerFrame;
@@ -319,7 +325,7 @@ void RayGenDirect()
 			float3 skyDir = float3(gbData.Normal.x, max(gbData.Normal.y, 0.0), gbData.Normal.z);
 			skyDir = normalize(skyDir * 0.5 + WorldUp);
 			float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz;
-			indirectLight = skyLight * 0.025;
+			indirectLight = skyLight * 0.05;
 		}
 	}
 
