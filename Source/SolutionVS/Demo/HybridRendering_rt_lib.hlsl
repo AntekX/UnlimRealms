@@ -11,11 +11,11 @@ Texture2D<float4>				g_GeometryImage1		: register(t2);
 Texture2D<float4>				g_GeometryImage2		: register(t3);
 Texture2D<float>				g_DepthHistory			: register(t4);
 Texture2D<float4>				g_ShadowHistory			: register(t5);
-Texture2D<uint2>				g_TracingHistory		: register(t6);
+Texture2D<uint4>				g_TracingHistory		: register(t6);
 Texture2D<float4>				g_PrecomputedSky		: register(t7);
 RaytracingAccelerationStructure	g_SceneStructure		: register(t8);
 RWTexture2D<float4>				g_ShadowTarget			: register(u0);
-RWTexture2D<uint2>				g_TracingInfoTarget		: register(u1);
+RWTexture2D<uint4>				g_TracingInfoTarget		: register(u1);
 RWTexture2D<float4>				g_IndirectLightTarget	: register(u2);
 
 // common functions
@@ -83,7 +83,7 @@ void RayGenDirect()
 	#else
 	float4 occlusionPerLight = 1.0;
 	#endif
-	uint2 tracingInfo = 0; // sub sample pos & counter
+	uint4 tracingInfo = 0; // sub sample pos & counters
 	float3 indirectLight = 0.0;
 
 	// fetch at first sub sample

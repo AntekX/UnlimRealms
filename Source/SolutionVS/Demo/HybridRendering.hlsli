@@ -22,6 +22,7 @@ struct SceneConstants
 	float4 LightBufferSize; // w, h, 1/w, 1/h
 	float4 PrecomputedSkySize;
 	float4 DebugVec0;
+	float4 DebugVec1;
 	float2 LightBufferDownscale; // d, 1/d
 	float DirectLightFactor;
 	float IndirectLightFactor;

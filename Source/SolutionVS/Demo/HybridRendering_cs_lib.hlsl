@@ -12,10 +12,10 @@ Texture2D<float4>	g_GeometryImage0			: register(t1);
 Texture2D<float4>	g_GeometryImage1			: register(t2);
 Texture2D<float4>	g_GeometryImage2			: register(t3);
 Texture2D<float4>	g_ShadowResult				: register(t4);
-Texture2D<uint2>	g_TracingInfo				: register(t5);
+Texture2D<uint4>	g_TracingInfo				: register(t5);
 Texture2D<float>	g_DepthHistory				: register(t6);
 Texture2D<float4>	g_ShadowHistory				: register(t7);
-Texture2D<uint2>	g_TracingHistory			: register(t8);
+Texture2D<uint4>	g_TracingHistory			: register(t8);
 Texture2D<float4>	g_ShadowMips				: register(t9);
 Texture2D<float4>	g_PrecomputedSky			: register(t10);
 Texture2D<float4>	g_IndirectLight				: register(t11);
@@ -27,7 +27,7 @@ RWTexture2D<float4>	g_ShadowMip2				: register(u2);
 RWTexture2D<float4>	g_ShadowMip3				: register(u3);
 RWTexture2D<float4>	g_ShadowMip4				: register(u4);
 RWTexture2D<float4>	g_ShadowTarget				: register(u5);
-RWTexture2D<uint2>	g_TracingInfoTarget			: register(u6);
+RWTexture2D<uint4>	g_TracingInfoTarget			: register(u6);
 RWTexture2D<float4>	g_PrecomputedSkyTarget		: register(u7);
 RWTexture2D<float4>	g_IndirectLightTarget		: register(u8);
 RWTexture2D<float4>	g_BlurTarget				: register(u9);
@@ -473,6 +473,7 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 			//blurSampleWeight *= 1.0 - saturate(abs(gbData.ClipDepth - blurSampleGBData.ClipDepth) / blurDepthDeltaTolerance);
 			float blurSampleViewDepth = ClipDepthToViewDepth(blurSampleGBData.ClipDepth, g_SceneCB.Proj);
 			blurSampleWeight *= 1.0 - saturate(abs(viewDepth - blurSampleViewDepth) / blurDepthDeltaTolerance);
+			// TODO: surface normal is a must for wide recurrent GI blur
 
 			#if (BLUR_PREFETCH)
 			int groupDataOfs = (blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x;
@@ -503,8 +504,8 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 
 	// tracing info (sub sample pos & counter)
 
-	uint2 tracingInfo = g_TracingInfoTarget[lightBufferPos.xy];
-	uint tracingSampleId = tracingInfo.x;
+	uint4 tracingInfo = g_TracingInfoTarget[lightBufferPos.xy];
+	uint tracingSampleId = tracingInfo[0];
 	uint2 tracingSamplePos = uint2(tracingSampleId % (uint)g_SceneCB.LightBufferDownscale.x, tracingSampleId / (uint)g_SceneCB.LightBufferDownscale.x);
 
 	// read geometry buffer
@@ -543,6 +544,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		uint2 dispatchPosPrev = clamp(floor(imagePosPrev * g_SceneCB.LightBufferDownscale.y), float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
 		imagePosPrev = dispatchPosPrev * g_SceneCB.LightBufferDownscale.x;
 
+		uint4 tracingInfoHistory = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0));
 		float clipDepthPrev = g_DepthHistory.Load(int3(imagePosPrev.xy, 0));
 		bool isSkyPrev = (clipDepthPrev >= 1.0);
 		// TODO
@@ -561,15 +563,20 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
 		float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
 		float viewDepthPrev = ClipDepthToViewDepth(clipDepthPrev, g_SceneCB.ProjPrev);
+		float worldPosDist = length(worldPos - worldPosPrev);
 		float worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
-		float surfaceHistoryWeight = 1.0 - saturate(length(worldPos - worldPosPrev) / worldPosTolerance);
-		surfaceHistoryWeight = saturate((surfaceHistoryWeight - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
-		//shadowPerLight[3] = surfaceHistoryWeight; // TEMP: for debug output
+		float shadowHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
+		shadowHistoryConfidence = saturate((shadowHistoryConfidence - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
+		//shadowPerLight[3] = shadowHistoryConfidence; // TEMP: for debug output
+		worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec1[2]);
+		float indirectLightHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
+		indirectLightHistoryConfidence = saturate((indirectLightHistoryConfidence - g_SceneCB.DebugVec1[1]) / (1.0 - g_SceneCB.DebugVec1[1]));
 		#endif
-
-		uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
-		counter = (uint)floor(float(counter) * surfaceHistoryWeight + 0.5);
-		float historyWeight = float(counter) / (counter + 1);
+		
+		uint shadowCounter = (uint)floor(float(tracingInfoHistory[1]) * shadowHistoryConfidence + 0.5);
+		float shadowHistoryWeight = float(shadowCounter) / (shadowCounter + 1);
+		uint indirectLightCounter = (uint)floor(float(tracingInfoHistory[2]) * indirectLightHistoryConfidence + 0.5);
+		float indirectLightHistoryWeight = float(indirectLightCounter) / (indirectLightCounter + 1);
 
 		// direct shadow
 
@@ -577,7 +584,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		// not supported
 		#elif (0)
 		// fallback to higher mip at low history counter
-		float shadowMip = g_SceneCB.DebugVec0[3] * pow(1.0 - float(counter) / g_SceneCB.AccumulationFrameCount, 1.0);
+		float shadowMip = g_SceneCB.DebugVec0[3] * pow(1.0 - float(shadowCounter) / g_SceneCB.AccumulationFrameCount, 1.0);
 		float4 shadowMipData = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, shadowMip - 1);
 		shadowPerLight = (shadowMip < 1 ? lerp(shadowPerLight, shadowMipData, shadowMip) : shadowMipData);
 		#endif
@@ -592,7 +599,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 			#if (SHADOW_BUFFER_UINT32)
 			uint shadowPackedPrev = ((shadowHistoryPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask);
 			float shadowAccumulated = ShadowBufferEntryUnpack(shadowPackedPrev);
-			shadowAccumulated = lerp(shadowPerLight[j], shadowAccumulated, historyWeight);
+			shadowAccumulated = lerp(shadowPerLight[j], shadowAccumulated, shadowHistoryWeight);
 			#if (1)
 			// note: following code guarantees minimal difference (if any) is applied to quantized result to overcome lack of precision at the end of the accumulation curve
 			const float diffEps = 1.0e-4;
@@ -607,9 +614,9 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 			#else
 
 			#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
-			shadowPerLight[j] = lerp(shadowPerLight[j], shadowHistoryData[j], (ilight == j ? historyWeight : 1.0));
+			shadowPerLight[j] = lerp(shadowPerLight[j], shadowHistoryData[j], (ilight == j ? shadowHistoryWeight : 1.0));
 			#else
-			shadowPerLight[j] = lerp(shadowPerLight[j], shadowHistoryData[j], historyWeight);
+			shadowPerLight[j] = lerp(shadowPerLight[j], shadowHistoryData[j], shadowHistoryWeight);
 			#endif
 			#endif
 		}
@@ -617,15 +624,17 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		// indirect light
 
 		float4 indirectLightHistory = g_IndirectLightHistory.Load(int3(dispatchPosPrev.xy, 0));
-		indirectLight = lerp(indirectLight, indirectLightHistory, historyWeight);
+		indirectLight = lerp(indirectLight, indirectLightHistory, indirectLightHistoryWeight);
 
-		// counter
+		// update counters
 
 		#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
 		if (ilight == lightCount - 1) // note: counter is currently shared with indirect light accumulation, so this option will break it
 		#endif
-		counter = clamp(counter + 1, 0, g_SceneCB.AccumulationFrameCount);
-		tracingInfo[1] = counter;
+		shadowCounter = clamp(shadowCounter + 1, 0, g_SceneCB.AccumulationFrameCount);
+		indirectLightCounter = clamp(indirectLightCounter + 1, 0, g_SceneCB.AccumulationFrameCount);
+		tracingInfo[1] = shadowCounter;
+		tracingInfo[2] = indirectLightCounter;
 	}
 	else
 	{

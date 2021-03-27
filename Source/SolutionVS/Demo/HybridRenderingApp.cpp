@@ -152,7 +152,7 @@ int HybridRenderingApp::Run()
 
 	static const GrafFormat LightingImageFormat[LightingImageCount] = {
 		GrafFormat::R16G16B16A16_UNORM,
-		GrafFormat::R8G8_UINT,
+		GrafFormat::R8G8B8A8_UINT,
 		GrafFormat::R16G16B16A16_UNORM,
 		GrafFormat::R16G16B16A16_SFLOAT,
 		GrafFormat::R16G16B16A16_SFLOAT,
@@ -190,7 +190,7 @@ int HybridRenderingApp::Run()
 		std::unique_ptr<GrafImageSubresource> mipsSubresource[LightingImageCountWithHistory];
 	};
 
-	static const ur_uint BlurPassCountMax = 32; // reserved descriptor tables per frame
+	static const ur_uint BlurPassCountPerFrame = 32; // reserved descriptor tables per frame
 
 	std::vector<std::unique_ptr<GrafCommandList>> cmdListPerFrame;
 	std::unique_ptr<GrafRenderPass> rasterRenderPass;
@@ -427,6 +427,7 @@ int HybridRenderingApp::Run()
 			ur_float4 LightBufferSize;
 			ur_float4 PrecomputedSkySize;
 			ur_float4 DebugVec0;
+			ur_float4 DebugVec1;
 			ur_float2 LightBufferDownscale;
 			ur_float DirectLightFactor;
 			ur_float IndirectLightFactor;
@@ -719,7 +720,7 @@ int HybridRenderingApp::Run()
 		std::vector<std::unique_ptr<GrafDescriptorTable>> shadowMipsDescTablePerFrame;
 		std::unique_ptr<GrafComputePipeline> shadowMipsPipelineState;
 		std::unique_ptr<GrafDescriptorTableLayout> blurDescTableLayout;
-		std::vector<std::unique_ptr<GrafDescriptorTable>> blurDescTablePerFrame;
+		std::vector<std::unique_ptr<GrafDescriptorTable>> blurDescTables;
 		std::unique_ptr<GrafComputePipeline> blurPipelineState;
 		std::unique_ptr<GrafDescriptorTableLayout> accumulationDescTableLayout;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> accumulationDescTablePerFrame;
@@ -733,7 +734,9 @@ int HybridRenderingApp::Run()
 		std::unique_ptr<GrafSampler> samplerTrilinearWrap;
 		SceneConstants sceneConstants;
 		Allocation sceneCBCrntFrameAlloc;
+		ur_uint blurDescTableIdx;
 		ur_float4 debugVec0;
+		ur_float4 debugVec1;
 
 		std::vector<Instance> sampleInstances;
 		ur_uint sampleInstanceCount;
@@ -747,7 +750,9 @@ int HybridRenderingApp::Run()
 			memset(&this->sceneConstants, 0, sizeof(SceneConstants));
 			this->sceneConstants.DirectLightFactor = 1.0f;
 			this->sceneConstants.IndirectLightFactor = 1.0f;
+			this->blurDescTableIdx = 0;
 			this->debugVec0 = ur_float4(0.0f, 0.0f, 0.005f, 0.0f);
+			this->debugVec1 = ur_float4(0.0f, 0.0f, 0.1f, 1.0f);
 			
 			// default material override
 			this->sceneConstants.FrameNumber = 0;
@@ -1124,8 +1129,8 @@ int HybridRenderingApp::Run()
 				};
 				grafSystem->CreateDescriptorTableLayout(this->blurDescTableLayout);
 				this->blurDescTableLayout->Initialize(grafDevice, { blurDescTableLayoutDesc });
-				this->blurDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount() * BlurPassCountMax);
-				for (auto& descTable : this->blurDescTablePerFrame)
+				this->blurDescTables.resize(grafRenderer->GetRecordedFrameCount() * BlurPassCountPerFrame);
+				for (auto& descTable : this->blurDescTables)
 				{
 					grafSystem->CreateDescriptorTable(descTable);
 					descTable->Initialize(grafDevice, { this->blurDescTableLayout.get() });
@@ -1432,6 +1437,7 @@ int HybridRenderingApp::Run()
 			sceneConstants.LightBufferDownscale.x = (ur_float)g_Settings.RayTracing.LightingBufferDownscale;
 			sceneConstants.LightBufferDownscale.y = 1.0f / sceneConstants.LightBufferDownscale.x;
 			sceneConstants.DebugVec0 = this->debugVec0;
+			sceneConstants.DebugVec1 = this->debugVec1;
 			sceneConstants.Lighting = lightingDesc;
 			sceneConstants.Atmosphere = atmosphereDesc;
 			sceneConstants.ShadowSamplesPerLight = g_Settings.RayTracing.ShadowSamplesPerLight;
@@ -1589,89 +1595,63 @@ int HybridRenderingApp::Run()
 			grafCmdList->Dispatch((bufferSize.x - 1) / groupSize.x + 1, (bufferSize.y - 1) / groupSize.y + 1, 1);
 		}
 
-		void BlurLightingResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
+		void BlurLightingResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet,
+			GrafImage* sourceImage, GrafImage* targetImage, ur_uint blurPassCount)
 		{
+			GrafImage* workImages[] = {
+				sourceImage,
+				targetImage
+			};
+			ur_uint srcImageId = 0;
+			ur_uint dstImageId = 1;
+			ur_uint passCount = (blurPassCount / 2) * 2; // multiple of 2 to avoid copying blured image back to source
+			for (ur_uint ipass = 0; ipass < passCount; ++ipass)
 			{
-				GrafImage* workImages[] = {
-					lightingBufferSet->images[LightingImageUsage_DirectShadow].get(),
-					lightingBufferSet->images[LightingImageUsage_DirectShadowBlured].get()
-				};
-				ur_uint srcImageId = 0;
-				ur_uint dstImageId = 1;
-				ur_uint passCount = (g_Settings.RayTracing.ShadowBlurPassCount / 2) * 2; // multiple of 2 to avoid copying blured image back to source
-				for (ur_uint ipass = 0; ipass < passCount; ++ipass)
+				grafCmdList->ImageMemoryBarrier(workImages[srcImageId], GrafImageState::Current, GrafImageState::ComputeRead);
+				grafCmdList->ImageMemoryBarrier(workImages[dstImageId], GrafImageState::Current, GrafImageState::ComputeReadWrite);
+
+				// update descriptor table
+				// common constant buffer is expected to be uploaded during rasterization pass
+
+				this->blurDescTableIdx = (this->blurDescTableIdx + 1) % ur_uint(this->blurDescTables.size());
+				GrafDescriptorTable* descriptorTable = this->blurDescTables[this->blurDescTableIdx].get();
+				descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 				{
-					grafCmdList->ImageMemoryBarrier(workImages[srcImageId], GrafImageState::Current, GrafImageState::ComputeRead);
-					grafCmdList->ImageMemoryBarrier(workImages[dstImageId], GrafImageState::Current, GrafImageState::ComputeReadWrite);
-
-					// update descriptor table
-					// common constant buffer is expected to be uploaded during rasterization pass
-
-					ur_uint descriptorTableId = this->grafRenderer->GetCurrentFrameId() * BlurPassCountMax + ipass;
-					GrafDescriptorTable* descriptorTable = this->blurDescTablePerFrame[descriptorTableId].get();
-					descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-					for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
-					{
-						descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
-					}
-					descriptorTable->SetImage(13, workImages[srcImageId]);
-					descriptorTable->SetRWImage(9, workImages[dstImageId]);
-
-					// compute
-
-					grafCmdList->BindComputePipeline(this->blurPipelineState.get());
-					grafCmdList->BindComputeDescriptorTable(descriptorTable, this->blurPipelineState.get());
-
-					static const ur_uint3 groupSize = { 8, 8, 1 };
-					const ur_uint3& bufferSize = lightingBufferSet->images[0]->GetDesc().Size;
-					grafCmdList->Dispatch((bufferSize.x - 1) / groupSize.x + 1, (bufferSize.y - 1) / groupSize.y + 1, 1);
-
-					// swap
-					srcImageId = !srcImageId;
-					dstImageId = !dstImageId;
+					descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
 				}
+				descriptorTable->SetImage(13, workImages[srcImageId]);
+				descriptorTable->SetRWImage(9, workImages[dstImageId]);
+
+				// compute
+
+				grafCmdList->BindComputePipeline(this->blurPipelineState.get());
+				grafCmdList->BindComputeDescriptorTable(descriptorTable, this->blurPipelineState.get());
+
+				static const ur_uint3 groupSize = { 8, 8, 1 };
+				const ur_uint3& bufferSize = sourceImage->GetDesc().Size;
+				grafCmdList->Dispatch((bufferSize.x - 1) / groupSize.x + 1, (bufferSize.y - 1) / groupSize.y + 1, 1);
+
+				// swap
+				srcImageId = !srcImageId;
+				dstImageId = !dstImageId;
 			}
+		}
 
-			{
-				GrafImage* workImages[] = {
-					lightingBufferSet->images[LightingImageUsage_IndirectLight].get(),
-					lightingBufferSet->images[LightingImageUsage_IndirectLightBlured].get()
-				};
-				ur_uint srcImageId = 0;
-				ur_uint dstImageId = 1;
-				ur_uint passCount = (g_Settings.RayTracing.IndirectBlurPassCount / 2) * 2; // multiple of 2 to avoid copying blured image back to source
-				for (ur_uint ipass = 0; ipass < passCount; ++ipass)
-				{
-					grafCmdList->ImageMemoryBarrier(workImages[srcImageId], GrafImageState::Current, GrafImageState::ComputeRead);
-					grafCmdList->ImageMemoryBarrier(workImages[dstImageId], GrafImageState::Current, GrafImageState::ComputeReadWrite);
+		void BlurShadowResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
+		{
+			BlurLightingResult(grafCmdList, renderTargetSet,
+				lightingBufferSet->images[LightingImageUsage_DirectShadow].get(),
+				lightingBufferSet->images[LightingImageUsage_DirectShadowBlured].get(),
+				g_Settings.RayTracing.ShadowBlurPassCount);
+		}
 
-					// update descriptor table
-					// common constant buffer is expected to be uploaded during rasterization pass
-
-					ur_uint descriptorTableId = this->grafRenderer->GetCurrentFrameId() * BlurPassCountMax + ipass;
-					GrafDescriptorTable* descriptorTable = this->blurDescTablePerFrame[descriptorTableId].get();
-					descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-					for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
-					{
-						descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
-					}
-					descriptorTable->SetImage(13, workImages[srcImageId]);
-					descriptorTable->SetRWImage(9, workImages[dstImageId]);
-
-					// compute
-
-					grafCmdList->BindComputePipeline(this->blurPipelineState.get());
-					grafCmdList->BindComputeDescriptorTable(descriptorTable, this->blurPipelineState.get());
-
-					static const ur_uint3 groupSize = { 8, 8, 1 };
-					const ur_uint3& bufferSize = lightingBufferSet->images[0]->GetDesc().Size;
-					grafCmdList->Dispatch((bufferSize.x - 1) / groupSize.x + 1, (bufferSize.y - 1) / groupSize.y + 1, 1);
-
-					// swap
-					srcImageId = !srcImageId;
-					dstImageId = !dstImageId;
-				}
-			}
+		void BlurIndirectLight(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
+		{
+			BlurLightingResult(grafCmdList, renderTargetSet,
+				lightingBufferSet->images[LightingImageUsage_IndirectLight].get(),
+				lightingBufferSet->images[LightingImageUsage_IndirectLightBlured].get(),
+				g_Settings.RayTracing.IndirectBlurPassCount);
 		}
 
 		void AccumulateLightingResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet)
@@ -1810,6 +1790,7 @@ int HybridRenderingApp::Run()
 				ImGui::DragFloat("DirectLightFactor", &this->sceneConstants.DirectLightFactor, 0.01f, 0.0f, 1.0f);
 				ImGui::DragFloat("IndirectLightFactor", &this->sceneConstants.IndirectLightFactor, 0.01f, 0.0f, 1.0f);
 				ImGui::InputFloat4("DebugVec0", &this->debugVec0.x);
+				ImGui::InputFloat4("DebugVec1", &this->debugVec1.x);
 				if (ImGui::CollapsingHeader("Material"))
 				{
 					ur_bool editableBool = (ur_bool)this->sceneConstants.OverrideMaterial;
@@ -1914,7 +1895,7 @@ int HybridRenderingApp::Run()
 
 	// setup main camera
 	Camera camera(realm);
-	CameraControl cameraControl(realm, &camera, CameraControl::Mode::AroundPoint);
+	CameraControl cameraControl(realm, &camera, CameraControl::Mode::FixedUp);
 	cameraControl.SetTargetPoint(ur_float3(0.0f, 2.0f, 0.0f));
 	cameraControl.SetSpeed(4.0);
 	camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
@@ -2185,7 +2166,8 @@ int HybridRenderingApp::Run()
 
 					if (demoScene != ur_null)
 					{
-						demoScene->BlurLightingResult(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
+						demoScene->BlurShadowResult(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
+						demoScene->BlurIndirectLight(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
 					}
 				}
 
@@ -2264,6 +2246,24 @@ int HybridRenderingApp::Run()
 
 					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get(), GrafImageState::Current, GrafImageState::ComputeRead);
 					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[LightingImageUsage_DirectShadow].get(), GrafImageState::ComputeRead, GrafImageState::ComputeRead);
+				}
+
+				// blur current frame result
+				if (g_Settings.RayTracing.ShadowBlurPassCount > 0)
+				{
+					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ShadowBlurPass", DebugLabelColorPass);
+
+					for (ur_uint imageId = 0; imageId < LightingImageCount; ++imageId)
+					{
+						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeRead);
+					}
+					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[LightingImageUsage_DirectShadowBlured].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
+					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[LightingImageUsage_IndirectLightBlured].get(), GrafImageState::Current, GrafImageState::ComputeReadWrite);
+
+					if (demoScene != ur_null)
+					{
+						demoScene->BlurIndirectLight(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
+					}
 				}
 			}
 
@@ -2383,13 +2383,13 @@ int HybridRenderingApp::Run()
 						g_Settings.RayTracing.ShadowSamplesPerLight = (ur_uint)std::max(1, std::min(1024, editableInt));
 						editableInt = (ur_int)g_Settings.RayTracing.ShadowBlurPassCount;
 						ImGui::InputInt("ShadowBlurPassCount", &editableInt);
-						g_Settings.RayTracing.ShadowBlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountMax), editableInt));
+						g_Settings.RayTracing.ShadowBlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
 						editableInt = (ur_int)g_Settings.RayTracing.IndirectSamplesPerFrame;
 						ImGui::InputInt("IndirectSamplesPerFrame", &editableInt);
 						g_Settings.RayTracing.IndirectSamplesPerFrame = (ur_uint)std::max(0, std::min(1024, editableInt));
 						editableInt = (ur_int)g_Settings.RayTracing.IndirectBlurPassCount;
 						ImGui::InputInt("IndirectBlurPassCount", &editableInt);
-						g_Settings.RayTracing.IndirectBlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountMax), editableInt));
+						g_Settings.RayTracing.IndirectBlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
 					}
 					if (ImGui::CollapsingHeader("Canvas"))
 					{
