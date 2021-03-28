@@ -14,9 +14,10 @@ MeshPixelOutput main(MeshPixelInput input)
 	float2 bumpPacked = g_NormalTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xy;
 	float mask = g_MaskTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).x;
 
-	if (!any(baseColor)) baseColor.xyz = float3(0.5, 0.5, 0.5);
-	if (!any(bumpPacked)) bumpPacked.xy = float2(0.5, 0.5);
-	if (!any(mask)) mask = 1.0;
+	//if (!any(baseColor)) baseColor.xyz = float3(0.5, 0.5, 0.5);
+	//if (!any(bumpPacked)) bumpPacked.xy = float2(0.5, 0.5);
+	//if (!any(mask)) mask = 1.0;
+	//clip(mask - 0.5);
 
 	float3 bumpNormal;
 	bumpNormal.xy = float2(bumpPacked.x, bumpPacked.y) * 2.0 - 1.0;

@@ -105,7 +105,9 @@ static const uint RTShaderId_MissDirect = 0;
 struct RayDataDirect
 {
 	bool occluded;
-	float hitDist; // TEMP: struct is shared with AO
+	// TEMP: additional data as struct is shared with GI
+	uint recusrionDepth;
+	float hitDist;
 };
 
 // Gemotry buffer utils

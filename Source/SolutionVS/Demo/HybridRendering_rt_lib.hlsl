@@ -34,7 +34,7 @@ float3 GetDiskSampleDirection(uint sampleId, uint sampleCount)
 
 float3 GetHemisphereSampleDirection(uint sampleId, uint sampleCount)
 {
-	float2 p2d = Hammersley(sampleId % sampleCount, sampleCount);
+	float2 p2d = Hammersley(sampleId % sampleCount + 1, sampleCount + 1);
 	float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
 	return dir.xyz;
 }
@@ -132,147 +132,155 @@ void RayGenDirect()
 
 		// Direct Shadow
 
-		RayDesc ray;
-		ray.Origin = worldPos + gbData.Normal * distBasedEps;
-		ray.TMin = 1.0e-3;
-		ray.TMax = 1.0e+4;
-
-		#if (SHADOW_BUFFER_UINT32)
-		occlusionPerLightPacked = 0x0;
-		float occlusionPerLight[ShadowBufferEntriesPerPixel];
-		[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j) occlusionPerLight[j] = 1.0;
-		#endif
-
-		// per light
-		uint lightCount = min(g_SceneCB.Lighting.LightSourceCount, ShadowBufferEntriesPerPixel);
-		#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
-		uint ilight = (g_SceneCB.FrameNumber % lightCount);
-		#else
-		for (uint ilight = 0; ilight < lightCount; ++ilight)
-		#endif
+		if (g_SceneCB.ShadowSamplesPerLight > 0)
 		{
-			LightDesc lightDesc = g_SceneCB.Lighting.LightSources[ilight];
-			float3x3 lightDirTBN = ComputeLightSamplingBasis(worldPos, lightDesc);
-			float shadowFactor = 0.0;
-
-			uint sampleCount = g_SceneCB.ShadowSamplesPerLight * max(1, g_SceneCB.ShadowAccumulationFrames);
-			uint sampleIdOfs = g_SceneCB.FrameNumber * g_SceneCB.ShadowSamplesPerLight * g_SceneCB.PerFrameJitter + dispatchConstHash;
-			for (uint isample = 0; isample < g_SceneCB.ShadowSamplesPerLight; ++isample)
-			{
-				float3 sampleDir = GetDiskSampleDirection(isample + sampleIdOfs, sampleCount);
-				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), lightDirTBN);
-				ray.TMax = (LightType_Directional == lightDesc.Type ? 1.0e+4 : length(lightDesc.Position - ray.Origin) - lightDesc.Size);
-
-				RayDataDirect rayData = (RayDataDirect)0;
-				rayData.occluded = true;
-				rayData.hitDist = ray.TMax;
-
-				// ray trace
-				uint instanceInclusionMask = 0xff;
-				uint rayContributionToHitGroupIndex = 0;
-				uint multiplierForGeometryContributionToShaderIndex = 1;
-				uint missShaderIndex = RTShaderId_MissDirect;
-				TraceRay(g_SceneStructure,
-					RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
-					instanceInclusionMask,
-					rayContributionToHitGroupIndex,
-					multiplierForGeometryContributionToShaderIndex,
-					missShaderIndex,
-					ray, rayData);
-
-				shadowFactor += float(rayData.occluded);
-			}
-			shadowFactor = 1.0 - shadowFactor / g_SceneCB.ShadowSamplesPerLight;
-			occlusionPerLight[ilight] = shadowFactor;
-		}
-
-		#if (SHADOW_BUFFER_APPLY_HISTORY_IN_RAYGEN)
-		// apply accumulatd history
-		float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
-		clipPosPrev.xy /= clipPosPrev.w;
-		if (g_SceneCB.ShadowAccumulationFrames > 0 && all(abs(clipPosPrev.xy) < 1.0))
-		{
-			float2 imagePosPrev = clamp((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);
-			uint2 dispatchPosPrev = clamp(floor(imagePosPrev * g_SceneCB.LightBufferDownscale.y), float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
-			imagePosPrev = dispatchPosPrev * g_SceneCB.LightBufferDownscale.x;
-			
-			float clipDepthPrev = g_DepthHistory.Load(int3(imagePosPrev.xy, 0));
-			bool isSkyPrev = (clipDepthPrev >= 1.0);
-			// TODO
-			#if (0)
-			float depthDeltaTolerance = gbData.ClipDepth * /*1.0e-4*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
-			float surfaceHistoryWeight = 1.0 - saturate(abs(gbData.ClipDepth - clipDepthPrev) / depthDeltaTolerance);
-			#elif (0)
-			// history rejection from Ray Tracing Gems "Ray traced Shadows"
-			float3 normalVS = mul(float4(gbData.Normal, 0.0), g_SceneCB.View).xyz;
-			//float depthDeltaTolerance = 0.003 + 0.017 * abs(normalVS.z);
-			float depthDeltaTolerance = g_SceneCB.DebugVec0[1] + g_SceneCB.DebugVec0[2] * abs(normalVS.z);
-			float surfaceHistoryWeight = (abs(1.0 - clipDepthPrev / gbData.ClipDepth) < depthDeltaTolerance ? 1.0 : 0.0);
-			#else
-			float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
-			float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
-			float worldPosTolerance = viewDepth * /*1.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
-			float surfaceHistoryWeight = 1.0 - saturate(length(worldPos - worldPosPrev) / worldPosTolerance);
-			surfaceHistoryWeight = saturate((surfaceHistoryWeight - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
-			#endif
-
-			uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
-			counter = (uint)floor(float(counter) * surfaceHistoryWeight + 0.5);
-			float historyWeight = float(counter) / (counter + 1);
+			RayDesc ray;
+			ray.Origin = worldPos + gbData.Normal * distBasedEps;
+			ray.TMin = 1.0e-3;
+			ray.TMax = 1.0e+4;
 
 			#if (SHADOW_BUFFER_UINT32)
-			uint shadowHistoryPacked = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
-			#else
-			float4 shadowHistoryData = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
+			occlusionPerLightPacked = 0x0;
+			float occlusionPerLight[ShadowBufferEntriesPerPixel];
+			[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j) occlusionPerLight[j] = 1.0;
 			#endif
-			[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
-			{
-				#if (SHADOW_BUFFER_UINT32)
-				uint occlusionPackedPrev = ((shadowHistoryPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask);
-				float occlusionAccumulated = ShadowBufferEntryUnpack(occlusionPackedPrev);
-				occlusionAccumulated = lerp(occlusionPerLight[j], occlusionAccumulated, historyWeight);
-				#if (1)
-				// note: following code guarantees minimal difference (if any) is applied to quantized result to overcome lack of precision at the end of the accumulation curve
-				const float diffEps = 1.0e-4;
-				float diff = occlusionPerLight[j] - occlusionAccumulated; // calculate difference before quantizing
-				diff = (diff > diffEps ? 1.0f : (diff < -diffEps ? -1.0f : 0.0f));
-				occlusionAccumulated = (float)ShadowBufferEntryPack(occlusionAccumulated); // quantize
-				occlusionAccumulated = occlusionPackedPrev + max(abs(occlusionAccumulated - occlusionPackedPrev), abs(diff)) * diff;
-				occlusionPerLight[j] = ShadowBufferEntryUnpack(occlusionAccumulated);
-				#else
-				occlusionPerLight[j] = occlusionAccumulated;
-				#endif
-				#else
 
-				#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
-				occlusionPerLight[j] = lerp(occlusionPerLight[j], shadowHistoryData[j], (ilight == j ? historyWeight : 1.0));
-				#else
-				occlusionPerLight[j] = lerp(occlusionPerLight[j], shadowHistoryData[j], historyWeight);
+			// per light
+			uint lightCount = min(g_SceneCB.Lighting.LightSourceCount, ShadowBufferEntriesPerPixel);
+			#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
+			uint ilight = (g_SceneCB.FrameNumber % lightCount);
+			#else
+			for (uint ilight = 0; ilight < lightCount; ++ilight)
 				#endif
-				#endif
+			{
+				LightDesc lightDesc = g_SceneCB.Lighting.LightSources[ilight];
+				float3x3 lightDirTBN = ComputeLightSamplingBasis(worldPos, lightDesc);
+				float shadowFactor = 0.0;
+
+				uint sampleCount = g_SceneCB.ShadowSamplesPerLight * max(1, g_SceneCB.ShadowAccumulationFrames);
+				uint sampleIdOfs = g_SceneCB.FrameNumber * g_SceneCB.ShadowSamplesPerLight * g_SceneCB.PerFrameJitter + dispatchConstHash;
+				for (uint isample = 0; isample < g_SceneCB.ShadowSamplesPerLight; ++isample)
+				{
+					float3 sampleDir = GetDiskSampleDirection(isample + sampleIdOfs, sampleCount);
+					ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), lightDirTBN);
+					ray.TMax = (LightType_Directional == lightDesc.Type ? 1.0e+4 : length(lightDesc.Position - ray.Origin) - lightDesc.Size);
+
+					RayDataDirect rayData = (RayDataDirect)0;
+					rayData.occluded = true;
+
+					// ray trace
+					uint instanceInclusionMask = 0xff;
+					uint rayContributionToHitGroupIndex = 0;
+					uint multiplierForGeometryContributionToShaderIndex = 1;
+					uint missShaderIndex = RTShaderId_MissDirect;
+					TraceRay(g_SceneStructure,
+						RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
+						instanceInclusionMask,
+						rayContributionToHitGroupIndex,
+						multiplierForGeometryContributionToShaderIndex,
+						missShaderIndex,
+						ray, rayData);
+
+					shadowFactor += float(rayData.occluded);
+				}
+				shadowFactor = 1.0 - shadowFactor / g_SceneCB.ShadowSamplesPerLight;
+				occlusionPerLight[ilight] = shadowFactor;
 			}
 
-			#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
-			if (ilight == lightCount - 1)
-			#endif
-			counter = clamp(counter + 1, 0, g_SceneCB.ShadowAccumulationFrames);
-			tracingInfo[1] = counter;
-		}
-		#endif
+			#if (SHADOW_BUFFER_APPLY_HISTORY_IN_RAYGEN)
+			// apply accumulatd history
+			float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
+			clipPosPrev.xy /= clipPosPrev.w;
+			if (g_SceneCB.ShadowAccumulationFrames > 0 && all(abs(clipPosPrev.xy) < 1.0))
+			{
+				float2 imagePosPrev = clamp((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);
+				uint2 dispatchPosPrev = clamp(floor(imagePosPrev * g_SceneCB.LightBufferDownscale.y), float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
+				imagePosPrev = dispatchPosPrev * g_SceneCB.LightBufferDownscale.x;
 
-		#if (SHADOW_BUFFER_UINT32)
-		// pack result
-		[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
-		{
-			occlusionPerLightPacked |= ShadowBufferEntryPack(occlusionPerLight[j]) << (j * ShadowBufferBitsPerEntry);
+				float clipDepthPrev = g_DepthHistory.Load(int3(imagePosPrev.xy, 0));
+				bool isSkyPrev = (clipDepthPrev >= 1.0);
+				// TODO
+				#if (0)
+				float depthDeltaTolerance = gbData.ClipDepth * /*1.0e-4*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
+				float surfaceHistoryWeight = 1.0 - saturate(abs(gbData.ClipDepth - clipDepthPrev) / depthDeltaTolerance);
+				#elif (0)
+				// history rejection from Ray Tracing Gems "Ray traced Shadows"
+				float3 normalVS = mul(float4(gbData.Normal, 0.0), g_SceneCB.View).xyz;
+				//float depthDeltaTolerance = 0.003 + 0.017 * abs(normalVS.z);
+				float depthDeltaTolerance = g_SceneCB.DebugVec0[1] + g_SceneCB.DebugVec0[2] * abs(normalVS.z);
+				float surfaceHistoryWeight = (abs(1.0 - clipDepthPrev / gbData.ClipDepth) < depthDeltaTolerance ? 1.0 : 0.0);
+				#else
+				float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
+				float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
+				float worldPosTolerance = viewDepth * /*1.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
+				float surfaceHistoryWeight = 1.0 - saturate(length(worldPos - worldPosPrev) / worldPosTolerance);
+				surfaceHistoryWeight = saturate((surfaceHistoryWeight - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
+				#endif
+
+				uint counter = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0)).y;
+				counter = (uint)floor(float(counter) * surfaceHistoryWeight + 0.5);
+				float historyWeight = float(counter) / (counter + 1);
+
+				#if (SHADOW_BUFFER_UINT32)
+				uint shadowHistoryPacked = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
+				#else
+				float4 shadowHistoryData = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
+				#endif
+				[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
+				{
+					#if (SHADOW_BUFFER_UINT32)
+					uint occlusionPackedPrev = ((shadowHistoryPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask);
+					float occlusionAccumulated = ShadowBufferEntryUnpack(occlusionPackedPrev);
+					occlusionAccumulated = lerp(occlusionPerLight[j], occlusionAccumulated, historyWeight);
+					#if (1)
+					// note: following code guarantees minimal difference (if any) is applied to quantized result to overcome lack of precision at the end of the accumulation curve
+					const float diffEps = 1.0e-4;
+					float diff = occlusionPerLight[j] - occlusionAccumulated; // calculate difference before quantizing
+					diff = (diff > diffEps ? 1.0f : (diff < -diffEps ? -1.0f : 0.0f));
+					occlusionAccumulated = (float)ShadowBufferEntryPack(occlusionAccumulated); // quantize
+					occlusionAccumulated = occlusionPackedPrev + max(abs(occlusionAccumulated - occlusionPackedPrev), abs(diff)) * diff;
+					occlusionPerLight[j] = ShadowBufferEntryUnpack(occlusionAccumulated);
+					#else
+					occlusionPerLight[j] = occlusionAccumulated;
+					#endif
+					#else
+
+					#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
+					occlusionPerLight[j] = lerp(occlusionPerLight[j], shadowHistoryData[j], (ilight == j ? historyWeight : 1.0));
+					#else
+					occlusionPerLight[j] = lerp(occlusionPerLight[j], shadowHistoryData[j], historyWeight);
+					#endif
+					#endif
+				}
+
+				#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
+				if (ilight == lightCount - 1)
+					#endif
+					counter = clamp(counter + 1, 0, g_SceneCB.ShadowAccumulationFrames);
+				tracingInfo[1] = counter;
+			}
+			#endif
+
+			#if (SHADOW_BUFFER_UINT32)
+			// pack result
+			[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
+			{
+				occlusionPerLightPacked |= ShadowBufferEntryPack(occlusionPerLight[j]) << (j * ShadowBufferBitsPerEntry);
+			}
+			#endif
 		}
-		#endif
 
 		// Indirect Light
 
 		if (g_SceneCB.IndirectSamplesPerFrame > 0)
 		{
 			// sky light with ambient occlusion
+			
+			RayDesc ray;
+			ray.Origin = worldPos + gbData.Normal * distBasedEps;
+			ray.TMax = worldDist * g_SceneCB.DebugVec1[0];// 20.0;
+			ray.TMin = ray.TMax * 1.0e-4;
+
 			float3x3 surfaceTBN = ComputeSamplingBasis(gbData.Normal);
 			float ambientOcclusion = 0.0;
 			float3 skyLight = 0.0;
@@ -282,11 +290,10 @@ void RayGenDirect()
 			{
 				float3 sampleDir = GetHemisphereSampleDirection(isample + sampleIdOfs, sampleCount);
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
-				ray.TMax = worldDist * g_SceneCB.DebugVec1[0];// 20.0;
-				ray.TMin = ray.TMax * 1.0e-4;
 
 				RayDataDirect rayData = (RayDataDirect)0;
 				rayData.occluded = true;
+				rayData.recusrionDepth = 0;
 				rayData.hitDist = ray.TMax;
 
 				// ray trace
@@ -353,4 +360,27 @@ void MissDirect(inout RayDataDirect rayData)
 void ClosestHitDirect(inout RayDataDirect rayData, in BuiltInTriangleIntersectionAttributes attribs)
 {
 	rayData.hitDist = RayTCurrent();
+	rayData.recusrionDepth += 1;
+
+	#if (0)
+	// TODO
+
+	const uint IndirectLightBounces = 1;
+	if (rayData.recusrionDepth <= IndirectLightBounces)
+	{
+		// ray trace
+		uint instanceInclusionMask = 0xff;
+		uint rayContributionToHitGroupIndex = 0;
+		uint multiplierForGeometryContributionToShaderIndex = 1;
+		uint missShaderIndex = RTShaderId_MissDirect;
+		TraceRay(g_SceneStructure,
+			RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
+			instanceInclusionMask,
+			rayContributionToHitGroupIndex,
+			multiplierForGeometryContributionToShaderIndex,
+			missShaderIndex,
+			ray, rayData);
+	}
+
+	#endif
 }

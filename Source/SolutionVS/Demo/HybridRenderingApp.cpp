@@ -2371,7 +2371,7 @@ int HybridRenderingApp::Run()
 						{
 							editableInt = (ur_int)g_Settings.RayTracing.Shadow.SamplesPerLight;
 							ImGui::InputInt("SamplesPerLight", &editableInt);
-							g_Settings.RayTracing.Shadow.SamplesPerLight = (ur_uint)std::max(1, std::min(1024, editableInt));
+							g_Settings.RayTracing.Shadow.SamplesPerLight = (ur_uint)std::max(0, std::min(1024, editableInt));
 							editableInt = (ur_int)g_Settings.RayTracing.Shadow.BlurPassCount;
 							ImGui::InputInt("BlurPassCount", &editableInt);
 							g_Settings.RayTracing.Shadow.BlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
