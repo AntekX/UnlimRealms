@@ -1435,8 +1435,9 @@ namespace UnlimRealms
 		{
 			Position = (1 << 0),
 			Normal = (1 << 1),
-			Color = (1 << 2),
-			TexCoord = (1 << 3),
+			Tangent = (1 << 2),
+			Color = (1 << 3),
+			TexCoord = (1 << 4),
 			All = ~ur_uint(0)
 		};
 		typedef ur_uint MeshVertexElementFlags;

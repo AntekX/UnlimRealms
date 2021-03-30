@@ -1178,6 +1178,15 @@ namespace UnlimRealms
 			vertexNormalOfs = vertexStride;
 			vertexStride += 12;
 		}
+		ur_size vertexTangentOfs = 0;
+		if (!attribs.normals.empty() && !attribs.texcoords.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Tangent)))
+		{
+			usedVertexElementFlags |= ur_uint(MeshVertexElementFlag::Tangent);
+			MeshVertexElementDesc vertexElement = { MeshVertexElementType::Tangent, GrafFormat::R32G32B32_SFLOAT };
+			modelVertexElements.emplace_back(vertexElement);
+			vertexTangentOfs = vertexStride;
+			vertexStride += 12;
+		}
 		ur_size vertexColorOfs = 0;
 		if (!attribs.colors.empty() && (vertexMask & ur_uint(MeshVertexElementFlag::Color)))
 		{
@@ -1422,6 +1431,44 @@ namespace UnlimRealms
 				verticesOffset += indicesCount;
 			}
 		}
+
+		// compute tangent vectors
+		// TODO
+		#if (0)
+		if (usedVertexElementFlags & ur_uint(MeshVertexElementFlag::Tangent))
+		{
+			ur_size primitiveCount = totalMeshIndicesCount / 3;
+			ur_byte* verticesPtr = meshData.Vertices.data();
+			ur_uint32* indicesPtr = (ur_uint32*)meshData.Indices.data();
+			for (ur_size ip = 0; ip < primitiveCount; ++ip, indicesPtr += 3)
+			{
+				ur_byte* pv0 = verticesPtr + indicesPtr[0] * vertexStride;
+				ur_byte* pv1 = verticesPtr + indicesPtr[1] * vertexStride;
+				ur_byte* pv2 = verticesPtr + indicesPtr[2] * vertexStride;
+				ur_float3& vpos0 = *(ur_float3*)(pv0 + vertexPositionOfs);
+				ur_float3& vpos1 = *(ur_float3*)(pv1 + vertexPositionOfs);
+				ur_float3& vpos2 = *(ur_float3*)(pv2 + vertexPositionOfs);
+				ur_float2& vtex0 = *(ur_float2*)(pv0 + vertexTexcoordOfs);
+				ur_float2& vtex1 = *(ur_float2*)(pv1 + vertexTexcoordOfs);
+				ur_float2& vtex2 = *(ur_float2*)(pv2 + vertexTexcoordOfs);
+				ur_float3 vposDelta1 = vpos1 - vpos0;
+				ur_float3 vposDelta2 = vpos2 - vpos0;
+				ur_float2 vtexDelta1 = vtex1 - vtex0;
+				ur_float2 vtexDelta2 = vtex2 - vtex0;
+				ur_float r = 1.0f / (vtexDelta1.x * vtexDelta2.y - vtexDelta1.y * vtexDelta2.x);
+				ur_float3 tangent = (vposDelta1 * vtexDelta2.y - vposDelta2 * vtexDelta1.y) * r;
+				ur_float3 bitangent = (vposDelta2 * vtexDelta1.x - vposDelta1 * vtexDelta2.x) * r;
+				tangent.Normalize();
+				bitangent.Normalize();
+				ur_float3& vtan0 = *(ur_float3*)(pv0 + vertexTangentOfs);
+				ur_float3& vtan1 = *(ur_float3*)(pv1 + vertexTangentOfs);
+				ur_float3& vtan2 = *(ur_float3*)(pv2 + vertexTangentOfs);
+				vtan0 = tangent;
+				vtan1 = tangent;
+				vtan2 = tangent;
+			}
+		}
+		#endif
 
 		return Result(Success);
 	}

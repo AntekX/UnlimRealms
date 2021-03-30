@@ -23,12 +23,17 @@ MeshPixelOutput main(MeshPixelInput input)
 	bumpNormal.xy = float2(bumpPacked.x, bumpPacked.y) * 2.0 - 1.0;
 	bumpNormal.z = sqrt(saturate(1.0 - dot(bumpNormal.xy, bumpNormal.xy)));
 
-	float3 normal = input.Norm.xyz;
+	float3 normal = input.Normal.xyz;
+	#if (1)
 	float3 bitangent = float3(0.0, 0.0, 1.0);
 	if (normal.z + Eps >= 1.0) bitangent = float3(0.0, -1.0, 0.0);
 	if (normal.z - Eps <= -1.0) bitangent = float3(0.0, 1.0, 0.0);
 	float3 tangent = normalize(cross(bitangent, normal));
 	bitangent = cross(normal, tangent);
+	#else
+	float3 tangent = input.Tangent.xyz;
+	float3 bitangent = normalize(cross(normal, tangent));
+	#endif
 	float3x3 surfaceTBN = {
 		tangent,
 		bitangent,
@@ -38,7 +43,7 @@ MeshPixelOutput main(MeshPixelInput input)
 
 	output.Target0 = float4(baseColor.xyz, 1);
 	output.Target1 = float4(normal.xyz, 0);
-	output.Target2 = float4(input.TexCoord.xy, 0, 0);
+	output.Target2 = float4(tangent.xyz, 0);
 
 	return output;
 }

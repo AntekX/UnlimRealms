@@ -467,6 +467,7 @@ int HybridRenderingApp::Run()
 			{
 				ur_float3 Pos;
 				ur_float3 Norm;
+				ur_float3 Tangent;
 				ur_float2 TexCoord;
 			};
 
@@ -893,7 +894,8 @@ int HybridRenderingApp::Run()
 				GrafVertexElementDesc vertexElements[] = {
 					{ GrafFormat::R32G32B32_SFLOAT, 0 },	// pos
 					{ GrafFormat::R32G32B32_SFLOAT, 12 },	// normal
-					{ GrafFormat::R32G32_SFLOAT, 24 }		// tex coord
+					{ GrafFormat::R32G32B32_SFLOAT, 24 },	// tangent
+					{ GrafFormat::R32G32_SFLOAT, 36 }		// tex coord
 				};
 				GrafVertexInputDesc vertexInputs[] = { {
 					GrafVertexInputType::PerVertex, 0, sizeof(Mesh::Vertex),
@@ -1222,6 +1224,7 @@ int HybridRenderingApp::Run()
 			GrafUtils::MeshVertexElementFlags meshVertexMask = // must be compatible with Mesh::Vertex
 				ur_uint(GrafUtils::MeshVertexElementFlag::Position) |
 				ur_uint(GrafUtils::MeshVertexElementFlag::Normal) |
+				ur_uint(GrafUtils::MeshVertexElementFlag::Tangent) |
 				ur_uint(GrafUtils::MeshVertexElementFlag::TexCoord);
 			struct MeshResDesc
 			{

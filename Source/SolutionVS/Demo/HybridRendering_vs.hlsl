@@ -17,11 +17,13 @@ MeshPixelInput main(MeshVertexInput input, uint instanceId : SV_InstanceID)
 
 	// transform
 	float3 worldPos = mul(instanceTransform, float4(input.Pos.xyz, 1.0)); // order changed because input matrix is column major
-	float3 worldNorm = normalize(mul(instanceTransform, float4(input.Norm, 0.0)));
+	float3 worldNorm = normalize(mul(instanceTransform, float4(input.Normal, 0.0)));
+	float3 worldTangent = normalize(mul(instanceTransform, float4(input.Tangent, 0.0)));
 
 	// output
 	output.Pos = mul(float4(worldPos, 1.0), g_SceneCB.ViewProj);
-	output.Norm = worldNorm;
+	output.Normal = worldNorm;
+	output.Tangent = worldTangent;
 	output.TexCoord = float2(input.TexCoord.x, 1.0 - input.TexCoord.y);
 
 	return output;

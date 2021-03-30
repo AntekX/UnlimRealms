@@ -492,7 +492,32 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 	}
 	bluredResult /= max(blurWeightSum, 1.0e-5);
 	#if (BLUR_COMPUTE_VARIANCE)
-	bluredResult[3] = varianceMax; // TEMO: used as debug output
+	bluredResult[3] = varianceMax; // TEMP: used as debug output
+	#endif
+
+	#if (0) && (BLUR_PREFETCH)
+	// TEMP: test fireflies suppression with median 3x3 filter right here
+	float valuesU[3];
+	float valuesV[3];
+	int idsU[3];
+	int2 filterFrom = clamp(bufferPos.xy - 1, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+	int2 filterTo = clamp(bufferPos.xy + 1, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+	for (iy = 0; iy < 3; ++iy)
+	{
+		for (int ix = 0; ix < 3; ++ix)
+		{
+			int groupDataOfs = (filterFrom.x + ix - groupFrom.x) + (filterFrom.y + iy - groupFrom.y) * groupSize.x;
+			valuesU[ix] = dot(g_BlurGroupData[groupDataOfs].xyz, 1.0);
+		}
+		idsU[iy] = 2;
+		if (valuesU[0] >= valuesU[1] && valuesU[0] <= valuesU[2]) idsU[iy] = 0;
+		else if (valuesU[1] >= valuesU[0] && valuesU[1] <= valuesU[2]) idsU[iy] = 1;
+	}
+	int idV = 2;
+	if (valuesV[0] >= valuesV[1] && valuesV[0] <= valuesV[2]) idV = 0;
+	else if (valuesV[1] >= valuesV[0] && valuesV[1] <= valuesV[2]) idV = 1;
+	float4 medianValue = g_BlurGroupData[(filterFrom.x + idsU[idV] - groupFrom.x) + (filterFrom.y + idV - groupFrom.y) * groupSize.x];
+	bluredResult = medianValue;
 	#endif
 
 	g_BlurTarget[bufferPos.xy] = bluredResult;

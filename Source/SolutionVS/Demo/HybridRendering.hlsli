@@ -45,14 +45,16 @@ static const uint InstanceStride = 64;
 struct MeshVertexInput
 {
 	float3 Pos		: POSITION;
-	float3 Norm		: NORMAL;
+	float3 Normal	: NORMAL;
+	float3 Tangent	: TANGENT;
 	float2 TexCoord	: TEXCOORD;
 };
 
 struct MeshPixelInput
 {
 	float4 Pos		: SV_POSITION;
-	float3 Norm		: NORMAL;
+	float3 Normal	: NORMAL;
+	float3 Tangent	: TANGENT;
 	float2 TexCoord	: TEXCOORD;
 };
 
