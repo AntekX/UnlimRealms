@@ -499,24 +499,26 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 	// TEMP: test fireflies suppression with median 3x3 filter right here
 	float valuesU[3];
 	float valuesV[3];
-	int idsU[3];
-	int2 filterFrom = clamp(bufferPos.xy - 1, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
-	int2 filterTo = clamp(bufferPos.xy + 1, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+	int idU[3];
+	const int filterOfs[3] = {-1, 0, 1};
 	for (iy = 0; iy < 3; ++iy)
 	{
 		for (int ix = 0; ix < 3; ++ix)
 		{
-			int groupDataOfs = (filterFrom.x + ix - groupFrom.x) + (filterFrom.y + iy - groupFrom.y) * groupSize.x;
+			int2 filterPos = clamp(bufferPos.xy + int2(filterOfs[ix], filterOfs[iy]), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+			int groupDataOfs = (filterPos.x - groupFrom.x) + (filterPos.y - groupFrom.y) * groupSize.x;
 			valuesU[ix] = dot(g_BlurGroupData[groupDataOfs].xyz, 1.0);
 		}
-		idsU[iy] = 2;
-		if (valuesU[0] >= valuesU[1] && valuesU[0] <= valuesU[2]) idsU[iy] = 0;
-		else if (valuesU[1] >= valuesU[0] && valuesU[1] <= valuesU[2]) idsU[iy] = 1;
+		idU[iy] = 0;
+		if (valuesU[1] >= valuesU[0] && valuesU[1] <= valuesU[2]) idU[iy] = 1;
+		else if (valuesU[2] >= valuesU[0] && valuesU[2] <= valuesU[1]) idU[iy] = 2;
+		valuesV[iy] = valuesU[idU[iy]];
 	}
-	int idV = 2;
-	if (valuesV[0] >= valuesV[1] && valuesV[0] <= valuesV[2]) idV = 0;
-	else if (valuesV[1] >= valuesV[0] && valuesV[1] <= valuesV[2]) idV = 1;
-	float4 medianValue = g_BlurGroupData[(filterFrom.x + idsU[idV] - groupFrom.x) + (filterFrom.y + idV - groupFrom.y) * groupSize.x];
+	int idV = 0;
+	if (valuesV[1] >= valuesV[0] && valuesV[1] <= valuesV[2]) idV = 1;
+	else if (valuesV[2] >= valuesV[0] && valuesV[2] <= valuesV[1]) idV = 2;
+	int2 medianValuePos = clamp(bufferPos.xy + int2(filterOfs[idU[idV]], filterOfs[idV]), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));;
+	float4 medianValue = g_BlurGroupData[(medianValuePos.x - groupFrom.x) + (medianValuePos.y - groupFrom.y) * groupSize.x];
 	bluredResult = medianValue;
 	#endif
 
