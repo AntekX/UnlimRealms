@@ -381,6 +381,20 @@ groupshared float3 g_BlurGroupNormal[g_BlurGroupSizeWithBorders * g_BlurGroupSiz
 #define BLUR_PREFETCH_GBDATA 1 // additional -20% time (-50% total)
 #define BLUR_COMPUTE_VARIANCE 0
 
+void swap(inout float a, inout float b)
+{
+	float c = a;
+	a = b;
+	b = c;
+}
+
+void swap(inout float4 a, inout float4 b)
+{
+	float4 c = a;
+	a = b;
+	b = c;
+}
+
 [shader("compute")]
 [numthreads(g_BlurGroupSize, g_BlurGroupSize, 1)]
 void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, const uint3 groupId : SV_GroupID, const uint3 groupThreadId : SV_GroupThreadID, const uint groupThreadIdx : SV_GroupIndex)
@@ -495,30 +509,36 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 	bluredResult[3] = varianceMax; // TEMP: used as debug output
 	#endif
 
-	#if (0) && (BLUR_PREFETCH)
-	// TEMP: test fireflies suppression with median 3x3 filter right here
-	float valuesU[3];
-	float valuesV[3];
-	int idU[3];
-	const int filterOfs[3] = {-1, 0, 1};
+	#if (0)
+	const int filterOfs[3] = { -1, 0, 1 };
+	float4 values[9];
+	float valuesLum[9];
 	for (iy = 0; iy < 3; ++iy)
 	{
 		for (int ix = 0; ix < 3; ++ix)
 		{
 			int2 filterPos = clamp(bufferPos.xy + int2(filterOfs[ix], filterOfs[iy]), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 			int groupDataOfs = (filterPos.x - groupFrom.x) + (filterPos.y - groupFrom.y) * groupSize.x;
-			valuesU[ix] = dot(g_BlurGroupData[groupDataOfs].xyz, 1.0);
+			values[ix + iy * 3] = g_BlurGroupData[groupDataOfs];
+			valuesLum[ix + iy * 3] = ComputeLuminance(values[ix + iy * 3].xyz);
 		}
-		idU[iy] = 0;
-		if (valuesU[1] >= valuesU[0] && valuesU[1] <= valuesU[2]) idU[iy] = 1;
-		else if (valuesU[2] >= valuesU[0] && valuesU[2] <= valuesU[1]) idU[iy] = 2;
-		valuesV[iy] = valuesU[idU[iy]];
 	}
-	int idV = 0;
-	if (valuesV[1] >= valuesV[0] && valuesV[1] <= valuesV[2]) idV = 1;
-	else if (valuesV[2] >= valuesV[0] && valuesV[2] <= valuesV[1]) idV = 2;
-	int2 medianValuePos = clamp(bufferPos.xy + int2(filterOfs[idU[idV]], filterOfs[idV]), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));;
-	float4 medianValue = g_BlurGroupData[(medianValuePos.x - groupFrom.x) + (medianValuePos.y - groupFrom.y) * groupSize.x];
+	float t;
+	for (int i = 0; i < 9; ++i)
+	{
+		for (int j = i + 1; j < 9; ++j)
+		{
+			#if (1)
+			if (values[i].x > values[j].x) swap(values[i].x, values[j].x);
+			if (values[i].y > values[j].y) swap(values[i].y, values[j].y);
+			if (values[i].z > values[j].z) swap(values[i].z, values[j].z);
+			if (values[i].w > values[j].w) swap(values[i].w, values[j].w);
+			#else
+			if (valuesLum[i] > valuesLum[j]) swap(values[i], values[j]);
+			#endif
+		}
+	}
+	float4 medianValue = values[4];
 	bluredResult = medianValue;
 	#endif
 
