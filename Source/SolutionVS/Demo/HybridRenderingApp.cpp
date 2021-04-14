@@ -1852,10 +1852,10 @@ int HybridRenderingApp::Run()
 	sphericalLight1.Color = { 1.0f, 1.0f, 1.0f };
 	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 	sphericalLight1.Position = { 10.0f, 10.0f, 10.0f };
-	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
+	sphericalLight1.Intensity = SolarIlluminanceNoon * powf(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
 	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 	sphericalLight1.Position = { 2.0f, 2.0f, 2.0f };
-	sphericalLight1.Intensity = SolarIlluminanceNoon * pow(sphericalLight1.Position.y, 2) * 1;
+	sphericalLight1.Intensity = SolarIlluminanceNoon * powf(sphericalLight1.Position.y, 2) * 1;
 	#endif
 	sphericalLight1.Size = 0.5f;
 	LightingDesc lightingDesc = {};

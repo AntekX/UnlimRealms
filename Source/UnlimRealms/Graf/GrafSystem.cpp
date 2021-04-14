@@ -1213,7 +1213,7 @@ namespace UnlimRealms
 		for (auto& shape : shapes)
 		{
 			//shape.name. += shape.mesh.indices.size();
-			std::transform(shape.name.begin(), shape.name.end(), shape.name.begin(), std::tolower);
+			std::transform(shape.name.begin(), shape.name.end(), shape.name.begin(), [](unsigned char c) -> unsigned char { return std::tolower(c); });
 			ur_size lodSpos = shape.name.rfind("lod");
 			if (lodSpos != std::string::npos)
 			{

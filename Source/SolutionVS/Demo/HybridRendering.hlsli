@@ -185,7 +185,7 @@ MaterialInputs GetMaterial(const SceneConstants sceneCB, const GBufferData gbDat
 LightingParams GetMaterialLightingParams(const SceneConstants sceneCB, const GBufferData gbData, const float3 worldPos)
 {
 	MaterialInputs material = GetMaterial(sceneCB, gbData);
-	LightingParams lightingParams;
+	LightingParams lightingParams = (LightingParams)0;
 	getLightingParams(worldPos, sceneCB.CameraPos.xyz, material, lightingParams);
 	return lightingParams;
 }

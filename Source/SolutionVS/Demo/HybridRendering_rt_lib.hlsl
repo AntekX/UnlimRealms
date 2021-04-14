@@ -34,7 +34,11 @@ float3 GetDiskSampleDirection(uint sampleId, uint sampleCount)
 
 float3 GetHemisphereSampleDirection(uint sampleId, uint sampleCount)
 {
+	#if (1)
 	float2 p2d = Hammersley(sampleId % sampleCount + 1, sampleCount + 1);
+	#else
+	float2 p2d = Halton(sampleId % sampleCount);
+	#endif
 	float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
 	return dir.xyz;
 }
@@ -279,7 +283,7 @@ void RayGenDirect()
 			RayDesc ray;
 			ray.Origin = worldPos + gbData.Normal * distBasedEps;
 			ray.TMax = worldDist * g_SceneCB.DebugVec1[0];// 20.0;
-			ray.TMin = ray.TMax * 1.0e-4;
+			ray.TMin = 1.0e-3;// ray.TMax * 1.0e-4;
 
 			float3x3 surfaceTBN = ComputeSamplingBasis(gbData.Normal);
 			float ambientOcclusion = 0.0;

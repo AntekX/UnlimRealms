@@ -562,7 +562,7 @@ void SampleClosestHit(inout SampleRayData rayData, in SampleHitAttributes attrib
 
 	// pre-calculate lighting paramns for given material and ray
 
-	LightingParams lightingParams;
+	LightingParams lightingParams = (LightingParams)0;
 	getLightingParams(hitWorldPos, WorldRayOrigin(), material, lightingParams);
 
 	// calculate direct light
