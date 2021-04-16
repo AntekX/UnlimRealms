@@ -2,7 +2,6 @@
 #define HYBRID_RENDERING_COMMON_HLSLI
 
 #include "ShaderLib/CommonTypes.hlsli"
-#include "Atmosphere/AtmosphereCommon.hlsli"
 
 struct SceneConstants
 {

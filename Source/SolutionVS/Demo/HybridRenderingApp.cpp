@@ -412,39 +412,6 @@ int HybridRenderingApp::Run()
 	{
 	public:
 
-		/*struct SceneConstants
-		{
-			ur_float4x4 View;
-			ur_float4x4 Proj;
-			ur_float4x4 ViewProj;
-			ur_float4x4 ViewProjInv;
-			ur_float4x4 ViewPrev;
-			ur_float4x4 ProjPrev;
-			ur_float4x4 ViewProjPrev;
-			ur_float4x4 ViewProjInvPrev;
-			ur_float4 CameraPos;
-			ur_float4 CameraDir;
-			ur_float4 TargetSize;
-			ur_float4 LightBufferSize;
-			ur_float4 PrecomputedSkySize;
-			ur_float4 DebugVec0;
-			ur_float4 DebugVec1;
-			ur_float2 LightBufferDownscale;
-			ur_float DirectLightFactor;
-			ur_float IndirectLightFactor;
-			ur_uint FrameNumber;
-			ur_uint ShadowSamplesPerLight;
-			ur_uint ShadowAccumulationFrames;
-			ur_uint IndirectSamplesPerFrame;
-			ur_uint IndirectAccumulationFrames;
-			ur_uint PerFrameJitter;
-			ur_uint OverrideMaterial;
-			ur_uint __pad1;
-			LightingDesc Lighting;
-			Atmosphere::Desc Atmosphere;
-			MeshMaterialDesc Material;
-		};*/
-
 		typedef GrafAccelerationStructureInstance Instance; // HW ray tracing compatible instance structure
 
 		enum MeshId
