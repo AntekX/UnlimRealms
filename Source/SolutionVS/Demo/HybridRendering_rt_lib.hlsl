@@ -1,23 +1,6 @@
 
 #include "HybridRendering.hlsli"
 
-// common bindings
-
-ConstantBuffer<SceneConstants>	g_SceneCB				: register(b0);
-sampler							g_SamplerTrilinearWrap	: register(s0);
-Texture2D<float>				g_GeometryDepth			: register(t0);
-Texture2D<float4>				g_GeometryImage0		: register(t1);
-Texture2D<float4>				g_GeometryImage1		: register(t2);
-Texture2D<float4>				g_GeometryImage2		: register(t3);
-Texture2D<float>				g_DepthHistory			: register(t4);
-Texture2D<float4>				g_ShadowHistory			: register(t5);
-Texture2D<uint4>				g_TracingHistory		: register(t6);
-Texture2D<float4>				g_PrecomputedSky		: register(t7);
-RaytracingAccelerationStructure	g_SceneStructure		: register(t8);
-RWTexture2D<float4>				g_ShadowTarget			: register(u0);
-RWTexture2D<uint4>				g_TracingInfoTarget		: register(u1);
-RWTexture2D<float4>				g_IndirectLightTarget	: register(u2);
-
 // common functions
 
 float3 GetDiskSampleDirection(uint sampleId, uint sampleCount)

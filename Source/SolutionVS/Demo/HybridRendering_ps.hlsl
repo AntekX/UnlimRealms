@@ -1,11 +1,6 @@
 
 #include "HybridRendering.hlsli"
 
-sampler				g_SamplerTrilinearWrap	: register(s0);
-Texture2D<float4>	g_ColorTexture			: register(t1);
-Texture2D<float4>	g_NormalTexture			: register(t2);
-Texture2D<float4>	g_MaskTexture			: register(t3);
-
 MeshPixelOutput main(MeshPixelInput input)
 {
 	MeshPixelOutput output;

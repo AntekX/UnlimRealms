@@ -829,10 +829,12 @@ int HybridRenderingApp::Run()
 			// rasterization descriptor table
 
 			GrafDescriptorRangeDesc rasterDescTableLayoutRanges[] = {
-				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-				{ GrafDescriptorType::Buffer, 0, 1 },
-				{ GrafDescriptorType::Sampler, 0, 1 },
-				{ GrafDescriptorType::Texture, 1, 3 },
+				g_SceneCBDescriptorRange,
+				g_InstanceBufferDescriptorRange,
+				g_SamplerTrilinearWrapDescriptorRange,
+				g_ColorTextureDescriptorRange,
+				g_NormalTextureDescriptorRange,
+				g_MaskTextureDescriptorRange,
 			};
 			GrafDescriptorTableLayoutDesc rasterDescTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::Vertex) |
@@ -896,8 +898,8 @@ int HybridRenderingApp::Run()
 			// sky precompute descriptor table
 
 			GrafDescriptorRangeDesc skyPrecomputeDescTableLayoutRanges[] = {
-				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-				{ GrafDescriptorType::RWTexture, 7, 1 },
+				g_SceneCBDescriptorRange,
+				g_PrecomputedSkyTargetDescriptorRange,
 			};
 			GrafDescriptorTableLayoutDesc skyPrecomputeDescTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::Compute),
@@ -929,11 +931,19 @@ int HybridRenderingApp::Run()
 			// lighting descriptor table
 
 			GrafDescriptorRangeDesc lightingDescTableLayoutRanges[] = {
-				{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-				{ GrafDescriptorType::Sampler, 0, 3 },
-				{ GrafDescriptorType::Texture, 0, 6 },
-				{ GrafDescriptorType::Texture, 10, 2 },
-				{ GrafDescriptorType::RWTexture, 0, 1 },
+				g_SceneCBDescriptorRange,
+				g_SamplerBilinearDescriptorRange,
+				g_SamplerTrilinearDescriptorRange,
+				g_SamplerTrilinearWrapDescriptorRange,
+				g_GeometryDepthDescriptorRange,
+				g_GeometryImage0DescriptorRange,
+				g_GeometryImage1DescriptorRange,
+				g_GeometryImage2DescriptorRange,
+				g_ShadowResultDescriptorRange,
+				g_TracingInfoDescriptorRange,
+				g_PrecomputedSkyDescriptorRange,
+				g_IndirectLightDescriptorRange,
+				g_LightingTargetDescriptorRange,
 			};
 			GrafDescriptorTableLayoutDesc lightingDescTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::Compute),
@@ -982,11 +992,20 @@ int HybridRenderingApp::Run()
 				// ray tracing descriptor table
 
 				GrafDescriptorRangeDesc raytraceDescTableLayoutRanges[] = {
-					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-					{ GrafDescriptorType::Sampler, 0, 1 },
-					{ GrafDescriptorType::Texture, 0, 8 },
-					{ GrafDescriptorType::AccelerationStructure, 8, 1},
-					{ GrafDescriptorType::RWTexture, 0, 3 },
+					g_SceneCBDescriptorRange,
+					g_SamplerTrilinearWrapDescriptorRange,
+					g_GeometryDepthDescriptorRange,
+					g_GeometryImage0DescriptorRange,
+					g_GeometryImage1DescriptorRange,
+					g_GeometryImage2DescriptorRange,
+					g_DepthHistoryDescriptorRange,
+					g_ShadowHistoryDescriptorRange,
+					g_TracingHistoryDescriptorRange,
+					g_PrecomputedSkyDescriptorRange,
+					g_SceneStructureDescriptorRange,
+					g_ShadowTargetDescriptorRange,
+					g_TracingInfoTargetDescriptorRange,
+					g_IndirectLightTargetDescriptorRange,
 				};
 				GrafDescriptorTableLayoutDesc raytraceDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::AllRayTracing),
@@ -1056,9 +1075,12 @@ int HybridRenderingApp::Run()
 				// ray tracing result mips generation pipeline
 
 				GrafDescriptorRangeDesc shadowMipsDescTableLayoutRanges[] = {
-					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-					{ GrafDescriptorType::Texture, 4, 1 },
-					{ GrafDescriptorType::RWTexture, 1, 4 },
+					g_SceneCBDescriptorRange,
+					g_ShadowResultDescriptorRange,
+					g_ShadowMip1DescriptorRange,
+					g_ShadowMip2DescriptorRange,
+					g_ShadowMip3DescriptorRange,
+					g_ShadowMip4DescriptorRange,
 				};
 				GrafDescriptorTableLayoutDesc shadowMipsDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::Compute),
@@ -1088,10 +1110,13 @@ int HybridRenderingApp::Run()
 				// ray tracing result blur filter
 
 				GrafDescriptorRangeDesc blurDescTableLayoutRanges[] = {
-					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-					{ GrafDescriptorType::Texture, 0, 4 },
-					{ GrafDescriptorType::Texture, 13, 1 },
-					{ GrafDescriptorType::RWTexture, 9, 1 },
+					g_SceneCBDescriptorRange,
+					g_GeometryDepthDescriptorRange,
+					g_GeometryImage0DescriptorRange,
+					g_GeometryImage1DescriptorRange,
+					g_GeometryImage2DescriptorRange,
+					g_BlurSourceDescriptorRange,
+					g_BlurTargetDescriptorRange,
 				};
 				GrafDescriptorTableLayoutDesc blurDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::Compute),
@@ -1121,13 +1146,21 @@ int HybridRenderingApp::Run()
 				// ray tracing result temporal accumulation filter
 
 				GrafDescriptorRangeDesc accumulationDescTableLayoutRanges[] = {
-					{ GrafDescriptorType::ConstantBuffer, 0, 1 },
-					{ GrafDescriptorType::Sampler, 0, 2 },
-					{ GrafDescriptorType::Texture, 0, 4 },
-					{ GrafDescriptorType::Texture, 6, 4 },
-					{ GrafDescriptorType::Texture, 12, 1 },
-					{ GrafDescriptorType::RWTexture, 5, 2 },
-					{ GrafDescriptorType::RWTexture, 8, 1 },
+					g_SceneCBDescriptorRange,
+					g_SamplerBilinearDescriptorRange,
+					g_SamplerTrilinearDescriptorRange,
+					g_GeometryDepthDescriptorRange,
+					g_GeometryImage0DescriptorRange,
+					g_GeometryImage1DescriptorRange,
+					g_GeometryImage2DescriptorRange,
+					g_DepthHistoryDescriptorRange,
+					g_ShadowHistoryDescriptorRange,
+					g_TracingHistoryDescriptorRange,
+					g_ShadowMipsDescriptorRange,
+					g_IndirectLightHistoryDescriptorRange,
+					g_ShadowTargetDescriptorRange,
+					g_TracingInfoTargetDescriptorRange,
+					g_IndirectLightTargetDescriptorRange,
 				};
 				GrafDescriptorTableLayoutDesc accumulationDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::Compute),
@@ -1449,12 +1482,12 @@ int HybridRenderingApp::Run()
 					GrafImage* normalImage = (subMesh.normalImage.get() ? subMesh.normalImage.get() : this->defaultImageNormal.get());
 					GrafImage* maskImage = (subMesh.maskImage.get() ? subMesh.maskImage.get() : this->defaultImageWhite.get());
 					GrafDescriptorTable* descriptorTable = subMesh.descTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
-					descriptorTable->SetConstantBuffer(0, dynamicCB, this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-					descriptorTable->SetBuffer(0, this->instanceBuffer.get());
-					descriptorTable->SetSampler(0, this->samplerTrilinearWrap.get());
-					descriptorTable->SetImage(1, colorImage);
-					descriptorTable->SetImage(2, normalImage);
-					descriptorTable->SetImage(3, maskImage);
+					descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, dynamicCB, this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+					descriptorTable->SetBuffer(g_InstanceBufferDescriptor, this->instanceBuffer.get());
+					descriptorTable->SetSampler(g_SamplerTrilinearWrapDescriptor, this->samplerTrilinearWrap.get());
+					descriptorTable->SetImage(g_ColorTextureDescriptor, colorImage);
+					descriptorTable->SetImage(g_NormalTextureDescriptor, normalImage);
+					descriptorTable->SetImage(g_MaskTextureDescriptor, maskImage);
 
 					// draw
 					grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
@@ -1498,8 +1531,8 @@ int HybridRenderingApp::Run()
 			// common constant buffer is expected to be uploaded during rasterization pass
 
 			GrafDescriptorTable* descriptorTable = this->skyPrecomputeDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
-			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-			descriptorTable->SetRWImage(7, this->skyImage.get());
+			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			descriptorTable->SetRWImage(g_PrecomputedSkyTargetDescriptor, this->skyImage.get());
 
 			// compute
 
@@ -1517,20 +1550,20 @@ int HybridRenderingApp::Run()
 			// common constant buffer is expected to be uploaded during rasterization pass
 
 			GrafDescriptorTable* descriptorTable = this->raytraceDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
-			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-			descriptorTable->SetSampler(0, this->samplerTrilinearWrap.get());
-			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
-			{
-				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
-			}
-			descriptorTable->SetImage(4, renderTargetSet->images[RenderTargetImageUsage_DepthHistory]);
-			descriptorTable->SetImage(5, lightingBufferSet->images[LightingImageUsage_DirectShadowHistory].get());
-			descriptorTable->SetImage(6, lightingBufferSet->images[LightingImageUsage_TracingInfoHistory].get());
-			descriptorTable->SetImage(7, this->skyImage.get());
-			descriptorTable->SetAccelerationStructure(8, this->accelerationStructureTL.get());
-			descriptorTable->SetRWImage(0, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
-			descriptorTable->SetRWImage(1, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
-			descriptorTable->SetRWImage(2, lightingBufferSet->images[LightingImageUsage_IndirectLight].get());
+			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			descriptorTable->SetSampler(g_SamplerTrilinearWrapDescriptor, this->samplerTrilinearWrap.get());
+			descriptorTable->SetImage(g_GeometryDepthDescriptor, renderTargetSet->images[RenderTargetImageUsage_Depth]);
+			descriptorTable->SetImage(g_GeometryImage0Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry0]);
+			descriptorTable->SetImage(g_GeometryImage1Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry1]);
+			descriptorTable->SetImage(g_GeometryImage2Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry2]);
+			descriptorTable->SetImage(g_DepthHistoryDescriptor, renderTargetSet->images[RenderTargetImageUsage_DepthHistory]);
+			descriptorTable->SetImage(g_ShadowHistoryDescriptor, lightingBufferSet->images[LightingImageUsage_DirectShadowHistory].get());
+			descriptorTable->SetImage(g_TracingHistoryDescriptor, lightingBufferSet->images[LightingImageUsage_TracingInfoHistory].get());
+			descriptorTable->SetImage(g_PrecomputedSkyDescriptor, this->skyImage.get());
+			descriptorTable->SetAccelerationStructure(g_SceneStructureDescriptor, this->accelerationStructureTL.get());
+			descriptorTable->SetRWImage(g_ShadowTargetDescriptor, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
+			descriptorTable->SetRWImage(g_TracingInfoTargetDescriptor, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
+			descriptorTable->SetRWImage(g_IndirectLightTargetDescriptor, lightingBufferSet->images[LightingImageUsage_IndirectLight].get());
 
 			// trace rays
 
@@ -1550,12 +1583,12 @@ int HybridRenderingApp::Run()
 			// common constant buffer is expected to be uploaded during rasterization pass
 
 			GrafDescriptorTable* descriptorTable = this->shadowMipsDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
-			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-			descriptorTable->SetImage(4, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get());
-			for (ur_uint mipId = 1; mipId < mipCount; ++mipId)
-			{
-				descriptorTable->SetRWImage(mipId, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][std::min(mipId, lastMipId)].get());
-			}
+			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			descriptorTable->SetImage(g_ShadowResultDescriptor, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get());
+			descriptorTable->SetRWImage(g_ShadowMip1Descriptor, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][std::min(1u, lastMipId)].get());
+			descriptorTable->SetRWImage(g_ShadowMip2Descriptor, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][std::min(2u, lastMipId)].get());
+			descriptorTable->SetRWImage(g_ShadowMip3Descriptor, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][std::min(3u, lastMipId)].get());
+			descriptorTable->SetRWImage(g_ShadowMip4Descriptor, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][std::min(4u, lastMipId)].get());
 
 			// compute
 
@@ -1587,13 +1620,13 @@ int HybridRenderingApp::Run()
 
 				this->blurDescTableIdx = (this->blurDescTableIdx + 1) % ur_uint(this->blurDescTables.size());
 				GrafDescriptorTable* descriptorTable = this->blurDescTables[this->blurDescTableIdx].get();
-				descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
-				{
-					descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
-				}
-				descriptorTable->SetImage(13, workImages[srcImageId]);
-				descriptorTable->SetRWImage(9, workImages[dstImageId]);
+				descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+				descriptorTable->SetImage(g_GeometryDepthDescriptor, renderTargetSet->images[RenderTargetImageUsage_Depth]);
+				descriptorTable->SetImage(g_GeometryImage0Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry0]);
+				descriptorTable->SetImage(g_GeometryImage1Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry1]);
+				descriptorTable->SetImage(g_GeometryImage2Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry2]);
+				descriptorTable->SetImage(g_BlurSourceDescriptor, workImages[srcImageId]);
+				descriptorTable->SetRWImage(g_BlurTargetDescriptor, workImages[dstImageId]);
 
 				// compute
 
@@ -1616,21 +1649,21 @@ int HybridRenderingApp::Run()
 			// common constant buffer is expected to be uploaded during rasterization pass
 
 			GrafDescriptorTable* descriptorTable = this->accumulationDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
-			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-			descriptorTable->SetSampler(0, this->samplerBilinear.get());
-			descriptorTable->SetSampler(1, this->samplerTrilinear.get());
-			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
-			{
-				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
-			}
-			descriptorTable->SetImage(6, renderTargetSet->images[RenderTargetImageUsage_DepthHistory]);
-			descriptorTable->SetImage(7, lightingBufferSet->images[LightingImageUsage_DirectShadowHistory].get());
-			descriptorTable->SetImage(8, lightingBufferSet->images[LightingImageUsage_TracingInfoHistory].get());
-			descriptorTable->SetImage(9, lightingBufferSet->mipsSubresource[LightingImageUsage_DirectShadow].get());
-			descriptorTable->SetImage(12, lightingBufferSet->images[LightingImageUsage_IndirectLightHistory].get());
-			descriptorTable->SetRWImage(5, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get());
-			descriptorTable->SetRWImage(6, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
-			descriptorTable->SetRWImage(8, lightingBufferSet->images[LightingImageUsage_IndirectLight].get());
+			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			descriptorTable->SetSampler(g_SamplerBilinearDescriptor, this->samplerBilinear.get());
+			descriptorTable->SetSampler(g_SamplerTrilinearDescriptor, this->samplerTrilinear.get());
+			descriptorTable->SetImage(g_GeometryDepthDescriptor, renderTargetSet->images[RenderTargetImageUsage_Depth]);
+			descriptorTable->SetImage(g_GeometryImage0Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry0]);
+			descriptorTable->SetImage(g_GeometryImage1Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry1]);
+			descriptorTable->SetImage(g_GeometryImage2Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry2]);
+			descriptorTable->SetImage(g_DepthHistoryDescriptor, renderTargetSet->images[RenderTargetImageUsage_DepthHistory]);
+			descriptorTable->SetImage(g_ShadowHistoryDescriptor, lightingBufferSet->images[LightingImageUsage_DirectShadowHistory].get());
+			descriptorTable->SetImage(g_TracingHistoryDescriptor, lightingBufferSet->images[LightingImageUsage_TracingInfoHistory].get());
+			descriptorTable->SetImage(g_ShadowMipsDescriptor, lightingBufferSet->mipsSubresource[LightingImageUsage_DirectShadow].get());
+			descriptorTable->SetImage(g_IndirectLightHistoryDescriptor, lightingBufferSet->images[LightingImageUsage_IndirectLightHistory].get());
+			descriptorTable->SetRWImage(g_ShadowTargetDescriptor, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get());
+			descriptorTable->SetRWImage(g_TracingInfoTargetDescriptor, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
+			descriptorTable->SetRWImage(g_IndirectLightTargetDescriptor, lightingBufferSet->images[LightingImageUsage_IndirectLight].get());
 			
 			// compute
 
@@ -1686,19 +1719,19 @@ int HybridRenderingApp::Run()
 			// common constant buffer is expected to be uploaded during rasterization pass
 
 			GrafDescriptorTable* descriptorTable = this->lightingDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
-			descriptorTable->SetConstantBuffer(0, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-			descriptorTable->SetSampler(0, this->samplerBilinear.get());
-			descriptorTable->SetSampler(1, this->samplerTrilinear.get());
-			descriptorTable->SetSampler(2, this->samplerTrilinearWrap.get());
-			for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
-			{
-				descriptorTable->SetImage(imageId, renderTargetSet->images[imageId]);
-			}
-			descriptorTable->SetImage(4, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
-			descriptorTable->SetImage(5, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
-			descriptorTable->SetImage(10, this->skyImage.get());
-			descriptorTable->SetImage(11, lightingBufferSet->images[LightingImageUsage_IndirectLight].get());
-			descriptorTable->SetRWImage(0, lightingTarget->GetImage(0));
+			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+			descriptorTable->SetSampler(g_SamplerBilinearDescriptor, this->samplerBilinear.get());
+			descriptorTable->SetSampler(g_SamplerTrilinearDescriptor, this->samplerTrilinear.get());
+			descriptorTable->SetSampler(g_SamplerTrilinearWrapDescriptor, this->samplerTrilinearWrap.get());
+			descriptorTable->SetImage(g_GeometryDepthDescriptor, renderTargetSet->images[RenderTargetImageUsage_Depth]);
+			descriptorTable->SetImage(g_GeometryImage0Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry0]);
+			descriptorTable->SetImage(g_GeometryImage1Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry1]);
+			descriptorTable->SetImage(g_GeometryImage2Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry2]);
+			descriptorTable->SetImage(g_ShadowResultDescriptor, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
+			descriptorTable->SetImage(g_TracingInfoDescriptor, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
+			descriptorTable->SetImage(g_PrecomputedSkyDescriptor, this->skyImage.get());
+			descriptorTable->SetImage(g_IndirectLightDescriptor, lightingBufferSet->images[LightingImageUsage_IndirectLight].get());
+			descriptorTable->SetRWImage(g_LightingTargetDescriptor, lightingTarget->GetImage(0));
 
 			// compute
 

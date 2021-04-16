@@ -1,37 +1,6 @@
 
 #include "HybridRendering.hlsli"
 
-// common bindings
-
-ConstantBuffer<SceneConstants>	g_SceneCB		: register(b0);
-sampler				g_SamplerBilinear			: register(s0);
-sampler				g_SamplerTrilinear			: register(s1);
-sampler				g_SamplerTrilinearWrap		: register(s2);
-Texture2D<float>	g_GeometryDepth				: register(t0);
-Texture2D<float4>	g_GeometryImage0			: register(t1);
-Texture2D<float4>	g_GeometryImage1			: register(t2);
-Texture2D<float4>	g_GeometryImage2			: register(t3);
-Texture2D<float4>	g_ShadowResult				: register(t4);
-Texture2D<uint4>	g_TracingInfo				: register(t5);
-Texture2D<float>	g_DepthHistory				: register(t6);
-Texture2D<float4>	g_ShadowHistory				: register(t7);
-Texture2D<uint4>	g_TracingHistory			: register(t8);
-Texture2D<float4>	g_ShadowMips				: register(t9);
-Texture2D<float4>	g_PrecomputedSky			: register(t10);
-Texture2D<float4>	g_IndirectLight				: register(t11);
-Texture2D<float4>	g_IndirectLightHistory		: register(t12);
-Texture2D<float4>	g_BlurSource				: register(t13);
-RWTexture2D<float4>	g_LightingTarget			: register(u0);
-RWTexture2D<float4>	g_ShadowMip1				: register(u1);
-RWTexture2D<float4>	g_ShadowMip2				: register(u2);
-RWTexture2D<float4>	g_ShadowMip3				: register(u3);
-RWTexture2D<float4>	g_ShadowMip4				: register(u4);
-RWTexture2D<float4>	g_ShadowTarget				: register(u5);
-RWTexture2D<uint4>	g_TracingInfoTarget			: register(u6);
-RWTexture2D<float4>	g_PrecomputedSkyTarget		: register(u7);
-RWTexture2D<float4>	g_IndirectLightTarget		: register(u8);
-RWTexture2D<float4>	g_BlurTarget				: register(u9);
-
 // sky precompute
 
 [shader("compute")]

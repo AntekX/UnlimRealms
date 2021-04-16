@@ -1,9 +1,6 @@
 
 #include "HybridRendering.hlsli"
 
-ConstantBuffer<SceneConstants> g_SceneCB	: register(b0);
-ByteAddressBuffer	g_InstanceBuffer		: register(t0);
-
 MeshPixelInput main(MeshVertexInput input, uint instanceId : SV_InstanceID)
 {
 	MeshPixelInput output;
