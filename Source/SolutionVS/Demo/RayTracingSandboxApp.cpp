@@ -232,7 +232,7 @@ int RayTracingSandboxApp::Run()
 
 	// atmosphere params
 	// temp: super low Mie & G to fake sun disc
-	Atmosphere::Desc atmosphereDesc = {
+	AtmosphereDesc atmosphereDesc = {
 		6371.0e+3f,
 		6381.0e+3f,
 		0.250f,
@@ -936,13 +936,13 @@ int RayTracingSandboxApp::Run()
 		}
 
 		void RenderAO(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4 &clearColor, Camera& camera,
-			const LightingDesc& lightingDesc, const Atmosphere::Desc& atmosphereDesc)
+			const LightingDesc& lightingDesc, const AtmosphereDesc& atmosphereDesc)
 		{
 
 		}
 
 		void Render(GrafCommandList* grafCmdList, GrafImage* grafTargetImage, const ur_float4 &clearColor, Camera& camera,
-			const LightingDesc& lightingDesc, const Atmosphere::Desc& atmosphereDesc)
+			const LightingDesc& lightingDesc, const AtmosphereDesc& atmosphereDesc)
 		{
 			if (ur_null == this->grafRenderer)
 				return;
@@ -972,7 +972,7 @@ int RayTracingSandboxApp::Run()
 				ur_uint accumulationFrameNumber;
 				ur_uint __pad0[2];
 				ur_float4 debugVec0;
-				Atmosphere::Desc atmoDesc;
+				AtmosphereDesc atmoDesc;
 				LightingDesc lightingDesc;
 			} cb;
 			ur_uint3 targetSize = grafTargetImage->GetDesc().Size;

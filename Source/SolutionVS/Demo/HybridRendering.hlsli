@@ -5,39 +5,7 @@
 #include "Lighting.hlsli"
 #include "HDRRender/HDRRender.hlsli"
 #include "Atmosphere/AtmosphericScattering.hlsli"
-
-struct SceneConstants
-{
-	float4x4 View;
-	float4x4 Proj;
-	float4x4 ViewProj;
-	float4x4 ViewProjInv;
-	float4x4 ViewPrev;
-	float4x4 ProjPrev;
-	float4x4 ViewProjPrev;
-	float4x4 ViewProjInvPrev;
-	float4 CameraPos;
-	float4 CameraDir;
-	float4 TargetSize; // w, h, 1/w, 1/h
-	float4 LightBufferSize; // w, h, 1/w, 1/h
-	float4 PrecomputedSkySize;
-	float4 DebugVec0;
-	float4 DebugVec1;
-	float2 LightBufferDownscale; // d, 1/d
-	float DirectLightFactor;
-	float IndirectLightFactor;
-	uint FrameNumber;
-	uint ShadowSamplesPerLight;
-	uint ShadowAccumulationFrames;
-	uint IndirectSamplesPerFrame;
-	uint IndirectAccumulationFrames;
-	uint PerFrameJitter;
-	uint OverrideMaterial;
-	uint __pad1;
-	LightingDesc Lighting;
-	AtmosphereDesc Atmosphere;
-	MeshMaterialDesc Material;
-};
+#include "HybridRenderingCommon.hlsli"
 
 // Instance format must be up to date with GrafAccelerationStructureInstance
 static const uint InstanceStride = 64;

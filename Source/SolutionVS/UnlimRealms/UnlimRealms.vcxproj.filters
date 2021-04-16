@@ -336,6 +336,9 @@
     <ClInclude Include="..\..\UnlimRealms\Graf\DX12\GrafSystemDX12.inline.h">
       <Filter>Graf\DX12</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\Atmosphere\AtmosphereCommon.h">
+      <Filter>Atmosphere</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -877,6 +880,9 @@
     </None>
     <None Include="..\..\UnlimRealms\ShaderLib\Lighting.hlsli">
       <Filter>ShaderLib</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\Atmosphere\AtmosphereCommon.hlsli">
+      <Filter>Atmosphere</Filter>
     </None>
   </ItemGroup>
 </Project>

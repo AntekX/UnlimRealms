@@ -12,19 +12,7 @@
 
 #include "Math.hlsli"
 #include "LightingCommon.hlsli"
-
-// Configurable parameters
-struct AtmosphereDesc
-{
-	float InnerRadius;
-	float OuterRadius;
-	float ScaleDepth;
-	float G;
-	float Km;
-	float Kr;
-	float D;
-	float __padding;
-};
+#include "AtmosphereCommon.hlsli"
 
 // scattering constants
 static const float3 LightWaveLength = float3(0.650, 0.570, 0.475);

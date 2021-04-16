@@ -2308,7 +2308,7 @@ namespace UnlimRealms
 			CommonCB cbData;
 			cbData.ViewProj = viewProj;
 			cbData.CameraPos = cameraPos;
-			cbData.AtmoParams = (atmosphere != ur_null ? atmosphere->GetDesc() : Atmosphere::Desc::Invisible);
+			cbData.AtmoParams = (atmosphere != ur_null ? atmosphere->GetDesc() : Atmosphere::DescInvisible);
 			cbData.LightParams = (light != ur_null ? *light : LightDescDefault);
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 			Allocation dynamicCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(CommonCB));

@@ -11,6 +11,7 @@
 #include "Gfx/GfxSystem.h"
 #include "GenericRender/GenericRender.h"
 #include "ShaderLib/LightingCommon.h"
+#include "AtmosphereCommon.h"
 
 namespace UnlimRealms
 {
@@ -22,18 +23,8 @@ namespace UnlimRealms
 	{
 	public:
 
-		struct UR_DECL alignas(16) Desc
-		{
-			ur_float InnerRadius;
-			ur_float OuterRadius;
-			ur_float ScaleDepth;
-			ur_float G;
-			ur_float Km;
-			ur_float Kr;
-			ur_float D;
-			static const Desc Default;
-			static const Desc Invisible;
-		};
+		static const AtmosphereDesc DescDefault;
+		static const AtmosphereDesc DescInvisible;
 
 		struct UR_DECL alignas(16) LightShaftsDesc
 		{
@@ -49,14 +40,14 @@ namespace UnlimRealms
 
 		virtual ~Atmosphere();
 
-		Result Init(const Desc &desc);
+		Result Init(const AtmosphereDesc&desc);
 
 		Result Render(GfxContext &gfxContext, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light);
 
 		Result RenderPostEffects(GfxContext &gfxContext, GfxRenderTarget &renderTarget,
 			const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light);
 
-		Result Init(const Desc& desc, GrafRenderPass* grafRenderPass);
+		Result Init(const AtmosphereDesc& desc, GrafRenderPass* grafRenderPass);
 
 		Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light);
 
@@ -65,7 +56,7 @@ namespace UnlimRealms
 
 		void ShowImgui();
 
-		inline const Desc& GetDesc() const { return this->desc; }
+		inline const AtmosphereDesc& GetDesc() const { return this->desc; }
 
 	protected:
 
@@ -137,7 +128,7 @@ namespace UnlimRealms
 		{
 			ur_float4x4 ViewProj;
 			ur_float4 CameraPos;
-			Desc Params;
+			AtmosphereDesc Params;
 			LightDesc Light;
 		};
 
@@ -152,7 +143,7 @@ namespace UnlimRealms
 
 		typedef ur_uint16 Index;
 
-		Desc desc;
+		AtmosphereDesc desc;
 		LightShaftsDesc lightShafts;
 	};
 

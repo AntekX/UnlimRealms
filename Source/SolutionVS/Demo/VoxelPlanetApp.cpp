@@ -264,7 +264,7 @@ int VoxelPlanetApp::Run()
 	// demo atmosphere
 	std::unique_ptr<Atmosphere> atmosphere(new Atmosphere(realm));
 	{
-		Atmosphere::Desc desc = Atmosphere::Desc::Default;
+		AtmosphereDesc desc = Atmosphere::DescDefault;
 		desc.InnerRadius = lerp(surfaceRadiusMin, surfaceRadiusMax, 0.75f);
 		desc.OuterRadius = surfaceRadiusMin * 1.2f;
 		desc.Kr = 0.00005f;

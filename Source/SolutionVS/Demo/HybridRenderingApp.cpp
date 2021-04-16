@@ -16,6 +16,7 @@
 #include "Camera/CameraControl.h"
 #include "HDRRender/HDRRender.h"
 #include "Atmosphere/Atmosphere.h"
+#include "HybridRenderingCommon.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
@@ -411,7 +412,7 @@ int HybridRenderingApp::Run()
 	{
 	public:
 
-		struct SceneConstants
+		/*struct SceneConstants
 		{
 			ur_float4x4 View;
 			ur_float4x4 Proj;
@@ -442,7 +443,7 @@ int HybridRenderingApp::Run()
 			LightingDesc Lighting;
 			Atmosphere::Desc Atmosphere;
 			MeshMaterialDesc Material;
-		};
+		};*/
 
 		typedef GrafAccelerationStructureInstance Instance; // HW ray tracing compatible instance structure
 
@@ -1409,7 +1410,7 @@ int HybridRenderingApp::Run()
 		}
 
 		void Render(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet, LightingBufferSet* lightingBufferSet,
-			Camera& camera, const LightingDesc& lightingDesc, const Atmosphere::Desc& atmosphereDesc)
+			Camera& camera, const LightingDesc& lightingDesc, const AtmosphereDesc& atmosphereDesc)
 		{
 			// update & upload frame constants
 
@@ -1871,7 +1872,7 @@ int HybridRenderingApp::Run()
 
 	// atmosphere params
 	// temp: super low Mie & G to fake sun disc
-	Atmosphere::Desc atmosphereDesc = {
+	AtmosphereDesc atmosphereDesc = {
 		6371.0e+3f,
 		6381.0e+3f,
 		0.250f,

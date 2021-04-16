@@ -441,7 +441,7 @@ namespace UnlimRealms
 		{
 			ur_float4x4 ViewProj;
 			ur_float4 CameraPos;
-			Atmosphere::Desc AtmoParams;
+			AtmosphereDesc AtmoParams;
 			LightDesc LightParams;
 		};
 

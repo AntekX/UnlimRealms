@@ -145,7 +145,7 @@ namespace UnlimRealms
 			{
 				ur_float4x4 ViewProj;
 				ur_float4 CameraPos;
-				Atmosphere::Desc Atmosphere;
+				AtmosphereDesc Atmosphere;
 				ur_float3 PatchPos;
 				ur_float3 PatchSize;
 			};

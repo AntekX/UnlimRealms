@@ -22,7 +22,7 @@ namespace UnlimRealms
 	// Atmosphere
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	const Atmosphere::Desc Atmosphere::Desc::Default = {
+	const AtmosphereDesc Atmosphere::DescDefault = {
 		1.0f,		// InnerRadius
 		1.025f,		// OuterRadius
 		0.250f,		// ScaleDepth
@@ -32,7 +32,7 @@ namespace UnlimRealms
 		2.718f,		// D
 	};
 
-	const Atmosphere::Desc Atmosphere::Desc::Invisible = {
+	const AtmosphereDesc Atmosphere::DescInvisible = {
 		1.0f,		// InnerRadius
 		1.025f,		// OuterRadius
 		1.000f,		// ScaleDepth
@@ -79,7 +79,7 @@ namespace UnlimRealms
 	#endif
 	}
 
-	Result Atmosphere::Init(const Desc &desc)
+	Result Atmosphere::Init(const AtmosphereDesc &desc)
 	{
 	#if defined(UR_GRAF)
 		return Result(NotImplemented);
@@ -98,7 +98,7 @@ namespace UnlimRealms
 	#endif
 	}
 
-	Result Atmosphere::Init(const Desc &desc, GrafRenderPass* grafRenderPass)
+	Result Atmosphere::Init(const AtmosphereDesc &desc, GrafRenderPass* grafRenderPass)
 	{
 	#if !defined(UR_GRAF)
 		return Result(NotImplemented);

@@ -186,6 +186,7 @@ call "CompileHLSL_SPIRV.bat"</Command>
   <ItemGroup>
     <ClInclude Include="D3D12SandboxApp.h" />
     <ClInclude Include="Demo.h" />
+    <ClInclude Include="HybridRenderingCommon.h" />
     <ClInclude Include="HybridRenderingApp.h" />
     <ClInclude Include="RayTracingSandboxApp.h" />
     <ClInclude Include="Resource.h" />
@@ -326,6 +327,7 @@ call "CompileHLSL_SPIRV.bat"</Command>
   <ItemGroup>
     <None Include="..\..\..\Tools\CompileHLSL_SPIRV.bat" />
     <None Include="HybridRendering.hlsli" />
+    <None Include="HybridRenderingCommon.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

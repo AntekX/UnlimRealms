@@ -56,6 +56,9 @@
     <ClInclude Include="VulkanSandboxApp.h">
       <Filter>VulkanSandboxApp</Filter>
     </ClInclude>
+    <ClInclude Include="HybridRenderingCommon.h">
+      <Filter>HybridRenderingApp</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -121,6 +124,9 @@
       <Filter>Source Files</Filter>
     </None>
     <None Include="HybridRendering.hlsli">
+      <Filter>HybridRenderingApp</Filter>
+    </None>
+    <None Include="HybridRenderingCommon.hlsli">
       <Filter>HybridRenderingApp</Filter>
     </None>
   </ItemGroup>
