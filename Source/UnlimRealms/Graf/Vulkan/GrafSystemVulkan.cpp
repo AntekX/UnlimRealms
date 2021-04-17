@@ -293,6 +293,7 @@ namespace UnlimRealms
 		vkEnumeratePhysicalDevices(this->vkInstance, &physicalDeviceCount, ur_null);
 		if (0 == physicalDeviceCount)
 		{
+			// note: if zero devices returned try adding DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1 to system env variables
 			this->Deinitialize();
 			return ResultError(Failure, "GrafSystemVulkan: init failed, no physical device found");
 		}

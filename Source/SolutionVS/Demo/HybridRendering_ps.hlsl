@@ -9,7 +9,7 @@ MeshPixelOutput main(MeshPixelInput input)
 	float2 bumpPacked = g_NormalTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xy;
 	float mask = g_MaskTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).x;
 	
-	// TEMP: dyanmic indexing test
+	// TEMP: dynamic indexing test
 	#if (0)
 	baseColor = g_Texture2DArray[0].Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xyz;
 	bumpPacked = g_Texture2DArray[1].Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xy;

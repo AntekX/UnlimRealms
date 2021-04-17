@@ -661,12 +661,99 @@ int HybridRenderingApp::Run()
 			inline ur_uint64 GetBLASHandle() const { return this->accelerationStructureHandle; }
 		};
 
+		class GPUResourceRegistry : public GrafEntity
+		{
+		public:
+
+			GPUResourceRegistry(DemoScene& scene) :
+				GrafEntity(*scene.grafRenderer->GetGrafSystem()),
+				scene(scene)
+			{
+				this->subMeshDescArray.reserve(16);
+			}
+			
+			~GPUResourceRegistry()
+			{
+			}
+
+			void Initialize()
+			{
+				// register fallback textures
+				this->defaultImageWhiteIdx = AddImage2D(scene.defaultImageWhite.get());
+				this->defaultImageBlackIdx = AddImage2D(scene.defaultImageBlack.get());
+				this->defaultImageNormalIdx = AddImage2D(scene.defaultImageNormal.get());
+			}
+
+			ur_uint32 AddImage2D(GrafImage* grafImage)
+			{
+				this->image2DArray.emplace_back(grafImage);
+				return ur_uint32(this->image2DArray.size() - 1);
+			}
+
+			ur_uint32 AddBuffer(GrafBuffer* grafBuffer)
+			{
+				this->bufferArray.emplace_back(grafBuffer);
+				return ur_uint32(this->bufferArray.size() - 1);
+			}
+
+			void AddMesh(Mesh* mesh)
+			{
+				ur_uint32 meshVBDescriptorIdx = AddBuffer(mesh->vertexBuffer.get());
+				ur_uint32 meshIBDescriptorIdx = AddBuffer(mesh->indexBuffer.get());
+				for (Mesh::SubMesh& subMesh : mesh->subMeshes)
+				{
+					SubMeshDesc subMeshDesc = {};
+					subMeshDesc.VertexBufferDescriptor = meshVBDescriptorIdx;
+					subMeshDesc.IndexBufferDescriptor = meshIBDescriptorIdx;
+					subMeshDesc.PrimitivesOffset = subMesh.primtivesOffset;
+					subMeshDesc.ColorMapDescriptor = (subMesh.colorImage.get() ? AddImage2D(subMesh.colorImage.get()) : this->defaultImageWhiteIdx);
+					subMeshDesc.NormalMapDescriptor = (subMesh.normalImage.get() ? AddImage2D(subMesh.normalImage.get()) : this->defaultImageNormalIdx);
+					subMeshDesc.MaskMapDescriptor = (subMesh.maskImage.get() ? AddImage2D(subMesh.maskImage.get()) : this->defaultImageWhiteIdx);
+					this->subMeshDescArray.emplace_back(subMeshDesc);
+				}
+			}
+
+			void Upload()
+			{
+				GrafRenderer* grafRenderer = scene.grafRenderer;
+				GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
+				GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
+				
+				grafRenderer->SafeDelete(this->subMeshDescBuffer.release());
+				if (this->subMeshDescArray.empty())
+					return;
+				
+				grafSystem->CreateBuffer(this->subMeshDescBuffer);
+				GrafBuffer::InitParams bufferParams = {};
+				bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferDst) | ur_uint(GrafBufferUsageFlag::RayTracing);
+				bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
+				bufferParams.BufferDesc.SizeInBytes = this->subMeshDescArray.size() * sizeof(SubMeshDesc);
+				this->subMeshDescBuffer->Initialize(grafDevice, bufferParams);
+
+				grafRenderer->Upload((ur_byte*)this->subMeshDescArray.data(), this->subMeshDescBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
+			}
+
+			inline GrafBuffer* GetSubMeshDescBuffer() const { return this->subMeshDescBuffer.get(); }
+
+		private:
+
+			DemoScene& scene;
+			std::vector<SubMeshDesc> subMeshDescArray;
+			std::unique_ptr<GrafBuffer> subMeshDescBuffer;
+			std::vector<GrafImage*> image2DArray;
+			std::vector<GrafBuffer*> bufferArray;
+			ur_uint32 defaultImageWhiteIdx;
+			ur_uint32 defaultImageBlackIdx;
+			ur_uint32 defaultImageNormalIdx;
+		};
+
 		GrafRenderer* grafRenderer;
-		std::vector<std::unique_ptr<Mesh>> meshes;
-		std::unique_ptr<GrafBuffer> instanceBuffer;
 		std::unique_ptr<GrafImage> defaultImageWhite;
 		std::unique_ptr<GrafImage> defaultImageBlack;
 		std::unique_ptr<GrafImage> defaultImageNormal;
+		std::unique_ptr<GPUResourceRegistry> gpuResourceRegistry;
+		std::vector<std::unique_ptr<Mesh>> meshes;
+		std::unique_ptr<GrafBuffer> instanceBuffer;
 		std::unique_ptr<GrafDescriptorTableLayout> rasterDescTableLayout;
 		std::vector<std::unique_ptr<GrafDescriptorTable>> rasterDescTablePerFrame;
 		std::unique_ptr<GrafPipeline> rasterPipelineState;
@@ -1220,6 +1307,11 @@ int HybridRenderingApp::Run()
 				cmdList->End();
 				grafDevice->Record(cmdList);
 			}
+
+			// gpu resource registry
+
+			this->gpuResourceRegistry.reset(new GPUResourceRegistry(*this));
+			this->gpuResourceRegistry->Initialize();
 
 			// load mesh(es)
 

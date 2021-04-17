@@ -38,6 +38,19 @@ struct SceneConstants
 	MeshMaterialDesc Material;
 };
 
+// sub mesh description
+// resources indirection for bindless rendering
+
+struct SubMeshDesc
+{
+	CUINT(VertexBufferDescriptor);
+	CUINT(IndexBufferDescriptor);
+	CUINT(PrimitivesOffset);
+	CUINT(ColorMapDescriptor);
+	CUINT(NormalMapDescriptor);
+	CUINT(MaskMapDescriptor);
+};
+
 // descriptors
 
 DESCRIPTOR_ConstantBuffer(SceneConstants,	g_SceneCB,						0);
@@ -75,9 +88,10 @@ DESCRIPTOR_RWTexture2D(float4,				g_ShadowMip3,					8);
 DESCRIPTOR_RWTexture2D(float4,				g_ShadowMip4,					9);
 
 // descriptor arrays
+
 static const CUINT(TextureArraySize) = 256;
 static const CUINT(BufferArraySize) = 256;
 DESCRIPTOR_ARRAY_Texture2D(TextureArraySize,		g_Texture2DArray,		128);
-//DESCRIPTOR_ARRAY_ByteAddressBuffer(BufferArraySize,	g_BufferArray,			384);
+//DESCRIPTOR_ARRAY_ByteAddressBuffer(BufferArraySize,	g_BufferArray,			129);
 
 #endif
