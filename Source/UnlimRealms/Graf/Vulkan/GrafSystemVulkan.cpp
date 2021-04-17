@@ -749,12 +749,15 @@ namespace UnlimRealms
 		*ppCrntCreateNextPtr = &vkBufferDeviceAddressFeatures;
 		ppCrntCreateNextPtr = &vkBufferDeviceAddressFeatures.pNext;
 
-		VkPhysicalDeviceDescriptorIndexingFeaturesEXT vkDescriptorIndexingFeatures = {};
-		vkDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+		VkPhysicalDeviceDescriptorIndexingFeatures vkDescriptorIndexingFeatures = {};
+		vkDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
 		vkDescriptorIndexingFeatures.pNext = ur_null;
 		vkDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = true;
-		vkDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+		vkDescriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
 		vkDescriptorIndexingFeatures.runtimeDescriptorArray = true;
+		vkDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+		vkDescriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
+		vkDescriptorIndexingFeatures.shaderStorageImageArrayNonUniformIndexing = true;
 		*ppCrntCreateNextPtr = &vkDescriptorIndexingFeatures;
 		ppCrntCreateNextPtr = &vkDescriptorIndexingFeatures.pNext;
 
@@ -4014,6 +4017,7 @@ namespace UnlimRealms
 
 		// initialize bindings
 
+		#if (1)
 		ur_uint bindingsTotalCount = 0;
 		for (ur_uint irange = 0; irange < initParams.LayoutDesc.DescriptorRangeCount; ++irange)
 		{
@@ -4035,6 +4039,20 @@ namespace UnlimRealms
 				vkDescriptorSetBindingInfo.pImmutableSamplers = ur_null;
 			}
 		}
+		#else
+		std::vector<VkDescriptorSetLayoutBinding> vkDescriptorSetBindingInfos(initParams.LayoutDesc.DescriptorRangeCount);
+		ur_uint bindingGlobalIdx = 0;
+		for (ur_uint irange = 0; irange < initParams.LayoutDesc.DescriptorRangeCount; ++irange)
+		{
+			const GrafDescriptorRangeDesc& rangeDesc = initParams.LayoutDesc.DescriptorRanges[irange];
+			VkDescriptorSetLayoutBinding& vkDescriptorSetBindingInfo = vkDescriptorSetBindingInfos[irange];
+			vkDescriptorSetBindingInfo.binding = rangeDesc.BindingOffset + GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(rangeDesc.Type);
+			vkDescriptorSetBindingInfo.descriptorType = GrafUtilsVulkan::GrafToVkDescriptorType(rangeDesc.Type);
+			vkDescriptorSetBindingInfo.descriptorCount = rangeDesc.BindingCount;
+			vkDescriptorSetBindingInfo.stageFlags = GrafUtilsVulkan::GrafToVkShaderStage(initParams.LayoutDesc.ShaderStageVisibility);
+			vkDescriptorSetBindingInfo.pImmutableSamplers = ur_null;
+		}
+		#endif
 
 		// create descriptor set layout
 

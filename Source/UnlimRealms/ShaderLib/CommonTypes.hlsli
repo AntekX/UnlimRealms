@@ -49,23 +49,32 @@
 // shader binding descriptors
 #if defined(CPP_CODE)
 
-#define DECRIPTOR_NAME(name) name##Descriptor
-#define DECLARE_DESCRIPTOR_CONSTANT(name, regIdx) const ur_uint32 DECRIPTOR_NAME(name) = regIdx
-#define DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(descriptorType, name) const GrafDescriptorRangeDesc name##DescriptorRange = { GrafDescriptorType::##descriptorType, DECRIPTOR_NAME(name), 1 }
+struct UR_DECL GrafDescriptorWrapper
+{
+	// simple wrapper allowing to use declared constant range both as a layout initializer and a binding slot index
+	GrafDescriptorRangeDesc Desc;
+	operator const GrafDescriptorRangeDesc& () const { return Desc; }
+	operator ur_uint32 () const { return Desc.BindingOffset; }
+};
 
-#define DESCRIPTOR_ConstantBuffer(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(ConstantBuffer, name);
-#define DESCRIPTOR_Sampler(name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(Sampler, name);
-#define DESCRIPTOR_AccelerationStructure(name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(AccelerationStructure, name);
-#define DESCRIPTOR_Texture1D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(Texture, name);
-#define DESCRIPTOR_Texture2D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(Texture, name);
-#define DESCRIPTOR_Texture3D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(Texture, name);
-#define DESCRIPTOR_RWTexture1D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(RWTexture, name);
-#define DESCRIPTOR_RWTexture2D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(RWTexture, name);
-#define DESCRIPTOR_RWTexture3D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(RWTexture, name);
-#define DESCRIPTOR_ByteAddressBuffer(name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(Buffer, name);
-#define DESCRIPTOR_RWByteAddressBuffer(name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(RWBuffer, name);
-#define DESCRIPTOR_StructuredBuffer(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(Buffer, name);
-#define DESCRIPTOR_RWStructuredBuffer(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_DESC(RWBuffer, name);
+#define DECRIPTOR_INDEX_NAME(name) name##DescriptorIdx
+#define DECRIPTOR_WRAPPER_NAME(name) name##Descriptor
+#define DECLARE_DESCRIPTOR_CONSTANT(name, regIdx) const ur_uint32 DECRIPTOR_INDEX_NAME(name) = regIdx
+#define DECLARE_GRAF_DESCRIPTOR_WRAPPER(descriptorType, name) const GrafDescriptorWrapper DECRIPTOR_WRAPPER_NAME(name) = { GrafDescriptorType::##descriptorType, DECRIPTOR_INDEX_NAME(name), 1 }
+
+#define DESCRIPTOR_ConstantBuffer(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(ConstantBuffer, name);
+#define DESCRIPTOR_Sampler(name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(Sampler, name);
+#define DESCRIPTOR_AccelerationStructure(name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(AccelerationStructure, name);
+#define DESCRIPTOR_Texture1D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(Texture, name);
+#define DESCRIPTOR_Texture2D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(Texture, name);
+#define DESCRIPTOR_Texture3D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(Texture, name);
+#define DESCRIPTOR_RWTexture1D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(RWTexture, name);
+#define DESCRIPTOR_RWTexture2D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(RWTexture, name);
+#define DESCRIPTOR_RWTexture3D(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(RWTexture, name);
+#define DESCRIPTOR_ByteAddressBuffer(name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(Buffer, name);
+#define DESCRIPTOR_RWByteAddressBuffer(name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(RWBuffer, name);
+#define DESCRIPTOR_StructuredBuffer(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(Buffer, name);
+#define DESCRIPTOR_RWStructuredBuffer(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(RWBuffer, name);
 
 #else
 

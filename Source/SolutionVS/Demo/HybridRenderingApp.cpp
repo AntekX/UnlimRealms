@@ -829,12 +829,12 @@ int HybridRenderingApp::Run()
 			// rasterization descriptor table
 
 			GrafDescriptorRangeDesc rasterDescTableLayoutRanges[] = {
-				g_SceneCBDescriptorRange,
-				g_InstanceBufferDescriptorRange,
-				g_SamplerTrilinearWrapDescriptorRange,
-				g_ColorTextureDescriptorRange,
-				g_NormalTextureDescriptorRange,
-				g_MaskTextureDescriptorRange,
+				g_SceneCBDescriptor,
+				g_InstanceBufferDescriptor,
+				g_SamplerTrilinearWrapDescriptor,
+				g_ColorTextureDescriptor,
+				g_NormalTextureDescriptor,
+				g_MaskTextureDescriptor,
 			};
 			GrafDescriptorTableLayoutDesc rasterDescTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::Vertex) |
@@ -898,8 +898,8 @@ int HybridRenderingApp::Run()
 			// sky precompute descriptor table
 
 			GrafDescriptorRangeDesc skyPrecomputeDescTableLayoutRanges[] = {
-				g_SceneCBDescriptorRange,
-				g_PrecomputedSkyTargetDescriptorRange,
+				g_SceneCBDescriptor,
+				g_PrecomputedSkyTargetDescriptor,
 			};
 			GrafDescriptorTableLayoutDesc skyPrecomputeDescTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::Compute),
@@ -931,19 +931,19 @@ int HybridRenderingApp::Run()
 			// lighting descriptor table
 
 			GrafDescriptorRangeDesc lightingDescTableLayoutRanges[] = {
-				g_SceneCBDescriptorRange,
-				g_SamplerBilinearDescriptorRange,
-				g_SamplerTrilinearDescriptorRange,
-				g_SamplerTrilinearWrapDescriptorRange,
-				g_GeometryDepthDescriptorRange,
-				g_GeometryImage0DescriptorRange,
-				g_GeometryImage1DescriptorRange,
-				g_GeometryImage2DescriptorRange,
-				g_ShadowResultDescriptorRange,
-				g_TracingInfoDescriptorRange,
-				g_PrecomputedSkyDescriptorRange,
-				g_IndirectLightDescriptorRange,
-				g_LightingTargetDescriptorRange,
+				g_SceneCBDescriptor,
+				g_SamplerBilinearDescriptor,
+				g_SamplerTrilinearDescriptor,
+				g_SamplerTrilinearWrapDescriptor,
+				g_GeometryDepthDescriptor,
+				g_GeometryImage0Descriptor,
+				g_GeometryImage1Descriptor,
+				g_GeometryImage2Descriptor,
+				g_ShadowResultDescriptor,
+				g_TracingInfoDescriptor,
+				g_PrecomputedSkyDescriptor,
+				g_IndirectLightDescriptor,
+				g_LightingTargetDescriptor,
 			};
 			GrafDescriptorTableLayoutDesc lightingDescTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::Compute),
@@ -992,20 +992,20 @@ int HybridRenderingApp::Run()
 				// ray tracing descriptor table
 
 				GrafDescriptorRangeDesc raytraceDescTableLayoutRanges[] = {
-					g_SceneCBDescriptorRange,
-					g_SamplerTrilinearWrapDescriptorRange,
-					g_GeometryDepthDescriptorRange,
-					g_GeometryImage0DescriptorRange,
-					g_GeometryImage1DescriptorRange,
-					g_GeometryImage2DescriptorRange,
-					g_DepthHistoryDescriptorRange,
-					g_ShadowHistoryDescriptorRange,
-					g_TracingHistoryDescriptorRange,
-					g_PrecomputedSkyDescriptorRange,
-					g_SceneStructureDescriptorRange,
-					g_ShadowTargetDescriptorRange,
-					g_TracingInfoTargetDescriptorRange,
-					g_IndirectLightTargetDescriptorRange,
+					g_SceneCBDescriptor,
+					g_SamplerTrilinearWrapDescriptor,
+					g_GeometryDepthDescriptor,
+					g_GeometryImage0Descriptor,
+					g_GeometryImage1Descriptor,
+					g_GeometryImage2Descriptor,
+					g_DepthHistoryDescriptor,
+					g_ShadowHistoryDescriptor,
+					g_TracingHistoryDescriptor,
+					g_PrecomputedSkyDescriptor,
+					g_SceneStructureDescriptor,
+					g_ShadowTargetDescriptor,
+					g_TracingInfoTargetDescriptor,
+					g_IndirectLightTargetDescriptor,
 				};
 				GrafDescriptorTableLayoutDesc raytraceDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::AllRayTracing),
@@ -1075,12 +1075,12 @@ int HybridRenderingApp::Run()
 				// ray tracing result mips generation pipeline
 
 				GrafDescriptorRangeDesc shadowMipsDescTableLayoutRanges[] = {
-					g_SceneCBDescriptorRange,
-					g_ShadowResultDescriptorRange,
-					g_ShadowMip1DescriptorRange,
-					g_ShadowMip2DescriptorRange,
-					g_ShadowMip3DescriptorRange,
-					g_ShadowMip4DescriptorRange,
+					g_SceneCBDescriptor,
+					g_ShadowResultDescriptor,
+					g_ShadowMip1Descriptor,
+					g_ShadowMip2Descriptor,
+					g_ShadowMip3Descriptor,
+					g_ShadowMip4Descriptor,
 				};
 				GrafDescriptorTableLayoutDesc shadowMipsDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::Compute),
@@ -1110,13 +1110,13 @@ int HybridRenderingApp::Run()
 				// ray tracing result blur filter
 
 				GrafDescriptorRangeDesc blurDescTableLayoutRanges[] = {
-					g_SceneCBDescriptorRange,
-					g_GeometryDepthDescriptorRange,
-					g_GeometryImage0DescriptorRange,
-					g_GeometryImage1DescriptorRange,
-					g_GeometryImage2DescriptorRange,
-					g_BlurSourceDescriptorRange,
-					g_BlurTargetDescriptorRange,
+					g_SceneCBDescriptor,
+					g_GeometryDepthDescriptor,
+					g_GeometryImage0Descriptor,
+					g_GeometryImage1Descriptor,
+					g_GeometryImage2Descriptor,
+					g_BlurSourceDescriptor,
+					g_BlurTargetDescriptor,
 				};
 				GrafDescriptorTableLayoutDesc blurDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::Compute),
@@ -1146,21 +1146,21 @@ int HybridRenderingApp::Run()
 				// ray tracing result temporal accumulation filter
 
 				GrafDescriptorRangeDesc accumulationDescTableLayoutRanges[] = {
-					g_SceneCBDescriptorRange,
-					g_SamplerBilinearDescriptorRange,
-					g_SamplerTrilinearDescriptorRange,
-					g_GeometryDepthDescriptorRange,
-					g_GeometryImage0DescriptorRange,
-					g_GeometryImage1DescriptorRange,
-					g_GeometryImage2DescriptorRange,
-					g_DepthHistoryDescriptorRange,
-					g_ShadowHistoryDescriptorRange,
-					g_TracingHistoryDescriptorRange,
-					g_ShadowMipsDescriptorRange,
-					g_IndirectLightHistoryDescriptorRange,
-					g_ShadowTargetDescriptorRange,
-					g_TracingInfoTargetDescriptorRange,
-					g_IndirectLightTargetDescriptorRange,
+					g_SceneCBDescriptor,
+					g_SamplerBilinearDescriptor,
+					g_SamplerTrilinearDescriptor,
+					g_GeometryDepthDescriptor,
+					g_GeometryImage0Descriptor,
+					g_GeometryImage1Descriptor,
+					g_GeometryImage2Descriptor,
+					g_DepthHistoryDescriptor,
+					g_ShadowHistoryDescriptor,
+					g_TracingHistoryDescriptor,
+					g_ShadowMipsDescriptor,
+					g_IndirectLightHistoryDescriptor,
+					g_ShadowTargetDescriptor,
+					g_TracingInfoTargetDescriptor,
+					g_IndirectLightTargetDescriptor,
 				};
 				GrafDescriptorTableLayoutDesc accumulationDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::Compute),
