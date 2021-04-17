@@ -1110,6 +1110,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafDescriptorTableDX12::SetImageArray(ur_uint bindingIdx, GrafImage** images, ur_uint imageCount)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafDescriptorTableDX12::SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
 	{
 		return Result(NotImplemented);

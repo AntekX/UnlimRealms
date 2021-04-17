@@ -746,6 +746,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafDescriptorTable::SetImageArray(ur_uint bindingIdx, GrafImage** images, ur_uint imageCount)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafDescriptorTable::SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
 	{
 		return Result(NotImplemented);

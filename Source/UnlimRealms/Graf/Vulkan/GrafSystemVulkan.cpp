@@ -4333,6 +4333,36 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafDescriptorTableVulkan::SetImageArray(ur_uint bindingIdx, GrafImage** images, ur_uint imageCount)
+	{
+		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
+
+		std::vector<VkDescriptorImageInfo> vkDescriptorImageInfoArray(imageCount);
+		for (ur_uint imageIdx = 0; imageIdx < imageCount; ++imageIdx)
+		{
+			VkDescriptorImageInfo& vkDescriptorImageInfo = vkDescriptorImageInfoArray[imageIdx];
+			vkDescriptorImageInfo.sampler = VK_NULL_HANDLE;
+			vkDescriptorImageInfo.imageView = static_cast<GrafImageVulkan*>(images[imageIdx])->GetVkImageView();
+			vkDescriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		}
+
+		VkWriteDescriptorSet vkWriteDescriptorSet = {};
+		vkWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		vkWriteDescriptorSet.pNext = ur_null;
+		vkWriteDescriptorSet.dstSet = this->vkDescriptorSet;
+		vkWriteDescriptorSet.dstBinding = bindingIdx + GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(GrafDescriptorType::Texture);
+		vkWriteDescriptorSet.dstArrayElement = 0;
+		vkWriteDescriptorSet.descriptorCount = ur_uint32(imageCount);
+		vkWriteDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		vkWriteDescriptorSet.pImageInfo = vkDescriptorImageInfoArray.data();
+		vkWriteDescriptorSet.pBufferInfo = ur_null;
+		vkWriteDescriptorSet.pTexelBufferView = ur_null;
+
+		vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, ur_null);
+
+		return Result(Success);
+	}
+
 	Result GrafDescriptorTableVulkan::SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
 	{
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();

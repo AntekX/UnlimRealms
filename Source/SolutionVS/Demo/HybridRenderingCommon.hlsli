@@ -63,7 +63,6 @@ DESCRIPTOR_Texture2D(float4,				g_ShadowHistory,				15);
 DESCRIPTOR_Texture2D(float4,				g_IndirectLightHistory,			16);
 DESCRIPTOR_Texture2D(float4,				g_ShadowMips,					17);
 DESCRIPTOR_Texture2D(float4,				g_BlurSource,					18);
-DESCRIPTOR_ARRAY_Texture2D(256,				g_Texture2DArray,				128);
 DESCRIPTOR_RWTexture2D(float4,				g_PrecomputedSkyTarget,			0);
 DESCRIPTOR_RWTexture2D(float4,				g_LightingTarget,				1);
 DESCRIPTOR_RWTexture2D(uint4,				g_TracingInfoTarget,			2);
@@ -74,5 +73,11 @@ DESCRIPTOR_RWTexture2D(float4,				g_ShadowMip1,					6);
 DESCRIPTOR_RWTexture2D(float4,				g_ShadowMip2,					7);
 DESCRIPTOR_RWTexture2D(float4,				g_ShadowMip3,					8);
 DESCRIPTOR_RWTexture2D(float4,				g_ShadowMip4,					9);
+
+// descriptor arrays
+static const CUINT(TextureArraySize) = 256;
+static const CUINT(BufferArraySize) = 256;
+DESCRIPTOR_ARRAY_Texture2D(TextureArraySize,		g_Texture2DArray,		128);
+//DESCRIPTOR_ARRAY_ByteAddressBuffer(BufferArraySize,	g_BufferArray,			384);
 
 #endif
