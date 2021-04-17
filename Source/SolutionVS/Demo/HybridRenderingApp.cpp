@@ -1491,8 +1491,10 @@ int HybridRenderingApp::Run()
 					descriptorTable->SetImage(g_MaskTextureDescriptor, maskImage);
 					
 					// TEMP: dynamic indexing test
-					//GrafImage* materialImages[] = { colorImage, normalImage, maskImage };
-					//descriptorTable->SetImageArray(g_Texture2DArrayDescriptor, materialImages, ur_array_size(materialImages));
+					#if (0)
+					GrafImage* materialImages[] = { colorImage, normalImage, maskImage };
+					descriptorTable->SetImageArray(g_Texture2DArrayDescriptor, materialImages, ur_array_size(materialImages));
+					#endif
 
 					// draw
 					grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());

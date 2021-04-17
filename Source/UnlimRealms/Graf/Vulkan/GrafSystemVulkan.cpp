@@ -103,7 +103,6 @@ namespace UnlimRealms
 		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR_PROV)
 		, "VK_KHR_ray_tracing"
 		, "VK_KHR_pipeline_library"
-		, "VK_EXT_descriptor_indexing"
 		, "VK_KHR_buffer_device_address"
 		, "VK_KHR_deferred_host_operations"
 		#else
@@ -113,7 +112,6 @@ namespace UnlimRealms
 		, "VK_KHR_pipeline_library"
 		, "VK_KHR_deferred_host_operations"
 		, "VK_KHR_buffer_device_address"
-		, "VK_EXT_descriptor_indexing"
 		#endif
 		#endif
 	};
@@ -734,6 +732,18 @@ namespace UnlimRealms
 		// enable required & supported features
 		const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystemVulkan.GetPhysicalDeviceDesc(deviceId);
 		void** ppCrntCreateNextPtr = const_cast<void**>(&vkDeviceInfo.pNext);
+
+		VkPhysicalDeviceDescriptorIndexingFeatures vkDescriptorIndexingFeatures = {};
+		vkDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+		vkDescriptorIndexingFeatures.pNext = ur_null;
+		vkDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = true;
+		vkDescriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
+		vkDescriptorIndexingFeatures.runtimeDescriptorArray = true;
+		vkDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+		vkDescriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
+		vkDescriptorIndexingFeatures.shaderStorageImageArrayNonUniformIndexing = true;
+		*ppCrntCreateNextPtr = &vkDescriptorIndexingFeatures;
+		ppCrntCreateNextPtr = &vkDescriptorIndexingFeatures.pNext;
 		
 		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 
@@ -749,18 +759,6 @@ namespace UnlimRealms
 		vkBufferDeviceAddressFeatures.bufferDeviceAddress = true;
 		*ppCrntCreateNextPtr = &vkBufferDeviceAddressFeatures;
 		ppCrntCreateNextPtr = &vkBufferDeviceAddressFeatures.pNext;
-
-		VkPhysicalDeviceDescriptorIndexingFeatures vkDescriptorIndexingFeatures = {};
-		vkDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-		vkDescriptorIndexingFeatures.pNext = ur_null;
-		vkDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = true;
-		vkDescriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
-		vkDescriptorIndexingFeatures.runtimeDescriptorArray = true;
-		vkDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
-		vkDescriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
-		vkDescriptorIndexingFeatures.shaderStorageImageArrayNonUniformIndexing = true;
-		*ppCrntCreateNextPtr = &vkDescriptorIndexingFeatures;
-		ppCrntCreateNextPtr = &vkDescriptorIndexingFeatures.pNext;
 
 		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR_PROV)
 		VkPhysicalDeviceRayTracingFeaturesKHR vkDeviceRayTracingFeatures = {};
