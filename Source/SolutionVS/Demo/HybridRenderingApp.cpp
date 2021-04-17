@@ -835,6 +835,7 @@ int HybridRenderingApp::Run()
 				g_ColorTextureDescriptor,
 				g_NormalTextureDescriptor,
 				g_MaskTextureDescriptor,
+				g_Texture2DArrayDescriptor,
 			};
 			GrafDescriptorTableLayoutDesc rasterDescTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::Vertex) |

@@ -49,7 +49,7 @@ namespace UnlimRealms
 		{ VK_DESCRIPTOR_TYPE_SAMPLER,						1 * 1024 },
 		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		0 },
 		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,					2 * 1024 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,					0 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,					1 * 1024 },
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,			0 },
 		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,			0 },
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				4 * 1024 },
@@ -68,13 +68,14 @@ namespace UnlimRealms
 	static const ur_uint VulkanBindingsPerRegisterType = 256;
 	static const ur_uint VulkanBindingOffsetConstantBuffer = 0;
 	static const ur_uint VulkanBindingOffsetSampler = VulkanBindingOffsetConstantBuffer + VulkanBindingsPerRegisterType;
-	static const ur_uint VulkanBindingOffsetReadOnlyResource = VulkanBindingOffsetSampler + VulkanBindingsPerRegisterType;
-	static const ur_uint VulkanBindingOffsetReadWriteResource = VulkanBindingOffsetReadOnlyResource + VulkanBindingsPerRegisterType;
+	static const ur_uint VulkanBindingOffsetReadWriteResource = VulkanBindingOffsetSampler + VulkanBindingsPerRegisterType;
+	static const ur_uint VulkanBindingOffsetReadOnlyResource = VulkanBindingOffsetReadWriteResource + VulkanBindingsPerRegisterType;
 	static const ur_uint VulkanBindingOffsetTexture = VulkanBindingOffsetReadOnlyResource;
 	static const ur_uint VulkanBindingOffsetBuffer = VulkanBindingOffsetReadOnlyResource;
 	static const ur_uint VulkanBindingOffsetRWTexture = VulkanBindingOffsetReadWriteResource;
 	static const ur_uint VulkanBindingOffsetRWBuffer = VulkanBindingOffsetReadWriteResource;
 	static const ur_uint VulkanBindingOffsetAccelerationStructure = VulkanBindingOffsetReadOnlyResource;
+	static const ur_uint VulkanBindingOffsetTextureDynamicArray = VulkanBindingOffsetReadOnlyResource;
 
 	#if defined(UR_GRAF_VULKAN_DEBUG_LAYER)
 	static const char* VulkanLayers[] = {
@@ -4017,47 +4018,54 @@ namespace UnlimRealms
 
 		// initialize bindings
 
-		#if (1)
 		ur_uint bindingsTotalCount = 0;
 		for (ur_uint irange = 0; irange < initParams.LayoutDesc.DescriptorRangeCount; ++irange)
 		{
-			bindingsTotalCount += initParams.LayoutDesc.DescriptorRanges[irange].BindingCount;
+			const GrafDescriptorRangeDesc& rangeDesc = initParams.LayoutDesc.DescriptorRanges[irange];
+			bindingsTotalCount += (GrafUtils::IsDescriptorTypeWithDynamicIndexing(rangeDesc.Type) ?
+				1 : rangeDesc.BindingCount);
 		}
 
 		std::vector<VkDescriptorSetLayoutBinding> vkDescriptorSetBindingInfos(bindingsTotalCount);
+		std::vector<VkDescriptorBindingFlags> vkDescriptorSetBindingFlags(bindingsTotalCount);
 		ur_uint bindingGlobalIdx = 0;
 		for (ur_uint irange = 0; irange < initParams.LayoutDesc.DescriptorRangeCount; ++irange)
 		{
 			const GrafDescriptorRangeDesc& rangeDesc = initParams.LayoutDesc.DescriptorRanges[irange];
-			for (ur_uint ibinding = 0; ibinding < rangeDesc.BindingCount; ++ibinding, ++bindingGlobalIdx)
+			ur_uint32 bindingCount = rangeDesc.BindingCount;
+			ur_uint32 descriptorCount = 1;
+			ur_bool descriptorWithDynamicIndexing = GrafUtils::IsDescriptorTypeWithDynamicIndexing(rangeDesc.Type);
+			if (descriptorWithDynamicIndexing)
+			{
+				descriptorCount = bindingCount;
+				bindingCount = 1;
+			}
+
+			for (ur_uint ibinding = 0; ibinding < bindingCount; ++ibinding, ++bindingGlobalIdx)
 			{
 				VkDescriptorSetLayoutBinding& vkDescriptorSetBindingInfo = vkDescriptorSetBindingInfos[bindingGlobalIdx];
 				vkDescriptorSetBindingInfo.binding = ibinding + rangeDesc.BindingOffset + GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(rangeDesc.Type);
 				vkDescriptorSetBindingInfo.descriptorType = GrafUtilsVulkan::GrafToVkDescriptorType(rangeDesc.Type);
-				vkDescriptorSetBindingInfo.descriptorCount = 1;
+				vkDescriptorSetBindingInfo.descriptorCount = descriptorCount;
 				vkDescriptorSetBindingInfo.stageFlags = GrafUtilsVulkan::GrafToVkShaderStage(initParams.LayoutDesc.ShaderStageVisibility);
 				vkDescriptorSetBindingInfo.pImmutableSamplers = ur_null;
+				
+				VkDescriptorBindingFlags& vkDescriptorSetBindingFlag = vkDescriptorSetBindingFlags[bindingGlobalIdx];
+				vkDescriptorSetBindingFlag = (descriptorWithDynamicIndexing ?
+					VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT : 0);
 			}
 		}
-		#else
-		std::vector<VkDescriptorSetLayoutBinding> vkDescriptorSetBindingInfos(initParams.LayoutDesc.DescriptorRangeCount);
-		ur_uint bindingGlobalIdx = 0;
-		for (ur_uint irange = 0; irange < initParams.LayoutDesc.DescriptorRangeCount; ++irange)
-		{
-			const GrafDescriptorRangeDesc& rangeDesc = initParams.LayoutDesc.DescriptorRanges[irange];
-			VkDescriptorSetLayoutBinding& vkDescriptorSetBindingInfo = vkDescriptorSetBindingInfos[irange];
-			vkDescriptorSetBindingInfo.binding = rangeDesc.BindingOffset + GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(rangeDesc.Type);
-			vkDescriptorSetBindingInfo.descriptorType = GrafUtilsVulkan::GrafToVkDescriptorType(rangeDesc.Type);
-			vkDescriptorSetBindingInfo.descriptorCount = rangeDesc.BindingCount;
-			vkDescriptorSetBindingInfo.stageFlags = GrafUtilsVulkan::GrafToVkShaderStage(initParams.LayoutDesc.ShaderStageVisibility);
-			vkDescriptorSetBindingInfo.pImmutableSamplers = ur_null;
-		}
-		#endif
 
 		// create descriptor set layout
 
+		VkDescriptorSetLayoutBindingFlagsCreateInfo vkDescriptorSetFlagsInfo = {};
+		vkDescriptorSetFlagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+		vkDescriptorSetFlagsInfo.bindingCount = (ur_uint32)vkDescriptorSetBindingFlags.size();;
+		vkDescriptorSetFlagsInfo.pBindingFlags = vkDescriptorSetBindingFlags.data();
+
 		VkDescriptorSetLayoutCreateInfo vkDescriptorSetInfo = {};
 		vkDescriptorSetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		vkDescriptorSetInfo.pNext = &vkDescriptorSetFlagsInfo;
 		vkDescriptorSetInfo.bindingCount = (ur_uint32)vkDescriptorSetBindingInfos.size();
 		vkDescriptorSetInfo.pBindings = vkDescriptorSetBindingInfos.data();
 
@@ -4154,10 +4162,27 @@ namespace UnlimRealms
 		}
 		#endif
 
+		// prepare info for descriptors with dynamic indexing
+
+		GrafDescriptorTableLayoutVulkan* tableLayoutVulkan = static_cast<GrafDescriptorTableLayoutVulkan*>(initParams.Layout);
+		const GrafDescriptorTableLayoutDesc& tableLayoutDesc = tableLayoutVulkan->GetLayoutDesc();
+		std::vector<ur_uint32> variableDescriptorCounts;
+		for (ur_uint irange = 0; irange < tableLayoutDesc.DescriptorRangeCount; ++irange)
+		{
+			if (GrafUtils::IsDescriptorTypeWithDynamicIndexing(tableLayoutDesc.DescriptorRanges[irange].Type))
+			{
+				variableDescriptorCounts.emplace_back(tableLayoutDesc.DescriptorRanges[irange].BindingCount);
+			}
+		}
+
 		// allocate descriptor set
 		
 		this->vkDescriptorPool = grafDeviceVulkan->GetVkDescriptorPool();
-		GrafDescriptorTableLayoutVulkan* tableLayoutVulkan = static_cast<GrafDescriptorTableLayoutVulkan*>(initParams.Layout);
+
+		VkDescriptorSetVariableDescriptorCountAllocateInfo vkVariableDescriptorCountInfo = {};
+		vkVariableDescriptorCountInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
+		vkVariableDescriptorCountInfo.descriptorSetCount = 1;
+		vkVariableDescriptorCountInfo.pDescriptorCounts = variableDescriptorCounts.data();
 
 		VkDescriptorSetAllocateInfo vkDescriptorSetAllocateInfo = {};
 		vkDescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -4165,6 +4190,7 @@ namespace UnlimRealms
 		VkDescriptorSetLayout vkDescritorSetLayouts[] = { tableLayoutVulkan->GetVkDescriptorSetLayout() };
 		vkDescriptorSetAllocateInfo.pSetLayouts = vkDescritorSetLayouts;
 		vkDescriptorSetAllocateInfo.descriptorSetCount = 1;
+		vkDescriptorSetAllocateInfo.pNext = (variableDescriptorCounts.empty() ? ur_null : &vkVariableDescriptorCountInfo);
 		VkResult vkRes = vkAllocateDescriptorSets(vkDevice, &vkDescriptorSetAllocateInfo, &this->vkDescriptorSet);
 		if (vkRes != VK_SUCCESS)
 		{
@@ -5508,6 +5534,7 @@ namespace UnlimRealms
 		case GrafDescriptorType::Buffer: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
 		case GrafDescriptorType::RWTexture: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; break;
 		case GrafDescriptorType::RWBuffer: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
+		case GrafDescriptorType::TextureDynamicArray: vkDescriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE; break;
 		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		case GrafDescriptorType::AccelerationStructure: vkDescriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR; break;
 		#endif
@@ -5522,7 +5549,8 @@ namespace UnlimRealms
 		VulkanBindingOffsetBuffer,
 		VulkanBindingOffsetRWTexture,
 		VulkanBindingOffsetRWBuffer,
-		VulkanBindingOffsetAccelerationStructure
+		VulkanBindingOffsetAccelerationStructure,
+		VulkanBindingOffsetTextureDynamicArray,
 	};
 
 	ur_uint32 GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(GrafDescriptorType descriptorType)

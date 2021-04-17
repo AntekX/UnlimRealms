@@ -52,15 +52,16 @@
 struct UR_DECL GrafDescriptorWrapper
 {
 	// simple wrapper allowing to use declared constant range both as a layout initializer and a binding slot index
-	GrafDescriptorRangeDesc Desc;
-	operator const GrafDescriptorRangeDesc& () const { return Desc; }
-	operator ur_uint32 () const { return Desc.BindingOffset; }
+	GrafDescriptorRangeDesc Range;
+	operator const GrafDescriptorRangeDesc& () const { return Range; }
+	operator ur_uint32 () const { return Range.BindingOffset; }
 };
 
 #define DECRIPTOR_INDEX_NAME(name) name##DescriptorIdx
 #define DECRIPTOR_WRAPPER_NAME(name) name##Descriptor
 #define DECLARE_DESCRIPTOR_CONSTANT(name, regIdx) const ur_uint32 DECRIPTOR_INDEX_NAME(name) = regIdx
-#define DECLARE_GRAF_DESCRIPTOR_WRAPPER(descriptorType, name) const GrafDescriptorWrapper DECRIPTOR_WRAPPER_NAME(name) = { GrafDescriptorType::##descriptorType, DECRIPTOR_INDEX_NAME(name), 1 }
+#define DECLARE_GRAF_DESCRIPTOR_RANGE_WRAPPER(descriptorType, name, count) const GrafDescriptorWrapper DECRIPTOR_WRAPPER_NAME(name) = { GrafDescriptorType::##descriptorType, DECRIPTOR_INDEX_NAME(name), count }
+#define DECLARE_GRAF_DESCRIPTOR_WRAPPER(descriptorType, name) DECLARE_GRAF_DESCRIPTOR_RANGE_WRAPPER(descriptorType, name, 1)
 
 #define DESCRIPTOR_ConstantBuffer(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(ConstantBuffer, name);
 #define DESCRIPTOR_Sampler(name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(Sampler, name);
@@ -75,6 +76,7 @@ struct UR_DECL GrafDescriptorWrapper
 #define DESCRIPTOR_RWByteAddressBuffer(name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(RWBuffer, name);
 #define DESCRIPTOR_StructuredBuffer(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(Buffer, name);
 #define DESCRIPTOR_RWStructuredBuffer(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(RWBuffer, name);
+#define DESCRIPTOR_ARRAY_Texture2D(maxSize, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_WRAPPER(TextureDynamicArray, name, maxSize);
 
 #else
 
@@ -91,6 +93,7 @@ struct UR_DECL GrafDescriptorWrapper
 #define DESCRIPTOR_RWByteAddressBuffer(name, regIdx) RWByteAddressBuffer name : register(u##regIdx)
 #define DESCRIPTOR_StructuredBuffer(dataType, name, regIdx) StructuredBuffer<dataType> name : register(t##regIdx)
 #define DESCRIPTOR_RWStructuredBuffer(dataType, name, regIdx) RWStructuredBuffer<dataType> name : register(u##regIdx)
+#define DESCRIPTOR_ARRAY_Texture2D(maxSize, name, regIdx) Texture2D name[maxSize] : register(t##regIdx)
 
 #endif
 

@@ -165,4 +165,14 @@ namespace UnlimRealms
 		return (ur_uint(grafFormat) >= ur_uint(GrafFormat::D16_UNORM) && ur_uint(grafFormat) <= ur_uint(GrafFormat::D32_SFLOAT_S8_UINT));
 	}
 
+	ur_bool GrafUtils::IsDescriptorTypeWithDynamicIndexing(GrafDescriptorType grafDescriptorType)
+	{
+		switch (grafDescriptorType)
+		{
+		case GrafDescriptorType::TextureDynamicArray:
+			return true;
+		}
+		return false;
+	}
+
 } // end namespace UnlimRealmscs

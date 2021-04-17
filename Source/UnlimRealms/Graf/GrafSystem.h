@@ -494,13 +494,14 @@ namespace UnlimRealms
 	enum class GrafDescriptorType
 	{
 		Undefined = -1,
-		ConstantBuffer,	// register type: ConstantBuffer
-		Sampler,		// register type: Sampler
-		Texture,		// register type: ReadOnlyResource
-		Buffer,			// register type: ReadOnlyResource
-		RWTexture,		// register type: ReadWriteResource
-		RWBuffer,		// register type: ReadWriteResource
-		AccelerationStructure, // register type: ReadOnlyResource
+		ConstantBuffer,			// register type: ConstantBuffer
+		Sampler,				// register type: Sampler
+		Texture,				// register type: ReadOnlyResource
+		Buffer,					// register type: ReadOnlyResource
+		RWTexture,				// register type: ReadWriteResource
+		RWBuffer,				// register type: ReadWriteResource
+		AccelerationStructure,	// register type: ReadOnlyResource
+		TextureDynamicArray,	// register type: ReadOnlyResource
 		Count
 	};
 
@@ -1414,6 +1415,7 @@ namespace UnlimRealms
 	public:
 
 		static inline ur_bool IsDepthStencilFormat(GrafFormat grafFormat);
+		static inline ur_bool IsDescriptorTypeWithDynamicIndexing(GrafDescriptorType grafDescriptorType);
 
 		class UR_DECL ScopedDebugLabel
 		{
