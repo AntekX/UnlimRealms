@@ -59,23 +59,24 @@ DESCRIPTOR_Sampler(							g_SamplerTrilinear,				1);
 DESCRIPTOR_Sampler(							g_SamplerTrilinearWrap,			2);
 DESCRIPTOR_AccelerationStructure(			g_SceneStructure,				0);
 DESCRIPTOR_ByteAddressBuffer(				g_InstanceBuffer,				1);
-DESCRIPTOR_Texture2D(float,					g_GeometryDepth,				2);
-DESCRIPTOR_Texture2D(float4,				g_GeometryImage0,				3);
-DESCRIPTOR_Texture2D(float4,				g_GeometryImage1,				4);
-DESCRIPTOR_Texture2D(float4,				g_GeometryImage2,				5);
-DESCRIPTOR_Texture2D(float4,				g_ColorTexture,					6);
-DESCRIPTOR_Texture2D(float4,				g_NormalTexture,				7);
-DESCRIPTOR_Texture2D(float4,				g_MaskTexture,					8);
-DESCRIPTOR_Texture2D(float4,				g_PrecomputedSky,				9);
-DESCRIPTOR_Texture2D(uint4,					g_TracingInfo,					10);
-DESCRIPTOR_Texture2D(float4,				g_ShadowResult,					11);
-DESCRIPTOR_Texture2D(float4,				g_IndirectLight,				12);
-DESCRIPTOR_Texture2D(float,					g_DepthHistory,					13);
-DESCRIPTOR_Texture2D(uint4,					g_TracingHistory,				14);
-DESCRIPTOR_Texture2D(float4,				g_ShadowHistory,				15);
-DESCRIPTOR_Texture2D(float4,				g_IndirectLightHistory,			16);
-DESCRIPTOR_Texture2D(float4,				g_ShadowMips,					17);
-DESCRIPTOR_Texture2D(float4,				g_BlurSource,					18);
+DESCRIPTOR_ByteAddressBuffer(				g_MeshDescBuffer,				2);
+DESCRIPTOR_Texture2D(float,					g_GeometryDepth,				3);
+DESCRIPTOR_Texture2D(float4,				g_GeometryImage0,				4);
+DESCRIPTOR_Texture2D(float4,				g_GeometryImage1,				5);
+DESCRIPTOR_Texture2D(float4,				g_GeometryImage2,				6);
+DESCRIPTOR_Texture2D(float4,				g_ColorTexture,					7);
+DESCRIPTOR_Texture2D(float4,				g_NormalTexture,				8);
+DESCRIPTOR_Texture2D(float4,				g_MaskTexture,					9);
+DESCRIPTOR_Texture2D(float4,				g_PrecomputedSky,				10);
+DESCRIPTOR_Texture2D(uint4,					g_TracingInfo,					11);
+DESCRIPTOR_Texture2D(float4,				g_ShadowResult,					12);
+DESCRIPTOR_Texture2D(float4,				g_IndirectLight,				13);
+DESCRIPTOR_Texture2D(float,					g_DepthHistory,					14);
+DESCRIPTOR_Texture2D(uint4,					g_TracingHistory,				15);
+DESCRIPTOR_Texture2D(float4,				g_ShadowHistory,				16);
+DESCRIPTOR_Texture2D(float4,				g_IndirectLightHistory,			17);
+DESCRIPTOR_Texture2D(float4,				g_ShadowMips,					18);
+DESCRIPTOR_Texture2D(float4,				g_BlurSource,					19);
 DESCRIPTOR_RWTexture2D(float4,				g_PrecomputedSkyTarget,			0);
 DESCRIPTOR_RWTexture2D(float4,				g_LightingTarget,				1);
 DESCRIPTOR_RWTexture2D(uint4,				g_TracingInfoTarget,			2);
@@ -89,9 +90,9 @@ DESCRIPTOR_RWTexture2D(float4,				g_ShadowMip4,					9);
 
 // descriptor arrays
 
-static const CUINT(TextureArraySize) = 256;
-static const CUINT(BufferArraySize) = 256;
-DESCRIPTOR_ARRAY_Texture2D(TextureArraySize,		g_Texture2DArray,		128);
-//DESCRIPTOR_ARRAY_ByteAddressBuffer(BufferArraySize,	g_BufferArray,			129);
+static const CUINT(g_TextureArraySize) = 256;
+static const CUINT(g_BufferArraySize) = 256;
+DESCRIPTOR_ARRAY_Texture2D(g_TextureArraySize,			g_Texture2DArray,	128);
+DESCRIPTOR_ARRAY_ByteAddressBuffer(g_BufferArraySize,	g_BufferArray,		129);
 
 #endif

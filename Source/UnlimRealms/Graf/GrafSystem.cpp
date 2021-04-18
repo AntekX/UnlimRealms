@@ -756,6 +756,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafDescriptorTable::SetBufferArray(ur_uint bindingIdx, GrafBuffer** buffers, ur_uint bufferCount)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafDescriptorTable::SetRWImage(ur_uint bindingIdx, GrafImage* image)
 	{
 		return Result(NotImplemented);
@@ -1341,7 +1346,7 @@ namespace UnlimRealms
 		{
 			MeshSurfaceData& surfaceData = meshData.Surfaces[surfaceIdx];
 			surfaceData.MaterialID = materialShapeIdsIter->first;
-			surfaceData.PrimtivesOffset = (ur_uint)indicesOffset;
+			surfaceData.PrimitivesOffset = (ur_uint)indicesOffset;
 			surfaceData.PrimtivesCount = 0;
 			for (auto& shapeId : *materialShapeIdsIter->second)
 			{

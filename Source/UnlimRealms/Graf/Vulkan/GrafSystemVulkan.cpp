@@ -76,6 +76,7 @@ namespace UnlimRealms
 	static const ur_uint VulkanBindingOffsetRWBuffer = VulkanBindingOffsetReadWriteResource;
 	static const ur_uint VulkanBindingOffsetAccelerationStructure = VulkanBindingOffsetReadOnlyResource;
 	static const ur_uint VulkanBindingOffsetTextureDynamicArray = VulkanBindingOffsetReadOnlyResource;
+	static const ur_uint VulkanBindingOffsetBufferDynamicArray = VulkanBindingOffsetReadOnlyResource;
 
 	#if defined(UR_GRAF_VULKAN_DEBUG_LAYER)
 	static const char* VulkanLayers[] = {
@@ -4388,6 +4389,36 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafDescriptorTableVulkan::SetBufferArray(ur_uint bindingIdx, GrafBuffer** buffers, ur_uint bufferCount)
+	{
+		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
+
+		std::vector<VkDescriptorBufferInfo> vkDescriptorBufferInfoArray;
+		for (ur_uint bufferIdx = 0; bufferIdx < bufferCount; ++bufferIdx)
+		{
+			VkDescriptorBufferInfo& vkDescriptorBufferInfo = vkDescriptorBufferInfoArray[bufferIdx];
+			vkDescriptorBufferInfo.buffer = static_cast<GrafBufferVulkan*>(buffers[bufferIdx])->GetVkBuffer();
+			vkDescriptorBufferInfo.offset = (VkDeviceSize)0;
+			vkDescriptorBufferInfo.range = VK_WHOLE_SIZE;
+		}
+
+		VkWriteDescriptorSet vkWriteDescriptorSet = {};
+		vkWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		vkWriteDescriptorSet.pNext = ur_null;
+		vkWriteDescriptorSet.dstSet = this->vkDescriptorSet;
+		vkWriteDescriptorSet.dstBinding = bindingIdx + GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(GrafDescriptorType::Buffer);
+		vkWriteDescriptorSet.dstArrayElement = 0;
+		vkWriteDescriptorSet.descriptorCount = ur_uint32(bufferCount);
+		vkWriteDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		vkWriteDescriptorSet.pImageInfo = ur_null;
+		vkWriteDescriptorSet.pBufferInfo = vkDescriptorBufferInfoArray.data();
+		vkWriteDescriptorSet.pTexelBufferView = ur_null;
+
+		vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, ur_null);
+
+		return Result(Success);
+	}
+
 	Result GrafDescriptorTableVulkan::SetRWImage(ur_uint bindingIdx, GrafImage* image)
 	{
 		GrafImageVulkan* grafImageVulkan = static_cast<GrafImageVulkan*>(image);
@@ -5564,6 +5595,7 @@ namespace UnlimRealms
 		case GrafDescriptorType::RWTexture: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; break;
 		case GrafDescriptorType::RWBuffer: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
 		case GrafDescriptorType::TextureDynamicArray: vkDescriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE; break;
+		case GrafDescriptorType::BufferDynamicArray: vkDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
 		#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
 		case GrafDescriptorType::AccelerationStructure: vkDescriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR; break;
 		#endif
@@ -5580,6 +5612,7 @@ namespace UnlimRealms
 		VulkanBindingOffsetRWBuffer,
 		VulkanBindingOffsetAccelerationStructure,
 		VulkanBindingOffsetTextureDynamicArray,
+		VulkanBindingOffsetBufferDynamicArray
 	};
 
 	ur_uint32 GrafUtilsVulkan::GrafToVkDescriptorBindingOffset(GrafDescriptorType descriptorType)

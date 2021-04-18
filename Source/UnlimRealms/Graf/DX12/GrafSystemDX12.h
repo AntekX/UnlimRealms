@@ -465,6 +465,8 @@ namespace UnlimRealms
 
 		virtual Result SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer);
 
+		virtual Result SetBufferArray(ur_uint bindingIdx, GrafBuffer** buffers, ur_uint bufferCount);
+
 		virtual Result SetRWImage(ur_uint bindingIdx, GrafImage* image);
 
 		virtual Result SetRWImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource);

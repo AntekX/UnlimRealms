@@ -502,6 +502,7 @@ namespace UnlimRealms
 		RWBuffer,				// register type: ReadWriteResource
 		AccelerationStructure,	// register type: ReadOnlyResource
 		TextureDynamicArray,	// register type: ReadOnlyResource
+		BufferDynamicArray,		// register type: ReadOnlyResource
 		Count
 	};
 
@@ -1280,6 +1281,8 @@ namespace UnlimRealms
 
 		virtual Result SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer);
 
+		virtual Result SetBufferArray(ur_uint bindingIdx, GrafBuffer** buffers, ur_uint bufferCount);
+
 		virtual Result SetRWImage(ur_uint bindingIdx, GrafImage* image);
 
 		virtual Result SetRWImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource);
@@ -1479,7 +1482,7 @@ namespace UnlimRealms
 
 		struct MeshSurfaceData
 		{
-			ur_uint PrimtivesOffset; // offset in indices if available, otherwise in vertices
+			ur_uint PrimitivesOffset; // offset in indices if available, otherwise in vertices
 			ur_uint PrimtivesCount; // number of triangles
 			ur_uint MaterialID;
 		};

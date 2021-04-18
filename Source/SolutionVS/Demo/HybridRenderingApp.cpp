@@ -443,29 +443,28 @@ int HybridRenderingApp::Run()
 
 			struct SubMesh
 			{
-				ur_uint primtivesOffset;
-				ur_uint primtivesCount;
+				ur_uint primitivesOffset;
+				ur_uint primitivesCount;
 				std::unique_ptr<GrafImage> colorImage;
 				std::unique_ptr<GrafImage> maskImage;
 				std::unique_ptr<GrafImage> normalImage;
 				std::vector<std::unique_ptr<GrafDescriptorTable>> descTablePerFrame;
-			};
-
-			struct DrawData
-			{
+				std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
+				ur_uint64 accelerationStructureHandle;
+				ur_uint32 gpuRegistryIdx;
 				ur_uint instanceCount;
 				ur_uint instanceOfs;
+
+				inline ur_uint64 GetBLASHandle() const { return this->accelerationStructureHandle; }
+				inline ur_uint32 GetGpuRegistryIdx() const { return this->gpuRegistryIdx; }
 			};
 
 			MeshId meshId;
 			std::unique_ptr<GrafBuffer> vertexBuffer;
 			std::unique_ptr<GrafBuffer> indexBuffer;
-			std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
-			ur_uint64 accelerationStructureHandle;
 			ur_uint verticesCount;
 			ur_uint indicesCount;
 			std::vector<SubMesh> subMeshes;
-			DrawData drawData;
 
 			Mesh(GrafSystem &grafSystem) : GrafEntity(grafSystem) {}
 			~Mesh() {}
@@ -478,11 +477,11 @@ int HybridRenderingApp::Run()
 				const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 
 				this->meshId = meshId;
-				this->accelerationStructureHandle = 0;
 				this->verticesCount = ur_uint(meshData.Vertices.size() / sizeof(Mesh::Vertex));
 				this->indicesCount = ur_uint(meshData.Indices.size() / sizeof(Mesh::Index));
 				ur_size vertexStride = sizeof(Vertex);
-				GrafIndexType indexType = (sizeof(Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32);
+				ur_size indexStride = sizeof(Index);
+				GrafIndexType indexType = (indexStride == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32);
 				Mesh::Vertex* vertices = (Mesh::Vertex*)meshData.Vertices.data();
 				Mesh::Index* indices = (Mesh::Index*)meshData.Indices.data();
 
@@ -513,7 +512,7 @@ int HybridRenderingApp::Run()
 					ur_uint(GrafBufferUsageFlag::RayTracing) |
 					ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 				IBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
-				IBParams.BufferDesc.SizeInBytes = indicesCount * sizeof(Index);
+				IBParams.BufferDesc.SizeInBytes = indicesCount * indexStride;
 
 				grafSystem->CreateBuffer(this->indexBuffer);
 				this->indexBuffer->Initialize(grafDevice, IBParams);
@@ -580,8 +579,8 @@ int HybridRenderingApp::Run()
 					return result;
 				};
 
-				GrafCommandList* uploadCmdList = grafRenderer->GetTransientCommandList();
-				uploadCmdList->Begin();
+				GrafCommandList* cmdList = grafRenderer->GetTransientCommandList();
+				cmdList->Begin();
 				subMeshes.resize(meshData.Surfaces.size());
 				for (ur_size surfaceIdx = 0; surfaceIdx < meshData.Surfaces.size(); ++surfaceIdx)
 				{
@@ -589,76 +588,80 @@ int HybridRenderingApp::Run()
 					auto& subMesh = subMeshes[surfaceIdx];
 					auto& materialDesc = meshData.Materials[surfaceData.MaterialID];
 					
-					subMesh.primtivesOffset = surfaceData.PrimtivesOffset;
-					subMesh.primtivesCount = surfaceData.PrimtivesCount;
+					subMesh.primitivesOffset = surfaceData.PrimitivesOffset;
+					subMesh.primitivesCount = surfaceData.PrimtivesCount;
+					subMesh.accelerationStructureHandle = 0;
+					subMesh.gpuRegistryIdx = ur_uint32(-1);
+					subMesh.instanceCount = 0;
+					subMesh.instanceOfs = ur_uint32(-1);
 
 					// textures
-					initializeGrafImage(grafRenderer, uploadCmdList, materialDesc.ColorTexName, subMesh.colorImage);
-					initializeGrafImage(grafRenderer, uploadCmdList, materialDesc.MaskTexName, subMesh.maskImage);
-					initializeGrafImage(grafRenderer, uploadCmdList, materialDesc.NormalTexName, subMesh.normalImage);
+
+					initializeGrafImage(grafRenderer, cmdList, materialDesc.ColorTexName, subMesh.colorImage);
+					initializeGrafImage(grafRenderer, cmdList, materialDesc.MaskTexName, subMesh.maskImage);
+					initializeGrafImage(grafRenderer, cmdList, materialDesc.NormalTexName, subMesh.normalImage);
 
 					// descriptor table
+
 					subMesh.descTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
 					for (auto& descTable : subMesh.descTablePerFrame)
 					{
 						grafSystem->CreateDescriptorTable(descTable);
 						descTable->Initialize(grafDevice, { demoScene->rasterDescTableLayout.get() });
 					}
+
+					// ray tracing data
+
+					if (grafDeviceDesc->RayTracing.RayTraceSupported)
+					{
+						// initialize bottom level acceleration structure container
+
+						GrafAccelerationStructureGeometryDesc accelStructGeomDescBL = {};
+						accelStructGeomDescBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
+						accelStructGeomDescBL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
+						accelStructGeomDescBL.VertexStride = ur_uint32(vertexStride);
+						accelStructGeomDescBL.IndexType = indexType;
+						accelStructGeomDescBL.PrimitiveCountMax = ur_uint32(subMesh.primitivesCount);
+						accelStructGeomDescBL.VertexCountMax = ur_uint32(verticesCount);
+						accelStructGeomDescBL.TransformsEnabled = false;
+
+						GrafAccelerationStructure::InitParams accelStructParamsBL = {};
+						accelStructParamsBL.StructureType = GrafAccelerationStructureType::BottomLevel;
+						accelStructParamsBL.BuildFlags = GrafAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlag::PreferFastTrace);
+						accelStructParamsBL.Geometry = &accelStructGeomDescBL;
+						accelStructParamsBL.GeometryCount = 1;
+
+						grafSystem->CreateAccelerationStructure(subMesh.accelerationStructureBL);
+						subMesh.accelerationStructureBL->Initialize(grafDevice, accelStructParamsBL);
+						subMesh.accelerationStructureHandle = subMesh.accelerationStructureBL->GetDeviceAddress();
+
+						// build bottom level acceleration structure(s)
+
+						GrafAccelerationStructureTrianglesData trianglesData = {};
+						trianglesData.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
+						trianglesData.VertexStride = ur_uint32(vertexStride);
+						trianglesData.VertexCount = ur_uint32(verticesCount);
+						trianglesData.VerticesDeviceAddress = vertexBuffer->GetDeviceAddress();
+						trianglesData.IndexType = indexType;
+						trianglesData.IndicesDeviceAddress = indexBuffer->GetDeviceAddress();
+
+						GrafAccelerationStructureGeometryData geometryDataBL = {};
+						geometryDataBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
+						geometryDataBL.GeometryFlags = ur_uint(GrafAccelerationStructureGeometryFlag::Opaque);
+						geometryDataBL.TrianglesData = &trianglesData;
+						geometryDataBL.PrimitiveCount = ur_uint32(subMesh.primitivesCount);
+						geometryDataBL.PrimitivesOffset = ur_uint32(subMesh.primitivesOffset * indexStride);
+						geometryDataBL.FirstVertexIndex = 0;
+
+						cmdList->BuildAccelerationStructure(subMesh.accelerationStructureBL.get(), &geometryDataBL, 1);
+					}
 				}
-				uploadCmdList->End();
-				grafDevice->Record(uploadCmdList);
+				cmdList->End();
+				grafDevice->Record(cmdList);
 
-				// ray tracing data
-
-				if (grafDeviceDesc->RayTracing.RayTraceSupported)
-				{
-					// initiaize bottom level acceleration structure container
-
-					GrafAccelerationStructureGeometryDesc accelStructGeomDescBL = {};
-					accelStructGeomDescBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
-					accelStructGeomDescBL.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
-					accelStructGeomDescBL.VertexStride = ur_uint32(vertexStride);
-					accelStructGeomDescBL.IndexType = indexType;
-					accelStructGeomDescBL.PrimitiveCountMax = ur_uint32(indicesCount / 3);
-					accelStructGeomDescBL.VertexCountMax = ur_uint32(verticesCount);
-					accelStructGeomDescBL.TransformsEnabled = false;
-
-					GrafAccelerationStructure::InitParams accelStructParamsBL = {};
-					accelStructParamsBL.StructureType = GrafAccelerationStructureType::BottomLevel;
-					accelStructParamsBL.BuildFlags = GrafAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlag::PreferFastTrace);
-					accelStructParamsBL.Geometry = &accelStructGeomDescBL;
-					accelStructParamsBL.GeometryCount = 1;
-
-					grafSystem->CreateAccelerationStructure(this->accelerationStructureBL);
-					this->accelerationStructureBL->Initialize(grafDevice, accelStructParamsBL);
-					this->accelerationStructureHandle = this->accelerationStructureBL->GetDeviceAddress();
-
-					// build bottom level acceleration structure for sample geometry
-
-					GrafAccelerationStructureTrianglesData trianglesData = {};
-					trianglesData.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
-					trianglesData.VertexStride = ur_uint32(vertexStride);
-					trianglesData.VertexCount = ur_uint32(verticesCount);
-					trianglesData.VerticesDeviceAddress = vertexBuffer->GetDeviceAddress();
-					trianglesData.IndexType = indexType;
-					trianglesData.IndicesDeviceAddress = indexBuffer->GetDeviceAddress();
-
-					GrafAccelerationStructureGeometryData geometryDataBL = {};
-					geometryDataBL.GeometryType = GrafAccelerationStructureGeometryType::Triangles;
-					geometryDataBL.GeometryFlags = ur_uint(GrafAccelerationStructureGeometryFlag::Opaque);
-					geometryDataBL.TrianglesData = &trianglesData;
-					geometryDataBL.PrimitiveCount = ur_uint32(indicesCount / 3);
-
-					GrafCommandList* cmdListBuildAccelStructBL = grafRenderer->GetTransientCommandList();
-					cmdListBuildAccelStructBL->Begin();
-					cmdListBuildAccelStructBL->BuildAccelerationStructure(this->accelerationStructureBL.get(), &geometryDataBL, 1);
-					cmdListBuildAccelStructBL->End();
-					grafDevice->Record(cmdListBuildAccelStructBL);
-				}
+				// add to gpu resource registry for dynamic indexing
+				demoScene->gpuResourceRegistry->AddMesh(this);
 			}
-
-			inline MeshId GetMeshId() const { return this->meshId; }
-			inline ur_uint64 GetBLASHandle() const { return this->accelerationStructureHandle; }
 		};
 
 		class GPUResourceRegistry : public GrafEntity
@@ -705,11 +708,12 @@ int HybridRenderingApp::Run()
 					SubMeshDesc subMeshDesc = {};
 					subMeshDesc.VertexBufferDescriptor = meshVBDescriptorIdx;
 					subMeshDesc.IndexBufferDescriptor = meshIBDescriptorIdx;
-					subMeshDesc.PrimitivesOffset = subMesh.primtivesOffset;
+					subMeshDesc.PrimitivesOffset = subMesh.primitivesOffset;
 					subMeshDesc.ColorMapDescriptor = (subMesh.colorImage.get() ? AddImage2D(subMesh.colorImage.get()) : this->defaultImageWhiteIdx);
 					subMeshDesc.NormalMapDescriptor = (subMesh.normalImage.get() ? AddImage2D(subMesh.normalImage.get()) : this->defaultImageNormalIdx);
 					subMeshDesc.MaskMapDescriptor = (subMesh.maskImage.get() ? AddImage2D(subMesh.maskImage.get()) : this->defaultImageWhiteIdx);
 					this->subMeshDescArray.emplace_back(subMeshDesc);
+					subMesh.gpuRegistryIdx = ur_uint32(this->subMeshDescArray.size() - 1);
 				}
 			}
 
@@ -734,6 +738,8 @@ int HybridRenderingApp::Run()
 			}
 
 			inline GrafBuffer* GetSubMeshDescBuffer() const { return this->subMeshDescBuffer.get(); }
+			inline std::vector<GrafImage*>& GetImage2DArray() { return this->image2DArray; }
+			inline std::vector<GrafBuffer*>& GetBufferArray() { return this->bufferArray; }
 
 		private:
 
@@ -844,7 +850,7 @@ int HybridRenderingApp::Run()
 
 			// instance buffer
 
-			static const ur_size InstanceCountMax = 1024;
+			static const ur_size InstanceCountMax = 1024 * 4;
 
 			GrafBuffer::InitParams instanceBufferParams;
 			instanceBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferDst) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
@@ -1091,6 +1097,10 @@ int HybridRenderingApp::Run()
 					g_TracingHistoryDescriptor,
 					g_PrecomputedSkyDescriptor,
 					g_SceneStructureDescriptor,
+					g_InstanceBufferDescriptor,
+					g_MeshDescBufferDescriptor,
+					g_Texture2DArrayDescriptor,
+					//g_BufferArrayDescriptor, // TODO: investigate validation error when both texture2d and buffer array descriptors used
 					g_ShadowTargetDescriptor,
 					g_TracingInfoTargetDescriptor,
 					g_IndirectLightTargetDescriptor,
@@ -1349,6 +1359,10 @@ int HybridRenderingApp::Run()
 					}
 				}
 			}
+
+			// all meshes & images are expected to be initialized at this point
+			// upload registry data to gpu
+			this->gpuResourceRegistry->Upload();
 		}
 
 		void Update(ur_float elapsedSeconds)
@@ -1370,63 +1384,84 @@ int HybridRenderingApp::Run()
 
 			this->sceneConstants.FrameNumber += 1;
 
-			// clear per mesh draw data
+			// update instances
 
 			for (auto& mesh : this->meshes)
 			{
-				memset(&mesh->drawData, 0, sizeof(Mesh::DrawData));
+				for (auto& subNesh : mesh->subMeshes)
+				{
+					subNesh.instanceCount = 0;
+				}
 			}
-
-			// update instances
-
 			sampleInstances.clear();
 			ur_uint instanceBufferOfs = 0;
+			std::vector<ur_float4x4> transforms;
 
 			// plane
-			
 			static const float planeScale = 100.0f;
-			Instance planeInstance =
-			{
-				{
-					planeScale, 0.0f, 0.0f, 0.0f,
-					0.0f, 1.0f, 0.0f, 0.0f,
-					0.0f, 0.0f, planeScale, 0.0f
-				},
-				ur_uint32(MeshId_Plane), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-				ur_uint64(this->meshes[MeshId_Plane]->GetBLASHandle())
+			ur_float4x4 planeTransform = {
+				planeScale, 0.0f, 0.0f, 0.0f,
+				0.0f, 1.0f, 0.0f, 0.0f,
+				0.0f, 0.0f, planeScale, 0.0f,
+				0.0f, 0.0f, 0.0f, 1.0f
 			};
-			this->meshes[MeshId_Plane]->drawData.instanceCount = 1;
-			this->meshes[MeshId_Plane]->drawData.instanceOfs = instanceBufferOfs;
-			instanceBufferOfs += 1;
-			sampleInstances.emplace_back(planeInstance);
-
-			// animated spheres
-			for (ur_size i = 0; i < this->sampleInstanceCount; ++i)
+			for (auto& subMesh : this->meshes[MeshId_Plane]->subMeshes)
 			{
-				ur_float radius = 7.0f;
-				ur_float height = 2.0f;
-				GrafAccelerationStructureInstance meshInstance =
-				{
-					{
-						1.0f, 0.0f, 0.0f, radius * cosf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
-						0.0f, 1.0f, 0.0f, height + cosf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
-						0.0f, 0.0f, 1.0f, radius * sinf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle)
-					},
-					ur_uint32(MeshId_Sphere), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-					ur_uint64(this->meshes[MeshId_Sphere]->GetBLASHandle())
-				};
+				GrafAccelerationStructureInstance meshInstance;
+				memcpy(meshInstance.Transform, &planeTransform, sizeof(ur_float4) * 3);
+				meshInstance.Index = ur_uint32(subMesh.GetGpuRegistryIdx());
+				meshInstance.Mask = 0xff;
+				meshInstance.ShaderTableRecordOffset = 0;
+				meshInstance.Flags = (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable));
+				meshInstance.AccelerationStructureHandle = ur_uint64(subMesh.GetBLASHandle());
+				subMesh.instanceCount = 1;
+				subMesh.instanceOfs = instanceBufferOfs;
+				instanceBufferOfs += 1;
 				sampleInstances.emplace_back(meshInstance);
 			}
-			this->meshes[MeshId_Sphere]->drawData.instanceCount = this->sampleInstanceCount;
-			this->meshes[MeshId_Sphere]->drawData.instanceOfs = instanceBufferOfs;
-			instanceBufferOfs += this->sampleInstanceCount;
+
+			// animated spheres
+			transforms.clear();
+			transforms.resize(this->sampleInstanceCount);
+			ur_float radius = 7.0f;
+			ur_float height = 2.0f;
+			for (ur_size i = 0; i < this->sampleInstanceCount; ++i)
+			{
+				ur_float4x4& transform = transforms[i];
+				transform = {
+					1.0f, 0.0f, 0.0f, radius* cosf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
+					0.0f, 1.0f, 0.0f, height + cosf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
+					0.0f, 0.0f, 1.0f, radius* sinf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
+					0.0f, 0.0f, 0.0f, 1.0f
+				};
+			}
+			for (auto& subMesh : this->meshes[MeshId_Sphere]->subMeshes)
+			{
+				for (ur_size i = 0; i < this->sampleInstanceCount; ++i)
+				{
+					GrafAccelerationStructureInstance meshInstance;
+					memcpy(meshInstance.Transform, &transforms[i], sizeof(ur_float4) * 3);
+					meshInstance.Index = ur_uint32(subMesh.GetGpuRegistryIdx());
+					meshInstance.Mask = 0xff;
+					meshInstance.ShaderTableRecordOffset = 0;
+					meshInstance.Flags = (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable));
+					meshInstance.AccelerationStructureHandle = ur_uint64(subMesh.GetBLASHandle());
+					sampleInstances.emplace_back(meshInstance);
+				}
+				subMesh.instanceCount = this->sampleInstanceCount;
+				subMesh.instanceOfs = instanceBufferOfs;
+				instanceBufferOfs += this->sampleInstanceCount;
+			}
 
 			// static randomly scarttered meshes
-			auto ScatterMeshInstances = [this, &instanceBufferOfs](Mesh* mesh, ur_uint instanceCount, ur_float radius, ur_float size, ur_float posOfs, ur_bool firstInstanceRnd = true) -> void
+			auto ScatterMeshInstances = [this, &instanceBufferOfs, &transforms](Mesh* mesh, ur_uint instanceCount, ur_float radius, ur_float size, ur_float posOfs, ur_bool firstInstanceRnd = true) -> void
 			{
 				if (ur_null == mesh)
 					return;
 
+				// generate per instance transformations
+				transforms.clear();
+				transforms.resize(instanceCount);
 				ur_float3 pos(0.0f, posOfs, 0.0f);
 				ur_float3 frameI, frameJ, frameK;
 				frameJ = ur_float3(0.0f, 1.0, 0.0f);
@@ -1444,21 +1479,32 @@ int HybridRenderingApp::Run()
 					frameI.z = sinf(a);
 					frameK = ur_float3::Cross(frameI, frameJ);
 
-					GrafAccelerationStructureInstance meshInstance =
-					{
-						{
-							frameI.x * size, frameJ.x * size, frameK.x * size, pos.x,
-							frameI.y * size, frameJ.y * size, frameK.y * size, pos.y,
-							frameI.z * size, frameJ.z * size, frameK.z * size, pos.z
-						},
-						ur_uint32(mesh->GetMeshId()), 0xff, 0, (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable)),
-						ur_uint64(mesh->GetBLASHandle())
+					ur_float4x4& transform = transforms[i];
+					transform = {
+						frameI.x* size, frameJ.x* size, frameK.x* size, pos.x,
+						frameI.y* size, frameJ.y* size, frameK.y* size, pos.y,
+						frameI.z* size, frameJ.z* size, frameK.z* size, pos.z,
+						0.0f, 0.0f, 0.0f, 1.0f
 					};
-					this->sampleInstances.emplace_back(meshInstance);
 				}
-				mesh->drawData.instanceCount = instanceCount;
-				mesh->drawData.instanceOfs = instanceBufferOfs;
-				instanceBufferOfs += instanceCount;
+				// fill sub meshes (share transformations but have different Index)
+				for (auto& subMesh : mesh->subMeshes)
+				{
+					for (ur_size i = 0; i < instanceCount; ++i)
+					{
+						GrafAccelerationStructureInstance meshInstance;
+						memcpy(meshInstance.Transform, &transforms[i], sizeof(ur_float4) * 3);
+						meshInstance.Index = ur_uint32(subMesh.GetGpuRegistryIdx());
+						meshInstance.Mask = 0xff;
+						meshInstance.ShaderTableRecordOffset = 0;
+						meshInstance.Flags = (ur_uint(GrafAccelerationStructureInstanceFlag::ForceOpaque) | ur_uint(GrafAccelerationStructureInstanceFlag::TriangleFacingCullDisable));
+						meshInstance.AccelerationStructureHandle = ur_uint64(subMesh.GetBLASHandle());
+						this->sampleInstances.emplace_back(meshInstance);
+					}
+					subMesh.instanceCount = instanceCount;
+					subMesh.instanceOfs = instanceBufferOfs;
+					instanceBufferOfs += instanceCount;
+				}
 			};
 			std::srand(58911192);
 			#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
@@ -1547,29 +1593,18 @@ int HybridRenderingApp::Run()
 			this->sceneCBCrntFrameAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
 			dynamicCB->Write((ur_byte*)&sceneConstants, sizeof(sceneConstants), 0, this->sceneCBCrntFrameAlloc.Offset);
 
-			#if (0)
-			// update descriptor table
-			GrafDescriptorTable* descriptorTable = this->rasterDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
-			descriptorTable->SetConstantBuffer(0, dynamicCB, this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-			descriptorTable->SetBuffer(0, this->instanceBuffer.get());
-			grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
-			#endif
-
 			// rasterize meshes
 
 			grafCmdList->BindPipeline(this->rasterPipelineState.get());
 			for (auto& mesh : this->meshes)
 			{
-				if (0 == mesh->drawData.instanceCount)
-					continue;
-
 				grafCmdList->BindVertexBuffer(mesh->vertexBuffer.get(), 0);
 				grafCmdList->BindIndexBuffer(mesh->indexBuffer.get(), (sizeof(Mesh::Index) == 2 ? GrafIndexType::UINT16 : GrafIndexType::UINT32));
-				#if (0)
-				grafCmdList->DrawIndexed(mesh->indicesCount, mesh->drawData.instanceCount, 0, 0, mesh->drawData.instanceOfs);
-				#else
 				for (auto& subMesh : mesh->subMeshes)
 				{
+					if (0 == subMesh.instanceCount)
+						continue;
+
 					// update descriptor table
 					GrafImage* colorImage = (subMesh.colorImage.get() ? subMesh.colorImage.get() : this->defaultImageWhite.get());
 					GrafImage* normalImage = (subMesh.normalImage.get() ? subMesh.normalImage.get() : this->defaultImageNormal.get());
@@ -1590,10 +1625,9 @@ int HybridRenderingApp::Run()
 
 					// draw
 					grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
-					grafCmdList->DrawIndexed(subMesh.primtivesCount * 3, mesh->drawData.instanceCount,
-						subMesh.primtivesOffset, 0, mesh->drawData.instanceOfs);
+					grafCmdList->DrawIndexed(subMesh.primitivesCount * 3, subMesh.instanceCount,
+						subMesh.primitivesOffset, 0, subMesh.instanceOfs);
 				}
-				#endif
 			}
 		}
 
@@ -1660,6 +1694,10 @@ int HybridRenderingApp::Run()
 			descriptorTable->SetImage(g_TracingHistoryDescriptor, lightingBufferSet->images[LightingImageUsage_TracingInfoHistory].get());
 			descriptorTable->SetImage(g_PrecomputedSkyDescriptor, this->skyImage.get());
 			descriptorTable->SetAccelerationStructure(g_SceneStructureDescriptor, this->accelerationStructureTL.get());
+			descriptorTable->SetBuffer(g_InstanceBufferDescriptor, this->instanceBuffer.get());
+			descriptorTable->SetBuffer(g_MeshDescBufferDescriptor, this->gpuResourceRegistry->GetSubMeshDescBuffer());
+			descriptorTable->SetImageArray(g_Texture2DArrayDescriptor, this->gpuResourceRegistry->GetImage2DArray().data(), std::min((ur_uint32)this->gpuResourceRegistry->GetImage2DArray().size(), g_TextureArraySize));
+			//descriptorTable->SetBufferArray(g_BufferArrayDescriptor, this->gpuResourceRegistry->GetBufferArray().data(), std::min((ur_uint32)this->gpuResourceRegistry->GetBufferArray().size(), g_BufferArraySize));
 			descriptorTable->SetRWImage(g_ShadowTargetDescriptor, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
 			descriptorTable->SetRWImage(g_TracingInfoTargetDescriptor, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
 			descriptorTable->SetRWImage(g_IndirectLightTargetDescriptor, lightingBufferSet->images[LightingImageUsage_IndirectLight].get());

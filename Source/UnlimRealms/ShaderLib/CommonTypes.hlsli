@@ -77,6 +77,7 @@ struct UR_DECL GrafDescriptorWrapper
 #define DESCRIPTOR_StructuredBuffer(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(Buffer, name);
 #define DESCRIPTOR_RWStructuredBuffer(dataType, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_WRAPPER(RWBuffer, name);
 #define DESCRIPTOR_ARRAY_Texture2D(maxSize, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_WRAPPER(TextureDynamicArray, name, maxSize);
+#define DESCRIPTOR_ARRAY_ByteAddressBuffer(maxSize, name, regIdx) DECLARE_DESCRIPTOR_CONSTANT(name, regIdx); DECLARE_GRAF_DESCRIPTOR_RANGE_WRAPPER(BufferDynamicArray, name, maxSize);
 
 #else
 
@@ -94,6 +95,7 @@ struct UR_DECL GrafDescriptorWrapper
 #define DESCRIPTOR_StructuredBuffer(dataType, name, regIdx) StructuredBuffer<dataType> name : register(t##regIdx)
 #define DESCRIPTOR_RWStructuredBuffer(dataType, name, regIdx) RWStructuredBuffer<dataType> name : register(u##regIdx)
 #define DESCRIPTOR_ARRAY_Texture2D(maxSize, name, regIdx) Texture2D name[maxSize] : register(t##regIdx)
+#define DESCRIPTOR_ARRAY_ByteAddressBuffer(maxSize, name, regIdx) ByteAddressBuffer name[maxSize] : register(t##regIdx)
 
 #endif
 
