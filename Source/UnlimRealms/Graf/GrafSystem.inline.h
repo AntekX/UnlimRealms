@@ -170,6 +170,7 @@ namespace UnlimRealms
 		switch (grafDescriptorType)
 		{
 		case GrafDescriptorType::TextureDynamicArray:
+		case GrafDescriptorType::BufferDynamicArray:
 			return true;
 		}
 		return false;
