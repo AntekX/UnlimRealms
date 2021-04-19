@@ -58,6 +58,72 @@ float3x3 ComputeSamplingBasis(const float3 direction)
 	return sampleTBN;
 }
 
+float2 InterpolatedVertexAttribute2(float2 attributes[3], float3 barycentrics)
+{
+	return (attributes[0] * barycentrics.x + attributes[1] * barycentrics.y + attributes[2] * barycentrics.z);
+}
+
+float3 InterpolatedVertexAttribute3(float3 attributes[3], float3 barycentrics)
+{
+	return (attributes[0] * barycentrics.x + attributes[1] * barycentrics.y + attributes[2] * barycentrics.z);
+	//return attributes[0] + (attributes[1] - attributes[0]) * barycentrics[1] + (attributes[2] - attributes[0]) * barycentrics[2];
+}
+
+MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAttributes attribs)
+{
+	MaterialInputs material = (MaterialInputs)0;
+
+	// get hit mesh desc
+	const uint subMeshIdx = InstanceID(); // sub mesh index
+	const uint subMeshBufferOfs = subMeshIdx * SubMeshDescSize;
+	SubMeshDesc subMeshDesc = (SubMeshDesc)0;
+	subMeshDesc.VertexBufferDescriptor = g_MeshDescBuffer.Load(subMeshBufferOfs + 0);
+	subMeshDesc.IndexBufferDescriptor = g_MeshDescBuffer.Load(subMeshBufferOfs + 4);
+	subMeshDesc.PrimitivesOffset = g_MeshDescBuffer.Load(subMeshBufferOfs + 8);
+	subMeshDesc.ColorMapDescriptor = g_MeshDescBuffer.Load(subMeshBufferOfs + 12);
+	subMeshDesc.NormalMapDescriptor = g_MeshDescBuffer.Load(subMeshBufferOfs + 16);
+	subMeshDesc.MaskMapDescriptor = g_MeshDescBuffer.Load(subMeshBufferOfs + 20);
+
+	// instance transformation
+	float3x3 instanceFrame = (float3x3)ObjectToWorld4x3();
+	#if (0)
+	float scaleInv = 1.0 / length(instanceFrame[0]); // unscale
+	instanceFrame[0] = instanceFrame[0] * scaleInv;
+	instanceFrame[1] = instanceFrame[1] * scaleInv;
+	instanceFrame[2] = instanceFrame[2] * scaleInv;
+	#endif
+
+	// fetch hit primitive data
+	ByteAddressBuffer vertexBuffer = g_BufferArray[NonUniformResourceIndex(subMeshDesc.VertexBufferDescriptor)];
+	ByteAddressBuffer indexBuffer = g_BufferArray[NonUniformResourceIndex(subMeshDesc.IndexBufferDescriptor)];
+	Texture2D colorMap = g_Texture2DArray[NonUniformResourceIndex(subMeshDesc.ColorMapDescriptor)];
+	const uint hitPrimitiveIdx = PrimitiveIndex();
+	const uint indexBufferOfs = (subMeshDesc.PrimitivesOffset + hitPrimitiveIdx * 3) * IndexSize;
+	const uint3 indices = indexBuffer.Load3(indexBufferOfs);
+	float3 vertexNormal[3];
+	float2 vertexTexcoord[3];
+	[unroll] for (int i = 0; i < 3; ++i)
+	{
+		uint vertexBufferOfs = indices[i] * VertexSize;
+		vertexNormal[i] = asfloat(vertexBuffer.Load3(vertexBufferOfs + 12));
+		vertexTexcoord[i] = asfloat(vertexBuffer.Load2(vertexBufferOfs + 36));
+	}
+	const float3 baryCoords = float3(1.0 - attribs.barycentrics.x - attribs.barycentrics.y, attribs.barycentrics.x, attribs.barycentrics.y);
+	float3 normal = normalize(mul(InterpolatedVertexAttribute3(vertexNormal, baryCoords), instanceFrame));
+	float2 texCoord = InterpolatedVertexAttribute2(vertexTexcoord, baryCoords);
+	#if (1)
+	texCoord = float2(texCoord.x, 1.0 - texCoord.y); // TODO: investigate why texCoord.y is inverted...
+	#endif
+	float3 baseColor = colorMap.SampleLevel(g_SamplerBilinearWrap, texCoord, 0).xyz;
+
+	// fill material
+	
+	material.baseColor.xyz = baseColor;
+	material.normal = normal;
+
+	return material;
+}
+
 // ray generation: direct light
 
 [shader("raygeneration")]
@@ -276,12 +342,19 @@ void RayGenDirect()
 			for (uint isample = 0; isample < g_SceneCB.IndirectSamplesPerFrame; ++isample)
 			{
 				float3 sampleDir = GetHemisphereSampleDirection(isample + sampleIdOfs, sampleCount);
+				#if (RT_REFLECTION_TEST)
+				ray.Direction = reflect(normalize(worldPos - g_SceneCB.CameraPos.xyz), gbData.Normal);
+				#else
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
+				#endif
 
 				RayDataDirect rayData = (RayDataDirect)0;
 				rayData.occluded = true;
 				rayData.recusrionDepth = 0;
 				rayData.hitDist = ray.TMax;
+				#if (RT_REFLECTION_TEST)
+				rayData.color = 0.0;
+				#endif
 
 				// ray trace
 				uint instanceInclusionMask = 0xff;
@@ -299,6 +372,14 @@ void RayGenDirect()
 				float sampleOcclusion = float(rayData.occluded) * saturate(1.0 - rayData.hitDist / ray.TMax);
 				ambientOcclusion += sampleOcclusion;
 
+				#if (RT_REFLECTION_TEST)
+				if (rayData.occluded)
+					skyLight += rayData.color;
+				else
+					skyLight += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, worldPos, ray.Direction).xyz;
+
+				#else
+
 				float3 skyDir = ray.Direction;
 				float NdotL = saturate(dot(gbData.Normal, ray.Direction));
 				float3 absorption = 1.0;
@@ -308,7 +389,8 @@ void RayGenDirect()
 					skyDir = reflect(skyDir, gbData.Normal);
 					absorption = g_SceneCB.Material.BaseColor;
 				}
-				skyLight += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz * absorption * NdotL * (1.0 - sampleOcclusion);
+				skyLight += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, worldPos, skyDir).xyz * absorption * NdotL * (1.0 - sampleOcclusion);
+				#endif
 			}
 			ambientOcclusion = 1.0 - ambientOcclusion / g_SceneCB.IndirectSamplesPerFrame;
 			indirectLight = skyLight / g_SceneCB.IndirectSamplesPerFrame;
@@ -318,7 +400,7 @@ void RayGenDirect()
 			// simplified ambient
 			float3 skyDir = float3(gbData.Normal.x, max(gbData.Normal.y, 0.0), gbData.Normal.z);
 			skyDir = normalize(skyDir * 0.5 + WorldUp);
-			float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, worldPos, skyDir).xyz;
+			float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, worldPos, skyDir).xyz;
 			indirectLight = skyLight * 0.05;
 		}
 	}
@@ -349,12 +431,42 @@ void ClosestHitDirect(inout RayDataDirect rayData, in BuiltInTriangleIntersectio
 	rayData.hitDist = RayTCurrent();
 	rayData.recusrionDepth += 1;
 
-	#if (0)
-	// TODO
+#if (RT_REFLECTION_TEST)
+	
+	// read hit surface material
+	MaterialInputs material = GetMeshMaterialAtRayHitPoint(attribs);
+	
+	// calculate reflected radiance
+	const float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
+	LightingParams lightingParams = (LightingParams)0;
+	getLightingParams(hitWorldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
+	float3 directLight = 0;
+	for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
+	{
+		LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
+		float3 lightDir = (LightType_Directional == light.Type ? -light.Direction : normalize(light.Position.xyz - hitWorldPos.xyz));
+		float shadowFactor = 1.0;
+		float NoL = dot(lightDir, lightingParams.normal);
+		shadowFactor *= saturate(NoL * 10.0); // approximate self shadowing at grazing angles
+		float specularOcclusion = shadowFactor;
+		directLight += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
+	}
+	rayData.color += directLight;
+#endif
 
+#if (0)
+	// TODO
 	const uint IndirectLightBounces = 1;
 	if (rayData.recusrionDepth <= IndirectLightBounces)
 	{
+		// reflected ray
+		const float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
+		RayDesc ray;
+		ray.Origin = hitWorldPos;
+		ray.TMax = 100.0;
+		ray.TMin = 1.0e-3;
+		ray.Direction = reflect(WorldRayDirection(), material.normal);
+
 		// ray trace
 		uint instanceInclusionMask = 0xff;
 		uint rayContributionToHitGroupIndex = 0;
@@ -368,6 +480,5 @@ void ClosestHitDirect(inout RayDataDirect rayData, in BuiltInTriangleIntersectio
 			missShaderIndex,
 			ray, rayData);
 	}
-
-	#endif
+#endif
 }

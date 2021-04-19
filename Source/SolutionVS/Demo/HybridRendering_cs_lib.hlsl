@@ -41,7 +41,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	[branch] if (isSky)
 	{
-		lightingResult = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerTrilinearWrap, g_SceneCB.CameraPos.xyz, worldRay).xyz;
+		lightingResult = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, g_SceneCB.CameraPos.xyz, worldRay).xyz;
 	}
 	else
 	{
@@ -596,7 +596,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		float indirectLightHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
 		indirectLightHistoryConfidence = saturate((indirectLightHistoryConfidence - g_SceneCB.DebugVec1[1]) / (1.0 - g_SceneCB.DebugVec1[1]));
 		#endif
-		
+
 		uint shadowCounter = (uint)floor(float(tracingInfoHistory[1]) * shadowHistoryConfidence + 0.5);
 		float shadowHistoryWeight = float(shadowCounter) / (shadowCounter + 1);
 		uint indirectLightCounter = (uint)floor(float(tracingInfoHistory[2]) * indirectLightHistoryConfidence + 0.5);

@@ -7,9 +7,6 @@
 #include "Atmosphere/AtmosphericScattering.hlsli"
 #include "HybridRenderingCommon.hlsli"
 
-// Instance format must be up to date with GrafAccelerationStructureInstance
-static const uint InstanceStride = 64;
-
 struct MeshVertexInput
 {
 	float3 Pos		: POSITION;
@@ -78,6 +75,9 @@ struct RayDataDirect
 	// TEMP: additional data as struct is shared with GI
 	uint recusrionDepth;
 	float hitDist;
+	#if (RT_REFLECTION_TEST)
+	float3 color;
+	#endif
 };
 
 // Gemotry buffer utils

@@ -1246,11 +1246,11 @@ namespace UnlimRealms
 			break;
 		case GrafBufferState::VertexBuffer:
 			vkBufferBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-			vkStageSrc = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
 			break;
 		case GrafBufferState::IndexBuffer:
 			vkBufferBarrier.srcAccessMask = VK_ACCESS_INDEX_READ_BIT;
-			vkStageSrc = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+			vkStageSrc = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
 			break;
 		case GrafBufferState::ConstantBuffer:
 			vkBufferBarrier.srcAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
@@ -1304,11 +1304,11 @@ namespace UnlimRealms
 			break;
 		case GrafBufferState::VertexBuffer:
 			vkBufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-			vkStageDst = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
 			break;
 		case GrafBufferState::IndexBuffer:
 			vkBufferBarrier.dstAccessMask = VK_ACCESS_INDEX_READ_BIT;
-			vkStageDst = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
 			break;
 		case GrafBufferState::ConstantBuffer:
 			vkBufferBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
@@ -4393,7 +4393,7 @@ namespace UnlimRealms
 	{
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
 
-		std::vector<VkDescriptorBufferInfo> vkDescriptorBufferInfoArray;
+		std::vector<VkDescriptorBufferInfo> vkDescriptorBufferInfoArray(bufferCount);
 		for (ur_uint bufferIdx = 0; bufferIdx < bufferCount; ++bufferIdx)
 		{
 			VkDescriptorBufferInfo& vkDescriptorBufferInfo = vkDescriptorBufferInfoArray[bufferIdx];

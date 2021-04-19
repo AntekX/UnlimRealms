@@ -3,6 +3,8 @@
 
 #include "ShaderLib/CommonTypes.hlsli"
 
+#define RT_REFLECTION_TEST 0
+
 // constant buffers
 
 struct SceneConstants
@@ -50,13 +52,18 @@ struct SubMeshDesc
 	CUINT(NormalMapDescriptor);
 	CUINT(MaskMapDescriptor);
 };
+static const CUINT(SubMeshDescSize) = 24;
+static const CUINT(InstanceSize) = 64; // sizeof(GrafAccelerationStructureInstance)
+static const CUINT(VertexSize) = 44; // sizeof(Mesh::Vertex)
+static const CUINT(IndexSize) = 4; // sizeof(Mesh::Index)
 
 // descriptors
 
 DESCRIPTOR_ConstantBuffer(SceneConstants,	g_SceneCB,						0);
 DESCRIPTOR_Sampler(							g_SamplerBilinear,				0);
-DESCRIPTOR_Sampler(							g_SamplerTrilinear,				1);
-DESCRIPTOR_Sampler(							g_SamplerTrilinearWrap,			2);
+DESCRIPTOR_Sampler(							g_SamplerBilinearWrap,			1);
+DESCRIPTOR_Sampler(							g_SamplerTrilinear,				2);
+DESCRIPTOR_Sampler(							g_SamplerTrilinearWrap,			3);
 DESCRIPTOR_AccelerationStructure(			g_SceneStructure,				0);
 DESCRIPTOR_ByteAddressBuffer(				g_InstanceBuffer,				1);
 DESCRIPTOR_ByteAddressBuffer(				g_MeshDescBuffer,				2);
@@ -93,6 +100,6 @@ DESCRIPTOR_RWTexture2D(float4,				g_ShadowMip4,					9);
 static const CUINT(g_TextureArraySize) = 256;
 static const CUINT(g_BufferArraySize) = 256;
 DESCRIPTOR_ARRAY_Texture2D(g_TextureArraySize,			g_Texture2DArray,	128);
-DESCRIPTOR_ARRAY_ByteAddressBuffer(g_BufferArraySize,	g_BufferArray,		129);
+DESCRIPTOR_ARRAY_ByteAddressBuffer(g_BufferArraySize,	g_BufferArray,		384);
 
 #endif

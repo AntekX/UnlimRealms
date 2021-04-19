@@ -6,7 +6,7 @@ MeshPixelInput main(MeshVertexInput input, uint instanceId : SV_InstanceID)
 	MeshPixelInput output;
 
 	// load instance data
-	uint instanceOfs = instanceId * InstanceStride;
+	uint instanceOfs = instanceId * InstanceSize;
 	float3x4 instanceTransform;
 	instanceTransform[0] = asfloat(g_InstanceBuffer.Load4(instanceOfs + 0));
 	instanceTransform[1] = asfloat(g_InstanceBuffer.Load4(instanceOfs + 16));

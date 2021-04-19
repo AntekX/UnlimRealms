@@ -792,6 +792,7 @@ int HybridRenderingApp::Run()
 		std::unique_ptr<GrafShader> shaderVertex;
 		std::unique_ptr<GrafShader> shaderPixel;
 		std::unique_ptr<GrafSampler> samplerBilinear;
+		std::unique_ptr<GrafSampler> samplerBilinearWrap;
 		std::unique_ptr<GrafSampler> samplerTrilinear;
 		std::unique_ptr<GrafSampler> samplerTrilinearWrap;
 		SceneConstants sceneConstants;
@@ -903,6 +904,14 @@ int HybridRenderingApp::Run()
 			grafSystem->CreateSampler(this->samplerBilinear);
 			this->samplerBilinear->Initialize(grafDevice, { samplerBilinearDesc });
 
+			GrafSamplerDesc samplerBilinearWrapDesc = {
+				GrafFilterType::Linear, GrafFilterType::Linear, GrafFilterType::Nearest,
+				GrafAddressMode::Wrap, GrafAddressMode::Wrap, GrafAddressMode::Wrap,
+				false, 1.0f, 0.0f, 0.0f, 128.0f
+			};
+			grafSystem->CreateSampler(this->samplerBilinearWrap);
+			this->samplerBilinearWrap->Initialize(grafDevice, { samplerBilinearWrapDesc });
+
 			GrafSamplerDesc samplerTrilinearDesc = {
 				GrafFilterType::Linear, GrafFilterType::Linear, GrafFilterType::Linear,
 				GrafAddressMode::Clamp, GrafAddressMode::Clamp, GrafAddressMode::Clamp,
@@ -928,7 +937,6 @@ int HybridRenderingApp::Run()
 				g_ColorTextureDescriptor,
 				g_NormalTextureDescriptor,
 				g_MaskTextureDescriptor,
-				g_Texture2DArrayDescriptor,
 			};
 			GrafDescriptorTableLayoutDesc rasterDescTableLayoutDesc = {
 				ur_uint(GrafShaderStageFlag::Vertex) |
@@ -1026,9 +1034,8 @@ int HybridRenderingApp::Run()
 
 			GrafDescriptorRangeDesc lightingDescTableLayoutRanges[] = {
 				g_SceneCBDescriptor,
-				g_SamplerBilinearDescriptor,
+				g_SamplerBilinearWrapDescriptor,
 				g_SamplerTrilinearDescriptor,
-				g_SamplerTrilinearWrapDescriptor,
 				g_GeometryDepthDescriptor,
 				g_GeometryImage0Descriptor,
 				g_GeometryImage1Descriptor,
@@ -1087,7 +1094,7 @@ int HybridRenderingApp::Run()
 
 				GrafDescriptorRangeDesc raytraceDescTableLayoutRanges[] = {
 					g_SceneCBDescriptor,
-					g_SamplerTrilinearWrapDescriptor,
+					g_SamplerBilinearWrapDescriptor,
 					g_GeometryDepthDescriptor,
 					g_GeometryImage0Descriptor,
 					g_GeometryImage1Descriptor,
@@ -1100,7 +1107,7 @@ int HybridRenderingApp::Run()
 					g_InstanceBufferDescriptor,
 					g_MeshDescBufferDescriptor,
 					g_Texture2DArrayDescriptor,
-					//g_BufferArrayDescriptor, // TODO: investigate validation error when both texture2d and buffer array descriptors used
+					g_BufferArrayDescriptor,
 					g_ShadowTargetDescriptor,
 					g_TracingInfoTargetDescriptor,
 					g_IndirectLightTargetDescriptor,
@@ -1110,6 +1117,8 @@ int HybridRenderingApp::Run()
 					raytraceDescTableLayoutRanges, ur_array_size(raytraceDescTableLayoutRanges)
 				};
 				grafSystem->CreateDescriptorTableLayout(this->raytraceDescTableLayout);
+				// TODO: investigate validation error when both texture2d and buffer array descriptors used
+				// note: two descriptor arrays can be used in the same descriptor set if their bindings are sufficiently spaced from one another...
 				this->raytraceDescTableLayout->Initialize(grafDevice, { raytraceDescTableLayoutDesc });
 				this->raytraceDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
 				for (auto& descTable : this->raytraceDescTablePerFrame)
@@ -1617,12 +1626,6 @@ int HybridRenderingApp::Run()
 					descriptorTable->SetImage(g_NormalTextureDescriptor, normalImage);
 					descriptorTable->SetImage(g_MaskTextureDescriptor, maskImage);
 					
-					// TEMP: dynamic indexing test
-					#if (0)
-					GrafImage* materialImages[] = { colorImage, normalImage, maskImage };
-					descriptorTable->SetImageArray(g_Texture2DArrayDescriptor, materialImages, ur_array_size(materialImages));
-					#endif
-
 					// draw
 					grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
 					grafCmdList->DrawIndexed(subMesh.primitivesCount * 3, subMesh.instanceCount,
@@ -1684,7 +1687,7 @@ int HybridRenderingApp::Run()
 
 			GrafDescriptorTable* descriptorTable = this->raytraceDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-			descriptorTable->SetSampler(g_SamplerTrilinearWrapDescriptor, this->samplerTrilinearWrap.get());
+			descriptorTable->SetSampler(g_SamplerBilinearWrapDescriptor, this->samplerBilinearWrap.get());
 			descriptorTable->SetImage(g_GeometryDepthDescriptor, renderTargetSet->images[RenderTargetImageUsage_Depth]);
 			descriptorTable->SetImage(g_GeometryImage0Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry0]);
 			descriptorTable->SetImage(g_GeometryImage1Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry1]);
@@ -1697,7 +1700,7 @@ int HybridRenderingApp::Run()
 			descriptorTable->SetBuffer(g_InstanceBufferDescriptor, this->instanceBuffer.get());
 			descriptorTable->SetBuffer(g_MeshDescBufferDescriptor, this->gpuResourceRegistry->GetSubMeshDescBuffer());
 			descriptorTable->SetImageArray(g_Texture2DArrayDescriptor, this->gpuResourceRegistry->GetImage2DArray().data(), std::min((ur_uint32)this->gpuResourceRegistry->GetImage2DArray().size(), g_TextureArraySize));
-			//descriptorTable->SetBufferArray(g_BufferArrayDescriptor, this->gpuResourceRegistry->GetBufferArray().data(), std::min((ur_uint32)this->gpuResourceRegistry->GetBufferArray().size(), g_BufferArraySize));
+			descriptorTable->SetBufferArray(g_BufferArrayDescriptor, this->gpuResourceRegistry->GetBufferArray().data(), std::min((ur_uint32)this->gpuResourceRegistry->GetBufferArray().size(), g_BufferArraySize));
 			descriptorTable->SetRWImage(g_ShadowTargetDescriptor, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());
 			descriptorTable->SetRWImage(g_TracingInfoTargetDescriptor, lightingBufferSet->images[LightingImageUsage_TracingInfo].get());
 			descriptorTable->SetRWImage(g_IndirectLightTargetDescriptor, lightingBufferSet->images[LightingImageUsage_IndirectLight].get());
@@ -1857,9 +1860,8 @@ int HybridRenderingApp::Run()
 
 			GrafDescriptorTable* descriptorTable = this->lightingDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
-			descriptorTable->SetSampler(g_SamplerBilinearDescriptor, this->samplerBilinear.get());
+			descriptorTable->SetSampler(g_SamplerBilinearWrapDescriptor, this->samplerBilinearWrap.get());
 			descriptorTable->SetSampler(g_SamplerTrilinearDescriptor, this->samplerTrilinear.get());
-			descriptorTable->SetSampler(g_SamplerTrilinearWrapDescriptor, this->samplerTrilinearWrap.get());
 			descriptorTable->SetImage(g_GeometryDepthDescriptor, renderTargetSet->images[RenderTargetImageUsage_Depth]);
 			descriptorTable->SetImage(g_GeometryImage0Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry0]);
 			descriptorTable->SetImage(g_GeometryImage1Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry1]);
@@ -2195,6 +2197,15 @@ int HybridRenderingApp::Run()
 					}
 				}
 
+				if (demoScene != ur_null)
+				{
+					for (auto& mesh : demoScene->meshes)
+					{
+						grafCmdListCrnt->BufferMemoryBarrier(mesh->vertexBuffer.get(), GrafBufferState::Current, GrafBufferState::VertexBuffer);
+						grafCmdListCrnt->BufferMemoryBarrier(mesh->indexBuffer.get(), GrafBufferState::Current, GrafBufferState::IndexBuffer);
+					}
+				}
+
 				grafCmdListCrnt->BeginRenderPass(rasterRenderPass.get(), renderTargetSet->renderTarget);
 
 				if (demoScene != ur_null)
@@ -2263,6 +2274,12 @@ int HybridRenderingApp::Run()
 				if (demoScene != ur_null)
 				{
 					grafCmdListCrnt->ImageMemoryBarrier(demoScene->skyImage.get(), GrafImageState::Current, GrafImageState::RayTracingRead);
+
+					for (auto& mesh : demoScene->meshes)
+					{
+						grafCmdListCrnt->BufferMemoryBarrier(mesh->vertexBuffer.get(), GrafBufferState::Current, GrafBufferState::RayTracingRead);
+						grafCmdListCrnt->BufferMemoryBarrier(mesh->indexBuffer.get(), GrafBufferState::Current, GrafBufferState::RayTracingRead);
+					}
 
 					demoScene->RayTrace(grafCmdListCrnt, renderTargetSet.get(), lightingBufferSet.get());
 				}
