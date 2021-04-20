@@ -445,6 +445,7 @@ int HybridRenderingApp::Run()
 			{
 				ur_uint primitivesOffset;
 				ur_uint primitivesCount;
+				ur_uint materialID;
 				std::unique_ptr<GrafImage> colorImage;
 				std::unique_ptr<GrafImage> maskImage;
 				std::unique_ptr<GrafImage> normalImage;
@@ -464,6 +465,7 @@ int HybridRenderingApp::Run()
 			std::unique_ptr<GrafBuffer> indexBuffer;
 			ur_uint verticesCount;
 			ur_uint indicesCount;
+			std::vector<MeshMaterialDesc> materials;
 			std::vector<SubMesh> subMeshes;
 
 			Mesh(GrafSystem &grafSystem) : GrafEntity(grafSystem) {}
@@ -518,6 +520,26 @@ int HybridRenderingApp::Run()
 				this->indexBuffer->Initialize(grafDevice, IBParams);
 
 				grafRenderer->Upload((ur_byte*)indices, this->indexBuffer.get(), IBParams.BufferDesc.SizeInBytes);
+
+				// mesh materials
+
+				this->materials.reserve(meshData.Materials.size());
+				for (auto& srcMaterial : meshData.Materials)
+				{
+					this->materials.emplace_back();
+					auto& material = this->materials.back();
+					material = {};
+					material.BaseColor = srcMaterial.BaseColor;
+					material.Roughness = srcMaterial.Roughness;
+					material.EmissiveColor = srcMaterial.EmissiveColor;
+					material.Metallic = srcMaterial.Metallic;
+					material.SheenColor = srcMaterial.SheenColor;
+					material.Reflectance = srcMaterial.Reflectance;
+					material.AnisotropyDirection = srcMaterial.AnisotropyDirection;
+					material.Anisotropy = srcMaterial.Anisotropy;
+					material.ClearCoat = srcMaterial.ClearCoat;
+					material.ClearCoatRoughness = srcMaterial.ClearCoatRoughness;
+				}
 
 				// per material sub mesh data
 
@@ -590,6 +612,7 @@ int HybridRenderingApp::Run()
 					
 					subMesh.primitivesOffset = surfaceData.PrimitivesOffset;
 					subMesh.primitivesCount = surfaceData.PrimtivesCount;
+					subMesh.materialID = surfaceData.MaterialID;
 					subMesh.accelerationStructureHandle = 0;
 					subMesh.gpuRegistryIdx = ur_uint32(-1);
 					subMesh.instanceCount = 0;
@@ -699,10 +722,21 @@ int HybridRenderingApp::Run()
 				return ur_uint32(this->bufferArray.size() - 1);
 			}
 
+			ur_uint32 AddMaterial(const MeshMaterialDesc& materialDesc)
+			{
+				this->materialDescArray.emplace_back(materialDesc);
+				return ur_uint32(this->materialDescArray.size() - 1);
+			}
+
 			void AddMesh(Mesh* mesh)
 			{
 				ur_uint32 meshVBDescriptorIdx = AddBuffer(mesh->vertexBuffer.get());
 				ur_uint32 meshIBDescriptorIdx = AddBuffer(mesh->indexBuffer.get());
+				ur_uint32 meshFirstMaterialIdx = AddMaterial(mesh->materials[0]); // at least one default material always exists
+				for (ur_size imat = 1; imat < mesh->materials.size(); ++imat)
+				{
+					AddMaterial(mesh->materials[imat]);
+				}
 				for (Mesh::SubMesh& subMesh : mesh->subMeshes)
 				{
 					SubMeshDesc subMeshDesc = {};
@@ -712,6 +746,7 @@ int HybridRenderingApp::Run()
 					subMeshDesc.ColorMapDescriptor = (subMesh.colorImage.get() ? AddImage2D(subMesh.colorImage.get()) : this->defaultImageWhiteIdx);
 					subMeshDesc.NormalMapDescriptor = (subMesh.normalImage.get() ? AddImage2D(subMesh.normalImage.get()) : this->defaultImageNormalIdx);
 					subMeshDesc.MaskMapDescriptor = (subMesh.maskImage.get() ? AddImage2D(subMesh.maskImage.get()) : this->defaultImageWhiteIdx);
+					subMeshDesc.MaterialBufferIndex = meshFirstMaterialIdx + subMesh.materialID;
 					this->subMeshDescArray.emplace_back(subMeshDesc);
 					subMesh.gpuRegistryIdx = ur_uint32(this->subMeshDescArray.size() - 1);
 				}
@@ -722,22 +757,36 @@ int HybridRenderingApp::Run()
 				GrafRenderer* grafRenderer = scene.grafRenderer;
 				GrafSystem* grafSystem = grafRenderer->GetGrafSystem();
 				GrafDevice* grafDevice = grafRenderer->GetGrafDevice();
-				
-				grafRenderer->SafeDelete(this->subMeshDescBuffer.release());
-				if (this->subMeshDescArray.empty())
-					return;
-				
-				grafSystem->CreateBuffer(this->subMeshDescBuffer);
-				GrafBuffer::InitParams bufferParams = {};
-				bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferDst) | ur_uint(GrafBufferUsageFlag::RayTracing);
-				bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
-				bufferParams.BufferDesc.SizeInBytes = this->subMeshDescArray.size() * sizeof(SubMeshDesc);
-				this->subMeshDescBuffer->Initialize(grafDevice, bufferParams);
 
-				grafRenderer->Upload((ur_byte*)this->subMeshDescArray.data(), this->subMeshDescBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
+				grafRenderer->SafeDelete(this->subMeshDescBuffer.release());
+				if (!this->subMeshDescArray.empty())
+				{
+					grafSystem->CreateBuffer(this->subMeshDescBuffer);
+					GrafBuffer::InitParams bufferParams = {};
+					bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferDst) | ur_uint(GrafBufferUsageFlag::RayTracing);
+					bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
+					bufferParams.BufferDesc.SizeInBytes = this->subMeshDescArray.size() * sizeof(SubMeshDesc);
+					this->subMeshDescBuffer->Initialize(grafDevice, bufferParams);
+
+					grafRenderer->Upload((ur_byte*)this->subMeshDescArray.data(), this->subMeshDescBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
+				}
+
+				grafRenderer->SafeDelete(this->materialDescBuffer.release());
+				if (!this->materialDescArray.empty())
+				{
+					grafSystem->CreateBuffer(this->materialDescBuffer);
+					GrafBuffer::InitParams bufferParams = {};
+					bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferDst) | ur_uint(GrafBufferUsageFlag::RayTracing);
+					bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
+					bufferParams.BufferDesc.SizeInBytes = this->materialDescArray.size() * sizeof(MeshMaterialDesc);
+					this->materialDescBuffer->Initialize(grafDevice, bufferParams);
+
+					grafRenderer->Upload((ur_byte*)this->materialDescArray.data(), this->materialDescBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
+				}
 			}
 
 			inline GrafBuffer* GetSubMeshDescBuffer() const { return this->subMeshDescBuffer.get(); }
+			inline GrafBuffer* GetMaterialDescBuffer() const { return this->materialDescBuffer.get(); }
 			inline std::vector<GrafImage*>& GetImage2DArray() { return this->image2DArray; }
 			inline std::vector<GrafBuffer*>& GetBufferArray() { return this->bufferArray; }
 
@@ -746,6 +795,8 @@ int HybridRenderingApp::Run()
 			DemoScene& scene;
 			std::vector<SubMeshDesc> subMeshDescArray;
 			std::unique_ptr<GrafBuffer> subMeshDescBuffer;
+			std::vector<MeshMaterialDesc> materialDescArray;
+			std::unique_ptr<GrafBuffer> materialDescBuffer;
 			std::vector<GrafImage*> image2DArray;
 			std::vector<GrafBuffer*> bufferArray;
 			ur_uint32 defaultImageWhiteIdx;
@@ -1106,19 +1157,20 @@ int HybridRenderingApp::Run()
 					g_SceneStructureDescriptor,
 					g_InstanceBufferDescriptor,
 					g_MeshDescBufferDescriptor,
+					g_MaterialDescBufferDescriptor,
 					g_Texture2DArrayDescriptor,
 					g_BufferArrayDescriptor,
 					g_ShadowTargetDescriptor,
 					g_TracingInfoTargetDescriptor,
 					g_IndirectLightTargetDescriptor,
+					// TODO: texture2d and buffer arrays are used in the same descriptor set, which is against the specification;
+					// however, it works fine while the bindings are sufficiently spaced from one another (buffer array binding slot > texture array slot + array size)
 				};
 				GrafDescriptorTableLayoutDesc raytraceDescTableLayoutDesc = {
 					ur_uint(GrafShaderStageFlag::AllRayTracing),
 					raytraceDescTableLayoutRanges, ur_array_size(raytraceDescTableLayoutRanges)
 				};
 				grafSystem->CreateDescriptorTableLayout(this->raytraceDescTableLayout);
-				// TODO: investigate validation error when both texture2d and buffer array descriptors used
-				// note: two descriptor arrays can be used in the same descriptor set if their bindings are sufficiently spaced from one another...
 				this->raytraceDescTableLayout->Initialize(grafDevice, { raytraceDescTableLayoutDesc });
 				this->raytraceDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
 				for (auto& descTable : this->raytraceDescTablePerFrame)
@@ -1699,6 +1751,7 @@ int HybridRenderingApp::Run()
 			descriptorTable->SetAccelerationStructure(g_SceneStructureDescriptor, this->accelerationStructureTL.get());
 			descriptorTable->SetBuffer(g_InstanceBufferDescriptor, this->instanceBuffer.get());
 			descriptorTable->SetBuffer(g_MeshDescBufferDescriptor, this->gpuResourceRegistry->GetSubMeshDescBuffer());
+			descriptorTable->SetBuffer(g_MaterialDescBufferDescriptor, this->gpuResourceRegistry->GetMaterialDescBuffer());
 			descriptorTable->SetImageArray(g_Texture2DArrayDescriptor, this->gpuResourceRegistry->GetImage2DArray().data(), std::min((ur_uint32)this->gpuResourceRegistry->GetImage2DArray().size(), g_TextureArraySize));
 			descriptorTable->SetBufferArray(g_BufferArrayDescriptor, this->gpuResourceRegistry->GetBufferArray().data(), std::min((ur_uint32)this->gpuResourceRegistry->GetBufferArray().size(), g_BufferArraySize));
 			descriptorTable->SetRWImage(g_ShadowTargetDescriptor, lightingBufferSet->images[LightingImageUsage_DirectShadow].get());

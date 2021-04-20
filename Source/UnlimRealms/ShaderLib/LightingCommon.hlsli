@@ -38,6 +38,7 @@ struct LightDesc
 	CUINT	(Type);
 	CFLOAT3	(__pad0);
 };
+static const CUINT(LightDescSize) = 64;
 
 #define LIGHT_SOURCES_MAX 8
 struct LightingDesc
@@ -61,5 +62,6 @@ struct MeshMaterialDesc
 	CFLOAT	(ClearCoatRoughness);
 	CFLOAT2	(__pad0);
 };
+static const CUINT(MeshMaterialDescSize) = 80;
 
 #endif

@@ -83,6 +83,7 @@ MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAtt
 	subMeshDesc.ColorMapDescriptor = g_MeshDescBuffer.Load(subMeshBufferOfs + 12);
 	subMeshDesc.NormalMapDescriptor = g_MeshDescBuffer.Load(subMeshBufferOfs + 16);
 	subMeshDesc.MaskMapDescriptor = g_MeshDescBuffer.Load(subMeshBufferOfs + 20);
+	subMeshDesc.MaterialBufferIndex = g_MeshDescBuffer.Load(subMeshBufferOfs + 24);
 
 	// instance transformation
 	float3x3 instanceFrame = (float3x3)ObjectToWorld4x3();
@@ -93,10 +94,15 @@ MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAtt
 	instanceFrame[2] = instanceFrame[2] * scaleInv;
 	#endif
 
+	// load hit mesh material desc
+	const uint materialBufferOfs = subMeshDesc.MaterialBufferIndex * MeshMaterialDescSize;
+	MeshMaterialDesc materialDesc = (MeshMaterialDesc)0;
+	materialDesc.BaseColor = asfloat(g_MaterialDescBuffer.Load3(materialBufferOfs + 0));
+
 	// fetch hit primitive data
 	ByteAddressBuffer vertexBuffer = g_BufferArray[NonUniformResourceIndex(subMeshDesc.VertexBufferDescriptor)];
 	ByteAddressBuffer indexBuffer = g_BufferArray[NonUniformResourceIndex(subMeshDesc.IndexBufferDescriptor)];
-	Texture2D colorMap = g_Texture2DArray[NonUniformResourceIndex(subMeshDesc.ColorMapDescriptor)];
+	
 	const uint hitPrimitiveIdx = PrimitiveIndex();
 	const uint indexBufferOfs = (subMeshDesc.PrimitivesOffset + hitPrimitiveIdx * 3) * IndexSize;
 	const uint3 indices = indexBuffer.Load3(indexBufferOfs);
@@ -114,11 +120,14 @@ MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAtt
 	#if (1)
 	texCoord = float2(texCoord.x, 1.0 - texCoord.y); // TODO: investigate why texCoord.y is inverted...
 	#endif
+	
+	// fetch textures
+	Texture2D colorMap = g_Texture2DArray[NonUniformResourceIndex(subMeshDesc.ColorMapDescriptor)];
 	float3 baseColor = colorMap.SampleLevel(g_SamplerBilinearWrap, texCoord, 0).xyz;
 
 	// fill material
 	
-	material.baseColor.xyz = baseColor;
+	material.baseColor.xyz = baseColor * materialDesc.BaseColor;
 	material.normal = normal;
 
 	return material;
@@ -343,7 +352,11 @@ void RayGenDirect()
 			{
 				float3 sampleDir = GetHemisphereSampleDirection(isample + sampleIdOfs, sampleCount);
 				#if (RT_REFLECTION_TEST)
-				ray.Direction = reflect(normalize(worldPos - g_SceneCB.CameraPos.xyz), gbData.Normal);
+				//ray.Direction = reflect(normalize(worldPos - g_SceneCB.CameraPos.xyz), gbData.Normal);
+				float3 reflectionDir = reflect(normalize(worldPos - g_SceneCB.CameraPos.xyz), gbData.Normal);
+				float3x3 reflectionTBN = ComputeSamplingBasis(reflectionDir);
+				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), reflectionTBN);
+				ray.Direction = normalize(ray.Direction*0 + reflectionDir * 10.0);
 				#else
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
 				#endif
