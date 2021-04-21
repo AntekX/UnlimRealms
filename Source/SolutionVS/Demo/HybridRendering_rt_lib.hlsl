@@ -134,6 +134,7 @@ MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAtt
 	// fill material
 	material.baseColor.xyz = baseColor * materialDesc.BaseColor;
 	material.normal = normal;
+	ApplyMaterialOverride(g_SceneCB, material);
 
 	return material;
 }
@@ -439,54 +440,9 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 	const float3 hitWorldPos = WorldRayHitPoint();
 	MaterialInputs material = GetMeshMaterialAtRayHitPoint(attribs);
 
-#if (RT_REFLECTION_TEST)
-
-	// calculate reflected radiance
-	
-	// direct
-	LightingParams lightingParams = (LightingParams)0;
-	getLightingParams(hitWorldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
-	float3 directLight = 0;
-	for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
-	{
-		LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
-		float3 lightDir = (LightType_Directional == light.Type ? -light.Direction : normalize(light.Position.xyz - hitWorldPos.xyz));
-		float shadowFactor = 1.0;
-		float NoL = dot(lightDir, lightingParams.normal);
-		shadowFactor *= saturate(NoL * 10.0); // approximate self shadowing at grazing angles
-		float specularOcclusion = shadowFactor;
-		directLight += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
-	}
-	rayData.luminance += directLight * material.baseColor.xyz;
-
-	// ambient approximation
-	float3 skyDir = float3(material.normal.x, max(material.normal.y, 0.0), material.normal.z);
-	skyDir = normalize(skyDir * 0.5 + WorldUp);
-	float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, skyDir).xyz;
-	rayData.luminance += skyLight * material.baseColor.xyz;
-
-#else
-
-	// simplified indirect: sky light with ambient occlusion
-
-	float hitWorldDist = length(hitWorldPos - g_SceneCB.CameraPos.xyz);
-	float occlusionDist = hitWorldDist * g_SceneCB.DebugVec1[0];// 20.0;
-	float sampleOcclusion = saturate(1.0 - rayData.hitDist / occlusionDist);
-	float3 skyDir = WorldRayDirection();
-	float3 absorption = 1.0;
-	if (skyDir.z <= 0.0)
-	{
-		// bounced sky light approximation
-		skyDir = reflect(skyDir, material.normal);
-		absorption = material.baseColor.xyz;
-	}
-	rayData.luminance += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldDist, skyDir).xyz * absorption * (1.0 - sampleOcclusion);
-
-#endif
-
-#if (0)
-	// TODO
-	const uint IndirectLightBounces = 1;
+#if (RT_GI_TEST)
+	// recursive bounces
+	const uint IndirectLightBounces = 2;
 	if (rayData.recusrionDepth <= IndirectLightBounces)
 	{
 		// reflected ray
@@ -509,6 +465,59 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 			multiplierForGeometryContributionToShaderIndex,
 			missShaderIndex,
 			ray, rayData);
+
+		float NdotL = saturate(dot(material.normal, ray.Direction));
+		rayData.luminance *= material.baseColor.xyz * NdotL;
 	}
+#endif
+
+#if (RT_REFLECTION_TEST) || (RT_GI_TEST)
+
+	// calculate reflected radiance
+	
+	// direct
+	LightingParams lightingParams = (LightingParams)0;
+	getLightingParams(hitWorldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
+	float3 directLight = 0;
+	for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
+	{
+		LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
+		float3 lightDir = (LightType_Directional == light.Type ? -light.Direction : normalize(light.Position.xyz - hitWorldPos.xyz));
+		float shadowFactor = 1.0;
+		float NoL = dot(lightDir, lightingParams.normal);
+		shadowFactor *= saturate(NoL * 10.0); // approximate self shadowing at grazing angles
+		float specularOcclusion = shadowFactor;
+		directLight += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
+	}
+	#if (RT_GI_TEST)
+	directLight *= 0.075; // add some portion of direct light for now (proper shadowing information is required)
+	#endif
+	rayData.luminance += directLight * material.baseColor.xyz;
+
+	// ambient approximation
+	#if (RT_REFLECTION_TEST)
+	float3 skyDir = float3(material.normal.x, max(material.normal.y, 0.0), material.normal.z);
+	skyDir = normalize(skyDir * 0.5 + WorldUp);
+	float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, skyDir).xyz;
+	rayData.luminance += skyLight * material.baseColor.xyz;
+	#endif
+
+#else
+
+	// simplified indirect: sky light with ambient occlusion
+
+	float hitWorldDist = length(hitWorldPos - g_SceneCB.CameraPos.xyz);
+	float occlusionDist = hitWorldDist * g_SceneCB.DebugVec1[0];// 20.0;
+	float sampleOcclusion = saturate(1.0 - rayData.hitDist / occlusionDist);
+	float3 skyDir = WorldRayDirection();
+	float3 absorption = 1.0;
+	if (skyDir.z <= 0.0)
+	{
+		// bounced sky light approximation
+		skyDir = reflect(skyDir, material.normal);
+		absorption = material.baseColor.xyz;
+	}
+	rayData.luminance += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldDist, skyDir).xyz * absorption * (1.0 - sampleOcclusion);
+
 #endif
 }

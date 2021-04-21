@@ -5,6 +5,7 @@
 
 // TEMP
 #define RT_REFLECTION_TEST 0
+#define RT_GI_TEST 1
 
 // constant buffers
 

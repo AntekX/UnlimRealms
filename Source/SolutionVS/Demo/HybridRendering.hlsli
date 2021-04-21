@@ -130,26 +130,28 @@ GBufferData LoadGBufferData(in int2 imagePos,
 
 // Lighting common
 
+void ApplyMaterialOverride(const SceneConstants sceneCB, inout MaterialInputs material)
+{
+	if (g_SceneCB.OverrideMaterial)
+	{
+		material.baseColor.xyz = g_SceneCB.Material.BaseColor;
+		material.roughness = g_SceneCB.Material.Roughness;
+		material.metallic = g_SceneCB.Material.Metallic;
+		material.reflectance = g_SceneCB.Material.Reflectance;
+	}
+}
+
 MaterialInputs GetMaterial(const SceneConstants sceneCB, const GBufferData gbData)
 {
 	MaterialInputs material = (MaterialInputs)0;
 	
 	initMaterial(material);
+	material.baseColor.xyz = gbData.BaseColor.xyz;
 	material.normal = gbData.Normal;
-	if (sceneCB.OverrideMaterial)
-	{
-		material.baseColor.xyz = sceneCB.Material.BaseColor;
-		material.roughness = sceneCB.Material.Roughness;
-		material.metallic = sceneCB.Material.Metallic;
-		material.reflectance = sceneCB.Material.Reflectance;
-	}
-	else
-	{
-		material.baseColor.xyz = gbData.BaseColor.xyz;
-		material.roughness = sceneCB.Material.Roughness;
-		material.metallic = sceneCB.Material.Metallic;
-		material.reflectance = sceneCB.Material.Reflectance;
-	}
+	material.roughness = sceneCB.Material.Roughness;
+	material.metallic = sceneCB.Material.Metallic;
+	material.reflectance = sceneCB.Material.Reflectance;
+	ApplyMaterialOverride(sceneCB, material);
 
 	return material;
 }
