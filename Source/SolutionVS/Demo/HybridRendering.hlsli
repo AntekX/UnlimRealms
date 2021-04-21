@@ -66,18 +66,22 @@ static const uint ShadowBufferEntriesPerPixel = 4;
 
 #endif // shadow buffer
 
-// Ray tracing shader table
-static const uint RTShaderId_MissDirect = 0;
+// Ray tracing shader table offsets
+static const uint ShaderGroupIdx_MissDirect = 0;
+static const uint ShaderGroupIdx_MissIndirect = 1;
+static const uint ShaderGroupIdx_ClosestHitDirect = 0;
+static const uint ShaderGroupIdx_ClosestHitIndirect = 1;
 
 struct RayDataDirect
 {
 	bool occluded;
-	// TEMP: additional data as struct is shared with GI
+};
+
+struct RayDataIndirect
+{
 	uint recusrionDepth;
 	float hitDist;
-	#if (RT_REFLECTION_TEST)
-	float3 color;
-	#endif
+	float3 luminance;
 };
 
 // Gemotry buffer utils

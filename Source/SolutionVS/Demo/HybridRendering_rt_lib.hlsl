@@ -133,10 +133,10 @@ MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAtt
 	return material;
 }
 
-// ray generation: direct light
+// ray generation
 
 [shader("raygeneration")]
-void RayGenDirect()
+void RayGenMain()
 {
 	uint3 dispatchIdx = DispatchRaysIndex();
 	uint2 dispatchSize = (uint2)g_SceneCB.LightBufferSize.xy;
@@ -232,9 +232,9 @@ void RayGenDirect()
 
 					// ray trace
 					uint instanceInclusionMask = 0xff;
-					uint rayContributionToHitGroupIndex = 0;
+					uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitDirect;
 					uint multiplierForGeometryContributionToShaderIndex = 1;
-					uint missShaderIndex = RTShaderId_MissDirect;
+					uint missShaderIndex = ShaderGroupIdx_MissDirect;
 					TraceRay(g_SceneStructure,
 						RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
 						instanceInclusionMask,
@@ -361,19 +361,16 @@ void RayGenDirect()
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
 				#endif
 
-				RayDataDirect rayData = (RayDataDirect)0;
-				rayData.occluded = true;
+				RayDataIndirect rayData = (RayDataIndirect)0;
 				rayData.recusrionDepth = 0;
-				rayData.hitDist = ray.TMax;
-				#if (RT_REFLECTION_TEST)
-				rayData.color = 0.0;
-				#endif
+				rayData.hitDist = -1; // miss
+				rayData.luminance = 0.0;
 
 				// ray trace
 				uint instanceInclusionMask = 0xff;
-				uint rayContributionToHitGroupIndex = 0;
+				uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitIndirect;
 				uint multiplierForGeometryContributionToShaderIndex = 1;
-				uint missShaderIndex = RTShaderId_MissDirect;
+				uint missShaderIndex = ShaderGroupIdx_MissIndirect;
 				TraceRay(g_SceneStructure,
 					RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
 					instanceInclusionMask,
@@ -382,12 +379,13 @@ void RayGenDirect()
 					missShaderIndex,
 					ray, rayData);
 
-				float sampleOcclusion = float(rayData.occluded) * saturate(1.0 - rayData.hitDist / ray.TMax);
+				bool sampleOccluded = (rayData.hitDist > 0);
+				float sampleOcclusion = float(sampleOccluded) * saturate(1.0 - rayData.hitDist / ray.TMax);
 				ambientOcclusion += sampleOcclusion;
 
 				#if (RT_REFLECTION_TEST)
-				if (rayData.occluded)
-					skyLight += rayData.color;
+				if (sampleOccluded)
+					skyLight += rayData.luminance;
 				else
 					skyLight += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, worldPos, ray.Direction).xyz;
 
@@ -428,7 +426,7 @@ void RayGenDirect()
 	g_IndirectLightTarget[dispatchIdx.xy] = float4(indirectLight.xyz, 0.0);
 }
 
-// miss: direct light
+// miss
 
 [shader("miss")]
 void MissDirect(inout RayDataDirect rayData)
@@ -436,19 +434,31 @@ void MissDirect(inout RayDataDirect rayData)
 	rayData.occluded = false;
 }
 
-// closest: direct light
+[shader("miss")]
+void MissIndirect(inout RayDataIndirect rayData)
+{
+	rayData.hitDist = -1;
+}
+
+// closest
 
 [shader("closesthit")]
 void ClosestHitDirect(inout RayDataDirect rayData, in BuiltInTriangleIntersectionAttributes attribs)
+{
+	// nothing to do, miss shader updates RayDataDirect
+}
+
+[shader("closesthit")]
+void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleIntersectionAttributes attribs)
 {
 	rayData.hitDist = RayTCurrent();
 	rayData.recusrionDepth += 1;
 
 #if (RT_REFLECTION_TEST)
-	
+
 	// read hit surface material
 	MaterialInputs material = GetMeshMaterialAtRayHitPoint(attribs);
-	
+
 	// calculate reflected radiance
 	const float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
 	LightingParams lightingParams = (LightingParams)0;
@@ -464,7 +474,7 @@ void ClosestHitDirect(inout RayDataDirect rayData, in BuiltInTriangleIntersectio
 		float specularOcclusion = shadowFactor;
 		directLight += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 	}
-	rayData.color += directLight;
+	rayData.luminance += directLight;
 #endif
 
 #if (0)
@@ -482,9 +492,9 @@ void ClosestHitDirect(inout RayDataDirect rayData, in BuiltInTriangleIntersectio
 
 		// ray trace
 		uint instanceInclusionMask = 0xff;
-		uint rayContributionToHitGroupIndex = 0;
+		uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitIndirect;
 		uint multiplierForGeometryContributionToShaderIndex = 1;
-		uint missShaderIndex = RTShaderId_MissDirect;
+		uint missShaderIndex = ShaderGroupIdx_MissIndirect;
 		TraceRay(g_SceneStructure,
 			RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
 			instanceInclusionMask,

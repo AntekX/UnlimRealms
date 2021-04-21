@@ -931,14 +931,18 @@ int HybridRenderingApp::Run()
 			};
 			enum RTShaderLibId
 			{
-				RTShaderLibId_RayGenDirect,
+				RTShaderLibId_RayGenMain,
 				RTShaderLibId_MissDirect,
+				RTShaderLibId_MissIndirect,
 				RTShaderLibId_ClosestHitDirect,
+				RTShaderLibId_ClosestHitIndirect,
 			};
 			GrafShaderLib::EntryPoint RTShaderLibEntries[] = {
-				{ "RayGenDirect", GrafShaderType::RayGen },
+				{ "RayGenMain", GrafShaderType::RayGen },
 				{ "MissDirect", GrafShaderType::Miss },
+				{ "MissIndirect", GrafShaderType::Miss },
 				{ "ClosestHitDirect", GrafShaderType::ClosestHit },
+				{ "ClosestHitIndirect", GrafShaderType::ClosestHit },
 			};
 			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_cs_lib.spv", ShaderLibEntries, ur_array_size(ShaderLibEntries), this->shaderLib);
 			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_rt_lib.spv", RTShaderLibEntries, ur_array_size(RTShaderLibEntries), this->shaderLibRT);
@@ -1182,20 +1186,28 @@ int HybridRenderingApp::Run()
 				// ray tracing pipeline
 
 				GrafShader* shaderStages[] = {
-					this->shaderLibRT->GetShader(RTShaderLibId_RayGenDirect),
+					this->shaderLibRT->GetShader(RTShaderLibId_RayGenMain),
 					this->shaderLibRT->GetShader(RTShaderLibId_MissDirect),
+					this->shaderLibRT->GetShader(RTShaderLibId_MissIndirect),
 					this->shaderLibRT->GetShader(RTShaderLibId_ClosestHitDirect),
+					this->shaderLibRT->GetShader(RTShaderLibId_ClosestHitIndirect),
 				};
-				GrafRayTracingShaderGroupDesc shaderGroups[3];
+				GrafRayTracingShaderGroupDesc shaderGroups[5];
 				shaderGroups[0] = GrafRayTracingShaderGroupDesc::Default;
 				shaderGroups[0].Type = GrafRayTracingShaderGroupType::General;
-				shaderGroups[0].GeneralShaderIdx = RTShaderLibId_RayGenDirect;
+				shaderGroups[0].GeneralShaderIdx = RTShaderLibId_RayGenMain;
 				shaderGroups[1] = GrafRayTracingShaderGroupDesc::Default;
 				shaderGroups[1].Type = GrafRayTracingShaderGroupType::General;
 				shaderGroups[1].GeneralShaderIdx = RTShaderLibId_MissDirect;
 				shaderGroups[2] = GrafRayTracingShaderGroupDesc::Default;
-				shaderGroups[2].Type = GrafRayTracingShaderGroupType::TrianglesHit;
-				shaderGroups[2].GeneralShaderIdx = RTShaderLibId_ClosestHitDirect;
+				shaderGroups[2].Type = GrafRayTracingShaderGroupType::General;
+				shaderGroups[2].GeneralShaderIdx = RTShaderLibId_MissIndirect;
+				shaderGroups[3] = GrafRayTracingShaderGroupDesc::Default;
+				shaderGroups[3].Type = GrafRayTracingShaderGroupType::TrianglesHit;
+				shaderGroups[3].GeneralShaderIdx = RTShaderLibId_ClosestHitDirect;
+				shaderGroups[4] = GrafRayTracingShaderGroupDesc::Default;
+				shaderGroups[4].Type = GrafRayTracingShaderGroupType::TrianglesHit;
+				shaderGroups[4].GeneralShaderIdx = RTShaderLibId_ClosestHitIndirect;
 
 				GrafDescriptorTableLayout* descriptorLayouts[] = {
 					this->raytraceDescTableLayout.get()
@@ -1228,8 +1240,8 @@ int HybridRenderingApp::Run()
 					return Result(Success);
 				});
 				this->rayGenShaderTable		= { this->raytraceShaderHandlesBuffer.get(),	0 * sgHandleSize,	1 * sgHandleSize,	sgHandleSize };
-				this->rayMissShaderTable	= { this->raytraceShaderHandlesBuffer.get(),	1 * sgHandleSize,	1 * sgHandleSize,	sgHandleSize };
-				this->rayHitShaderTable		= { this->raytraceShaderHandlesBuffer.get(),	2 * sgHandleSize,	1 * sgHandleSize,	sgHandleSize };
+				this->rayMissShaderTable	= { this->raytraceShaderHandlesBuffer.get(),	1 * sgHandleSize,	2 * sgHandleSize,	sgHandleSize };
+				this->rayHitShaderTable		= { this->raytraceShaderHandlesBuffer.get(),	3 * sgHandleSize,	2 * sgHandleSize,	sgHandleSize };
 
 				// ray tracing result mips generation pipeline
 
