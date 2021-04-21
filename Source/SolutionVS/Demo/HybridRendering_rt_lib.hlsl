@@ -17,12 +17,16 @@ float3 GetDiskSampleDirection(uint sampleId, uint sampleCount)
 
 float3 GetHemisphereSampleDirection(uint sampleId, uint sampleCount)
 {
-	#if (1)
+	#if (0)
 	float2 p2d = Hammersley(sampleId % sampleCount + 1, sampleCount + 1);
-	#else
-	float2 p2d = Halton(sampleId % sampleCount);
-	#endif
 	float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
+	#elif (0)
+	float2 p2d = Halton(sampleId % sampleCount);
+	float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
+	#elif (1)
+	float2 p2d = BlueNoiseDiskLUT64[sampleId % 64]; // [-1, 1]
+	float3 dir = float3(p2d.x, p2d.y, sqrt(1.0 - dot(p2d.xy, p2d.xy)));
+	#endif
 	return dir.xyz;
 }
 
@@ -490,7 +494,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		directLight += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 	}
 	#if (RT_GI_TEST)
-	directLight *= 0.075; // add some portion of direct light for now (proper shadowing information is required)
+	directLight *= 0.05; // add some portion of direct light for now (proper shadowing information is required)
 	#endif
 	rayData.luminance += directLight * material.baseColor.xyz;
 
