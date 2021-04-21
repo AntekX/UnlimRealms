@@ -69,6 +69,11 @@ float3 InterpolatedVertexAttribute3(float3 attributes[3], float3 barycentrics)
 	//return attributes[0] + (attributes[1] - attributes[0]) * barycentrics[1] + (attributes[2] - attributes[0]) * barycentrics[2];
 }
 
+float3 WorldRayHitPoint()
+{
+	return WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
+}
+
 MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAttributes attribs)
 {
 	MaterialInputs material = (MaterialInputs)0;
@@ -116,6 +121,7 @@ MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAtt
 	}
 	const float3 baryCoords = float3(1.0 - attribs.barycentrics.x - attribs.barycentrics.y, attribs.barycentrics.x, attribs.barycentrics.y);
 	float3 normal = normalize(mul(InterpolatedVertexAttribute3(vertexNormal, baryCoords), instanceFrame));
+	if (HIT_KIND_TRIANGLE_BACK_FACE == HitKind()) normal *= -1; // back face
 	float2 texCoord = InterpolatedVertexAttribute2(vertexTexcoord, baryCoords);
 	#if (1)
 	texCoord = float2(texCoord.x, 1.0 - texCoord.y); // TODO: investigate why texCoord.y is inverted...
@@ -126,7 +132,6 @@ MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAtt
 	float3 baseColor = colorMap.SampleLevel(g_SamplerBilinearWrap, texCoord, 0).xyz;
 
 	// fill material
-	
 	material.baseColor.xyz = baseColor * materialDesc.BaseColor;
 	material.normal = normal;
 
@@ -336,15 +341,12 @@ void RayGenMain()
 
 		if (g_SceneCB.IndirectSamplesPerFrame > 0)
 		{
-			// sky light with ambient occlusion
-			
 			RayDesc ray;
 			ray.Origin = worldPos + gbData.Normal * distBasedEps;
 			ray.TMax = worldDist * g_SceneCB.DebugVec1[0];// 20.0;
 			ray.TMin = 1.0e-3;// ray.TMax * 1.0e-4;
 
 			float3x3 surfaceTBN = ComputeSamplingBasis(gbData.Normal);
-			float ambientOcclusion = 0.0;
 			float3 skyLight = 0.0;
 			uint sampleCount = g_SceneCB.IndirectSamplesPerFrame * (g_SceneCB.IndirectAccumulationFrames + 1);
 			uint sampleIdOfs = g_SceneCB.FrameNumber * g_SceneCB.IndirectSamplesPerFrame * g_SceneCB.PerFrameJitter + dispatchConstHash;
@@ -379,32 +381,10 @@ void RayGenMain()
 					missShaderIndex,
 					ray, rayData);
 
-				bool sampleOccluded = (rayData.hitDist > 0);
-				float sampleOcclusion = float(sampleOccluded) * saturate(1.0 - rayData.hitDist / ray.TMax);
-				ambientOcclusion += sampleOcclusion;
-
-				#if (RT_REFLECTION_TEST)
-				if (sampleOccluded)
-					skyLight += rayData.luminance;
-				else
-					skyLight += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, worldPos, ray.Direction).xyz;
-
-				#else
-
-				float3 skyDir = ray.Direction;
 				float NdotL = saturate(dot(gbData.Normal, ray.Direction));
-				float3 absorption = 1.0;
-				if (skyDir.z <= 0.0)
-				{
-					// bounced sky light approximation
-					skyDir = reflect(skyDir, gbData.Normal);
-					absorption = g_SceneCB.Material.BaseColor;
-				}
-				skyLight += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, worldPos, skyDir).xyz * absorption * NdotL * (1.0 - sampleOcclusion);
-				#endif
+				indirectLight += rayData.luminance * NdotL;
 			}
-			ambientOcclusion = 1.0 - ambientOcclusion / g_SceneCB.IndirectSamplesPerFrame;
-			indirectLight = skyLight / g_SceneCB.IndirectSamplesPerFrame;
+			indirectLight /= g_SceneCB.IndirectSamplesPerFrame;
 		}
 		else
 		{
@@ -438,6 +418,7 @@ void MissDirect(inout RayDataDirect rayData)
 void MissIndirect(inout RayDataIndirect rayData)
 {
 	rayData.hitDist = -1;
+	rayData.luminance += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, WorldRayHitPoint(), WorldRayDirection()).xyz;
 }
 
 // closest
@@ -454,13 +435,15 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 	rayData.hitDist = RayTCurrent();
 	rayData.recusrionDepth += 1;
 
-#if (RT_REFLECTION_TEST)
-
 	// read hit surface material
+	const float3 hitWorldPos = WorldRayHitPoint();
 	MaterialInputs material = GetMeshMaterialAtRayHitPoint(attribs);
 
+#if (RT_REFLECTION_TEST)
+
 	// calculate reflected radiance
-	const float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
+	
+	// direct
 	LightingParams lightingParams = (LightingParams)0;
 	getLightingParams(hitWorldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
 	float3 directLight = 0;
@@ -474,7 +457,31 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		float specularOcclusion = shadowFactor;
 		directLight += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 	}
-	rayData.luminance += directLight;
+	rayData.luminance += directLight * material.baseColor.xyz;
+
+	// ambient approximation
+	float3 skyDir = float3(material.normal.x, max(material.normal.y, 0.0), material.normal.z);
+	skyDir = normalize(skyDir * 0.5 + WorldUp);
+	float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, skyDir).xyz;
+	rayData.luminance += skyLight * material.baseColor.xyz;
+
+#else
+
+	// simplified indirect: sky light with ambient occlusion
+
+	float hitWorldDist = length(hitWorldPos - g_SceneCB.CameraPos.xyz);
+	float occlusionDist = hitWorldDist * g_SceneCB.DebugVec1[0];// 20.0;
+	float sampleOcclusion = saturate(1.0 - rayData.hitDist / occlusionDist);
+	float3 skyDir = WorldRayDirection();
+	float3 absorption = 1.0;
+	if (skyDir.z <= 0.0)
+	{
+		// bounced sky light approximation
+		skyDir = reflect(skyDir, material.normal);
+		absorption = material.baseColor.xyz;
+	}
+	rayData.luminance += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldDist, skyDir).xyz * absorption * (1.0 - sampleOcclusion);
+
 #endif
 
 #if (0)
