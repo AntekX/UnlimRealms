@@ -136,7 +136,7 @@ MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAtt
 	float3 baseColor = colorMap.SampleLevel(g_SamplerBilinearWrap, texCoord, 0).xyz;
 
 	// fill material
-	material.baseColor.xyz = baseColor * materialDesc.BaseColor;
+	material.baseColor.xyz = baseColor;// *materialDesc.BaseColor; // note: material color is not applied as it is not applied in PS
 	material.normal = normal;
 	ApplyMaterialOverride(g_SceneCB, material);
 
@@ -223,7 +223,7 @@ void RayGenMain()
 			uint ilight = (g_SceneCB.FrameNumber % lightCount);
 			#else
 			for (uint ilight = 0; ilight < lightCount; ++ilight)
-				#endif
+			#endif
 			{
 				LightDesc lightDesc = g_SceneCB.Lighting.LightSources[ilight];
 				float3x3 lightDirTBN = ComputeLightSamplingBasis(worldPos, lightDesc);
@@ -346,9 +346,14 @@ void RayGenMain()
 
 		if (g_SceneCB.IndirectSamplesPerFrame > 0)
 		{
+			#if (RT_REFLECTION_TEST) || (RT_GI_TEST)
+			float rayTraceDist = 1000.0;
+			#else
+			float rayTraceDist = 20.0;
+			#endif
 			RayDesc ray;
 			ray.Origin = worldPos + gbData.Normal * distBasedEps;
-			ray.TMax = worldDist * g_SceneCB.DebugVec1[0];// 20.0;
+			ray.TMax = worldDist * rayTraceDist;
 			ray.TMin = 1.0e-3;// ray.TMax * 1.0e-4;
 
 			float3x3 surfaceTBN = ComputeSamplingBasis(gbData.Normal);
@@ -446,7 +451,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 
 #if (RT_GI_TEST)
 	// recursive bounces
-	const uint IndirectLightBounces = 2;
+	const uint IndirectLightBounces = min(2, (uint)g_SceneCB.DebugVec1[0]); //2;
 	if (rayData.recusrionDepth <= IndirectLightBounces)
 	{
 		// reflected ray
@@ -456,6 +461,21 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		ray.TMax = 100.0;
 		ray.TMin = 1.0e-3;
 		ray.Direction = reflect(WorldRayDirection(), material.normal);
+
+		uint3 dispatchIdx = DispatchRaysIndex();
+		uint3 dispatchSize = DispatchRaysDimensions();
+		uint dispatchConstHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x);
+		uint dispatchCrntHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x * (1 + g_SceneCB.FrameNumber * g_SceneCB.PerFrameJitter));
+		float2 dispathNoise2d = BlueNoiseDiskLUT64[dispatchCrntHash % 64];
+		float3x3 dispatchSamplingFrame;
+		dispatchSamplingFrame[2] = float3(0.0, 0.0, 1.0);
+		dispatchSamplingFrame[0] = normalize(float3(dispathNoise2d.xy, 0.0));
+		dispatchSamplingFrame[1] = cross(dispatchSamplingFrame[2], dispatchSamplingFrame[0]);
+		uint sampleId = g_SceneCB.FrameNumber * g_SceneCB.PerFrameJitter + dispatchConstHash;
+		uint sampleCount = g_SceneCB.IndirectAccumulationFrames + 1;
+		float3x3 surfaceTBN = ComputeSamplingBasis(material.normal);
+		float3 sampleDir = GetHemisphereSampleDirection(sampleId, sampleCount);
+		ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
 
 		// ray trace
 		uint instanceInclusionMask = 0xff;
@@ -483,20 +503,49 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 	LightingParams lightingParams = (LightingParams)0;
 	getLightingParams(hitWorldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
 	float3 directLight = 0;
-	for (uint ilight = 0; ilight < g_SceneCB.Lighting.LightSourceCount; ++ilight)
+	for (uint ilight = 0; ilight < /*g_SceneCB.Lighting.LightSourceCount*/1; ++ilight)
 	{
 		LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
 		float3 lightDir = (LightType_Directional == light.Type ? -light.Direction : normalize(light.Position.xyz - hitWorldPos.xyz));
 		float shadowFactor = 1.0;
+
+		// ray trace occlusion
+		#if (1)
+		RayDesc ray;
+		ray.Origin = hitWorldPos;
+		ray.TMax = 1000.0;
+		ray.TMin = 1.0e-3;
+		ray.Direction = lightDir;
+
+		RayDataDirect rayData = (RayDataDirect)0;
+		rayData.occluded = true;
+
+		uint instanceInclusionMask = 0xff;
+		uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitDirect;
+		uint multiplierForGeometryContributionToShaderIndex = 1;
+		uint missShaderIndex = ShaderGroupIdx_MissDirect;
+		TraceRay(g_SceneStructure,
+			RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
+			instanceInclusionMask,
+			rayContributionToHitGroupIndex,
+			multiplierForGeometryContributionToShaderIndex,
+			missShaderIndex,
+			ray, rayData);
+
+		shadowFactor = float(rayData.occluded ? 0.0 : 1.0);
+		#else
+
+		shadowFactor = 0.05;
+		#endif
+
+		// evaluate direct light
+
 		float NoL = dot(lightDir, lightingParams.normal);
 		shadowFactor *= saturate(NoL * 10.0); // approximate self shadowing at grazing angles
 		float specularOcclusion = shadowFactor;
 		directLight += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 	}
-	#if (RT_GI_TEST)
-	directLight *= 0.05; // add some portion of direct light for now (proper shadowing information is required)
-	#endif
-	rayData.luminance += directLight * material.baseColor.xyz;
+	rayData.luminance += directLight * material.baseColor.xyz * g_SceneCB.DirectLightFactor;
 
 	// ambient approximation
 	#if (RT_REFLECTION_TEST)

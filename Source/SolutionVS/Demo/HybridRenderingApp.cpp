@@ -2065,7 +2065,9 @@ int HybridRenderingApp::Run()
 	sphericalLight1.Size = 0.5f;
 	LightingDesc lightingDesc = {};
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
+	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sphericalLight1;
+	#endif
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
 
 	// light source animation
