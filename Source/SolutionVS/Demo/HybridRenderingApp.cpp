@@ -886,15 +886,16 @@ int HybridRenderingApp::Run()
 			this->sceneConstants.Material.Roughness = 0.5f;
 			this->sceneConstants.Material.Reflectance = 0.04f;
 
+			this->sampleInstanceScatterRadius = 40.0f;
 			this->sampleInstanceCount = 0;
 			#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 			this->sampleInstanceCount = 16;
 			#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 			this->sampleInstanceCount = 1;
 			#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
-			this->sampleInstanceCount = 1;
+			this->sampleInstanceCount = 320;
+			this->sampleInstanceScatterRadius = 100.0f;
 			#endif
-			this->sampleInstanceScatterRadius = 40.0f;
 			this->animationEnabled = true;
 			this->animationCycleTime = 30.0f;
 			this->animationElapsedTime = 0.0f;
@@ -2055,7 +2056,11 @@ int HybridRenderingApp::Run()
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
 		hdrParams.LumWhite = 1.0f;
+		#if (SCENE_TYPE_FOREST == SCENE_TYPE)
+		hdrParams.LumAdaptationMin = 2800.0;
+		#else
 		hdrParams.LumAdaptationMin = 400.0;
+		#endif
 		hdrParams.BloomThreshold = 4.0f;
 		hdrParams.BloomIntensity = 0.5f;
 		hdrRender->SetParams(hdrParams);
@@ -2101,10 +2106,10 @@ int HybridRenderingApp::Run()
 	//lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
 
 	// light source animation
-	ur_float lightCycleTime = 60.0f;
+	ur_float lightCycleTime = 120.0f;
 	ur_float lightCrntCycleFactor = 0.0f;
 	ur_bool lightAnimationEnabled = true;
-	ur_float lightAnimationElapsedTime = 0.0f;
+	ur_float lightAnimationElapsedTime = 20.0f;
 
 	// atmosphere params
 	// temp: super low Mie & G to fake sun disc
@@ -2124,10 +2129,12 @@ int HybridRenderingApp::Run()
 	cameraControl.SetTargetPoint(ur_float3(0.0f, 2.0f, 0.0f));
 	cameraControl.SetSpeed(4.0);
 	camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
-	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE) || (SCENE_TYPE_FOREST == SCENE_TYPE)
+	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 	camera.SetPosition(ur_float3(9.541f, 5.412f, -12.604f));
 	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 	camera.SetPosition(ur_float3(9.541f, 1.8f, -12.604f));
+	#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
+	camera.SetPosition(ur_float3(6.0f, 2.0f, -14.0f));
 	#endif
 	camera.SetLookAt(cameraControl.GetTargetPoint(), cameraControl.GetWorldUp());
 

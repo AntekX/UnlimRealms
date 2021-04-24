@@ -451,17 +451,16 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 
 #if (RT_GI_TEST)
 	// recursive bounces
-	const uint IndirectLightBounces = min(1, (uint)g_SceneCB.DebugVec1[0]); //2;
+	const uint IndirectLightBounces = min(2, (uint)g_SceneCB.DebugVec1[0]); //2;
 	if (rayData.recusrionDepth <= IndirectLightBounces)
 	{
-		// reflected ray
 		const float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
 		RayDesc ray;
 		ray.Origin = hitWorldPos;
 		ray.TMax = 100.0;
 		ray.TMin = 1.0e-3;
-		ray.Direction = reflect(WorldRayDirection(), material.normal);
 
+		// sample direction
 		uint3 dispatchIdx = DispatchRaysIndex();
 		uint3 dispatchSize = DispatchRaysDimensions();
 		uint dispatchConstHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x);
@@ -552,7 +551,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 	float3 skyDir = float3(material.normal.x, max(material.normal.y, 0.0), material.normal.z);
 	skyDir = normalize(skyDir * 0.5 + WorldUp);
 	float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, skyDir).xyz;
-	rayData.luminance += skyLight * material.baseColor.xyz;
+	rayData.luminance += skyLight * material.baseColor.xyz * 0.5;
 	#endif
 
 #else
