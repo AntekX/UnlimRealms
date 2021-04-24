@@ -402,7 +402,7 @@ void RayGenMain()
 			float3 skyDir = float3(gbData.Normal.x, max(gbData.Normal.y, 0.0), gbData.Normal.z);
 			skyDir = normalize(skyDir * 0.5 + WorldUp);
 			float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, worldPos, skyDir).xyz;
-			indirectLight = skyLight;// *0.05;
+			indirectLight = skyLight * 0.5;// *0.05;
 		}
 	}
 
@@ -457,7 +457,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		const float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
 		RayDesc ray;
 		ray.Origin = hitWorldPos;
-		ray.TMax = 100.0;
+		ray.TMax = 1000.0;
 		ray.TMin = 1.0e-3;
 
 		// sample direction
