@@ -2059,7 +2059,7 @@ int HybridRenderingApp::Run()
 		#if (SCENE_TYPE_FOREST == SCENE_TYPE)
 		hdrParams.LumAdaptationMin = 2800.0;
 		#else
-		hdrParams.LumAdaptationMin = 400.0;
+		hdrParams.LumAdaptationMin = 1000.0;
 		#endif
 		hdrParams.BloomThreshold = 4.0f;
 		hdrParams.BloomIntensity = 0.5f;
@@ -2197,7 +2197,11 @@ int HybridRenderingApp::Run()
 			ur_float modY;
 			lightCrntCycleFactor = std::modf(crntTimeFactor, &modY);
 			ur_float3 sunDir;
+			#if (SCENE_TYPE_SPONZA == SCENE_TYPE)
+			const ur_float SunInclinationScale = 2.6f;
+			#else
 			const ur_float SunInclinationScale = 0.6f;
+			#endif
 			const ur_float SunInclinationBias = 0.02f;
 			sunDir.x = -cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
 			sunDir.z = -sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
