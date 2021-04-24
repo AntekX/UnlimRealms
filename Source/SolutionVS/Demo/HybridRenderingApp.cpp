@@ -877,7 +877,7 @@ int HybridRenderingApp::Run()
 			this->sceneConstants.IndirectLightFactor = 1.0f;
 			this->blurDescTableIdx = 0;
 			this->debugVec0 = ur_float4(0.0f, 0.0f, 0.01f, 0.0f);
-			this->debugVec1 = ur_float4(20.0f, 0.0f, 0.1f, 16.0f);
+			this->debugVec1 = ur_float4(1.0f, 0.0f, 0.1f, 16.0f);
 			
 			// default material override
 			this->sceneConstants.FrameNumber = 0;
