@@ -1,18 +1,15 @@
 
 #include "HybridRendering.hlsli"
 
-MeshPixelOutput main(MeshPixelInput input)
+MeshPixelOutput main(MeshPixelInput input, in float VFace : VFACE)
 {
 	MeshPixelOutput output;
 
-	float3 baseColor = g_ColorTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xyz;
+	float4 baseColor = g_ColorTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xyzw;
 	float2 bumpPacked = g_NormalTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xy;
-	float mask = g_MaskTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).x;
-
-	//if (!any(baseColor)) baseColor.xyz = float3(0.5, 0.5, 0.5);
-	//if (!any(bumpPacked)) bumpPacked.xy = float2(0.5, 0.5);
-	//if (!any(mask)) mask = 1.0;
-	//clip(mask - 0.5);
+	float mask = g_MaskTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).w;
+	float alpha = mask;
+	clip(alpha - 0.5);
 
 	float3 bumpNormal;
 	bumpNormal.xy = float2(bumpPacked.x, bumpPacked.y) * 2.0 - 1.0;
@@ -34,9 +31,10 @@ MeshPixelOutput main(MeshPixelInput input)
 		bitangent,
 		normal
 	};
+	surfaceTBN *= (VFace > 0 ? -1.0 : 1.0);
 	normal = mul(bumpNormal, surfaceTBN);
 
-	output.Target0 = float4(baseColor.xyz, 1);
+	output.Target0 = float4(baseColor.xyz * input.Color.xyz, 1);
 	output.Target1 = float4(normal.xyz, 0);
 	output.Target2 = float4(tangent.xyz, 0);
 

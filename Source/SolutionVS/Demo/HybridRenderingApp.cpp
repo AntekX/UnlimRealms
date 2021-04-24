@@ -22,7 +22,8 @@ using namespace UnlimRealms;
 
 #define SCENE_TYPE_MEDIEVAL_BUILDINGS 0
 #define SCENE_TYPE_SPONZA 1
-#define SCENE_TYPE SCENE_TYPE_SPONZA
+#define SCENE_TYPE_FOREST 2
+#define SCENE_TYPE SCENE_TYPE_FOREST
 
 #define UPDATE_ASYNC 1
 #define RENDER_ASYNC 1
@@ -423,6 +424,9 @@ int HybridRenderingApp::Run()
 			MeshId_MedievalBuilding,
 			#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 			MeshId_Sponza,
+			#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
+			MeshId_Banana,
+			MeshId_MedievalBuilding,
 			#endif
 			MeshCount
 		};
@@ -623,6 +627,13 @@ int HybridRenderingApp::Run()
 					initializeGrafImage(grafRenderer, cmdList, materialDesc.ColorTexName, subMesh.colorImage);
 					initializeGrafImage(grafRenderer, cmdList, materialDesc.MaskTexName, subMesh.maskImage);
 					initializeGrafImage(grafRenderer, cmdList, materialDesc.NormalTexName, subMesh.normalImage);
+					
+					if (subMesh.colorImage != ur_null)
+					{
+						// use material color only if there is no color texture
+						// otherwise set it to white (colors are multiplied in shaders)
+						this->materials[subMesh.materialID].BaseColor = 1.0f;
+					}
 
 					// descriptor table
 
@@ -880,6 +891,8 @@ int HybridRenderingApp::Run()
 			this->sampleInstanceCount = 16;
 			#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 			this->sampleInstanceCount = 1;
+			#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
+			this->sampleInstanceCount = 1;
 			#endif
 			this->sampleInstanceScatterRadius = 40.0f;
 			this->animationEnabled = true;
@@ -988,6 +1001,8 @@ int HybridRenderingApp::Run()
 			GrafDescriptorRangeDesc rasterDescTableLayoutRanges[] = {
 				g_SceneCBDescriptor,
 				g_InstanceBufferDescriptor,
+				g_MeshDescBufferDescriptor,
+				g_MaterialDescBufferDescriptor,
 				g_SamplerTrilinearWrapDescriptor,
 				g_ColorTextureDescriptor,
 				g_NormalTextureDescriptor,
@@ -1043,7 +1058,7 @@ int HybridRenderingApp::Run()
 				pipelineParams.VertexInputCount = ur_array_size(vertexInputs);
 				pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::TriangleList;
 				pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
-				pipelineParams.CullMode = GrafCullMode::Back;
+				pipelineParams.CullMode = GrafCullMode::None;
 				pipelineParams.DepthTestEnable = true;
 				pipelineParams.DepthWriteEnable = true;
 				pipelineParams.DepthCompareOp = GrafCompareOp::LessOrEqual;
@@ -1416,6 +1431,9 @@ int HybridRenderingApp::Run()
 				{ MeshId_MedievalBuilding, "../Res/Models/Medieval_building.obj" },
 				#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 				{ MeshId_Sponza, "../Res/Models/Sponza/sponza.obj" },
+				#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
+				{ MeshId_Banana, "../Res/Models/Banana/Banana.obj" },
+				{ MeshId_MedievalBuilding, "../Res/Models/Medieval_building.obj" },
 				#endif
 			};
 			for (ur_size ires = 0; ires < ur_array_size(meshResDesc); ++ires)
@@ -1472,9 +1490,14 @@ int HybridRenderingApp::Run()
 
 			// plane
 			static const float planeScale = 100.0f;
+			#if (SCENE_TYPE_SPONZA == SCENE_TYPE)
+			static const float planeHeight = -2.0f;
+			#else
+			static const float planeHeight = 0.0f;
+			#endif
 			ur_float4x4 planeTransform = {
 				planeScale, 0.0f, 0.0f, 0.0f,
-				0.0f, 1.0f, 0.0f, 0.0f,
+				0.0f, 1.0f, 0.0f, planeHeight,
 				0.0f, 0.0f, planeScale, 0.0f,
 				0.0f, 0.0f, 0.0f, 1.0f
 			};
@@ -1494,23 +1517,24 @@ int HybridRenderingApp::Run()
 			}
 
 			// animated spheres
+			static const ur_uint sphereInstanceCount = 16;
 			transforms.clear();
-			transforms.resize(this->sampleInstanceCount);
+			transforms.resize(sphereInstanceCount);
 			ur_float radius = 7.0f;
 			ur_float height = 2.0f;
-			for (ur_size i = 0; i < this->sampleInstanceCount; ++i)
+			for (ur_size i = 0; i < sphereInstanceCount; ++i)
 			{
 				ur_float4x4& transform = transforms[i];
 				transform = {
-					1.0f, 0.0f, 0.0f, radius* cosf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
-					0.0f, 1.0f, 0.0f, height + cosf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
-					0.0f, 0.0f, 1.0f, radius* sinf(ur_float(i) / this->sampleInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
+					1.0f, 0.0f, 0.0f, radius* cosf(ur_float(i) / sphereInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
+					0.0f, 1.0f, 0.0f, height + cosf(ur_float(i) / sphereInstanceCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
+					0.0f, 0.0f, 1.0f, radius* sinf(ur_float(i) / sphereInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
 					0.0f, 0.0f, 0.0f, 1.0f
 				};
 			}
 			for (auto& subMesh : this->meshes[MeshId_Sphere]->subMeshes)
 			{
-				for (ur_size i = 0; i < this->sampleInstanceCount; ++i)
+				for (ur_size i = 0; i < sphereInstanceCount; ++i)
 				{
 					GrafAccelerationStructureInstance meshInstance;
 					memcpy(meshInstance.Transform, &transforms[i], sizeof(ur_float4) * 3);
@@ -1521,13 +1545,13 @@ int HybridRenderingApp::Run()
 					meshInstance.AccelerationStructureHandle = ur_uint64(subMesh.GetBLASHandle());
 					sampleInstances.emplace_back(meshInstance);
 				}
-				subMesh.instanceCount = this->sampleInstanceCount;
+				subMesh.instanceCount = sphereInstanceCount;
 				subMesh.instanceOfs = instanceBufferOfs;
-				instanceBufferOfs += this->sampleInstanceCount;
+				instanceBufferOfs += sphereInstanceCount;
 			}
 
 			// static randomly scarttered meshes
-			auto ScatterMeshInstances = [this, &instanceBufferOfs, &transforms](Mesh* mesh, ur_uint instanceCount, ur_float radius, ur_float size, ur_float posOfs, ur_bool firstInstanceRnd = true) -> void
+			auto ScatterMeshInstances = [this, &instanceBufferOfs, &transforms](Mesh* mesh, ur_uint instanceCount, ur_float radius, ur_float size, ur_float sizeRndDelta, ur_float posOfs, ur_bool firstInstanceRnd = true) -> void
 			{
 				if (ur_null == mesh)
 					return;
@@ -1552,11 +1576,12 @@ int HybridRenderingApp::Run()
 					frameI.z = sinf(a);
 					frameK = ur_float3::Cross(frameI, frameJ);
 
+					ur_float scale = size + sizeRndDelta * (2.0f * ur_float(std::rand()) / RAND_MAX - 1.0f) * r;
 					ur_float4x4& transform = transforms[i];
 					transform = {
-						frameI.x* size, frameJ.x* size, frameK.x* size, pos.x,
-						frameI.y* size, frameJ.y* size, frameK.y* size, pos.y,
-						frameI.z* size, frameJ.z* size, frameK.z* size, pos.z,
+						frameI.x * scale, frameJ.x * scale, frameK.x * scale, pos.x,
+						frameI.y * scale, frameJ.y * scale, frameK.y * scale, pos.y,
+						frameI.z * scale, frameJ.z * scale, frameK.z * scale, pos.z,
 						0.0f, 0.0f, 0.0f, 1.0f
 					};
 				}
@@ -1581,9 +1606,12 @@ int HybridRenderingApp::Run()
 			};
 			std::srand(58911192);
 			#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
-			ScatterMeshInstances(this->meshes[MeshId_MedievalBuilding].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 2.0f, 0.0f, false);
+			ScatterMeshInstances(this->meshes[MeshId_MedievalBuilding].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 2.0f, 0.0f, 0.0f, false);
 			#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
-			ScatterMeshInstances(this->meshes[MeshId_Sponza].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 0.02f, 0.0f, false);
+			ScatterMeshInstances(this->meshes[MeshId_Sponza].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 0.02f, 0.0f, 0.0f, false);
+			#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
+			ScatterMeshInstances(this->meshes[MeshId_Banana].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 0.03f, 0.01f, 0.0f, false);
+			ScatterMeshInstances(this->meshes[MeshId_MedievalBuilding].get(), this->sampleInstanceCount / 4, this->sampleInstanceScatterRadius, 2.0f, 0.0f, 0.0f, true);
 			#endif
 
 			// upload instances
@@ -1685,6 +1713,8 @@ int HybridRenderingApp::Run()
 					GrafDescriptorTable* descriptorTable = subMesh.descTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 					descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, dynamicCB, this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 					descriptorTable->SetBuffer(g_InstanceBufferDescriptor, this->instanceBuffer.get());
+					descriptorTable->SetBuffer(g_MeshDescBufferDescriptor, this->gpuResourceRegistry->GetSubMeshDescBuffer());
+					descriptorTable->SetBuffer(g_MaterialDescBufferDescriptor, this->gpuResourceRegistry->GetMaterialDescBuffer());
 					descriptorTable->SetSampler(g_SamplerTrilinearWrapDescriptor, this->samplerTrilinearWrap.get());
 					descriptorTable->SetImage(g_ColorTextureDescriptor, colorImage);
 					descriptorTable->SetImage(g_NormalTextureDescriptor, normalImage);
@@ -2055,7 +2085,7 @@ int HybridRenderingApp::Run()
 	LightDesc sphericalLight1 = {}; // main directional light source
 	sphericalLight1.Type = LightType_Spherical;
 	sphericalLight1.Color = { 1.0f, 1.0f, 1.0f };
-	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
+	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE) || (SCENE_TYPE_FOREST == SCENE_TYPE)
 	sphericalLight1.Position = { 10.0f, 10.0f, 10.0f };
 	sphericalLight1.Intensity = SolarIlluminanceNoon * powf(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
 	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
@@ -2066,9 +2096,9 @@ int HybridRenderingApp::Run()
 	LightingDesc lightingDesc = {};
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
 	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
-	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sphericalLight1;
+	//lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sphericalLight1;
 	#endif
-	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
+	//lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
 
 	// light source animation
 	ur_float lightCycleTime = 60.0f;
@@ -2094,7 +2124,7 @@ int HybridRenderingApp::Run()
 	cameraControl.SetTargetPoint(ur_float3(0.0f, 2.0f, 0.0f));
 	cameraControl.SetSpeed(4.0);
 	camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
-	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
+	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE) || (SCENE_TYPE_FOREST == SCENE_TYPE)
 	camera.SetPosition(ur_float3(9.541f, 5.412f, -12.604f));
 	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 	camera.SetPosition(ur_float3(9.541f, 1.8f, -12.604f));

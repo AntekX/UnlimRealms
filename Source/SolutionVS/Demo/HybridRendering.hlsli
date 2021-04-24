@@ -20,7 +20,8 @@ struct MeshPixelInput
 	float4 Pos		: SV_POSITION;
 	float3 Normal	: NORMAL;
 	float3 Tangent	: TANGENT;
-	float2 TexCoord	: TEXCOORD;
+	float2 TexCoord	: TEXCOORD0;
+	float3 Color	: COLOR0;
 };
 
 struct MeshPixelOutput
@@ -217,4 +218,17 @@ float4 GetSkyLight(const SceneConstants sceneCB, const Texture2D<float4> precomp
 
 static const int2 QuadSampleOfs[4] = {
 	{ 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 }
+};
+
+// Debug
+
+static const uint DebugColorsSize = 7;
+static const float3 DebugColors[DebugColorsSize] = {
+	{ 0.0, 0.0, 1.0 },
+	{ 0.0, 1.0, 0.0 },
+	{ 0.0, 1.0, 1.0 },
+	{ 1.0, 0.0, 0.0 },
+	{ 1.0, 0.0, 1.0 },
+	{ 1.0, 1.0, 0.0 },
+	{ 1.0, 1.0, 1.0 },
 };

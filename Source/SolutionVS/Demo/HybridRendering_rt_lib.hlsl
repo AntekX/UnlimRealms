@@ -136,7 +136,7 @@ MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAtt
 	float3 baseColor = colorMap.SampleLevel(g_SamplerBilinearWrap, texCoord, 0).xyz;
 
 	// fill material
-	material.baseColor.xyz = baseColor;// *materialDesc.BaseColor; // note: material color is not applied as it is not applied in PS
+	material.baseColor.xyz = baseColor * materialDesc.BaseColor;
 	material.normal = normal;
 	ApplyMaterialOverride(g_SceneCB, material);
 
@@ -402,7 +402,7 @@ void RayGenMain()
 			float3 skyDir = float3(gbData.Normal.x, max(gbData.Normal.y, 0.0), gbData.Normal.z);
 			skyDir = normalize(skyDir * 0.5 + WorldUp);
 			float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, worldPos, skyDir).xyz;
-			indirectLight = skyLight * 0.05;
+			indirectLight = skyLight;// *0.05;
 		}
 	}
 
@@ -451,7 +451,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 
 #if (RT_GI_TEST)
 	// recursive bounces
-	const uint IndirectLightBounces = min(2, (uint)g_SceneCB.DebugVec1[0]); //2;
+	const uint IndirectLightBounces = min(1, (uint)g_SceneCB.DebugVec1[0]); //2;
 	if (rayData.recusrionDepth <= IndirectLightBounces)
 	{
 		// reflected ray

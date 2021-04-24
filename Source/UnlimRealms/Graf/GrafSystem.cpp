@@ -1242,8 +1242,11 @@ namespace UnlimRealms
 
 		// init materials
 		meshData.Materials.resize(materials.size() + 1);
-		meshData.Materials.back() = MeshMaterialDesc::Default;
-		ur_size defaultMaterialID = meshData.Materials.size() - 1;
+		if (meshData.Materials.empty())
+		{
+			meshData.Materials.back() = MeshMaterialDesc::Default;
+		}
+		ur_size defaultMaterialID = 0;
 		for (ur_size im = 0; im < materials.size(); ++im)
 		{
 			const tinyobj::material_t& srcMat = materials[im];
@@ -1309,9 +1312,16 @@ namespace UnlimRealms
 		// compute total size(s) to pre-allocate buffers
 		// TODO: optimize shared attributes usage, pack indices (currectly all primtives vertices are unique to simplify loading logic)
 		ur_size totalMeshIndicesCount = 0;
-		typedef std::vector<ur_size> ShapeIdArray;
-		typedef std::unique_ptr<ShapeIdArray> ShapeIdArrayUPtr;
-		std::unordered_map<ur_uint, ShapeIdArrayUPtr> perMaterialShapeIds;
+		struct SubShape
+		{
+			ur_uint shapeIdx;
+			ur_uint materialIdx;
+			ur_uint primitiveOffset;
+			ur_uint primitiveCount;
+		};
+		typedef std::vector<SubShape> SubShapeArray;
+		typedef std::unique_ptr<SubShapeArray> SubShapeArrayUPtr;
+		std::unordered_map<ur_uint, SubShapeArrayUPtr> perMaterialSubShapes;
 		for (ur_size shapeIdx = 0; shapeIdx < shapes.size(); ++shapeIdx)
 		{
 			auto& shape = shapes[shapeIdx];
@@ -1323,16 +1333,51 @@ namespace UnlimRealms
 			totalMeshIndicesCount += shape.mesh.indices.size();
 
 			// update per material array of shapes
-			ur_int shapeMaterialID = shape.mesh.material_ids[0];
-			shapeMaterialID = (ur_uint)(shapeMaterialID >= 0 && shapeMaterialID < (ur_int)meshData.Materials.size() ? shapeMaterialID : defaultMaterialID); // consider all faces in one shape share the same material
-			auto& materialShapesIter = perMaterialShapeIds.find(shapeMaterialID);
-			if (materialShapesIter == perMaterialShapeIds.end())
+			ur_size shapePrimitivesCount = shape.mesh.material_ids.size();
+			if (shapePrimitivesCount > 0)
 			{
-				ShapeIdArrayUPtr materialShapeArray(new ShapeIdArray);
-				perMaterialShapeIds.insert(std::pair<ur_uint, ShapeIdArrayUPtr>(shapeMaterialID, std::move(materialShapeArray)));
-				materialShapesIter = perMaterialShapeIds.find(shapeMaterialID);
+				ur_int shapeMaterialID = shape.mesh.material_ids[0];
+				SubShape crntSubShape = {};
+				crntSubShape.shapeIdx = ur_uint(shapeIdx);
+				crntSubShape.materialIdx = 0;
+				crntSubShape.primitiveOffset = 0;
+				crntSubShape.primitiveCount = 0;
+				for (ur_size ip = 0; ip < shapePrimitivesCount; ++ip)
+				{
+					if (shapeMaterialID != shape.mesh.material_ids[ip])
+					{
+						crntSubShape.materialIdx = ur_uint(shapeMaterialID >= 0 && shapeMaterialID < (ur_int)meshData.Materials.size() ? shapeMaterialID : defaultMaterialID);
+						crntSubShape.primitiveCount = ur_uint(ip - crntSubShape.primitiveOffset);
+						auto& materialShapesIter = perMaterialSubShapes.find(crntSubShape.materialIdx);
+						if (materialShapesIter == perMaterialSubShapes.end())
+						{
+							SubShapeArrayUPtr subShapeArray(new SubShapeArray);
+							perMaterialSubShapes.insert(std::pair<ur_uint, SubShapeArrayUPtr>(crntSubShape.materialIdx, std::move(subShapeArray)));
+							materialShapesIter = perMaterialSubShapes.find(crntSubShape.materialIdx);
+						}
+						materialShapesIter->second->emplace_back(crntSubShape);
+
+						shapeMaterialID = shape.mesh.material_ids[ip];
+						crntSubShape.materialIdx = 0;
+						crntSubShape.primitiveOffset = ur_uint(ip);
+						crntSubShape.primitiveCount = 0;
+					}
+
+					if (ip + 1 == shapePrimitivesCount)
+					{
+						crntSubShape.materialIdx = ur_uint(shapeMaterialID >= 0 && shapeMaterialID < (ur_int)meshData.Materials.size() ? shapeMaterialID : defaultMaterialID);
+						crntSubShape.primitiveCount = ur_uint(ip - crntSubShape.primitiveOffset + 1);
+						auto& materialShapesIter = perMaterialSubShapes.find(crntSubShape.materialIdx);
+						if (materialShapesIter == perMaterialSubShapes.end())
+						{
+							SubShapeArrayUPtr subShapeArray(new SubShapeArray);
+							perMaterialSubShapes.insert(std::pair<ur_uint, SubShapeArrayUPtr>(crntSubShape.materialIdx, std::move(subShapeArray)));
+							materialShapesIter = perMaterialSubShapes.find(crntSubShape.materialIdx);
+						}
+						materialShapesIter->second->emplace_back(crntSubShape);
+					}
+				}
 			}
-			materialShapesIter->second->emplace_back(shapeIdx);
 		}
 		meshData.Indices.resize(totalMeshIndicesCount * indexStride);
 		meshData.Vertices.resize(totalMeshIndicesCount * vertexStride);
@@ -1340,23 +1385,25 @@ namespace UnlimRealms
 		ur_size verticesOffset = 0;
 
 		// creaate MeshSurfaceData per material shape group
-		meshData.Surfaces.resize(perMaterialShapeIds.size());
-		auto materialShapeIdsIter = perMaterialShapeIds.begin();
+		meshData.Surfaces.resize(perMaterialSubShapes.size());
+		auto materialShapeIdsIter = perMaterialSubShapes.begin();
 		for (ur_size surfaceIdx = 0; surfaceIdx < meshData.Surfaces.size(); ++surfaceIdx, ++materialShapeIdsIter)
 		{
 			MeshSurfaceData& surfaceData = meshData.Surfaces[surfaceIdx];
 			surfaceData.MaterialID = materialShapeIdsIter->first;
 			surfaceData.PrimitivesOffset = (ur_uint)indicesOffset;
 			surfaceData.PrimtivesCount = 0;
-			for (auto& shapeId : *materialShapeIdsIter->second)
+			for (auto& subShape : *materialShapeIdsIter->second)
 			{
-				auto& shape = shapes[shapeId];
-				surfaceData.PrimtivesCount += (ur_uint)shape.mesh.indices.size() / 3;
+				auto& shape = shapes[subShape.shapeIdx];
+				surfaceData.PrimtivesCount += subShape.primitiveCount;
 
 				ur_byte* indicesPtr = meshData.Indices.data() + indicesOffset * indexStride;
 				ur_uint32* typedIndexPtr = (ur_uint32*)indicesPtr;
-				ur_size indicesCount = shape.mesh.indices.size();
-				for (ur_size ii = 0; ii < indicesCount; ++ii)
+				ur_size shapeIndicesCount = ur_size(subShape.primitiveCount) * 3;
+				ur_size shapeIndicesFrom = ur_size(subShape.primitiveOffset) * 3;
+				ur_size shapeIndicesTo = shapeIndicesFrom + shapeIndicesCount;
+				for (ur_size ii = 0; ii < shapeIndicesCount; ++ii)
 				{
 					*typedIndexPtr++ = ur_uint32(ii + indicesOffset);
 				}
@@ -1367,7 +1414,7 @@ namespace UnlimRealms
 					ur_byte* vertexElementPtr = (verticesPtr + vertexPositionOfs);
 					ur_float* typedElementPtr;
 					ur_size attribIdx;
-					for (ur_size ii = 0; ii < indicesCount; ++ii)
+					for (ur_size ii = shapeIndicesFrom; ii < shapeIndicesTo; ++ii)
 					{
 						attribIdx = shape.mesh.indices[ii].vertex_index * 3;
 						typedElementPtr = (ur_float*)vertexElementPtr;
@@ -1384,7 +1431,7 @@ namespace UnlimRealms
 					if (smoothNormals.empty())
 					{
 						ur_size attribIdx;
-						for (ur_size ii = 0; ii < indicesCount; ++ii)
+						for (ur_size ii = shapeIndicesFrom; ii < shapeIndicesTo; ++ii)
 						{
 							attribIdx = shape.mesh.indices[ii].normal_index * 3;
 							typedElementPtr = (ur_float*)vertexElementPtr;
@@ -1396,7 +1443,7 @@ namespace UnlimRealms
 					}
 					else
 					{
-						for (ur_size ii = 0; ii < indicesCount; ++ii)
+						for (ur_size ii = shapeIndicesFrom; ii < shapeIndicesTo; ++ii)
 						{
 							ur_float3& sn = smoothNormals[shape.mesh.indices[ii].vertex_index];
 							typedElementPtr = (ur_float*)vertexElementPtr;
@@ -1412,7 +1459,7 @@ namespace UnlimRealms
 					ur_byte* vertexElementPtr = (verticesPtr + vertexColorOfs);
 					ur_float* typedElementPtr;
 					ur_size attribIdx;
-					for (ur_size ii = 0; ii < indicesCount; ++ii)
+					for (ur_size ii = shapeIndicesFrom; ii < shapeIndicesTo; ++ii)
 					{
 						attribIdx = shape.mesh.indices[ii].vertex_index * 3;
 						typedElementPtr = (ur_float*)vertexElementPtr;
@@ -1427,7 +1474,7 @@ namespace UnlimRealms
 					ur_byte* vertexElementPtr = (verticesPtr + vertexTexcoordOfs);
 					ur_float* typedElementPtr;
 					ur_size attribIdx;
-					for (ur_size ii = 0; ii < indicesCount; ++ii)
+					for (ur_size ii = shapeIndicesFrom; ii < shapeIndicesTo; ++ii)
 					{
 						attribIdx = shape.mesh.indices[ii].texcoord_index * 2;
 						typedElementPtr = (ur_float*)vertexElementPtr;
@@ -1437,8 +1484,8 @@ namespace UnlimRealms
 					}
 				}
 
-				indicesOffset += indicesCount;
-				verticesOffset += indicesCount;
+				indicesOffset += shapeIndicesCount;
+				verticesOffset += shapeIndicesCount;
 			}
 		}
 
