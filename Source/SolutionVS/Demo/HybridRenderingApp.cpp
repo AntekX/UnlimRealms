@@ -2200,7 +2200,7 @@ int HybridRenderingApp::Run()
 			#if (SCENE_TYPE_SPONZA == SCENE_TYPE)
 			const ur_float SunInclinationScale = 2.6f;
 			#else
-			const ur_float SunInclinationScale = 0.6f;
+			const ur_float SunInclinationScale = 2.6f;
 			#endif
 			const ur_float SunInclinationBias = 0.02f;
 			sunDir.x = -cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
