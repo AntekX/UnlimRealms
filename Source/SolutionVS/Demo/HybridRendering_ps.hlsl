@@ -1,7 +1,7 @@
 
 #include "HybridRendering.hlsli"
 
-MeshPixelOutput main(MeshPixelInput input, in float VFace : VFACE)
+MeshPixelOutput main(MeshPixelInput input, in bool isFrontFace : SV_IsFrontFace)
 {
 	MeshPixelOutput output;
 
@@ -11,8 +11,9 @@ MeshPixelOutput main(MeshPixelInput input, in float VFace : VFACE)
 	float alpha = mask;
 	clip(alpha - 0.5);
 
+	const bool NormalMapInvertY = true;
 	float3 bumpNormal;
-	bumpNormal.xy = float2(bumpPacked.x, bumpPacked.y) * 2.0 - 1.0;
+	bumpNormal.xy = float2(bumpPacked.x, (NormalMapInvertY ? 1.0 - bumpPacked.y : bumpPacked.y)) * 2.0 - 1.0;
 	bumpNormal.z = sqrt(saturate(1.0 - dot(bumpNormal.xy, bumpNormal.xy)));
 
 	float3 normal = input.Normal.xyz;
@@ -31,7 +32,7 @@ MeshPixelOutput main(MeshPixelInput input, in float VFace : VFACE)
 		bitangent,
 		normal
 	};
-	surfaceTBN *= (VFace > 0 ? -1.0 : 1.0);
+	surfaceTBN *= (isFrontFace ? 1.0 : -1.0);
 	normal = mul(bumpNormal, surfaceTBN);
 
 	output.Target0 = float4(baseColor.xyz * input.Color.xyz, 1);
