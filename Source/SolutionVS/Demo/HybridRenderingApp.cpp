@@ -426,7 +426,8 @@ int HybridRenderingApp::Run()
 			MeshId_Sponza,
 			#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
 			MeshId_Banana,
-			MeshId_MedievalBuilding,
+			MeshId_BananaSmall,
+			MeshId_House,
 			#endif
 			MeshCount
 		};
@@ -1434,7 +1435,8 @@ int HybridRenderingApp::Run()
 				{ MeshId_Sponza, "../Res/Models/Sponza/sponza.obj" },
 				#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
 				{ MeshId_Banana, "../Res/Models/Banana/Banana.obj" },
-				{ MeshId_MedievalBuilding, "../Res/Models/Medieval_building.obj" },
+				{ MeshId_BananaSmall, "../Res/Models/BananaSmall/Banana-small.obj" },
+				{ MeshId_House, "../Res/Models/House/House.obj" },
 				#endif
 			};
 			for (ur_size ires = 0; ires < ur_array_size(meshResDesc); ++ires)
@@ -1611,8 +1613,9 @@ int HybridRenderingApp::Run()
 			#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 			ScatterMeshInstances(this->meshes[MeshId_Sponza].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 0.02f, 0.0f, 0.0f, false);
 			#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
-			ScatterMeshInstances(this->meshes[MeshId_Banana].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 0.03f, 0.01f, 0.0f, false);
-			ScatterMeshInstances(this->meshes[MeshId_MedievalBuilding].get(), this->sampleInstanceCount / 4, this->sampleInstanceScatterRadius, 2.0f, 0.0f, 0.0f, true);
+			ScatterMeshInstances(this->meshes[MeshId_Banana].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 0.035f, 0.01f, 0.0f, true);
+			ScatterMeshInstances(this->meshes[MeshId_BananaSmall].get(), this->sampleInstanceCount * 2, this->sampleInstanceScatterRadius, 0.02f, 0.005f, 0.0f, true);
+			ScatterMeshInstances(this->meshes[MeshId_House].get(), this->sampleInstanceCount / 8, this->sampleInstanceScatterRadius, 0.01f, 0.0f, 0.0f, false);
 			#endif
 
 			// upload instances

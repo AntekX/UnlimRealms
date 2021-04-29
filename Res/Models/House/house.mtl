@@ -1,0 +1,143 @@
+# 3ds Max Wavefront OBJ Exporter v0.97b - (c)2007 guruware
+# File Created: 29.04.2021 15:34:22
+
+newmtl MAT_ENV_ARC_TGF_Roof_Village_Metal_Rooftop_A_BLE
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\TXT-ENV-ARC-TGF-Roof-Village-Metal-Rooftop-A_DiffuseMap_0x1df84dc1c2b.dds
+	map_Kd maps\TXT-ENV-ARC-TGF-Roof-Village-Metal-Rooftop-A_DiffuseMap_0x1df84dc1c2b.dds
+
+newmtl MAT_ENV_ARC_TGF_Trim_Village_Wood_Beam_SPE_A_BAS
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\TXT-ENV-ARC-TGF-Trim-Village-Wood-Beam-SPE-A_DiffuseMap_0x1df84db9935.dds
+	map_Kd maps\TXT-ENV-ARC-TGF-Trim-Village-Wood-Beam-SPE-A_DiffuseMap_0x1df84db9935.dds
+
+newmtl MAT_ENV_ARC_TGF_Roof_Village_RoofTile_A_BAS
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\TXT-ENV-ARC-TGF-Roof-Village-RoofTile-A_DiffuseMap_0x1df84ddc302.dds
+	map_Kd maps\TXT-ENV-ARC-TGF-Roof-Village-RoofTile-A_DiffuseMap_0x1df84ddc302.dds
+
+newmtl MAT_ENV_ARC_TGF_Trim_Village_Wood_Beam_A_BLE
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\TXT-ENV-ARC-TGF-Wall-Village-Wood-Beam-Base-A_DiffuseMap_0x1df84dbc5ca.dds
+	map_Kd maps\TXT-ENV-ARC-TGF-Wall-Village-Wood-Beam-Base-A_DiffuseMap_0x1df84dbc5ca.dds
+
+newmtl MAT_ENV_ARC_TGF_Trim_Village_Wood_Beam_End_A_BAS
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\TXT-ENV-ARC-TGF-Trim-Village-Wood-Beam-End-A_DiffuseMap_0x1df84db994d.dds
+	map_Kd maps\TXT-ENV-ARC-TGF-Trim-Village-Wood-Beam-End-A_DiffuseMap_0x1df84db994d.dds
+	map_d maps\TXT-ENV-ARC-TGF-Trim-Village-Wood-Beam-End-A_DiffuseMap_0x1df84db994d.dds
+
+newmtl MAT_ENV_ARC_TGF_Window_Village_Wood_Shutter_A_BAS
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\TXT-ENV-ARC-TGF-Window-Village-Wood-Shutter-A_DiffuseMap_0x1df84dd2886.dds
+	map_Kd maps\TXT-ENV-ARC-TGF-Window-Village-Wood-Shutter-A_DiffuseMap_0x1df84dd2886.dds
+
+newmtl MAT_ENV_ARC_TGF_Trim_Village_Wood_Beam_B_BLE
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\TXT-ENV-ARC-TGF-Wall-Village-Wood-Beam-Base-Ba_DiffuseMap_0x1df84ddcddc.dds
+	map_Kd maps\TXT-ENV-ARC-TGF-Wall-Village-Wood-Beam-Base-Ba_DiffuseMap_0x1df84ddcddc.dds
+
+newmtl MAT_ENV_ARC_TGF_Wall_Village_Bamboo_Interlaced_A_BLE
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\TEX-ENV-ARC-TGF-Wall-BambooInterlaced-A_DiffuseMap_0x1df84d69408.dds
+	map_Kd maps\TEX-ENV-ARC-TGF-Wall-BambooInterlaced-A_DiffuseMap_0x1df84d69408.dds
+
+newmtl MAT_ENV_ARC_TGF_Trim_Village_Wood_Plank_A_BLE
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\TXT-ENV-ARC-TGF-Wall-Village-Wood-Plank-Base-Aa_DiffuseMap_0x1df84dcba90.dds
+	map_Kd maps\TXT-ENV-ARC-TGF-Wall-Village-Wood-Plank-Base-Aa_DiffuseMap_0x1df84dcba90.dds
+
+newmtl MAT_ENV_ARC_TGF_Wall_Village_Tarp_A_BAS
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5880 0.5880 0.5880
+	Kd 0.5880 0.5880 0.5880
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\TXT-ENV-ARC-TGF-Wall-Village-Tarp-A_DiffuseMap_0x1df84ddc2e1.dds
+	map_Kd maps\TXT-ENV-ARC-TGF-Wall-Village-Tarp-A_DiffuseMap_0x1df84ddc2e1.dds
