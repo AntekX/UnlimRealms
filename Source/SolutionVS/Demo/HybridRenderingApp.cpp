@@ -23,7 +23,7 @@ using namespace UnlimRealms;
 #define SCENE_TYPE_MEDIEVAL_BUILDINGS 0
 #define SCENE_TYPE_SPONZA 1
 #define SCENE_TYPE_FOREST 2
-#define SCENE_TYPE SCENE_TYPE_FOREST
+#define SCENE_TYPE SCENE_TYPE_SPONZA
 
 #define UPDATE_ASYNC 1
 #define RENDER_ASYNC 1
@@ -863,6 +863,8 @@ int HybridRenderingApp::Run()
 		ur_uint blurDescTableIdx;
 		ur_float4 debugVec0;
 		ur_float4 debugVec1;
+		ur_float4 debugVec2;
+		ur_float4 debugVec3;
 
 		std::vector<Instance> sampleInstances;
 		ur_uint sampleInstanceCount;
@@ -879,6 +881,8 @@ int HybridRenderingApp::Run()
 			this->blurDescTableIdx = 0;
 			this->debugVec0 = ur_float4(0.0f, 0.0f, 0.01f, 0.0f);
 			this->debugVec1 = ur_float4(1.0f, 0.0f, 0.1f, 16.0f);
+			this->debugVec2 = ur_float4(0.1f, 0.02f, 1.0f, 0.0f);
+			this->debugVec3 = ur_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			
 			// default material override
 			this->sceneConstants.FrameNumber = 0;
@@ -1686,6 +1690,8 @@ int HybridRenderingApp::Run()
 			sceneConstants.LightBufferDownscale.y = 1.0f / sceneConstants.LightBufferDownscale.x;
 			sceneConstants.DebugVec0 = this->debugVec0;
 			sceneConstants.DebugVec1 = this->debugVec1;
+			sceneConstants.DebugVec2 = this->debugVec2;
+			sceneConstants.DebugVec3 = this->debugVec3;
 			sceneConstants.Lighting = lightingDesc;
 			sceneConstants.Atmosphere = atmosphereDesc;
 			sceneConstants.ShadowSamplesPerLight = g_Settings.RayTracing.Shadow.SamplesPerLight;
@@ -2016,8 +2022,13 @@ int HybridRenderingApp::Run()
 				ImGui::InputFloat("InstancesCycleTime", &this->animationCycleTime);
 				ImGui::DragFloat("DirectLightFactor", &this->sceneConstants.DirectLightFactor, 0.01f, 0.0f, 1.0f);
 				ImGui::DragFloat("IndirectLightFactor", &this->sceneConstants.IndirectLightFactor, 0.01f, 0.0f, 1.0f);
-				ImGui::InputFloat4("DebugVec0", &this->debugVec0.x);
-				ImGui::InputFloat4("DebugVec1", &this->debugVec1.x);
+				if (ImGui::CollapsingHeader("Tweakers"))
+				{
+					ImGui::InputFloat4("DebugVec0", &this->debugVec0.x);
+					ImGui::InputFloat4("DebugVec1", &this->debugVec1.x);
+					ImGui::InputFloat4("DebugVec2", &this->debugVec2.x);
+					ImGui::InputFloat4("DebugVec3", &this->debugVec3.x);
+				}
 				if (ImGui::CollapsingHeader("Material"))
 				{
 					ur_bool editableBool = (ur_bool)this->sceneConstants.OverrideMaterial;

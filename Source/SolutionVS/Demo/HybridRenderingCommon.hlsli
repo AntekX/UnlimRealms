@@ -26,6 +26,8 @@ struct SceneConstants
 	CFLOAT4		(PrecomputedSkySize);
 	CFLOAT4		(DebugVec0);
 	CFLOAT4		(DebugVec1);
+	CFLOAT4		(DebugVec2);
+	CFLOAT4		(DebugVec3);
 	CFLOAT2		(LightBufferDownscale); // d, 1/d
 	CFLOAT		(DirectLightFactor);
 	CFLOAT		(IndirectLightFactor);

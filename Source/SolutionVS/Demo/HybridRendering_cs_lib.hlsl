@@ -461,8 +461,21 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 			#endif
 			//blurSampleWeight *= 1.0 - saturate(abs(gbData.ClipDepth - blurSampleGBData.ClipDepth) / blurDepthDeltaTolerance);
 			float blurSampleViewDepth = ClipDepthToViewDepth(blurSampleGBData.ClipDepth, g_SceneCB.Proj);
+			#if (0)
 			blurSampleWeight *= 1.0 - saturate(abs(viewDepth - blurSampleViewDepth) / blurDepthDeltaTolerance);
 			blurSampleWeight *= pow(saturate(dot(blurSampleGBData.Normal, gbData.Normal)), g_SceneCB.DebugVec1[3]);
+			#else
+			uint mainSampleGroupDataPos = (bufferPos.x - groupFrom.x) + (bufferPos.y - groupFrom.y) * groupSize.x;;
+			float depthDist = (viewDepth - blurSampleViewDepth);
+			float depthDist2 = depthDist * depthDist;
+			blurSampleWeight *= saturate(exp(-depthDist2 / g_SceneCB.DebugVec2[0]));
+			float3 normalDist = blurSampleGBData.Normal - gbData.Normal;
+			float normalDist2 = dot(normalDist, normalDist);
+			blurSampleWeight *= saturate(exp(-normalDist2 / g_SceneCB.DebugVec2[1]));
+			//float3 colorDist = g_BlurGroupData[groupDataPos].xyz - g_BlurGroupData[mainSampleGroupDataPos].xyz;
+			//float colorDist2 = dot(colorDist, colorDist);
+			//blurSampleWeight *= saturate(exp(-colorDist2 / g_SceneCB.DebugVec2[2]));
+			#endif
 
 			#if (BLUR_PREFETCH)
 			int groupDataOfs = (blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x;
