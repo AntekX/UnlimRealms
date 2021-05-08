@@ -80,7 +80,7 @@ struct RayDataDirect
 
 struct RayDataIndirect
 {
-	uint recusrionDepth;
+	uint recursionDepth;
 	float hitDist;
 	float3 luminance;
 };

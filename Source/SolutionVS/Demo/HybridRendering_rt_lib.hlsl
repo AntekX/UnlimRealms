@@ -368,13 +368,13 @@ void RayGenMain()
 				float3 reflectionDir = reflect(normalize(worldPos - g_SceneCB.CameraPos.xyz), gbData.Normal);
 				float3x3 reflectionTBN = ComputeSamplingBasis(reflectionDir);
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), reflectionTBN);
-				ray.Direction = normalize(ray.Direction*0 + reflectionDir * 10.0);
+				ray.Direction = normalize(ray.Direction*0 + reflectionDir * 20.0);
 				#else
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
 				#endif
 
 				RayDataIndirect rayData = (RayDataIndirect)0;
-				rayData.recusrionDepth = 0;
+				rayData.recursionDepth = 0;
 				rayData.hitDist = -1; // miss
 				rayData.luminance = 0.0;
 
@@ -443,7 +443,7 @@ void ClosestHitDirect(inout RayDataDirect rayData, in BuiltInTriangleIntersectio
 void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleIntersectionAttributes attribs)
 {
 	rayData.hitDist = RayTCurrent();
-	rayData.recusrionDepth += 1;
+	rayData.recursionDepth += 1;
 
 	// read hit surface material
 	const float3 hitWorldPos = WorldRayHitPoint();
@@ -452,7 +452,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 #if (RT_GI_TEST)
 	// recursive bounces
 	const uint IndirectLightBounces = min(2, (uint)g_SceneCB.DebugVec1[0]); //2;
-	if (rayData.recusrionDepth <= IndirectLightBounces)
+	if (rayData.recursionDepth <= IndirectLightBounces)
 	{
 		const float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
 		RayDesc ray;

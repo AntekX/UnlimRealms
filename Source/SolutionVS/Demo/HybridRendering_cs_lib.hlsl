@@ -72,7 +72,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		#else
 		shadowPerLight = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
 		#endif
-		indirectLight = g_IndirectLisght.Load(int3(lightBufferPos.xy, 0)).xyz;
+		indirectLight = g_IndirectLight.Load(int3(lightBufferPos.xy, 0)).xyz;
 		
 		#else
 		
@@ -135,6 +135,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			#endif
 			indirectLight.xyz += g_IndirectLight.Load(int3(lightSamplePos.xy, 0)).xyz * sampleWeight[i];
 		}
+		//float debugValue = shadowPerLight[3];
 		#endif
 
 		// direct light
@@ -164,7 +165,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		// TEMP:
 		if (g_SceneCB.DebugVec0[0] > 0)
 		{
-			lightingResult = lerp(float3(1,0,0), float3(0,1,0), /*debugValue*/shadowPerLight[3]) * max(indirectLight, 1.0);
+			lightingResult = lerp(float3(1, 0, 0), float3(0, 1, 0), debugValue);
 		}
 	}
 
