@@ -422,6 +422,7 @@ namespace UnlimRealms
 				continue; // allocated commands potentially still used on gpu
 
 			commandAllocator = cachedAllocator.get();
+			break;
 		}
 		if (ur_null == commandAllocator)
 		{
@@ -602,32 +603,95 @@ namespace UnlimRealms
 
 	Result GrafCommandListDX12::InsertDebugLabel(const char* name, const ur_float4& color)
 	{
+		// requires pix shite
 		return Result(NotImplemented);
 	}
 
 	Result GrafCommandListDX12::BeginDebugLabel(const char* name, const ur_float4& color)
 	{
+		// requires pix shite
 		return Result(NotImplemented);
 	}
 
 	Result GrafCommandListDX12::EndDebugLabel()
 	{
+		// requires pix shite
 		return Result(NotImplemented);
 	}
 
 	Result GrafCommandListDX12::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState)
 	{
-		return Result(NotImplemented);
+		if (ur_null == grafBuffer)
+			return Result(InvalidArgs);
+
+		if (grafBuffer->GetState() == dstState)
+			return Result(Success);
+
+		srcState = (GrafBufferState::Current == srcState ? grafBuffer->GetState() : srcState);
+
+		GrafBufferDX12* grafBufferDX12 = static_cast<GrafBufferDX12*>(grafBuffer);
+		ID3D12Resource* d3dResource = grafBufferDX12->GetD3DResource();
+
+		D3D12_RESOURCE_BARRIER d3dBarrier = {};
+		d3dBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		d3dBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		d3dBarrier.Transition.pResource = d3dResource;
+		d3dBarrier.Transition.Subresource = 0;
+		d3dBarrier.Transition.StateBefore = GrafUtilsDX12::GrafToD3DBufferState(srcState);
+		d3dBarrier.Transition.StateAfter = GrafUtilsDX12::GrafToD3DBufferState(dstState);
+
+		this->d3dCommandList->ResourceBarrier(1, &d3dBarrier);
+		
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::ImageMemoryBarrier(GrafImage* grafImage, GrafImageState srcState, GrafImageState dstState)
 	{
+		if (ur_null == grafImage)
+			return Result(InvalidArgs);
+
+		GrafImageDX12* grafImageVulkan = static_cast<GrafImageDX12*>(grafImage);
+		Result res = this->ImageMemoryBarrier(grafImageVulkan->GetDefaultSubresource(), srcState, dstState);
+		if (Succeeded(res))
+		{
+			// image state = default subresource state (all mips/layers)
+			static_cast<GrafImageDX12*>(grafImage)->SetState(dstState);
+		}
+
 		return Result(NotImplemented);
 	}
 
 	Result GrafCommandListDX12::ImageMemoryBarrier(GrafImageSubresource* grafImageSubresource, GrafImageState srcState, GrafImageState dstState)
 	{
-		return Result(NotImplemented);
+		if (ur_null == grafImageSubresource)
+			return Result(InvalidArgs);
+
+		const GrafImageDX12* grafImageDX12 = static_cast<const GrafImageDX12*>(grafImageSubresource->GetImage());
+		if (ur_null == grafImageDX12)
+			return Result(InvalidArgs);
+
+		srcState = (GrafImageState::Current == srcState ? grafImageSubresource->GetState() : srcState);
+
+		ID3D12Resource* d3dResource = grafImageDX12->GetD3DResource();
+
+		ur_uint32 subresFirst = grafImageSubresource->GetDesc().BaseMipLevel;
+		ur_uint32 subresCount = grafImageSubresource->GetDesc().LevelCount;
+		std::vector<D3D12_RESOURCE_BARRIER> d3dBarriers(subresCount);
+		for (ur_uint32 subresIdx = 0; subresIdx < subresCount; ++subresIdx)
+		{
+			D3D12_RESOURCE_BARRIER& d3dBarrier = d3dBarriers[subresIdx];
+			d3dBarrier = {};
+			d3dBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			d3dBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			d3dBarrier.Transition.pResource = d3dResource;
+			d3dBarrier.Transition.Subresource = subresFirst + subresIdx;
+			d3dBarrier.Transition.StateBefore = GrafUtilsDX12::GrafToD3DImageState(srcState);
+			d3dBarrier.Transition.StateAfter = GrafUtilsDX12::GrafToD3DImageState(dstState);
+		}
+
+		this->d3dCommandList->ResourceBarrier(UINT(subresCount), d3dBarriers.data());
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::SetFenceState(GrafFence* grafFence, GrafFenceState state)
@@ -887,6 +951,11 @@ namespace UnlimRealms
 	}
 
 	Result GrafImageDX12::InitializeFromD3DResource(GrafDevice *grafDevice, const InitParams& initParams, ID3D12Resource* d3dResource)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafImageDX12::CreateDefaultSubresource()
 	{
 		return Result(NotImplemented);
 	}
@@ -1262,5 +1331,98 @@ namespace UnlimRealms
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// GrafUtilsDX12
+
+	D3D12_RESOURCE_STATES GrafUtilsDX12::GrafToD3DBufferState(GrafBufferState state)
+	{
+		D3D12_RESOURCE_STATES d3dState = D3D12_RESOURCE_STATE_COMMON;
+		switch (state)
+		{
+		case GrafBufferState::TransferSrc:
+			d3dState = D3D12_RESOURCE_STATE_COPY_SOURCE;
+			break;
+		case GrafBufferState::TransferDst:
+			d3dState = D3D12_RESOURCE_STATE_COPY_DEST;
+			break;
+		case GrafBufferState::VertexBuffer:
+			d3dState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+			break;
+		case GrafBufferState::IndexBuffer:
+			d3dState = D3D12_RESOURCE_STATE_INDEX_BUFFER;
+			break;
+		case GrafBufferState::ConstantBuffer:
+			d3dState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+			break;
+		case GrafBufferState::ShaderRead:
+			d3dState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+			break;
+		case GrafBufferState::ShaderReadWrite:
+			d3dState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+			break;
+		case GrafBufferState::ComputeConstantBuffer:
+			d3dState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+			break;
+		case GrafBufferState::ComputeRead:
+			d3dState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+			break;
+		case GrafBufferState::ComputeReadWrite:
+			d3dState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+			break;
+		case GrafBufferState::RayTracingConstantBuffer:
+			d3dState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+			break;
+		case GrafBufferState::RayTracingRead:
+			d3dState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+			break;
+		case GrafBufferState::RayTracingReadWrite:
+			d3dState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+			break;
+		};
+		return d3dState;
+	}
+
+	D3D12_RESOURCE_STATES GrafUtilsDX12::GrafToD3DImageState(GrafImageState state)
+	{
+		D3D12_RESOURCE_STATES d3dState = D3D12_RESOURCE_STATE_COMMON;
+		switch (state)
+		{
+		case GrafImageState::TransferSrc:
+			d3dState = D3D12_RESOURCE_STATE_COPY_SOURCE;
+			break;
+		case GrafImageState::TransferDst:
+			d3dState = D3D12_RESOURCE_STATE_COPY_DEST;
+			break;
+		case GrafImageState::Present:
+			d3dState = D3D12_RESOURCE_STATE_PRESENT;
+			break;
+		case GrafImageState::ColorWrite:
+			d3dState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+			break;
+		case GrafImageState::DepthStencilWrite:
+			d3dState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+			break;
+		case GrafImageState::DepthStencilRead:
+			d3dState = D3D12_RESOURCE_STATE_DEPTH_READ;
+			break;
+		case GrafImageState::ShaderRead:
+			d3dState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+			break;
+		case GrafImageState::ShaderReadWrite:
+			d3dState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+			break;
+		case GrafImageState::ComputeRead:
+			d3dState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+			break;
+		case GrafImageState::ComputeReadWrite:
+			d3dState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+			break;
+		case GrafImageState::RayTracingRead:
+			d3dState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+			break;
+		case GrafImageState::RayTracingReadWrite:
+			d3dState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+			break;
+		};
+		return d3dState;
+	}
 
 } // end namespace UnlimRealms

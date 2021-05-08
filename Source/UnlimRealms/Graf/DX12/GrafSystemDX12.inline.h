@@ -30,6 +30,26 @@ namespace UnlimRealms
 		return this->d3dCommandList.get();
 	}
 
+	inline ID3D12Resource* GrafImageDX12::GetD3DResource() const
+	{
+		return this->d3dResource.get();
+	}
+
+	inline GrafImageSubresource* GrafImageDX12::GetDefaultSubresource() const
+	{
+		return this->grafDefaultSubresource.get();
+	}
+
+	inline void GrafImageDX12::SetState(GrafImageState& state)
+	{
+		this->imageState = state;
+	}
+
+	inline ID3D12Resource* GrafBufferDX12::GetD3DResource() const
+	{
+		return this->d3dResource.get();
+	}
+
 	inline GrafBuffer* GrafAccelerationStructureDX12::GetScratchBuffer() const
 	{
 		return this->grafScratchBuffer.get();

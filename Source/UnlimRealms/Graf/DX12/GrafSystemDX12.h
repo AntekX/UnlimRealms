@@ -313,9 +313,21 @@ namespace UnlimRealms
 
 		Result InitializeFromD3DResource(GrafDevice *grafDevice, const InitParams& initParams, ID3D12Resource* d3dResource);
 
+		inline ID3D12Resource* GetD3DResource() const;
+
+		inline GrafImageSubresource* GetDefaultSubresource() const;
+
 	private:
 
 		Result Deinitialize();
+
+		Result CreateDefaultSubresource();
+
+		friend class GrafCommandListDX12;
+		inline void SetState(GrafImageState& state);
+
+		shared_ref<ID3D12Resource> d3dResource;
+		std::unique_ptr<GrafImageSubresource> grafDefaultSubresource;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -353,9 +365,13 @@ namespace UnlimRealms
 
 		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
+		inline ID3D12Resource* GetD3DResource() const;
+
 	private:
 
 		Result Deinitialize();
+
+		shared_ref<ID3D12Resource> d3dResource;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -555,7 +571,8 @@ namespace UnlimRealms
 	{
 	public:
 
-		
+		static inline D3D12_RESOURCE_STATES GrafToD3DBufferState(GrafBufferState state);
+		static inline D3D12_RESOURCE_STATES GrafToD3DImageState(GrafImageState state);
 	};
 
 } // end namespace UnlimRealms
