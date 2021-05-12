@@ -881,7 +881,7 @@ int HybridRenderingApp::Run()
 			this->blurDescTableIdx = 0;
 			this->debugVec0 = ur_float4(0.0f, 0.0f, 0.01f, 0.0f);
 			this->debugVec1 = ur_float4(1.0f, 0.0f, 0.1f, 16.0f);
-			this->debugVec2 = ur_float4(0.1f, 0.02f, 1.0f, 0.0f);
+			this->debugVec2 = ur_float4(0.1f, 0.02f, 1.0f, 1.0f);
 			this->debugVec3 = ur_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			
 			// default material override

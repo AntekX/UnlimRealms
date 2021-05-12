@@ -32,40 +32,9 @@ struct MeshPixelOutput
 };
 
 // Shadow buffer
-
 #define SHADOW_BUFFER_APPLY_HISTORY_IN_RAYGEN 0 // allows to apply temporal accumulation without separate filter pass
 #define SHADOW_BUFFER_ONE_LIGHT_PER_FRAME 0 // enables light sources tracing distribution between multiple frames (requires temporal accumulation enabled)
-#define SHADOW_BUFFER_UINT32 0
-
-#if (SHADOW_BUFFER_UINT32)
-
-// following setup considers R32_UINT format
-static const uint ShadowBufferEntriesPerPixel = 4;
-static const uint ShadowBufferEntryMask = 0xff;
-static const uint ShadowBufferBitsPerEntry = 8;
-
-float ShadowBufferEntryUnpack(uint entryPacked)
-{
-	return float(entryPacked) / ShadowBufferEntryMask;
-}
-
-uint ShadowBufferEntryPack(float shadowFactor)
-{
-	return (uint)min(floor(shadowFactor * ShadowBufferEntryMask + 0.5), ShadowBufferEntryMask);
-}
-
-float ShadowBufferGetLightOcclusion(uint bufferData, uint lightIdx)
-{
-	uint entryData = (bufferData >> (lightIdx * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask;
-	return ShadowBufferEntryUnpack(entryData);
-}
-
-#else
-
-// 4 channel unorm or float buffer
-static const uint ShadowBufferEntriesPerPixel = 4;
-
-#endif // shadow buffer
+static const uint ShadowBufferEntriesPerPixel = 4; // 4 channel float buffer
 
 // Ray tracing shader table offsets
 static const uint ShaderGroupIdx_MissDirect = 0;

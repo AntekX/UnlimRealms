@@ -150,11 +150,7 @@ void RayGenMain()
 {
 	uint3 dispatchIdx = DispatchRaysIndex();
 	uint2 dispatchSize = (uint2)g_SceneCB.LightBufferSize.xy;
-	#if (SHADOW_BUFFER_UINT32)
-	uint occlusionPerLightPacked = 0xffffffff;
-	#else
 	float4 occlusionPerLight = 1.0;
-	#endif
 	uint4 tracingInfo = 0; // sub sample pos & counters
 	float3 indirectLight = 0.0;
 
@@ -210,12 +206,6 @@ void RayGenMain()
 			ray.Origin = worldPos + gbData.Normal * distBasedEps;
 			ray.TMin = 1.0e-3;
 			ray.TMax = 1.0e+4;
-
-			#if (SHADOW_BUFFER_UINT32)
-			occlusionPerLightPacked = 0x0;
-			float occlusionPerLight[ShadowBufferEntriesPerPixel];
-			[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j) occlusionPerLight[j] = 1.0;
-			#endif
 
 			// per light
 			uint lightCount = min(g_SceneCB.Lighting.LightSourceCount, ShadowBufferEntriesPerPixel);
@@ -293,51 +283,21 @@ void RayGenMain()
 				counter = (uint)floor(float(counter) * surfaceHistoryWeight + 0.5);
 				float historyWeight = float(counter) / (counter + 1);
 
-				#if (SHADOW_BUFFER_UINT32)
-				uint shadowHistoryPacked = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
-				#else
 				float4 shadowHistoryData = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
-				#endif
 				[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 				{
-					#if (SHADOW_BUFFER_UINT32)
-					uint occlusionPackedPrev = ((shadowHistoryPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask);
-					float occlusionAccumulated = ShadowBufferEntryUnpack(occlusionPackedPrev);
-					occlusionAccumulated = lerp(occlusionPerLight[j], occlusionAccumulated, historyWeight);
-					#if (1)
-					// note: following code guarantees minimal difference (if any) is applied to quantized result to overcome lack of precision at the end of the accumulation curve
-					const float diffEps = 1.0e-4;
-					float diff = occlusionPerLight[j] - occlusionAccumulated; // calculate difference before quantizing
-					diff = (diff > diffEps ? 1.0f : (diff < -diffEps ? -1.0f : 0.0f));
-					occlusionAccumulated = (float)ShadowBufferEntryPack(occlusionAccumulated); // quantize
-					occlusionAccumulated = occlusionPackedPrev + max(abs(occlusionAccumulated - occlusionPackedPrev), abs(diff)) * diff;
-					occlusionPerLight[j] = ShadowBufferEntryUnpack(occlusionAccumulated);
-					#else
-					occlusionPerLight[j] = occlusionAccumulated;
-					#endif
-					#else
-
 					#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
 					occlusionPerLight[j] = lerp(occlusionPerLight[j], shadowHistoryData[j], (ilight == j ? historyWeight : 1.0));
 					#else
 					occlusionPerLight[j] = lerp(occlusionPerLight[j], shadowHistoryData[j], historyWeight);
 					#endif
-					#endif
 				}
 
 				#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
 				if (ilight == lightCount - 1)
-					#endif
-					counter = clamp(counter + 1, 0, g_SceneCB.ShadowAccumulationFrames);
+				#endif
+				counter = clamp(counter + 1, 0, g_SceneCB.ShadowAccumulationFrames);
 				tracingInfo[1] = counter;
-			}
-			#endif
-
-			#if (SHADOW_BUFFER_UINT32)
-			// pack result
-			[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
-			{
-				occlusionPerLightPacked |= ShadowBufferEntryPack(occlusionPerLight[j]) << (j * ShadowBufferBitsPerEntry);
 			}
 			#endif
 		}
@@ -407,11 +367,7 @@ void RayGenMain()
 	}
 
 	// write result
-	#if (SHADOW_BUFFER_UINT32)
-	g_ShadowTarget[dispatchIdx.xy] = occlusionPerLightPacked;
-	#else
 	g_ShadowTarget[dispatchIdx.xy] = occlusionPerLight;
-	#endif
 	g_TracingInfoTarget[dispatchIdx.xy] = tracingInfo;
 	g_IndirectLightTarget[dispatchIdx.xy] = float4(indirectLight.xyz, 0.0);
 }
@@ -451,7 +407,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 
 #if (RT_GI_TEST)
 	// recursive bounces
-	const uint IndirectLightBounces = min(2, (uint)g_SceneCB.DebugVec1[0]); //2;
+	const uint IndirectLightBounces = min(8, (uint)g_SceneCB.DebugVec1[0]); //2;
 	if (rayData.recursionDepth <= IndirectLightBounces)
 	{
 		const float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
@@ -490,7 +446,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 			ray, rayData);
 
 		float NdotL = saturate(dot(material.normal, ray.Direction));
-		rayData.luminance *= material.baseColor.xyz * NdotL;
+		rayData.luminance *= material.baseColor.xyz * NdotL * g_SceneCB.DebugVec2[3];
 	}
 #endif
 
@@ -505,14 +461,16 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 	for (uint ilight = 0; ilight < /*g_SceneCB.Lighting.LightSourceCount*/1; ++ilight)
 	{
 		LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
-		float3 lightDir = (LightType_Directional == light.Type ? -light.Direction : normalize(light.Position.xyz - hitWorldPos.xyz));
+		float3 hitPosToLightVec = light.Position.xyz - hitWorldPos.xyz;
+		float hitPosToLightDist = length(hitPosToLightVec);
+		float3 lightDir = (LightType_Directional == light.Type ? -light.Direction : normalize(hitPosToLightVec));
 		float shadowFactor = 1.0;
 
 		// ray trace occlusion
 		#if (1)
 		RayDesc ray;
 		ray.Origin = hitWorldPos;
-		ray.TMax = 1000.0;
+		ray.TMax = (LightType_Directional == light.Type ? 1.0e+4 : max(0.0, hitPosToLightDist - light.Size));
 		ray.TMin = 1.0e-3;
 		ray.Direction = lightDir;
 

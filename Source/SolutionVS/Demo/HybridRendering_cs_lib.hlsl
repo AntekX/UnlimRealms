@@ -51,27 +51,14 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		// read lighting buffer
 
-		#if (SHADOW_BUFFER_UINT32)
-		float shadowPerLight[ShadowBufferEntriesPerPixel];
-		[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j) shadowPerLight[j] = 0.0;
-		#else
 		float4 shadowPerLight = 0.0;
-		#endif
 		float3 indirectLight = 0.0;
-
 		float2 lightBufferPos = (float2(imagePos.xy) + 0.5) * g_SceneCB.LightBufferDownscale.y;
+
 		#if (0)
 		
 		// point upsampling
-		#if (SHADOW_BUFFER_UINT32)
-		uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
-		[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
-		{
-			shadowPerLight[j] = ShadowBufferGetLightOcclusion(shadowPerLightPacked, j);
-		}
-		#else
 		shadowPerLight = g_ShadowResult.Load(int3(lightBufferPos.xy, 0));
-		#endif
 		indirectLight = g_IndirectLight.Load(int3(lightBufferPos.xy, 0)).xyz;
 		
 		#else
@@ -120,19 +107,11 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		[unroll] for (/*uint */i = 0; i < 4; ++i)
 		{
 			int2 lightSamplePos = int2(clamp(lightBufferPos + QuadSampleOfs[i], float2(0, 0), g_SceneCB.LightBufferSize.xy - 1));
-			#if (SHADOW_BUFFER_UINT32)
-			uint shadowPerLightPacked = g_ShadowResult.Load(int3(lightSamplePos.xy, 0));
-			[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
-			{
-				shadowPerLight[j] += ShadowBufferGetLightOcclusion(shadowPerLightPacked, j) * sampleWeight[i];
-			}
-			#else
 			float4 shadowResultData = g_ShadowResult.Load(int3(lightSamplePos.xy, 0));
 			[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 			{
 				shadowPerLight[j] += shadowResultData[j] * sampleWeight[i];
 			}
-			#endif
 			indirectLight.xyz += g_IndirectLight.Load(int3(lightSamplePos.xy, 0)).xyz * sampleWeight[i];
 		}
 		//float debugValue = shadowPerLight[3];
@@ -554,16 +533,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 
 	// read lighting result
 
-	float4 shadowPerLight = 0.0;
-	#if (SHADOW_BUFFER_UINT32)
-	uint shadowPerLightPacked = g_ShadowTarget[lightBufferPos.xy];
-	[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
-	{
-		shadowPerLight[j] = ShadowBufferGetLightOcclusion(shadowPerLightPacked, j);
-	}
-	#else
-	shadowPerLight = g_ShadowTarget[lightBufferPos.xy];
-	#endif
+	float4 shadowPerLight = g_ShadowTarget[lightBufferPos.xy];
 	float4 indirectLight = g_IndirectLightTarget[lightBufferPos.xy];
 
 	// apply filter
@@ -575,7 +545,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 	float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
 	clipPosPrev.xy /= clipPosPrev.w;
 	// TODO: experimental, always reproject, even on borders, prefer ghosting over disocclusion
-	clipPosPrev.xy = clamp(clipPosPrev.xy, float2(-1.0 + g_SceneCB.TargetSize.zw * 0.5), 1.0 - float2(g_SceneCB.TargetSize.zw * 0.5));
+	//clipPosPrev.xy = clamp(clipPosPrev.xy, float2(-1.0 + g_SceneCB.TargetSize.zw * 0.5), 1.0 - float2(g_SceneCB.TargetSize.zw * 0.5));
 	if (all(abs(clipPosPrev.xy) < 1.0))
 	{
 		float2 imagePosPrev = clamp((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);
@@ -618,44 +588,20 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 
 		// direct shadow
 
-		#if (SHADOW_BUFFER_UINT32)
-		// not supported
-		#elif (0)
+		#if (0)
 		// fallback to higher mip at low history counter
 		float shadowMip = g_SceneCB.DebugVec0[3] * pow(1.0 - float(shadowCounter) / g_SceneCB.ShadowAccumulationFrames, 1.0);
 		float4 shadowMipData = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, shadowMip - 1);
 		shadowPerLight = (shadowMip < 1 ? lerp(shadowPerLight, shadowMipData, shadowMip) : shadowMipData);
 		#endif
 
-		#if (SHADOW_BUFFER_UINT32)
-		uint shadowHistoryPacked = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
-		#else
 		float4 shadowHistoryData = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
-		#endif
 		[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 		{
-			#if (SHADOW_BUFFER_UINT32)
-			uint shadowPackedPrev = ((shadowHistoryPacked >> (j * ShadowBufferBitsPerEntry)) & ShadowBufferEntryMask);
-			float shadowAccumulated = ShadowBufferEntryUnpack(shadowPackedPrev);
-			shadowAccumulated = lerp(shadowPerLight[j], shadowAccumulated, shadowHistoryWeight);
-			#if (1)
-			// note: following code guarantees minimal difference (if any) is applied to quantized result to overcome lack of precision at the end of the accumulation curve
-			const float diffEps = 1.0e-4;
-			float diff = shadowPerLight[j] - shadowAccumulated; // calculate difference before quantizing
-			diff = (diff > diffEps ? 1.0f : (diff < -diffEps ? -1.0f : 0.0f));
-			shadowAccumulated = (float)ShadowBufferEntryPack(shadowAccumulated); // quantize
-			shadowAccumulated = shadowPackedPrev + max(abs(shadowAccumulated - shadowPackedPrev), abs(diff)) * diff;
-			shadowPerLight[j] = ShadowBufferEntryUnpack(shadowAccumulated);
-			#else
-			shadowPerLight[j] = shadowAccumulated;
-			#endif
-			#else
-
 			#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
 			shadowPerLight[j] = lerp(shadowPerLight[j], shadowHistoryData[j], (ilight == j ? shadowHistoryWeight : 1.0));
 			#else
 			shadowPerLight[j] = lerp(shadowPerLight[j], shadowHistoryData[j], shadowHistoryWeight);
-			#endif
 			#endif
 		}
 
@@ -667,7 +613,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		// update counters
 
 		#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
-		if (ilight == lightCount - 1) // note: counter is currently shared with indirect light accumulation, so this option will break it
+		if (ilight == lightCount - 1)
 		#endif
 		shadowCounter = clamp(shadowCounter + 1, 0, g_SceneCB.ShadowAccumulationFrames);
 		indirectLightCounter = clamp(indirectLightCounter + 1, 0, g_SceneCB.IndirectAccumulationFrames);
@@ -677,28 +623,11 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 	else
 	{
 		// no history available, fallback to higher mip
-		#if (SHADOW_BUFFER_UINT32)
-		// not supported
-		#else
 		//shadowPerLight = g_ShadowMips.SampleLevel(g_SamplerTrilinear, lightBufferUV, 3);
-		#endif
 	}
-
-	#if (SHADOW_BUFFER_UINT32)
-	// pack result
-	shadowPerLightPacked = 0x0;
-	[unroll] for (/*uint */j = 0; j < ShadowBufferEntriesPerPixel; ++j)
-	{
-		shadowPerLightPacked |= ShadowBufferEntryPack(shadowPerLight[j]) << (j * ShadowBufferBitsPerEntry);
-	}
-	#endif
 
 	// write result
-	#if (SHADOW_BUFFER_UINT32)
-	g_ShadowTarget[lightBufferPos.xy] = shadowPerLightPacked;
-	#else
 	g_ShadowTarget[lightBufferPos.xy] = shadowPerLight;
-	#endif
 	g_TracingInfoTarget[lightBufferPos.xy] = tracingInfo;
 	g_IndirectLightTarget[lightBufferPos.xy] = indirectLight;
 }
