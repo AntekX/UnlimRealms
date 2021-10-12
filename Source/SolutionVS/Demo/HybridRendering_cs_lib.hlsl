@@ -509,6 +509,29 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 
 // lighting result temporal accumulation filter
 
+#define ACCUMULATE_NEIGHBOURHOOD_CLIP 0
+static const uint AccumulateNeighbourhoodSize = 9;
+static const float2 AccumulateNeighbourhoodOfs[AccumulateNeighbourhoodSize] = {
+	float2( 0, 0), float2(-1,-1), float2( 0,-1),
+	float2( 1,-1), float2( 1, 0), float2( 1, 1),
+	float2( 0, 1), float2(-1, 1), float2(-1, 0)
+};
+
+// note: clips towards aabb center + p.w
+float4 ClipAABB(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
+{
+	float3 p_clip = 0.5 * (aabb_max + aabb_min);
+	float3 e_clip = 0.5 * (aabb_max - aabb_min);
+	float4 v_clip = q - float4(p_clip, p.w);
+	float3 v_unit = v_clip.xyz / e_clip;
+	float3 a_unit = abs(v_unit);
+	float ma_unit = max3(a_unit);
+	if (ma_unit > 1.0)
+		return float4(p_clip, p.w) + v_clip / ma_unit;
+	else
+		return q;// point inside aabb
+}
+
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID)
@@ -535,6 +558,23 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 
 	float4 shadowPerLight = g_ShadowTarget[lightBufferPos.xy];
 	float4 indirectLight = g_IndirectLightTarget[lightBufferPos.xy];
+	
+	#if (ACCUMULATE_NEIGHBOURHOOD_CLIP)
+	float4 indirectMu1 = 0;
+	float4 indirectMu2 = 0;
+	for (uint isample = 0; isample < AccumulateNeighbourhoodSize; ++isample)
+	{
+		int2 samplePos = clamp(lightBufferPos.xy + AccumulateNeighbourhoodOfs[isample], int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+		float4 sampleValue = g_IndirectLightTarget[samplePos];
+		indirectMu1 += sampleValue;
+		indirectMu2 += sampleValue * sampleValue;
+	}
+	float4 indirectMu = indirectMu1 / AccumulateNeighbourhoodSize;
+	float4 indirectSigma = sqrt(indirectMu2 / AccumulateNeighbourhoodSize - indirectMu * indirectMu);
+	const float indirectGamma = g_SceneCB.DebugVec0[3];
+	float4 indirectMin = indirectMu - indirectGamma * indirectSigma;
+	float4 indirectMax = indirectMu + indirectGamma * indirectSigma;
+	#endif
 
 	// apply filter
 
@@ -575,6 +615,9 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		float worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
 		float shadowHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
 		shadowHistoryConfidence = saturate((shadowHistoryConfidence - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
+		//float depthDist = abs(viewDepth - viewDepthPrev);
+		//float depthDist2 = depthDist * depthDist;
+		//float shadowHistoryConfidence = saturate(exp(-depthDist2 / g_SceneCB.DebugVec0[1]));
 		//shadowPerLight[3] = shadowHistoryConfidence; // TEMP: for debug output
 		worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec1[2]);
 		float indirectLightHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
@@ -608,6 +651,11 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		// indirect light
 
 		float4 indirectLightHistory = g_IndirectLightHistory.Load(int3(dispatchPosPrev.xy, 0));
+		#if (ACCUMULATE_NEIGHBOURHOOD_CLIP)
+		indirectLightHistory = ClipAABB(indirectMin.xyz, indirectMax.xyz, float4(indirectLightHistory.xyz, 1.0), float4(indirectLightHistory.xyz, 1.0));
+		//indirectLightHistory.xyz = max(indirectMin.xyz, indirectLightHistory.xyz);
+		//indirectLightHistory.xyz = min(indirectMax.xyz, indirectLightHistory.xyz);
+		#endif
 		indirectLight = lerp(indirectLight, indirectLightHistory, indirectLightHistoryWeight);
 
 		// update counters
