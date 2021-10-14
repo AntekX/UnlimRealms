@@ -23,7 +23,7 @@ using namespace UnlimRealms;
 #define SCENE_TYPE_MEDIEVAL_BUILDINGS 0
 #define SCENE_TYPE_SPONZA 1
 #define SCENE_TYPE_FOREST 2
-#define SCENE_TYPE SCENE_TYPE_FOREST
+#define SCENE_TYPE SCENE_TYPE_SPONZA
 
 #define UPDATE_ASYNC 1
 #define RENDER_ASYNC 1
@@ -92,7 +92,7 @@ int HybridRenderingApp::Run()
 		GrafRenderer::InitParams grafRendererParams = GrafRenderer::InitParams::Default;
 		grafRendererParams.DeviceId = grafSystem->GetRecommendedDeviceId();
 		grafRendererParams.CanvasParams = GrafCanvas::InitParams::Default;
-		grafRendererParams.CanvasParams.PresentMode = GrafPresentMode::VerticalSync;
+		grafRendererParams.CanvasParams.PresentMode = GrafPresentMode::Immediate;
 		res = grafRenderer->Initialize(std::move(grafSystem), grafRendererParams);
 		if (Failed(res)) break;
 
@@ -1303,6 +1303,7 @@ int HybridRenderingApp::Run()
 
 				GrafDescriptorRangeDesc blurDescTableLayoutRanges[] = {
 					g_SceneCBDescriptor,
+					g_BlurPassCBDescriptor,
 					g_GeometryDepthDescriptor,
 					g_GeometryImage0Descriptor,
 					g_GeometryImage1Descriptor,
@@ -1860,12 +1861,23 @@ int HybridRenderingApp::Run()
 				grafCmdList->ImageMemoryBarrier(workImages[srcImageId], GrafImageState::Current, GrafImageState::ComputeRead);
 				grafCmdList->ImageMemoryBarrier(workImages[dstImageId], GrafImageState::Current, GrafImageState::ComputeReadWrite);
 
+				// update & upload pass constants
+
+				BlurPassConstants passConstants;
+				passConstants.PassIdx = ipass;
+				passConstants.KernelSizeFactor = (1 << ipass);
+
+				GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
+				Allocation passCBAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(BlurPassConstants));
+				dynamicCB->Write((ur_byte*)&passConstants, sizeof(passConstants), 0, passCBAlloc.Offset);
+
 				// update descriptor table
 				// common constant buffer is expected to be uploaded during rasterization pass
 
 				this->blurDescTableIdx = (this->blurDescTableIdx + 1) % ur_uint(this->blurDescTables.size());
 				GrafDescriptorTable* descriptorTable = this->blurDescTables[this->blurDescTableIdx].get();
 				descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+				descriptorTable->SetConstantBuffer(g_BlurPassCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), passCBAlloc.Offset, passCBAlloc.Size);
 				descriptorTable->SetImage(g_GeometryDepthDescriptor, renderTargetSet->images[RenderTargetImageUsage_Depth]);
 				descriptorTable->SetImage(g_GeometryImage0Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry0]);
 				descriptorTable->SetImage(g_GeometryImage1Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry1]);
