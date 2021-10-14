@@ -432,7 +432,7 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 			int2 blurSamplePos = clamp(blurStartPos.xy + int2(ix, iy), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 			#else
 			// with kernelSizeFactor
-			int2 blurSamplePos = clamp(int2(bufferPos.xy) + (int2(ix, iy) - (BlurKernelSize / 2)) * kernelSizeFactor, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
+			int2 blurSamplePos = clamp(int2(bufferPos.xy) + (int2(ix, iy) - int(BlurKernelSize / 2)) * kernelSizeFactor, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 			#endif
 			int blurKernelPos = ix + iy * BlurKernelSize;
 			float blurSampleWeight = BlurKernelWeight[blurKernelPos];
@@ -625,6 +625,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		float worldPosDist = length(worldPos - worldPosPrev);
 		float worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
 		float shadowHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
+		//float shadowHistoryConfidence = saturate(exp(-(worldPosDist * worldPosDist) / g_SceneCB.DebugVec0[2]));
 		shadowHistoryConfidence = saturate((shadowHistoryConfidence - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
 		//float depthDist = abs(viewDepth - viewDepthPrev);
 		//float depthDist2 = depthDist * depthDist;
