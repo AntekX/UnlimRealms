@@ -386,7 +386,7 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 	gbData.ClipDepth = g_BlurGroupDepth[groupDataPos];
 	gbData.Normal = g_BlurGroupNormal[groupDataPos];
 	#else
-	float4 sourceData = g_BlurSource[int2(px, py)];
+	float4 sourceData = g_BlurSource[bufferPos];
 	GBufferData gbData = LoadGBufferData(gbufferPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 	#endif
 	bool isSky = (gbData.ClipDepth >= 1.0);
