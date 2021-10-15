@@ -381,10 +381,12 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 	uint2 gbufferPos = bufferPos * g_SceneCB.LightBufferDownscale.x + subSamplePos;
 	#if (BLUR_PREFETCH_GBDATA)
 	uint groupDataPos = (bufferPos.x - groupFrom.x) + (bufferPos.y - groupFrom.y) * groupSize.x;
+	float4 sourceData = g_BlurGroupData[groupDataPos];
 	GBufferData gbData = (GBufferData)0;
 	gbData.ClipDepth = g_BlurGroupDepth[groupDataPos];
 	gbData.Normal = g_BlurGroupNormal[groupDataPos];
 	#else
+	float4 sourceData = g_BlurSource[int2(px, py)];
 	GBufferData gbData = LoadGBufferData(gbufferPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 	#endif
 	bool isSky = (gbData.ClipDepth >= 1.0);
@@ -444,10 +446,12 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 			// gbuffer based discontinuities rejection
 			#if (BLUR_PREFETCH_GBDATA)
 			groupDataPos = (blurSamplePos.x - groupFrom.x) + (blurSamplePos.y - groupFrom.y) * groupSize.x;
+			float4 blurSampleData = g_BlurGroupData[groupDataPos];
 			GBufferData blurSampleGBData = (GBufferData)0;
 			blurSampleGBData.ClipDepth = g_BlurGroupDepth[groupDataPos];
 			blurSampleGBData.Normal = g_BlurGroupNormal[groupDataPos];
 			#else
+			float4 blurSampleData = g_BlurSource[blurSamplePos];
 			GBufferData blurSampleGBData = LoadGBufferData(blurSampleGBPos, g_GeometryDepth, g_GeometryImage0, g_GeometryImage1, g_GeometryImage2);
 			#endif
 			//blurSampleWeight *= 1.0 - saturate(abs(gbData.ClipDepth - blurSampleGBData.ClipDepth) / blurDepthDeltaTolerance);
@@ -462,8 +466,7 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 			float3 normalDist = blurSampleGBData.Normal - gbData.Normal;
 			float normalDist2 = dot(normalDist, normalDist);
 			blurSampleWeight *= saturate(exp(-normalDist2 / g_SceneCB.DebugVec2[1]));
-			//uint mainSampleGroupDataPos = (bufferPos.x - groupFrom.x) + (bufferPos.y - groupFrom.y) * groupSize.x;;
-			//float3 colorDist = g_BlurGroupData[groupDataPos].xyz - g_BlurGroupData[mainSampleGroupDataPos].xyz;
+			//float3 colorDist = sourceData.xyz - blurSampleData.xyz;
 			//float colorDist2 = dot(colorDist, colorDist);
 			//blurSampleWeight *= saturate(exp(-colorDist2 / g_SceneCB.DebugVec2[2]));
 			#endif
