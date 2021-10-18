@@ -433,7 +433,7 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 			#if (BLUR_PREFETCH)
 			int2 blurSamplePos = clamp(blurStartPos.xy + int2(ix, iy), int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 			#else
-			// with kernelSizeFactor
+			// with kernelSizeFactor (a-trous filtering)
 			int2 blurSamplePos = clamp(int2(bufferPos.xy) + (int2(ix, iy) - int(BlurKernelSize / 2)) * kernelSizeFactor, int2(0, 0), int2(g_SceneCB.LightBufferSize.xy - 1));
 			#endif
 			int blurKernelPos = ix + iy * BlurKernelSize;
@@ -602,8 +602,9 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 	//clipPosPrev.xy = clamp(clipPosPrev.xy, float2(-1.0 + g_SceneCB.TargetSize.zw * 0.5), 1.0 - float2(g_SceneCB.TargetSize.zw * 0.5));
 	if (all(abs(clipPosPrev.xy) < 1.0))
 	{
-		float2 imagePosPrev = clamp((clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5 * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);
-		uint2 dispatchPosPrev = clamp(floor(imagePosPrev * g_SceneCB.LightBufferDownscale.y), float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
+		float2 uvPosPrev = (clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5;
+		float2 imagePosPrev = clamp(floor(uvPosPrev * g_SceneCB.TargetSize.xy + 0.5), float2(0, 0), g_SceneCB.TargetSize.xy - 1);
+		uint2 dispatchPosPrev = clamp(imagePosPrev * g_SceneCB.LightBufferDownscale.y, float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
 		imagePosPrev = dispatchPosPrev * g_SceneCB.LightBufferDownscale.x;
 
 		uint4 tracingInfoHistory = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0));
