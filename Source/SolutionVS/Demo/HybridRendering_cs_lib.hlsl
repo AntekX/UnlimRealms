@@ -599,12 +599,12 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 	float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
 	clipPosPrev.xy /= clipPosPrev.w;
 	// TODO: experimental, always reproject, even on borders, prefer ghosting over disocclusion
-	//clipPosPrev.xy = clamp(clipPosPrev.xy, float2(-1.0 + g_SceneCB.TargetSize.zw * 0.5), 1.0 - float2(g_SceneCB.TargetSize.zw * 0.5));
+	clipPosPrev.xy = clamp(clipPosPrev.xy, float2(-1.0 + g_SceneCB.TargetSize.zw * 0.5), 1.0 - float2(g_SceneCB.TargetSize.zw * 0.5));
 	if (all(abs(clipPosPrev.xy) < 1.0))
 	{
 		float2 uvPosPrev = (clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5;
-		float2 imagePosPrev = clamp(floor(uvPosPrev * g_SceneCB.TargetSize.xy + 0.5), float2(0, 0), g_SceneCB.TargetSize.xy - 1);
-		uint2 dispatchPosPrev = clamp(imagePosPrev * g_SceneCB.LightBufferDownscale.y, float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
+		float2 imagePosPrev = clamp(uvPosPrev * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);
+		uint2 dispatchPosPrev = clamp(floor(imagePosPrev * g_SceneCB.LightBufferDownscale.y), float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
 		imagePosPrev = dispatchPosPrev * g_SceneCB.LightBufferDownscale.x;
 
 		uint4 tracingInfoHistory = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0));
@@ -628,8 +628,8 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		float viewDepthPrev = ClipDepthToViewDepth(clipDepthPrev, g_SceneCB.ProjPrev);
 		float worldPosDist = length(worldPos - worldPosPrev);
 		float worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
-		float shadowHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
-		//float shadowHistoryConfidence = saturate(exp(-(worldPosDist * worldPosDist) / g_SceneCB.DebugVec0[2]));
+		//float shadowHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
+		float shadowHistoryConfidence = saturate(exp(-(worldPosDist * worldPosDist) / g_SceneCB.DebugVec0[2]));
 		shadowHistoryConfidence = saturate((shadowHistoryConfidence - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
 		//float depthDist = abs(viewDepth - viewDepthPrev);
 		//float depthDist2 = depthDist * depthDist;
