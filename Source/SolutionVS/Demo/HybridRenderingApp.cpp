@@ -28,19 +28,34 @@ using namespace UnlimRealms;
 #define UPDATE_ASYNC 1
 #define RENDER_ASYNC 1
 
+struct SpatialFilterSettings
+{
+	ur_uint PassCount;
+	ur_float4 EdgeParams;
+};
+
 struct DirectShadowSettings
 {
 	ur_uint SamplesPerLight = 1;
-	ur_uint BlurPassCount = 2;
 	ur_uint AccumulationFrames = 16;
+	SpatialFilterSettings SpatialFilter = {
+		2, // PassCount
+		ur_float4(0.1f, 0.02f, 0.0f, 0.0f) // EdgeParams
+	};
 };
 
 struct IndirectLightSettings
 {
 	ur_uint SamplesPerFrame = 1;
-	ur_uint PreBlurPassCount = 4;
-	ur_uint PostBlurPassCount = 0;
 	ur_uint AccumulationFrames = 128;
+	SpatialFilterSettings SpatialFilter = {
+		4, // PassCount
+		ur_float4(0.1f, 0.02f, 0.0f, 0.0f) // EdgeParams
+	};
+	SpatialFilterSettings SpatialPostFilter = {
+		0, // PassCount
+		ur_float4(0.1f, 0.02f, 0.0f, 0.0f) // EdgeParams
+	};
 };
 
 struct RayTracingSettings
@@ -1849,7 +1864,7 @@ int HybridRenderingApp::Run()
 		}
 
 		void BlurLightingResult(GrafCommandList* grafCmdList, RenderTargetSet* renderTargetSet,
-			GrafImage* sourceImage, GrafImage* targetImage, ur_uint blurPassCount)
+			GrafImage* sourceImage, GrafImage* targetImage, SpatialFilterSettings filterSettings)
 		{
 			GrafImage* workImages[] = {
 				sourceImage,
@@ -1857,7 +1872,7 @@ int HybridRenderingApp::Run()
 			};
 			ur_uint srcImageId = 0;
 			ur_uint dstImageId = 1;
-			ur_uint passCount = (blurPassCount / 2) * 2; // multiple of 2 to avoid copying blured image back to source
+			ur_uint passCount = (filterSettings.PassCount / 2) * 2; // multiple of 2 to avoid copying blured image back to source
 			for (ur_uint ipass = 0; ipass < passCount; ++ipass)
 			{
 				grafCmdList->ImageMemoryBarrier(workImages[srcImageId], GrafImageState::Current, GrafImageState::ComputeRead);
@@ -1868,6 +1883,7 @@ int HybridRenderingApp::Run()
 				BlurPassConstants passConstants;
 				passConstants.PassIdx = ipass;
 				passConstants.KernelSizeFactor = (1 << ipass);
+				passConstants.EdgeParams = filterSettings.EdgeParams;
 
 				GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
 				Allocation passCBAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(BlurPassConstants));
@@ -2449,11 +2465,11 @@ int HybridRenderingApp::Run()
 						demoScene->BlurLightingResult(grafCmdListCrnt, renderTargetSet.get(),
 							lightingBufferSet->images[LightingImageUsage_DirectShadow].get(),
 							lightingBufferSet->images[LightingImageUsage_DirectShadowBlured].get(),
-							g_Settings.RayTracing.Shadow.BlurPassCount);
+							g_Settings.RayTracing.Shadow.SpatialFilter);
 						demoScene->BlurLightingResult(grafCmdListCrnt, renderTargetSet.get(),
 							lightingBufferSet->images[LightingImageUsage_IndirectLight].get(),
 							lightingBufferSet->images[LightingImageUsage_IndirectLightBlured].get(),
-							g_Settings.RayTracing.IndirectLight.PreBlurPassCount);
+							g_Settings.RayTracing.IndirectLight.SpatialFilter);
 					}
 				}
 
@@ -2550,7 +2566,7 @@ int HybridRenderingApp::Run()
 						demoScene->BlurLightingResult(grafCmdListCrnt, renderTargetSet.get(),
 							lightingBufferSet->images[LightingImageUsage_IndirectLight].get(),
 							lightingBufferSet->images[LightingImageUsage_IndirectLightBlured].get(),
-							g_Settings.RayTracing.IndirectLight.PostBlurPassCount);
+							g_Settings.RayTracing.IndirectLight.SpatialPostFilter);
 					}
 				}
 			}
@@ -2672,27 +2688,29 @@ int HybridRenderingApp::Run()
 							editableInt = (ur_int)g_Settings.RayTracing.Shadow.SamplesPerLight;
 							ImGui::InputInt("SamplesPerLight", &editableInt);
 							g_Settings.RayTracing.Shadow.SamplesPerLight = (ur_uint)std::max(0, std::min(1024, editableInt));
-							editableInt = (ur_int)g_Settings.RayTracing.Shadow.BlurPassCount;
-							ImGui::InputInt("BlurPassCount", &editableInt);
-							g_Settings.RayTracing.Shadow.BlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
 							editableInt = (ur_int)g_Settings.RayTracing.Shadow.AccumulationFrames;
 							ImGui::InputInt("AccumulationFrames", &editableInt);
 							g_Settings.RayTracing.Shadow.AccumulationFrames = (ur_uint)std::max(0, std::min(1024, editableInt));
+							editableInt = (ur_int)g_Settings.RayTracing.Shadow.SpatialFilter.PassCount;
+							ImGui::InputInt("BlurPassCount", &editableInt);
+							g_Settings.RayTracing.Shadow.SpatialFilter.PassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
+							ImGui::InputFloat4("BlurEdgeParams", &g_Settings.RayTracing.Shadow.SpatialFilter.EdgeParams.x);
 						}
 						if (ImGui::CollapsingHeader("IndirectLight"))
 						{
 							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.SamplesPerFrame;
 							ImGui::InputInt("SamplesPerFrame", &editableInt);
 							g_Settings.RayTracing.IndirectLight.SamplesPerFrame = (ur_uint)std::max(0, std::min(1024, editableInt));
-							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.PreBlurPassCount;
-							ImGui::InputInt("PreBlurPassCount", &editableInt);
-							g_Settings.RayTracing.IndirectLight.PreBlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
-							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.PostBlurPassCount;
-							ImGui::InputInt("PostBlurPassCount", &editableInt);
-							g_Settings.RayTracing.IndirectLight.PostBlurPassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
 							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.AccumulationFrames;
 							ImGui::InputInt("AccumulationFrames", &editableInt);
 							g_Settings.RayTracing.IndirectLight.AccumulationFrames = (ur_uint)std::max(0, std::min(1024, editableInt));
+							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.SpatialFilter.PassCount;
+							ImGui::InputInt("BlurPassCount", &editableInt);
+							g_Settings.RayTracing.IndirectLight.SpatialFilter.PassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
+							ImGui::InputFloat4("BlurEdgeParams", &g_Settings.RayTracing.IndirectLight.SpatialFilter.EdgeParams.x);
+							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.SpatialPostFilter.PassCount;
+							ImGui::InputInt("PostBlurPassCount", &editableInt);
+							g_Settings.RayTracing.IndirectLight.SpatialPostFilter.PassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
 						}
 					}
 					if (ImGui::CollapsingHeader("Canvas"))

@@ -48,6 +48,8 @@ struct BlurPassConstants
 {
 	CUINT		(PassIdx);
 	CUINT		(KernelSizeFactor);
+	CUINT2		(__pad0);
+	CFLOAT4		(EdgeParams);
 };
 
 // sub mesh description

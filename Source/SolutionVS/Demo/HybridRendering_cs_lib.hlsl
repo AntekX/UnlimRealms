@@ -463,13 +463,14 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 			#else
 			float depthDist = (viewDepth - blurSampleViewDepth);
 			float depthDist2 = depthDist * depthDist;
-			blurSampleWeight *= saturate(exp(-depthDist2 / g_SceneCB.DebugVec2[0]));
+			blurSampleWeight *= (g_BlurPassCB.EdgeParams[0] > 0 ? saturate(exp(-depthDist2 / g_BlurPassCB.EdgeParams[0])) : 1.0);
 			float3 normalDist = blurSampleGBData.Normal - gbData.Normal;
 			float normalDist2 = dot(normalDist, normalDist);
-			blurSampleWeight *= saturate(exp(-normalDist2 / g_SceneCB.DebugVec2[1]));
-			//float3 colorDist = sourceData.xyz - blurSampleData.xyz;
+			blurSampleWeight *= (g_BlurPassCB.EdgeParams[1] > 0 ? saturate(exp(-normalDist2 / g_BlurPassCB.EdgeParams[1])) : 1.0);
+			// currently always disabled by default in settings
+			//float3 colorDist = sourceData.xyz / (sourceData.xyz + 1) - blurSampleData.xyz / (blurSampleData.xyz + 1);
 			//float colorDist2 = dot(colorDist, colorDist);
-			//blurSampleWeight *= saturate(exp(-colorDist2 / g_SceneCB.DebugVec2[2]));
+			//blurSampleWeight *= (g_BlurPassCB.EdgeParams[2] > 0 ? saturate(exp(-colorDist2 / g_BlurPassCB.EdgeParams[2])) : 1.0);
 			#endif
 
 			#if (BLUR_PREFETCH)
