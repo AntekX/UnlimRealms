@@ -30,22 +30,24 @@ using namespace UnlimRealms;
 
 struct DirectShadowSettings
 {
-	ur_uint SamplesPerLight = 2;
-	ur_uint BlurPassCount = 4;
+	ur_uint SamplesPerLight = 1;
+	ur_uint BlurPassCount = 2;
 	ur_uint AccumulationFrames = 16;
 };
 
 struct IndirectLightSettings
 {
-	ur_uint SamplesPerFrame = 4;
+	ur_uint SamplesPerFrame = 1;
 	ur_uint PreBlurPassCount = 4;
-	ur_uint PostBlurPassCount = 4;
-	ur_uint AccumulationFrames = 64;
+	ur_uint PostBlurPassCount = 0;
+	ur_uint AccumulationFrames = 128;
 };
 
 struct RayTracingSettings
 {
-	ur_uint LightingBufferDownscale = 2;
+	// TODO: fix reprojection for downscaled light buffer
+	// consider bilateral upscale of ray tracing result to full res before accumulation pass
+	ur_uint LightingBufferDownscale = 1;
 	ur_bool PerFrameJitter = true;
 	DirectShadowSettings Shadow;
 	IndirectLightSettings IndirectLight;
@@ -2114,6 +2116,7 @@ int HybridRenderingApp::Run()
 	sunLight2.Direction = { 0.8018f,-0.26726f,-0.5345f };
 	sunLight2.Size = SolarDiskHalfAngleTangent * 4.0f;
 	LightDesc sphericalLight1 = {}; // main directional light source
+	LightDesc* sphericalLight1Ptr = ur_null;
 	sphericalLight1.Type = LightType_Spherical;
 	sphericalLight1.Color = { 1.0f, 1.0f, 1.0f };
 	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE) || (SCENE_TYPE_FOREST == SCENE_TYPE)
@@ -2123,11 +2126,12 @@ int HybridRenderingApp::Run()
 	sphericalLight1.Position = { 2.0f, 2.0f, 2.0f };
 	sphericalLight1.Intensity = SolarIlluminanceNoon * powf(sphericalLight1.Position.y, 2) * 1;
 	#endif
-	sphericalLight1.Size = 0.5f;
+	sphericalLight1.Size = 1.0f;
 	LightingDesc lightingDesc = {};
 	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
 	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
-	//lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sphericalLight1;
+	sphericalLight1Ptr = &lightingDesc.LightSources[lightingDesc.LightSourceCount];
+	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sphericalLight1;
 	#endif
 	//lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
 
@@ -2629,6 +2633,10 @@ int HybridRenderingApp::Run()
 						ImGui::DragFloat("CrntCycleFactor", &lightCrntCycleFactor, 0.01f, 0.0f, 1.0f);
 						ImGui::ColorEdit3("Color", &lightingDesc.LightSources[0].Color.x);
 						ImGui::InputFloat("Intensity", &lightingDesc.LightSources[0].Intensity);
+						if (sphericalLight1Ptr != nullptr)
+						{
+							ImGui::InputFloat("SpherLightSize", &sphericalLight1Ptr->Size);
+						}
 					}
 					if (ImGui::CollapsingHeader("Atmosphere"))
 					{

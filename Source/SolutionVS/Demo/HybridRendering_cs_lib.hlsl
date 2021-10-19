@@ -326,8 +326,9 @@ static const uint g_BlurGroupSizeWithBorders = g_BlurGroupSize + g_BlurGroupBord
 groupshared float4 g_BlurGroupData[g_BlurGroupSizeWithBorders * g_BlurGroupSizeWithBorders];
 groupshared float g_BlurGroupDepth[g_BlurGroupSizeWithBorders * g_BlurGroupSizeWithBorders];
 groupshared float3 g_BlurGroupNormal[g_BlurGroupSizeWithBorders * g_BlurGroupSizeWithBorders];
-#define BLUR_PREFETCH 1 // -40% time
-#define BLUR_PREFETCH_GBDATA 1 // additional -20% time (-50% total)
+// note: prefetch optimization is not compatible with a-trous filter
+#define BLUR_PREFETCH 0 // -40% time
+#define BLUR_PREFETCH_GBDATA 0 // additional -20% time (-50% total)
 #define BLUR_COMPUTE_VARIANCE 0
 
 void swap(inout float a, inout float b)
@@ -603,12 +604,14 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 	if (all(abs(clipPosPrev.xy) < 1.0))
 	{
 		float2 uvPosPrev = (clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5;
-		float2 imagePosPrev = clamp(uvPosPrev * g_SceneCB.TargetSize.xy, float2(0, 0), g_SceneCB.TargetSize.xy - 1);
+		float2 uvDelta = abs(uvPos - uvPosPrev);
+		if (max(uvDelta.x, uvDelta.y) < g_SceneCB.TargetSize.w * 0.1) uvPosPrev = uvPos; // remove reprojection error
+		float2 imagePosPrev = clamp(floor(uvPosPrev * g_SceneCB.TargetSize.xy), float2(0, 0), g_SceneCB.TargetSize.xy - 1);
 		uint2 dispatchPosPrev = clamp(floor(imagePosPrev * g_SceneCB.LightBufferDownscale.y), float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
-		imagePosPrev = dispatchPosPrev * g_SceneCB.LightBufferDownscale.x;
 
 		uint4 tracingInfoHistory = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0));
-		float clipDepthPrev = g_DepthHistory.Load(int3(imagePosPrev.xy, 0));
+		//float clipDepthPrev = g_DepthHistory.Load(int3(imagePosPrev.xy, 0));
+		float clipDepthPrev = g_DepthHistory.SampleLevel(g_SamplerBilinear, uvPosPrev, 0);
 		bool isSkyPrev = (clipDepthPrev >= 1.0);
 		// TODO
 		#if (0)
@@ -628,8 +631,8 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		float viewDepthPrev = ClipDepthToViewDepth(clipDepthPrev, g_SceneCB.ProjPrev);
 		float worldPosDist = length(worldPos - worldPosPrev);
 		float worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
-		//float shadowHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
-		float shadowHistoryConfidence = saturate(exp(-(worldPosDist * worldPosDist) / g_SceneCB.DebugVec0[2]));
+		float shadowHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
+		//float shadowHistoryConfidence = saturate(exp(-(worldPosDist * worldPosDist) / g_SceneCB.DebugVec0[2]));
 		shadowHistoryConfidence = saturate((shadowHistoryConfidence - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
 		//float depthDist = abs(viewDepth - viewDepthPrev);
 		//float depthDist2 = depthDist * depthDist;
@@ -654,7 +657,8 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		shadowPerLight = (shadowMip < 1 ? lerp(shadowPerLight, shadowMipData, shadowMip) : shadowMipData);
 		#endif
 
-		float4 shadowHistoryData = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
+		//float4 shadowHistoryData = g_ShadowHistory.Load(int3(dispatchPosPrev.xy, 0));
+		float4 shadowHistoryData = g_ShadowHistory.SampleLevel(g_SamplerBilinear, uvPosPrev, 0);
 		[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 		{
 			#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
@@ -666,7 +670,8 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 
 		// indirect light
 
-		float4 indirectLightHistory = g_IndirectLightHistory.Load(int3(dispatchPosPrev.xy, 0));
+		//float4 indirectLightHistory = g_IndirectLightHistory.Load(int3(dispatchPosPrev.xy, 0));
+		float4 indirectLightHistory = g_IndirectLightHistory.SampleLevel(g_SamplerBilinear, uvPosPrev, 0);
 		#if (ACCUMULATE_NEIGHBOURHOOD_CLIP)
 		indirectLightHistory = ClipAABB(indirectMin.xyz, indirectMax.xyz, float4(indirectLightHistory.xyz, 1.0), float4(indirectLightHistory.xyz, 1.0));
 		//indirectLightHistory.xyz = max(indirectMin.xyz, indirectLightHistory.xyz);
