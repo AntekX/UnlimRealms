@@ -601,12 +601,11 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 	float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);
 	clipPosPrev.xy /= clipPosPrev.w;
 	// TODO: experimental, always reproject, even on borders, prefer ghosting over disocclusion
-	clipPosPrev.xy = clamp(clipPosPrev.xy, float2(-1.0 + g_SceneCB.TargetSize.zw * 0.5), 1.0 - float2(g_SceneCB.TargetSize.zw * 0.5));
+	//clipPosPrev.xy = clamp(clipPosPrev.xy, float2(-1.0 + g_SceneCB.TargetSize.zw * 0.5), 1.0 - float2(g_SceneCB.TargetSize.zw * 0.5));
 	if (all(abs(clipPosPrev.xy) < 1.0))
 	{
 		float2 uvPosPrev = (clipPosPrev.xy * float2(1.0, -1.0) + 1.0) * 0.5;
 		float2 uvDelta = abs(uvPos - uvPosPrev);
-		if (max(uvDelta.x, uvDelta.y) < g_SceneCB.TargetSize.w * 0.1) uvPosPrev = uvPos; // remove reprojection error
 		float2 imagePosPrev = clamp(floor(uvPosPrev * g_SceneCB.TargetSize.xy), float2(0, 0), g_SceneCB.TargetSize.xy - 1);
 		uint2 dispatchPosPrev = clamp(floor(imagePosPrev * g_SceneCB.LightBufferDownscale.y), float2(0, 0), g_SceneCB.LightBufferSize.xy - 1);
 
