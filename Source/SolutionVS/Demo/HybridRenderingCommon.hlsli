@@ -4,8 +4,8 @@
 #include "ShaderLib/CommonTypes.hlsli"
 
 // TEMP
-#define RT_REFLECTION_TEST 0
 #define RT_GI_TEST 1
+#define RT_REFLECTION_TEST 0
 
 // constant buffers
 

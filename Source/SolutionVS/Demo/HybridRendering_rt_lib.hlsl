@@ -325,22 +325,16 @@ void RayGenMain()
 			for (uint isample = 0; isample < g_SceneCB.IndirectSamplesPerFrame; ++isample)
 			{
 				float3 sampleDir = GetHemisphereSampleDirection(isample + sampleIdOfs, sampleCount);
-				#if (RT_REFLECTION_TEST)
-				//ray.Direction = reflect(normalize(worldPos - g_SceneCB.CameraPos.xyz), gbData.Normal);
-				float3 reflectionDir = reflect(normalize(worldPos - g_SceneCB.CameraPos.xyz), gbData.Normal);
-				float3x3 reflectionTBN = ComputeSamplingBasis(reflectionDir);
-				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), reflectionTBN);
-				ray.Direction = normalize(ray.Direction*0 + reflectionDir * 20.0);
-				#else
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
+				#if (RT_REFLECTION_TEST)
 				// TEST: specular lobe importance sampling
-				/*if (gbData.Normal.y > 0.9)
+				if (gbData.Normal.y > 0.9)
 				{
 					float3 viewVec = normalize(g_SceneCB.CameraPos.xyz - worldPos);
 					float2 xi = Hammersley((isample + sampleIdOfs) % sampleCount, sampleCount);
 					xi = mul(float3(xi.xy, 1.0), dispatchSamplingFrame).xy;
 					ray.Direction = ImportanceSampleGGX(xi, g_SceneCB.Material.Roughness, gbData.Normal, viewVec);
-				}*/
+				}
 				#endif
 
 				RayDataIndirect rayData = (RayDataIndirect)0;
@@ -442,6 +436,17 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		float3 sampleDir = GetHemisphereSampleDirection(sampleId, sampleCount);
 		ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
 
+		#if (RT_REFLECTION_TEST)
+		// TEST: specular lobe importance sampling
+		if (material.normal.y > 0.9)
+		{
+			float3 viewVec = normalize(WorldRayOrigin() - hitWorldPos);
+			float2 xi = Hammersley(sampleId % sampleCount, sampleCount);
+			xi = mul(float3(xi.xy, 1.0), dispatchSamplingFrame).xy;
+			ray.Direction = ImportanceSampleGGX(xi, g_SceneCB.Material.Roughness, material.normal, viewVec);
+		}
+		#endif
+
 		// ray trace
 		uint instanceInclusionMask = 0xff;
 		uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitIndirect;
@@ -516,7 +521,8 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 	rayData.luminance += directLight * material.baseColor.xyz * g_SceneCB.DirectLightFactor;
 
 	// ambient approximation
-	#if (RT_REFLECTION_TEST)
+	// TODO: consider as fallback when bounces limit reached
+	#if (RT_REFLECTION_TEST) && 0
 	float3 skyDir = float3(material.normal.x, max(material.normal.y, 0.0), material.normal.z);
 	skyDir = normalize(skyDir * 0.5 + WorldUp);
 	float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, skyDir).xyz;
