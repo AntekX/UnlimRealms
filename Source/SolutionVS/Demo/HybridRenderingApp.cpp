@@ -2652,6 +2652,7 @@ int HybridRenderingApp::Run()
 						if (sphericalLight1Ptr != nullptr)
 						{
 							ImGui::InputFloat("SpherLightSize", &sphericalLight1Ptr->Size);
+							ImGui::InputFloat("SpherLightIntensity", &sphericalLight1Ptr->Intensity);
 						}
 					}
 					if (ImGui::CollapsingHeader("Atmosphere"))

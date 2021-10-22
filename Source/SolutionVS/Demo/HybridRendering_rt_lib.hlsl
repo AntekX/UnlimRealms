@@ -26,6 +26,8 @@ float3 GetHemisphereSampleDirection(uint sampleId, uint sampleCount)
 	#elif (1)
 	float2 p2d = BlueNoiseDiskLUT64[sampleId % 64]; // [-1, 1]
 	float3 dir = float3(p2d.x, p2d.y, sqrt(1.0 - dot(p2d.xy, p2d.xy)));
+	//p2d.xy = (p2d.xy + 1.0) * 0.5;
+	//float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
 	#endif
 	return dir.xyz;
 }
@@ -331,6 +333,14 @@ void RayGenMain()
 				ray.Direction = normalize(ray.Direction*0 + reflectionDir * 20.0);
 				#else
 				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
+				// TEST: specular lobe importance sampling
+				/*if (gbData.Normal.y > 0.9)
+				{
+					float3 viewVec = normalize(g_SceneCB.CameraPos.xyz - worldPos);
+					float2 xi = Hammersley((isample + sampleIdOfs) % sampleCount, sampleCount);
+					xi = mul(float3(xi.xy, 1.0), dispatchSamplingFrame).xy;
+					ray.Direction = ImportanceSampleGGX(xi, g_SceneCB.Material.Roughness, gbData.Normal, viewVec);
+				}*/
 				#endif
 
 				RayDataIndirect rayData = (RayDataIndirect)0;
@@ -458,7 +468,8 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 	LightingParams lightingParams = (LightingParams)0;
 	getLightingParams(hitWorldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
 	float3 directLight = 0;
-	for (uint ilight = 0; ilight < /*g_SceneCB.Lighting.LightSourceCount*/1; ++ilight)
+	uint lightCount = min(2, g_SceneCB.Lighting.LightSourceCount);
+	for (uint ilight = 0; ilight < lightCount; ++ilight)
 	{
 		LightDesc light = g_SceneCB.Lighting.LightSources[ilight];
 		float3 hitPosToLightVec = light.Position.xyz - hitWorldPos.xyz;

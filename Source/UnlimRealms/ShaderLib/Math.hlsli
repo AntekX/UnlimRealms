@@ -264,4 +264,30 @@ static const float2 BlueNoiseDiskLUT64[64] = {
 	float2(-0.210004, 0.519896)
 };
 
+float3 ImportanceSampleGGX(float2 xi, float specA2, float3 normal)
+{
+	float phi = 2 * Pi * xi.x;
+	float cosTheta = sqrt((1.0 - xi.y) / (1.0 + (specA2 - 1.0) * xi.y));
+	float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+	float3 halfV;
+	halfV.x = sinTheta * cos(phi);
+	halfV.y = sinTheta * sin(phi);
+	halfV.z = cosTheta;
+	float3 up = abs(normal.z) < 0.999 ? float3(0, 0, 1) : float3(1, 0, 0);
+	float3 tangentX = normalize(cross(up, normal));
+	float3 tangentY = cross(normal, tangentX);
+	float3 halfVec = tangentX * halfV.x + tangentY * halfV.y + normal * halfV.z;
+	return halfVec;
+}
+
+float3 ImportanceSampleGGX(float2 xi, float roughness, float3 normal, float3 viewVec)
+{
+	float specA = roughness * roughness;
+	float specA2 = specA * specA;
+	float3 halfVec = ImportanceSampleGGX(xi, specA2, normal);
+	float VdotH = saturate(dot(viewVec, halfVec));
+	float3 sampleDir = 2.0 * VdotH * halfVec - viewVec;
+	return sampleDir;
+}
+
 #endif // MATH_HLSLI
