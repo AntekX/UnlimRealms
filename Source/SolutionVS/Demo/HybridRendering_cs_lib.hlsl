@@ -54,6 +54,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		float4 shadowPerLight = 0.0;
 		float3 indirectLight = 0.0;
 		float2 lightBufferPos = (float2(imagePos.xy) + 0.5) * g_SceneCB.LightBufferDownscale.y;
+		float debugValue = 0.0;
 
 		#if (0)
 		
@@ -95,7 +96,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			#endif
 			tracingConfidence[i] *= saturate(dot(tracingGBData.Normal, gbData.Normal));
 		}
-		float debugValue = max(max(tracingConfidence[0], tracingConfidence[1]), max(tracingConfidence[2], tracingConfidence[3])) > 0.0 ? 1 : 0;
+		debugValue = max(max(tracingConfidence[0], tracingConfidence[1]), max(tracingConfidence[2], tracingConfidence[3])) > 0.0 ? 1 : 0;
 		tracingConfidence *= sampleWeight;
 		float tracingConfidenceSum = dot(tracingConfidence, 1.0);
 		[flatten] if (tracingConfidenceSum > 0.0)
@@ -114,7 +115,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			}
 			indirectLight.xyz += g_IndirectLight.Load(int3(lightSamplePos.xy, 0)).xyz * sampleWeight[i];
 		}
-		//float debugValue = shadowPerLight[3];
+		//debugValue = shadowPerLight[3];
 		#endif
 
 		// direct light
@@ -594,8 +595,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 
 	// apply filter
 
-	float2 lightBufferUV = (float2(lightBufferPos.xy) + 0.5) * g_SceneCB.LightBufferSize.zw;
-	float2 uvPos = (float2(imagePos) + 0.5) * g_SceneCB.TargetSize.zw;
+	float2 uvPos = (float2(lightBufferPos.xy) + 0.5) * g_SceneCB.LightBufferSize.zw;
 	float3 clipPos = float3(float2(uvPos.x, 1.0 - uvPos.y) * 2.0 - 1.0, gbData.ClipDepth);
 	float3 worldPos = ClipPosToWorldPos(clipPos, g_SceneCB.ViewProjInv);
 	float4 clipPosPrev = mul(float4(worldPos, 1.0), g_SceneCB.ViewProjPrev);

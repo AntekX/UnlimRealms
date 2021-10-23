@@ -152,7 +152,7 @@ void RayGenMain()
 {
 	uint3 dispatchIdx = DispatchRaysIndex();
 	uint2 dispatchSize = (uint2)g_SceneCB.LightBufferSize.xy;
-	float4 occlusionPerLight = 1.0;
+	float4 shadowPerLight = 1.0;
 	uint4 tracingInfo = 0; // sub sample pos & counters
 	float3 indirectLight = 0.0;
 
@@ -248,7 +248,7 @@ void RayGenMain()
 					shadowFactor += float(rayData.occluded);
 				}
 				shadowFactor = 1.0 - shadowFactor / g_SceneCB.ShadowSamplesPerLight;
-				occlusionPerLight[ilight] = shadowFactor;
+				shadowPerLight[ilight] = shadowFactor;
 			}
 
 			#if (SHADOW_BUFFER_APPLY_HISTORY_IN_RAYGEN)
@@ -289,9 +289,9 @@ void RayGenMain()
 				[unroll] for (uint j = 0; j < ShadowBufferEntriesPerPixel; ++j)
 				{
 					#if (SHADOW_BUFFER_ONE_LIGHT_PER_FRAME)
-					occlusionPerLight[j] = lerp(occlusionPerLight[j], shadowHistoryData[j], (ilight == j ? historyWeight : 1.0));
+					shadowPerLight[j] = lerp(shadowPerLight[j], shadowHistoryData[j], (ilight == j ? historyWeight : 1.0));
 					#else
-					occlusionPerLight[j] = lerp(occlusionPerLight[j], shadowHistoryData[j], historyWeight);
+					shadowPerLight[j] = lerp(shadowPerLight[j], shadowHistoryData[j], historyWeight);
 					#endif
 				}
 
@@ -371,7 +371,7 @@ void RayGenMain()
 	}
 
 	// write result
-	g_ShadowTarget[dispatchIdx.xy] = occlusionPerLight;
+	g_ShadowTarget[dispatchIdx.xy] = shadowPerLight;
 	g_TracingInfoTarget[dispatchIdx.xy] = tracingInfo;
 	g_IndirectLightTarget[dispatchIdx.xy] = float4(indirectLight.xyz, 0.0);
 }
