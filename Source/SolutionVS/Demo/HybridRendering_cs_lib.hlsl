@@ -625,6 +625,8 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		//float depthDeltaTolerance = 0.003 + 0.017 * abs(normalVS.z);
 		float depthDeltaTolerance = g_SceneCB.DebugVec0[1] + g_SceneCB.DebugVec0[2] * abs(normalVS.z);
 		float surfaceHistoryWeight = (abs(1.0 - clipDepthPrev / gbData.ClipDepth) < depthDeltaTolerance ? 1.0 : 0.0);
+		float shadowHistoryConfidence = surfaceHistoryWeight;
+		float indirectLightHistoryConfidence = surfaceHistoryWeight;
 		#else
 		float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
 		float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);

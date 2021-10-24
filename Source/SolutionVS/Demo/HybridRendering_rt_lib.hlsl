@@ -433,7 +433,9 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		uint sampleId = g_SceneCB.FrameNumber * g_SceneCB.PerFrameJitter + dispatchConstHash;
 		uint sampleCount = g_SceneCB.IndirectAccumulationFrames + 1;
 		float3x3 surfaceTBN = ComputeSamplingBasis(material.normal);
-		float3 sampleDir = GetHemisphereSampleDirection(sampleId, sampleCount);
+		//float3 sampleDir = GetHemisphereSampleDirection(sampleId, sampleCount);
+		float2 p2d = Hammersley(sampleId % sampleCount, sampleCount);
+		float3 sampleDir = HemisphereSampleCosine(p2d.x, p2d.y);
 		ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
 
 		#if (RT_REFLECTION_TEST)
