@@ -462,8 +462,20 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 			missShaderIndex,
 			ray, rayData);
 
+		#if (1)
 		float NdotL = saturate(dot(material.normal, ray.Direction));
 		rayData.luminance *= material.baseColor.xyz * NdotL * g_SceneCB.DebugVec2[3];
+		#else
+		LightingParams lightingParams = (LightingParams)0;
+		getLightingParams(hitWorldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
+		LightDesc light = (LightDesc)0;
+		light.Color = rayData.luminance;
+		light.Intensity = 1.0;
+		light.Direction = -ray.Direction;
+		light.Type = LightType_Directional;
+		float NoL = saturate(dot(material.normal, ray.Direction));
+		rayData.luminance = EvaluateDirectLighting(lightingParams, light, 1.0, 1.0).xyz * g_SceneCB.DebugVec2[3];
+		#endif
 	}
 #endif
 
@@ -520,7 +532,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		float specularOcclusion = shadowFactor;
 		directLight += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
 	}
-	rayData.luminance += directLight * material.baseColor.xyz * g_SceneCB.DirectLightFactor;
+	rayData.luminance += directLight;
 
 	// ambient approximation
 	// TODO: consider as fallback when bounces limit reached
