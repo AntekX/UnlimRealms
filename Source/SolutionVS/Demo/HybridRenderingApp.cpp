@@ -2258,8 +2258,8 @@ int HybridRenderingApp::Run()
 			{
 				// main sun light
 				sunLight.Direction = sunDir;
-				sunLight.Intensity = lerp(SolarIlluminanceEvening, SolarIlluminanceNoon, std::min(1.0f, -sunLight.Direction.y / SunInclinationScale));
-				sunLight.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
+				//sunLight.Intensity = lerp(SolarIlluminanceEvening, SolarIlluminanceNoon, std::min(1.0f, -sunLight.Direction.y / SunInclinationScale));
+				//sunLight.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
 			}
 			for (ur_uint i = 0; i < lightingDesc.LightSourceCount; ++i)
 			{
@@ -2649,6 +2649,7 @@ int HybridRenderingApp::Run()
 						ImGui::DragFloat("CrntCycleFactor", &lightCrntCycleFactor, 0.01f, 0.0f, 1.0f);
 						ImGui::ColorEdit3("Color", &lightingDesc.LightSources[0].Color.x);
 						ImGui::InputFloat("Intensity", &lightingDesc.LightSources[0].Intensity);
+						ImGui::InputFloat("IntensityTopAtmosphere", &lightingDesc.LightSources[0].IntensityTopAtmosphere);
 						if (sphericalLight1Ptr != nullptr)
 						{
 							ImGui::InputFloat("SpherLightSize", &sphericalLight1Ptr->Size);
@@ -2795,5 +2796,5 @@ int HybridRenderingApp::Run()
 	realm.RemoveComponent<GenericRender>();
 	realm.RemoveComponent<GrafRenderer>();
 
-	return 0;
+	return 0;\
 }

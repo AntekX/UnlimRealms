@@ -709,16 +709,13 @@ float4 evaluateMaterial(const MaterialInputs material)
 	addEmissive(material, color);
 	return color;
 }
-
 #endif // TEMP: WIP section
 
 
-float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lightSource, const float directOcclusion, const float specularOcclusion)
+void GetLightIntensityAndDir(LightingParams lightingParams, const LightDesc lightSource, out float3 lightColor, out float3 lightDir)
 {
-	// common inputs
-
+	lightDir = -lightSource.Direction; // dir towards light source
 	float lightAttenuation = 1.0;
-	float3 lightDir = -lightSource.Direction; // dir towards light source
 	[flatten] if (LightType_Spherical == lightSource.Type)
 	{
 		lightDir = lightSource.Position.xyz - lightingParams.worldPos.xyz;
@@ -726,7 +723,24 @@ float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lig
 		lightAttenuation = 1.0 / max(dist * dist, max(lightSource.Size * lightSource.Size, 1.0e-4));
 		lightDir /= dist;
 	}
-	float3 lightColor = lightSource.Color * lightSource.Intensity * lightAttenuation;
+	lightColor = lightSource.Color * lightSource.Intensity * lightAttenuation;
+}
+
+float3 GetLightIntensity(LightingParams lightingParams, const LightDesc lightSource)
+{
+	float3 lightColor;
+	float3 lightDir;
+	GetLightIntensityAndDir(lightingParams, lightSource, lightColor, lightDir);
+	return lightColor;
+}
+
+float4 EvaluateDirectLighting(LightingParams lightingParams, const LightDesc lightSource, const float directOcclusion, const float specularOcclusion)
+{
+	// common inputs
+
+	float3 lightColor;
+	float3 lightDir;
+	GetLightIntensityAndDir(lightingParams, lightSource, lightColor, lightDir);
 
 	float3 halfV = normalize(lightingParams.viewDir + lightDir);
 	float NoV = abs(dot(lightingParams.normal, lightingParams.viewDir)) + 1.0e-5; // safe NoV, avoids artifacts in visibility function

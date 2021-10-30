@@ -410,6 +410,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 	MaterialInputs material = GetMeshMaterialAtRayHitPoint(attribs);
 
 #if (RT_GI_TEST)
+
 	// recursive bounces
 	const uint IndirectLightBounces = min(8, (uint)g_SceneCB.DebugVec1[0]); //2;
 	if (rayData.recursionDepth <= IndirectLightBounces)
@@ -462,30 +463,15 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 			missShaderIndex,
 			ray, rayData);
 
-		#if (1)
-		float NdotL = saturate(dot(material.normal, ray.Direction));
-		rayData.luminance *= material.baseColor.xyz * NdotL * g_SceneCB.DebugVec2[3];
-		#else
-		LightingParams lightingParams = (LightingParams)0;
-		getLightingParams(hitWorldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
-		LightDesc light = (LightDesc)0;
-		light.Color = rayData.luminance;
-		light.Intensity = 1.0;
-		light.Direction = -ray.Direction;
-		light.Type = LightType_Directional;
 		float NoL = saturate(dot(material.normal, ray.Direction));
-		rayData.luminance = EvaluateDirectLighting(lightingParams, light, 1.0, 1.0).xyz * g_SceneCB.DebugVec2[3];
-		#endif
+		rayData.luminance = rayData.luminance * material.baseColor.xyz * NoL * g_SceneCB.DebugVec2[3];
 	}
-#endif
-
-#if (RT_REFLECTION_TEST) || (RT_GI_TEST)
 
 	// calculate reflected radiance
 	
 	// direct
 	LightingParams lightingParams = (LightingParams)0;
-	getLightingParams(hitWorldPos, g_SceneCB.CameraPos.xyz, material, lightingParams);
+	getLightingParams(hitWorldPos, WorldRayOrigin(), material, lightingParams);
 	float3 directLight = 0;
 	uint lightCount = min(2, g_SceneCB.Lighting.LightSourceCount);
 	for (uint ilight = 0; ilight < lightCount; ++ilight)
@@ -527,10 +513,15 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 
 		// evaluate direct light
 
-		float NoL = dot(lightDir, lightingParams.normal);
+		float NoL = saturate(dot(lightDir, lightingParams.normal));
+		#if (1)
+		// TODO: check corectness of irradiance intensity
+		directLight += GetLightIntensity(lightingParams, light) * shadowFactor * NoL * lightingParams.diffuseColor.xyz;
+		#else
 		shadowFactor *= saturate(NoL * 10.0); // approximate self shadowing at grazing angles
 		float specularOcclusion = shadowFactor;
 		directLight += EvaluateDirectLighting(lightingParams, light, shadowFactor, specularOcclusion).xyz;
+		#endif
 	}
 	rayData.luminance += directLight;
 
@@ -540,7 +531,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 	float3 skyDir = float3(material.normal.x, max(material.normal.y, 0.0), material.normal.z);
 	skyDir = normalize(skyDir * 0.5 + WorldUp);
 	float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, skyDir).xyz;
-	rayData.luminance += skyLight * material.baseColor.xyz * 0.5;
+	rayData.luminance = skyLight * material.baseColor.xyz * 0.5;
 	#endif
 
 #else

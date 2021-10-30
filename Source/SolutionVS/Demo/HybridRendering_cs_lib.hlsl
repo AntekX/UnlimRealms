@@ -136,7 +136,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 
 		// indirect light
 
-		indirectLight = indirectLight * lightingParams.diffuseColor.xyz;
+		indirectLight = indirectLight * lightingParams.diffuseColor.xyz * Fd_Lambert();
 
 		// final
 
