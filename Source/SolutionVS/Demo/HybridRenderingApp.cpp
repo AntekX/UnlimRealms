@@ -1357,6 +1357,7 @@ int HybridRenderingApp::Run()
 
 				GrafDescriptorRangeDesc accumulationDescTableLayoutRanges[] = {
 					g_SceneCBDescriptor,
+					g_SamplerPointDescriptor,
 					g_SamplerBilinearDescriptor,
 					g_SamplerTrilinearDescriptor,
 					g_GeometryDepthDescriptor,

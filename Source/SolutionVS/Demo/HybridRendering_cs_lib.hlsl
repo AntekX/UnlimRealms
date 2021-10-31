@@ -643,6 +643,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec1[2]);
 		float indirectLightHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
 		indirectLightHistoryConfidence = saturate((indirectLightHistoryConfidence - g_SceneCB.DebugVec1[1]) / (1.0 - g_SceneCB.DebugVec1[1]));
+		//indirectLightHistoryConfidence = (indirectLightHistoryConfidence > 0.5 ? 1.0 : 0.0);
 		#endif
 
 		uint shadowCounter = (uint)floor(float(tracingInfoHistory[1]) * shadowHistoryConfidence + 0.5);

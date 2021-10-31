@@ -75,10 +75,11 @@ static const CUINT(IndexSize) = 4; // sizeof(Mesh::Index)
 
 DESCRIPTOR_ConstantBuffer(SceneConstants,		g_SceneCB,						0);
 DESCRIPTOR_ConstantBuffer(BlurPassConstants,	g_BlurPassCB,					1);
-DESCRIPTOR_Sampler(								g_SamplerBilinear,				0);
-DESCRIPTOR_Sampler(								g_SamplerBilinearWrap,			1);
-DESCRIPTOR_Sampler(								g_SamplerTrilinear,				2);
-DESCRIPTOR_Sampler(								g_SamplerTrilinearWrap,			3);
+DESCRIPTOR_Sampler(								g_SamplerPoint,					0);
+DESCRIPTOR_Sampler(								g_SamplerBilinear,				1);
+DESCRIPTOR_Sampler(								g_SamplerBilinearWrap,			2);
+DESCRIPTOR_Sampler(								g_SamplerTrilinear,				3);
+DESCRIPTOR_Sampler(								g_SamplerTrilinearWrap,			4);
 DESCRIPTOR_AccelerationStructure(				g_SceneStructure,				0);
 DESCRIPTOR_ByteAddressBuffer(					g_InstanceBuffer,				1);
 DESCRIPTOR_ByteAddressBuffer(					g_MeshDescBuffer,				2);
