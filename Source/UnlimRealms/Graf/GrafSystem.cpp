@@ -179,13 +179,20 @@ namespace UnlimRealms
 	{
 		ur_uint recommendedDeviceId = ur_uint(-1);
 
-		GrafPhysicalDeviceDesc bestDeviceDesc = {};
+		ur_size bestLocalMemory = 0;
+		ur_size bestTotalMemory = 0;
 		for (ur_uint deviceId = 0; deviceId < (ur_uint)grafPhysicalDeviceDesc.size(); ++deviceId)
 		{
 			const GrafPhysicalDeviceDesc& deviceDesc = grafPhysicalDeviceDesc[deviceId];
-			if (deviceDesc.DedicatedVideoMemory > bestDeviceDesc.DedicatedVideoMemory)
+			ur_size deviceTotalMemory = deviceDesc.LocalMemory + deviceDesc.SystemMemory;
+			if (deviceDesc.LocalMemory > bestLocalMemory)
 			{
-				bestDeviceDesc.DedicatedVideoMemory = deviceDesc.DedicatedVideoMemory;
+				bestLocalMemory = deviceDesc.LocalMemory;
+				recommendedDeviceId = deviceId;
+			}
+			else if (0 == bestLocalMemory && deviceTotalMemory > bestTotalMemory)
+			{
+				bestTotalMemory = deviceTotalMemory;
 				recommendedDeviceId = deviceId;
 			}
 		}

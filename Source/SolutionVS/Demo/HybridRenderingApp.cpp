@@ -2042,7 +2042,7 @@ int HybridRenderingApp::Run()
 		{
 			ur_int editableInt = 0;
 			ur_float editableFloat3[3];
-			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::CollapsingHeader("DemoScene"))
 			{
 				ImGui::Checkbox("InstancesAnimationEnabled", &this->animationEnabled);
@@ -2633,8 +2633,8 @@ int HybridRenderingApp::Run()
 				showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
 				if (showGUI)
 				{
-					ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
-					ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+					ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiCond_FirstUseEver);
+					ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiCond_Once);
 					ImGui::ShowMetricsWindow();
 
 					grafRenderer->ShowImgui();
@@ -2655,6 +2655,7 @@ int HybridRenderingApp::Run()
 						{
 							ImGui::InputFloat("SpherLightSize", &sphericalLight1Ptr->Size);
 							ImGui::InputFloat("SpherLightIntensity", &sphericalLight1Ptr->Intensity);
+							ImGui::ColorEdit3("SpherLightColor", &sphericalLight1Ptr->Color.x);
 						}
 					}
 					if (ImGui::CollapsingHeader("Atmosphere"))

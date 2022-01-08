@@ -1962,7 +1962,7 @@ namespace UnlimRealms
 
 	void Isosurface::HybridCubes::ShowImgui()
 	{
-		ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::TreeNode("HybridCubes"))
 		{
 			ImGui::Checkbox("Freeze update", &this->freezeUpdate);
@@ -1972,7 +1972,7 @@ namespace UnlimRealms
 			ImGui::Checkbox("Draw hexahedra", &this->drawHexahedra);
 			ImGui::Checkbox("Draw refinement tree", &this->drawRefinementTree);
 			
-			ImGui::SetNextTreeNodeOpen(true, ImGuiSetCond_Once);
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Stats"))
 			{
 				ImGui::Text("tetrahedraCount:       %i", (int)this->stats.tetrahedraCount);

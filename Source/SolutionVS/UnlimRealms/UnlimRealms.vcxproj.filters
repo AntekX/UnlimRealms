@@ -60,24 +60,6 @@
     <ClInclude Include="..\..\UnlimRealms\Sys\Storage.inline.h">
       <Filter>Sys</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\3rdParty\imgui\imconfig.h">
-      <Filter>3rdParty\Imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\3rdParty\imgui\imgui.h">
-      <Filter>3rdParty\Imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\3rdParty\imgui\imgui_internal.h">
-      <Filter>3rdParty\Imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\3rdParty\imgui\stb_rect_pack.h">
-      <Filter>3rdParty\Imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\3rdParty\imgui\stb_textedit.h">
-      <Filter>3rdParty\Imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\3rdParty\imgui\stb_truetype.h">
-      <Filter>3rdParty\Imgui</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\UnlimRealms\ImguiRender\ImguiRender.h">
       <Filter>ImguiRender</Filter>
     </ClInclude>
@@ -339,6 +321,24 @@
     <ClInclude Include="..\..\UnlimRealms\Atmosphere\AtmosphereCommon.h">
       <Filter>Atmosphere</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\imconfig.h">
+      <Filter>3rdParty\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\imgui.h">
+      <Filter>3rdParty\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\imgui_internal.h">
+      <Filter>3rdParty\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\imstb_rectpack.h">
+      <Filter>3rdParty\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\imstb_textedit.h">
+      <Filter>3rdParty\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rdParty\imgui\imstb_truetype.h">
+      <Filter>3rdParty\Imgui</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -373,15 +373,6 @@
     </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\Sys\Log.cpp">
       <Filter>Sys</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\3rdParty\imgui\imgui.cpp">
-      <Filter>3rdParty\Imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\3rdParty\imgui\imgui_demo.cpp">
-      <Filter>3rdParty\Imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\3rdParty\imgui\imgui_draw.cpp">
-      <Filter>3rdParty\Imgui</Filter>
     </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\ImguiRender\ImguiRender.cpp">
       <Filter>ImguiRender</Filter>
@@ -691,6 +682,21 @@
     </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\Graf\DX12\GrafSystemDX12.cpp">
       <Filter>Graf\DX12</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\imgui\imgui.cpp">
+      <Filter>3rdParty\Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\imgui\imgui_demo.cpp">
+      <Filter>3rdParty\Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\imgui\imgui_draw.cpp">
+      <Filter>3rdParty\Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\imgui\imgui_tables.cpp">
+      <Filter>3rdParty\Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdParty\imgui\imgui_widgets.cpp">
+      <Filter>3rdParty\Imgui</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

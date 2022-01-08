@@ -27,7 +27,7 @@ namespace UnlimRealms
 
 	inline ur_uint GrafDevice::GetDeviceId()
 	{
-		return deviceId;
+		return this->deviceId;
 	}
 
 	inline const GrafPhysicalDeviceDesc* GrafDevice::GetPhysicalDeviceDesc()

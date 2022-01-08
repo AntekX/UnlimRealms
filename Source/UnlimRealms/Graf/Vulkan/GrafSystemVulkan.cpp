@@ -367,9 +367,10 @@ namespace UnlimRealms
 				VkMemoryHeap& vkMemHeap = vkDeviceMemoryProperties.memoryHeaps[memHeapIdx];
 				ur_bool deviceLocal = (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT & perHeapFlags[memHeapIdx]);
 				ur_bool hostVisible = (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & perHeapFlags[memHeapIdx]);
-				if (deviceLocal && !hostVisible) grafDeviceDesc.DedicatedVideoMemory += (ur_size)vkMemHeap.size;
-				if (deviceLocal && hostVisible) grafDeviceDesc.SharedSystemMemory += (ur_size)vkMemHeap.size;
-				if (!deviceLocal && hostVisible) grafDeviceDesc.DedicatedSystemMemory += (ur_size)vkMemHeap.size;
+				if (deviceLocal) grafDeviceDesc.LocalMemory += (ur_size)vkMemHeap.size;
+				if (deviceLocal && !hostVisible) grafDeviceDesc.LocalMemoryExclusive += (ur_size)vkMemHeap.size;
+				if (deviceLocal && hostVisible) grafDeviceDesc.LocalMemoryHostVisible += (ur_size)vkMemHeap.size;
+				if (!deviceLocal) grafDeviceDesc.SystemMemory += (ur_size)vkMemHeap.size;
 			}
 
 			#if (UR_GRAF_VULKAN_RAY_TRACING_KHR)
@@ -395,7 +396,7 @@ namespace UnlimRealms
 
 			#if defined(UR_GRAF_LOG_LEVEL_DEBUG)
 			LogNoteGrafDbg(std::string("GrafSystemVulkan: device available ") + grafDeviceDesc.Description +
-				", VRAM = " + std::to_string(grafDeviceDesc.DedicatedVideoMemory >> 20) + " Mb");
+				", VRAM = " + std::to_string(grafDeviceDesc.LocalMemory >> 20) + " Mb");
 			#endif
 		}
 

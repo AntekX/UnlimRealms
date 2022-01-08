@@ -35,11 +35,12 @@ namespace UnlimRealms
 		this->vbSizePerFrame = 0;
 		this->ibSizePerFrame = 0;
 		#endif
+		ImGui::CreateContext();
 	}
 
 	ImguiRender::~ImguiRender()
 	{
-		ImGui::Shutdown();
+		ImGui::DestroyContext();
 	}
 
 	void ImguiRender::ReleaseGfxObjects()

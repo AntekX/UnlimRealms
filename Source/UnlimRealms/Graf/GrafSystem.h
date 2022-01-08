@@ -67,9 +67,10 @@ namespace UnlimRealms
 		std::string Description;
 		ur_uint VendorId;
 		ur_uint DeviceId;
-		ur_size DedicatedVideoMemory;
-		ur_size DedicatedSystemMemory;
-		ur_size SharedSystemMemory;
+		ur_size LocalMemory; // device memory total ecxlusive and shared
+		ur_size LocalMemoryExclusive; // device memory not visible to host
+		ur_size LocalMemoryHostVisible; // device memory visible to host
+		ur_size SystemMemory; // part of system memory dedicated to or shared with device
 		ur_size ConstantBufferOffsetAlignment;
 		GrafRayTracingProperties RayTracing;
 	};

@@ -90,14 +90,15 @@ namespace UnlimRealms
 			grafDeviceDesc.Description = _bstr_t(dxgiAdapterDesc.Description);
 			grafDeviceDesc.VendorId = (ur_uint)dxgiAdapterDesc.VendorId;
 			grafDeviceDesc.DeviceId = (ur_uint)dxgiAdapterDesc.DeviceId;
-			grafDeviceDesc.DedicatedVideoMemory = (ur_size)dxgiAdapterDesc.DedicatedVideoMemory;
-			grafDeviceDesc.SharedSystemMemory = (ur_size)dxgiAdapterDesc.SharedSystemMemory;
-			grafDeviceDesc.DedicatedSystemMemory = (ur_size)dxgiAdapterDesc.DedicatedSystemMemory;
+			grafDeviceDesc.LocalMemory = (ur_size)dxgiAdapterDesc.DedicatedVideoMemory;
+			grafDeviceDesc.LocalMemoryExclusive = grafDeviceDesc.LocalMemory;
+			grafDeviceDesc.LocalMemoryHostVisible = grafDeviceDesc.LocalMemory;
+			grafDeviceDesc.SystemMemory = (ur_size)(dxgiAdapterDesc.SharedSystemMemory + dxgiAdapterDesc.DedicatedSystemMemory);
 			grafDeviceDesc.ConstantBufferOffsetAlignment = 256;
 
 			#if defined(UR_GRAF_LOG_LEVEL_DEBUG)
 			LogNoteGrafDbg(std::string("GrafSystemDX12: device available ") + grafDeviceDesc.Description +
-				", VRAM = " + std::to_string(grafDeviceDesc.DedicatedVideoMemory >> 20) + " Mb");
+				", VRAM = " + std::to_string(grafDeviceDesc.LocalMemory >> 20) + " Mb");
 			#endif
 
 			// create temporary device object to check features support

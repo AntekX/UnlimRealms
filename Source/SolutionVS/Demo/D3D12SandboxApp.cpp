@@ -605,8 +605,8 @@ int D3D12SandboxApp::Run()
 					showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
 					if (showGUI)
 					{
-						ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiSetCond_FirstUseEver);
-						ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiSetCond_Once);
+						ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiCond_FirstUseEver);
+						ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiCond_Once);
 						ImGui::ShowMetricsWindow();
 
 						grafRenderer->ShowImgui();

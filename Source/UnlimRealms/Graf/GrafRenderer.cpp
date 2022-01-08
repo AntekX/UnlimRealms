@@ -628,11 +628,11 @@ namespace UnlimRealms
 		const RectI& canvasRect = this->GetRealm().GetCanvas()->GetClientBound();
 		const ImVec2 windowSize(400.0f, (float)canvasRect.Height());
 		const bool treeNodesOpenFirestTime = false;
-		ImGui::SetNextWindowSize(windowSize, ImGuiSetCond_Once);
-		ImGui::SetNextWindowPos({ canvasRect.Width() - windowSize.x, 0.0f }, ImGuiSetCond_Once);
+		ImGui::SetNextWindowSize(windowSize, ImGuiCond_Once);
+		ImGui::SetNextWindowPos({ canvasRect.Width() - windowSize.x, 0.0f }, ImGuiCond_Once);
 		ImGui::Begin("GrafRenderer");
 		
-		ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
+		ImGui::SetNextItemOpen(treeNodesOpenFirestTime, ImGuiCond_Once);
 		if (ImGui::TreeNode("GrafSystem"))
 		{
 			ImGui::Text("Implementation: %s", typeid(*this->grafSystem.get()).name());
@@ -641,17 +641,19 @@ namespace UnlimRealms
 				ImGui::Text("Device used: %s", this->grafDevice->GetPhysicalDeviceDesc()->Description.c_str());
 			}
 			
-			ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
+			ImGui::SetNextItemOpen(treeNodesOpenFirestTime, ImGuiCond_Once);
 			if (ImGui::TreeNode("Devices Available"))
 			{
 				for (ur_uint idevice = 0; idevice < this->grafSystem->GetPhysicalDeviceCount(); ++idevice)
 				{
 					const GrafPhysicalDeviceDesc* deviceDesc = this->grafSystem->GetPhysicalDeviceDesc(idevice);
-					ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
+					ImGui::SetNextItemOpen(treeNodesOpenFirestTime, ImGuiCond_Once);
 					if (ImGui::TreeNode("PhysicalDeviceNode", "%s", deviceDesc->Description.c_str()))
 					{
-						ImGui::Text("Dedicated Memory (Mb): %u", deviceDesc->DedicatedVideoMemory / (1 << 20));
-						ImGui::Text("Shared Memory (Mb): %u", deviceDesc->SharedSystemMemory / (1 << 20));
+						ImGui::Text("Local Memory (Mb): %u", deviceDesc->LocalMemory / (1 << 20));
+						ImGui::Text("	Exclusive (Mb): %u", deviceDesc->LocalMemoryExclusive / (1 << 20));
+						ImGui::Text("	Host Visible (Mb): %u", deviceDesc->LocalMemoryHostVisible / (1 << 20));
+						ImGui::Text("System Memory (Mb): %u", deviceDesc->SystemMemory / (1 << 20));
 						ImGui::TreePop();
 					}
 				}
@@ -660,7 +662,7 @@ namespace UnlimRealms
 
 			if (this->grafCanvas != ur_null)
 			{
-				ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
+				ImGui::SetNextItemOpen(treeNodesOpenFirestTime, ImGuiCond_Once);
 				if (ImGui::TreeNode("Swap Chain"))
 				{
 					ImGui::Text("Image count: %i", this->grafCanvas->GetSwapChainImageCount());
@@ -691,7 +693,7 @@ namespace UnlimRealms
 			ur_size allocatorOffsetDelta = crntAllocatorOffset + (crntAllocatorOffset < prevAllocatorOffset ? this->uploadBufferAllocator.GetSize() : 0) - prevAllocatorOffset;
 			allocatorOffsetDeltaMax = std::max(allocatorOffsetDelta, allocatorOffsetDeltaMax);
 			prevAllocatorOffset = crntAllocatorOffset;
-			ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
+			ImGui::SetNextItemOpen(treeNodesOpenFirestTime, ImGuiCond_Once);
 			if (ImGui::TreeNode("Dynamic Upload Buffer"))
 			{
 				ImGui::Text("Size: %i", this->grafDynamicUploadBuffer->GetDesc().SizeInBytes);
@@ -716,7 +718,7 @@ namespace UnlimRealms
 			ur_size allocatorOffsetDelta = crntAllocatorOffset + (crntAllocatorOffset < prevAllocatorOffset ? allocatorSize : 0) - prevAllocatorOffset;
 			allocatorOffsetDeltaMax = std::max(allocatorOffsetDelta, allocatorOffsetDeltaMax);
 			prevAllocatorOffset = crntAllocatorOffset;
-			ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
+			ImGui::SetNextItemOpen(treeNodesOpenFirestTime, ImGuiCond_Once);
 			if (ImGui::TreeNode("Dynamic Constant Buffer"))
 			{
 				ImGui::Text("Size: %i", this->grafDynamicConstantBuffer->GetDesc().SizeInBytes);
@@ -727,7 +729,7 @@ namespace UnlimRealms
 			}
 		}
 
-		ImGui::SetNextTreeNodeOpen(treeNodesOpenFirestTime, ImGuiSetCond_Once);
+		ImGui::SetNextItemOpen(treeNodesOpenFirestTime, ImGuiCond_Once);
 		if (ImGui::TreeNode("Command List Cache"))
 		{
 			ur_size inflightCount = 0;
