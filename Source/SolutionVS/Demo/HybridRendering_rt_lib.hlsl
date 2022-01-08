@@ -135,7 +135,8 @@ MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAtt
 	
 	// fetch textures
 	Texture2D colorMap = g_Texture2DArray[NonUniformResourceIndex(subMeshDesc.ColorMapDescriptor)];
-	float3 baseColor = colorMap.SampleLevel(g_SamplerBilinearWrap, texCoord, 0).xyz;
+	float colorMapMip = 0;
+	float3 baseColor = colorMap.SampleLevel(g_SamplerBilinearWrap, texCoord, colorMapMip).xyz;
 
 	// fill material
 	material.baseColor.xyz = baseColor * materialDesc.BaseColor;
