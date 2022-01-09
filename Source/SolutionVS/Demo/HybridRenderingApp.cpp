@@ -983,6 +983,8 @@ int HybridRenderingApp::Run()
 				RTShaderLibId_MissIndirect,
 				RTShaderLibId_ClosestHitDirect,
 				RTShaderLibId_ClosestHitIndirect,
+				RTShaderLibId_AnyHitDirect,
+				RTShaderLibId_AnyHitIndirect
 			};
 			GrafShaderLib::EntryPoint RTShaderLibEntries[] = {
 				{ "RayGenMain", GrafShaderType::RayGen },
@@ -990,6 +992,8 @@ int HybridRenderingApp::Run()
 				{ "MissIndirect", GrafShaderType::Miss },
 				{ "ClosestHitDirect", GrafShaderType::ClosestHit },
 				{ "ClosestHitIndirect", GrafShaderType::ClosestHit },
+				{ "AnyHitDirect", GrafShaderType::AnyHit },
+				{ "AnyHitIndirect", GrafShaderType::AnyHit },
 			};
 			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_cs_lib.spv", ShaderLibEntries, ur_array_size(ShaderLibEntries), this->shaderLib);
 			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_rt_lib.spv", RTShaderLibEntries, ur_array_size(RTShaderLibEntries), this->shaderLibRT);
@@ -1240,6 +1244,8 @@ int HybridRenderingApp::Run()
 					this->shaderLibRT->GetShader(RTShaderLibId_MissIndirect),
 					this->shaderLibRT->GetShader(RTShaderLibId_ClosestHitDirect),
 					this->shaderLibRT->GetShader(RTShaderLibId_ClosestHitIndirect),
+					this->shaderLibRT->GetShader(RTShaderLibId_AnyHitDirect),
+					this->shaderLibRT->GetShader(RTShaderLibId_AnyHitIndirect),
 				};
 				GrafRayTracingShaderGroupDesc shaderGroups[5];
 				shaderGroups[0] = GrafRayTracingShaderGroupDesc::Default;
@@ -1253,10 +1259,12 @@ int HybridRenderingApp::Run()
 				shaderGroups[2].GeneralShaderIdx = RTShaderLibId_MissIndirect;
 				shaderGroups[3] = GrafRayTracingShaderGroupDesc::Default;
 				shaderGroups[3].Type = GrafRayTracingShaderGroupType::TrianglesHit;
-				shaderGroups[3].GeneralShaderIdx = RTShaderLibId_ClosestHitDirect;
+				shaderGroups[3].ClosestHitShaderIdx = RTShaderLibId_ClosestHitDirect;
+				shaderGroups[3].AnyHitShaderIdx = RTShaderLibId_AnyHitDirect;
 				shaderGroups[4] = GrafRayTracingShaderGroupDesc::Default;
 				shaderGroups[4].Type = GrafRayTracingShaderGroupType::TrianglesHit;
-				shaderGroups[4].GeneralShaderIdx = RTShaderLibId_ClosestHitIndirect;
+				shaderGroups[4].ClosestHitShaderIdx = RTShaderLibId_ClosestHitIndirect;
+				shaderGroups[4].AnyHitShaderIdx = RTShaderLibId_AnyHitIndirect;
 
 				GrafDescriptorTableLayout* descriptorLayouts[] = {
 					this->raytraceDescTableLayout.get()

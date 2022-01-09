@@ -239,8 +239,12 @@ void RayGenMain()
 					uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitDirect;
 					uint multiplierForGeometryContributionToShaderIndex = 1;
 					uint missShaderIndex = ShaderGroupIdx_MissDirect;
+					uint traceFlags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+					#if (RT_ALPHATEST)
+					traceFlags = traceFlags | RAY_FLAG_FORCE_NON_OPAQUE;
+					#endif
 					TraceRay(g_SceneStructure,
-						RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
+						traceFlags,
 						instanceInclusionMask,
 						rayContributionToHitGroupIndex,
 						multiplierForGeometryContributionToShaderIndex,
@@ -349,8 +353,12 @@ void RayGenMain()
 				uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitIndirect;
 				uint multiplierForGeometryContributionToShaderIndex = 1;
 				uint missShaderIndex = ShaderGroupIdx_MissIndirect;
+				uint traceFlags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+				#if (RT_ALPHATEST)
+				traceFlags = traceFlags | RAY_FLAG_FORCE_NON_OPAQUE;
+				#endif
 				TraceRay(g_SceneStructure,
-					RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
+					traceFlags,
 					instanceInclusionMask,
 					rayContributionToHitGroupIndex,
 					multiplierForGeometryContributionToShaderIndex,
@@ -393,19 +401,38 @@ void MissIndirect(inout RayDataIndirect rayData)
 	rayData.luminance += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, WorldRayHitPoint(), WorldRayDirection()).xyz;
 }
 
-// closest
+// any hit
+
+[shader("anyhit")]
+void AnyHitDirect(inout RayDataDirect rayData, in BuiltInTriangleIntersectionAttributes attribs)
+{
+	#if (RT_ALPHATEST)
+	const float3 hitWorldPos = WorldRayHitPoint();
+	MaterialInputs material = GetMeshMaterialAtRayHitPoint(attribs);
+	bool occluded = (material.baseColor.w < RT_ALPHATEST_VALUE ? false : true);
+	if (!occluded)
+		IgnoreHit();
+	#endif
+}
+
+[shader("anyhit")]
+void AnyHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleIntersectionAttributes attribs)
+{
+	#if (RT_ALPHATEST)
+	const float3 hitWorldPos = WorldRayHitPoint();
+	MaterialInputs material = GetMeshMaterialAtRayHitPoint(attribs);
+	bool occluded = (material.baseColor.w < RT_ALPHATEST_VALUE ? false : true);
+	if (!occluded)
+		IgnoreHit();
+	#endif
+}
+
+// closest hit
 
 [shader("closesthit")]
 void ClosestHitDirect(inout RayDataDirect rayData, in BuiltInTriangleIntersectionAttributes attribs)
 {
 	// nothing to do, miss shader updates RayDataDirect
-
-	#if (RT_ALPHATEST)
-	// TODO: implement in any hit shader
-	const float3 hitWorldPos = WorldRayHitPoint();
-	MaterialInputs material = GetMeshMaterialAtRayHitPoint(attribs);
-	rayData.occluded = (material.baseColor.w < 0.9 ? false : true);
-	#endif
 }
 
 [shader("closesthit")]
@@ -464,8 +491,12 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitIndirect;
 		uint multiplierForGeometryContributionToShaderIndex = 1;
 		uint missShaderIndex = ShaderGroupIdx_MissIndirect;
+		uint traceFlags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+		#if (RT_ALPHATEST)
+		traceFlags = traceFlags | RAY_FLAG_FORCE_NON_OPAQUE;
+		#endif
 		TraceRay(g_SceneStructure,
-			RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
+			traceFlags,
 			instanceInclusionMask,
 			rayContributionToHitGroupIndex,
 			multiplierForGeometryContributionToShaderIndex,
@@ -506,8 +537,12 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitDirect;
 		uint multiplierForGeometryContributionToShaderIndex = 1;
 		uint missShaderIndex = ShaderGroupIdx_MissDirect;
+		uint traceFlags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+		#if (RT_ALPHATEST)
+		traceFlags = traceFlags | RAY_FLAG_FORCE_NON_OPAQUE;
+		#endif
 		TraceRay(g_SceneStructure,
-			RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
+			traceFlags,
 			instanceInclusionMask,
 			rayContributionToHitGroupIndex,
 			multiplierForGeometryContributionToShaderIndex,
@@ -533,16 +568,6 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		#endif
 	}
 	rayData.luminance += directLight;
-
-	#if (RT_ALPHATEST)
-	// TEMP: alpha tested windows approximation
-	// TODO: implement in any hit shader
-	if (material.baseColor.w < 0.9)
-	{
-		float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, WorldRayDirection()).xyz;
-		rayData.luminance += skyLight * (1.0 - material.baseColor.w);
-	}
-	#endif
 
 	// ambient approximation
 	// TODO: consider as fallback when bounces limit reached
