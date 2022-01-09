@@ -22,7 +22,9 @@ using namespace UnlimRealms;
 
 #define SCENE_TYPE_MEDIEVAL_BUILDINGS 0
 #define SCENE_TYPE_SPONZA 1
-#define SCENE_TYPE_FOREST 2
+#define SCENE_TYPE_SANMIGUEL 2
+#define SCENE_TYPE_RUNGHOLT 3
+#define SCENE_TYPE_FOREST 4
 #define SCENE_TYPE SCENE_TYPE_SPONZA
 
 #define UPDATE_ASYNC 1
@@ -110,6 +112,7 @@ int HybridRenderingApp::Run()
 		grafRendererParams.DeviceId = grafSystem->GetRecommendedDeviceId();
 		grafRendererParams.CanvasParams = GrafCanvas::InitParams::Default;
 		grafRendererParams.CanvasParams.PresentMode = GrafPresentMode::Immediate;
+		grafRendererParams.DynamicUploadBufferSize = 1024 * (1 << 20);
 		res = grafRenderer->Initialize(std::move(grafSystem), grafRendererParams);
 		if (Failed(res)) break;
 
@@ -441,6 +444,10 @@ int HybridRenderingApp::Run()
 			MeshId_MedievalBuilding,
 			#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 			MeshId_Sponza,
+			#elif (SCENE_TYPE_SANMIGUEL == SCENE_TYPE)
+			MeshId_SanMiguel,
+			#elif (SCENE_TYPE_RUNGHOLT == SCENE_TYPE)
+			MeshId_Rungholt,
 			#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
 			MeshId_Banana,
 			MeshId_BananaSmall,
@@ -913,6 +920,10 @@ int HybridRenderingApp::Run()
 			#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 			this->sampleInstanceCount = 16;
 			#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
+			this->sampleInstanceCount = 1;
+			#elif (SCENE_TYPE_SANMIGUEL == SCENE_TYPE)
+			this->sampleInstanceCount = 1;
+			#elif (SCENE_TYPE_RUNGHOLT == SCENE_TYPE)
 			this->sampleInstanceCount = 1;
 			#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
 			this->sampleInstanceCount = 320;
@@ -1456,6 +1467,10 @@ int HybridRenderingApp::Run()
 				{ MeshId_MedievalBuilding, "../Res/Models/Medieval_building.obj" },
 				#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 				{ MeshId_Sponza, "../Res/Models/Sponza/sponza.obj" },
+				#elif (SCENE_TYPE_SANMIGUEL == SCENE_TYPE)
+				{ MeshId_SanMiguel, "../Res/Models/SanMiguel/san-miguel-low-poly.obj" },
+				#elif (SCENE_TYPE_RUNGHOLT == SCENE_TYPE)
+				{ MeshId_Rungholt, "../Res/Models/Rungholt/rungholt.obj" },
 				#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
 				{ MeshId_Banana, "../Res/Models/Banana/Banana.obj" },
 				{ MeshId_BananaSmall, "../Res/Models/BananaSmall/Banana-small.obj" },
@@ -1518,6 +1533,10 @@ int HybridRenderingApp::Run()
 			static const float planeScale = 100.0f;
 			#if (SCENE_TYPE_SPONZA == SCENE_TYPE)
 			static const float planeHeight = -2.0f;
+			#elif (SCENE_TYPE_SANMIGUEL == SCENE_TYPE)
+			static const float planeHeight = -0.5;
+			#elif (SCENE_TYPE_RUNGHOLT == SCENE_TYPE)
+			static const float planeHeight = -0.0;
 			#else
 			static const float planeHeight = 0.0f;
 			#endif
@@ -1635,6 +1654,10 @@ int HybridRenderingApp::Run()
 			ScatterMeshInstances(this->meshes[MeshId_MedievalBuilding].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 2.0f, 0.0f, 0.0f, false);
 			#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 			ScatterMeshInstances(this->meshes[MeshId_Sponza].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 0.02f, 0.0f, 0.0f, false);
+			#elif (SCENE_TYPE_SANMIGUEL == SCENE_TYPE)
+			ScatterMeshInstances(this->meshes[MeshId_SanMiguel].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 1.0f, 0.0f, 0.0f, false);
+			#elif (SCENE_TYPE_RUNGHOLT == SCENE_TYPE)
+			ScatterMeshInstances(this->meshes[MeshId_Rungholt].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 1.0f, 0.0f, 0.0f, false);
 			#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
 			ScatterMeshInstances(this->meshes[MeshId_Banana].get(), this->sampleInstanceCount, this->sampleInstanceScatterRadius, 0.035f, 0.01f, 0.0f, true);
 			ScatterMeshInstances(this->meshes[MeshId_BananaSmall].get(), this->sampleInstanceCount * 2, this->sampleInstanceScatterRadius, 0.02f, 0.005f, 0.0f, true);
@@ -2173,13 +2196,18 @@ int HybridRenderingApp::Run()
 	// setup main camera
 	Camera camera(realm);
 	CameraControl cameraControl(realm, &camera, CameraControl::Mode::FixedUp);
-	cameraControl.SetTargetPoint(ur_float3(0.0f, 2.0f, 0.0f));
+	cameraControl.SetTargetPoint(ur_float3(-10.0f, 2.0f, -1.0f));
 	cameraControl.SetSpeed(4.0);
 	camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
 	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
 	camera.SetPosition(ur_float3(9.541f, 5.412f, -12.604f));
 	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
 	camera.SetPosition(ur_float3(9.541f, 1.8f, -12.604f));
+	#elif (SCENE_TYPE_SANMIGUEL == SCENE_TYPE)
+	camera.SetPosition(ur_float3(10.0f, 1.8f, -13.0f));
+	cameraControl.SetTargetPoint(ur_float3(5.0f, 1.8f, -15.0f));
+	#elif (SCENE_TYPE_RUNGHOLT == SCENE_TYPE)
+	camera.SetPosition(ur_float3(80.0f, 25.0f, -80.0f));
 	#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
 	camera.SetPosition(ur_float3(6.0f, 2.0f, -14.0f));
 	#endif
@@ -2244,11 +2272,7 @@ int HybridRenderingApp::Run()
 			ur_float modY;
 			lightCrntCycleFactor = std::modf(crntTimeFactor, &modY);
 			ur_float3 sunDir;
-			#if (SCENE_TYPE_SPONZA == SCENE_TYPE)
 			const ur_float SunInclinationScale = 2.6f;
-			#else
-			const ur_float SunInclinationScale = 2.6f;
-			#endif
 			const ur_float SunInclinationBias = 0.02f;
 			sunDir.x = -cos(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);
 			sunDir.z = -sin(MathConst<ur_float>::Pi * 2.0f * crntTimeFactor);

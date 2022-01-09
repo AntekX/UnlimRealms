@@ -8,7 +8,7 @@ MeshPixelOutput main(MeshPixelInput input, in bool isFrontFace : SV_IsFrontFace)
 	float4 baseColor = g_ColorTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xyzw;
 	float2 bumpPacked = g_NormalTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).xy;
 	float mask = g_MaskTexture.Sample(g_SamplerTrilinearWrap, input.TexCoord.xy).w;
-	float alpha = mask;
+	float alpha = baseColor.w;// mask;
 	clip(alpha - 0.5);
 
 	const bool NormalMapInvertY = true;

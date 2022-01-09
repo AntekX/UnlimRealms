@@ -136,10 +136,11 @@ MaterialInputs GetMeshMaterialAtRayHitPoint(const BuiltInTriangleIntersectionAtt
 	// fetch textures
 	Texture2D colorMap = g_Texture2DArray[NonUniformResourceIndex(subMeshDesc.ColorMapDescriptor)];
 	float colorMapMip = 0;
-	float3 baseColor = colorMap.SampleLevel(g_SamplerBilinearWrap, texCoord, colorMapMip).xyz;
+	float4 baseColor = colorMap.SampleLevel(g_SamplerBilinearWrap, texCoord, colorMapMip).xyzw;
 
 	// fill material
-	material.baseColor.xyz = baseColor * materialDesc.BaseColor;
+	material.baseColor.xyz = baseColor.xyz * materialDesc.BaseColor.xyz;
+	material.baseColor.w = baseColor.w;
 	material.normal = normal;
 	ApplyMaterialOverride(g_SceneCB, material);
 
@@ -310,7 +311,7 @@ void RayGenMain()
 		if (g_SceneCB.IndirectSamplesPerFrame > 0)
 		{
 			#if (RT_REFLECTION_TEST) || (RT_GI_TEST)
-			float rayTraceDist = 1000.0;
+			float rayTraceDist = 100.0;
 			#else
 			float rayTraceDist = 20.0;
 			#endif
@@ -398,6 +399,13 @@ void MissIndirect(inout RayDataIndirect rayData)
 void ClosestHitDirect(inout RayDataDirect rayData, in BuiltInTriangleIntersectionAttributes attribs)
 {
 	// nothing to do, miss shader updates RayDataDirect
+
+	#if (RT_ALPHATEST)
+	// TODO: implement in any hit shader
+	const float3 hitWorldPos = WorldRayHitPoint();
+	MaterialInputs material = GetMeshMaterialAtRayHitPoint(attribs);
+	rayData.occluded = (material.baseColor.w < 0.9 ? false : true);
+	#endif
 }
 
 [shader("closesthit")]
@@ -419,7 +427,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		const float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
 		RayDesc ray;
 		ray.Origin = hitWorldPos;
-		ray.TMax = 1000.0;
+		ray.TMax = 100.0;
 		ray.TMin = 1.0e-3;
 
 		// sample direction
@@ -525,6 +533,16 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		#endif
 	}
 	rayData.luminance += directLight;
+
+	#if (RT_ALPHATEST)
+	// TEMP: alpha tested windows approximation
+	// TODO: implement in any hit shader
+	if (material.baseColor.w < 0.9)
+	{
+		float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, WorldRayDirection()).xyz;
+		rayData.luminance += skyLight * (1.0 - material.baseColor.w);
+	}
+	#endif
 
 	// ambient approximation
 	// TODO: consider as fallback when bounces limit reached

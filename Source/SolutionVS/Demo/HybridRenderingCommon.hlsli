@@ -6,6 +6,7 @@
 // TEMP
 #define RT_GI_TEST 1
 #define RT_REFLECTION_TEST 0
+#define RT_ALPHATEST 0
 
 // constant buffers
 
@@ -114,9 +115,9 @@ DESCRIPTOR_RWTexture2D(float4,					g_ShadowMip4,					9);
 
 // descriptor arrays
 
-static const CUINT(g_TextureArraySize) = 256;
+static const CUINT(g_TextureArraySize) = 512;
 static const CUINT(g_BufferArraySize) = 256;
 DESCRIPTOR_ARRAY_Texture2D(g_TextureArraySize,			g_Texture2DArray,	128);
-DESCRIPTOR_ARRAY_ByteAddressBuffer(g_BufferArraySize,	g_BufferArray,		384);
+DESCRIPTOR_ARRAY_ByteAddressBuffer(g_BufferArraySize,	g_BufferArray,		640);
 
 #endif
