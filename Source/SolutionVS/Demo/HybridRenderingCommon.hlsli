@@ -38,9 +38,10 @@ struct SceneConstants
 	CUINT		(ShadowAccumulationFrames);
 	CUINT		(IndirectSamplesPerFrame);
 	CUINT		(IndirectAccumulationFrames);
+	CUINT		(IndirectBouncesCount);
 	CUINT		(PerFrameJitter);
 	CUINT		(OverrideMaterial);
-	CUINT		(__pad1);
+	//CUINT		(__pad1);
 	LightingDesc Lighting;
 	AtmosphereDesc Atmosphere;
 	MeshMaterialDesc Material;

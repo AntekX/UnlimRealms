@@ -448,7 +448,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 #if (RT_GI_TEST)
 
 	// recursive bounces
-	const uint IndirectLightBounces = min(8, (uint)g_SceneCB.DebugVec1[0]); //2;
+	const uint IndirectLightBounces = min(8, (uint)g_SceneCB.IndirectBouncesCount);
 	if (rayData.recursionDepth <= IndirectLightBounces)
 	{
 		const float3 hitWorldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
