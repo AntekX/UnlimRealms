@@ -90,16 +90,19 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 			float depthDeltaTolerance = clipDepth * 1.0e-4;
 			tracingConfidence[i] *= 1.0 - saturate(abs(tracingGBData.ClipDepth - clipDepth) / depthDeltaTolerance);
 			#else
-			float surfaceDistTolerance = worldDist * 1.0e-2;
 			float3 tracingOrigin = ImagePosToWorldPos(tracingImagePos, g_SceneCB.TargetSize.zw, tracingGBData.ClipDepth, g_SceneCB.ViewProjInv);
-			tracingConfidence[i] *= 1.0 - saturate(abs(dot(tracingOrigin - worldPos, gbData.Normal)) / surfaceDistTolerance);
+			float viewDepth = ClipDepthToViewDepth(tracingGBData.ClipDepth, g_SceneCB.Proj);
+			float tolerance = /*worldDist*/viewDepth * g_SceneCB.DebugVec0[2];//1.0e-2;
+			float confidence = 1.0 - saturate(abs(dot(tracingOrigin - worldPos, gbData.Normal)) / tolerance);
+			confidence = saturate((confidence - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
+			tracingConfidence[i] *= confidence;
 			#endif
-			tracingConfidence[i] *= saturate(dot(tracingGBData.Normal, gbData.Normal));
+			//tracingConfidence[i] *= saturate(dot(tracingGBData.Normal, gbData.Normal));
 		}
 		debugValue = max(max(tracingConfidence[0], tracingConfidence[1]), max(tracingConfidence[2], tracingConfidence[3])) > 0.0 ? 1 : 0;
 		tracingConfidence *= sampleWeight;
 		float tracingConfidenceSum = dot(tracingConfidence, 1.0);
-		[flatten] if (tracingConfidenceSum > 0.0)
+		//[flatten] if (tracingConfidenceSum > 0.0)
 		{
 			sampleWeight = tracingConfidence * rcp(tracingConfidenceSum);
 		}
@@ -613,7 +616,6 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		//float clipDepthPrev = g_DepthHistory.Load(int3(imagePosPrev.xy, 0));
 		float clipDepthPrev = g_DepthHistory.SampleLevel(g_SamplerBilinear, uvPosPrev, 0);
 		bool isSkyPrev = (clipDepthPrev >= 1.0);
-		// TODO
 		#if (0)
 		float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
 		float viewDepthPrev = ClipDepthToViewDepth(clipDepthPrev, g_SceneCB.ProjPrev);
@@ -627,23 +629,24 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		float surfaceHistoryWeight = (abs(1.0 - clipDepthPrev / gbData.ClipDepth) < depthDeltaTolerance ? 1.0 : 0.0);
 		float shadowHistoryConfidence = surfaceHistoryWeight;
 		float indirectLightHistoryConfidence = surfaceHistoryWeight;
-		#else
+		#elif (0)
 		float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
 		float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
 		float viewDepthPrev = ClipDepthToViewDepth(clipDepthPrev, g_SceneCB.ProjPrev);
 		float worldPosDist = length(worldPos - worldPosPrev);
 		float worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec0[2]);
 		float shadowHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
-		//float shadowHistoryConfidence = saturate(exp(-(worldPosDist * worldPosDist) / g_SceneCB.DebugVec0[2]));
 		shadowHistoryConfidence = saturate((shadowHistoryConfidence - g_SceneCB.DebugVec0[1]) / (1.0 - g_SceneCB.DebugVec0[1]));
-		//float depthDist = abs(viewDepth - viewDepthPrev);
-		//float depthDist2 = depthDist * depthDist;
-		//float shadowHistoryConfidence = saturate(exp(-depthDist2 / g_SceneCB.DebugVec0[1]));
-		//shadowPerLight[3] = shadowHistoryConfidence; // TEMP: for debug output
 		worldPosTolerance = max(viewDepth, viewDepthPrev) * /*3.0e-3*/max(1.0e-6, g_SceneCB.DebugVec1[2]);
 		float indirectLightHistoryConfidence = 1.0 - saturate(worldPosDist / worldPosTolerance);
 		indirectLightHistoryConfidence = saturate((indirectLightHistoryConfidence - g_SceneCB.DebugVec1[1]) / (1.0 - g_SceneCB.DebugVec1[1]));
-		//indirectLightHistoryConfidence = (indirectLightHistoryConfidence > 0.5 ? 1.0 : 0.0);
+		#else
+		float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
+		float viewDepth = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
+		float shadowHistoryConfidence = 1.0 - saturate(abs(dot(worldPos - worldPosPrev, gbData.Normal)) / (g_SceneCB.ShadowTemporalTolerance * viewDepth));
+		shadowHistoryConfidence = saturate((shadowHistoryConfidence - g_SceneCB.ShadowTemporalThreshold) / (1.0 - g_SceneCB.ShadowTemporalThreshold));
+		float indirectLightHistoryConfidence = 1.0 - saturate(abs(dot(worldPos - worldPosPrev, gbData.Normal)) / (g_SceneCB.IndirectTemporalTolerance * viewDepth));
+		indirectLightHistoryConfidence = saturate((indirectLightHistoryConfidence - g_SceneCB.IndirectTemporalThreshold) / (1.0 - g_SceneCB.IndirectTemporalThreshold));
 		#endif
 
 		uint shadowCounter = (uint)floor(float(tracingInfoHistory[1]) * shadowHistoryConfidence + 0.5);

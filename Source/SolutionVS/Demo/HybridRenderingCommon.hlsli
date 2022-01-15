@@ -33,6 +33,10 @@ struct SceneConstants
 	CFLOAT2		(LightBufferDownscale); // d, 1/d
 	CFLOAT		(DirectLightFactor);
 	CFLOAT		(IndirectLightFactor);
+	CFLOAT		(ShadowTemporalTolerance);
+	CFLOAT		(ShadowTemporalThreshold);
+	CFLOAT		(IndirectTemporalTolerance);
+	CFLOAT		(IndirectTemporalThreshold);
 	CUINT		(FrameNumber);
 	CUINT		(ShadowSamplesPerLight);
 	CUINT		(ShadowAccumulationFrames);

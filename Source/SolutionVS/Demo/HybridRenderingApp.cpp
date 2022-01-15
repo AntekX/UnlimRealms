@@ -36,10 +36,21 @@ struct SpatialFilterSettings
 	ur_float4 EdgeParams;
 };
 
+struct TemporalFilterSettings
+{
+	ur_uint AccumulationFrames;
+	ur_float Tolerance;
+	ur_float Threshold;
+};
+
 struct DirectShadowSettings
 {
 	ur_uint SamplesPerLight = 1;
-	ur_uint AccumulationFrames = 16;
+	TemporalFilterSettings TemporalFilter = {
+		16, // AccumulationFrames
+		0.1f, // Tolerance
+		0.5f, // Threshold
+	};
 	SpatialFilterSettings SpatialFilter = {
 		2, // PassCount
 		ur_float4(0.1f, 0.02f, 0.0f, 0.0f) // EdgeParams
@@ -49,8 +60,12 @@ struct DirectShadowSettings
 struct IndirectLightSettings
 {
 	ur_uint SamplesPerFrame = 1;
-	ur_uint AccumulationFrames = 128;
 	ur_uint BouncesCount = 1;
+	TemporalFilterSettings TemporalFilter = {
+		64, // AccumulationFrames
+		0.1f, // Tolerance
+		0.5f, // Threshold
+	};
 	SpatialFilterSettings SpatialFilter = {
 		4, // PassCount
 		ur_float4(0.1f, 0.02f, 0.0f, 0.0f) // EdgeParams
@@ -904,7 +919,7 @@ int HybridRenderingApp::Run()
 			this->sceneConstants.DirectLightFactor = 1.0f;
 			this->sceneConstants.IndirectLightFactor = 1.0f;
 			this->blurDescTableIdx = 0;
-			this->debugVec0 = ur_float4(0.0f, 0.0f, 0.01f, 0.0f);
+			this->debugVec0 = ur_float4(0.0f, 0.5f, 0.01f, 0.0f);
 			this->debugVec1 = ur_float4(0.0f, 0.0f, 0.1f, 16.0f);
 			this->debugVec2 = ur_float4(0.1f, 0.02f, 1.0f, 1.0f);
 			this->debugVec3 = ur_float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -1746,10 +1761,14 @@ int HybridRenderingApp::Run()
 			sceneConstants.Lighting = lightingDesc;
 			sceneConstants.Atmosphere = atmosphereDesc;
 			sceneConstants.ShadowSamplesPerLight = g_Settings.RayTracing.Shadow.SamplesPerLight;
-			sceneConstants.ShadowAccumulationFrames = g_Settings.RayTracing.Shadow.AccumulationFrames;
+			sceneConstants.ShadowAccumulationFrames = g_Settings.RayTracing.Shadow.TemporalFilter.AccumulationFrames;
+			sceneConstants.ShadowTemporalTolerance = g_Settings.RayTracing.Shadow.TemporalFilter.Tolerance;
+			sceneConstants.ShadowTemporalThreshold = g_Settings.RayTracing.Shadow.TemporalFilter.Threshold;
 			sceneConstants.IndirectSamplesPerFrame = g_Settings.RayTracing.IndirectLight.SamplesPerFrame;
 			sceneConstants.IndirectBouncesCount = g_Settings.RayTracing.IndirectLight.BouncesCount;
-			sceneConstants.IndirectAccumulationFrames = g_Settings.RayTracing.IndirectLight.AccumulationFrames;
+			sceneConstants.IndirectAccumulationFrames = g_Settings.RayTracing.IndirectLight.TemporalFilter.AccumulationFrames;
+			sceneConstants.IndirectTemporalTolerance = g_Settings.RayTracing.IndirectLight.TemporalFilter.Tolerance;
+			sceneConstants.IndirectTemporalThreshold = g_Settings.RayTracing.IndirectLight.TemporalFilter.Threshold;
 			sceneConstants.PerFrameJitter = g_Settings.RayTracing.PerFrameJitter;
 
 			GrafBuffer* dynamicCB = this->grafRenderer->GetDynamicConstantBuffer();
@@ -2726,9 +2745,11 @@ int HybridRenderingApp::Run()
 							editableInt = (ur_int)g_Settings.RayTracing.Shadow.SamplesPerLight;
 							ImGui::InputInt("SamplesPerLight", &editableInt);
 							g_Settings.RayTracing.Shadow.SamplesPerLight = (ur_uint)std::max(0, std::min(1024, editableInt));
-							editableInt = (ur_int)g_Settings.RayTracing.Shadow.AccumulationFrames;
+							editableInt = (ur_int)g_Settings.RayTracing.Shadow.TemporalFilter.AccumulationFrames;
 							ImGui::InputInt("AccumulationFrames", &editableInt);
-							g_Settings.RayTracing.Shadow.AccumulationFrames = (ur_uint)std::max(0, std::min(1024, editableInt));
+							g_Settings.RayTracing.Shadow.TemporalFilter.AccumulationFrames = (ur_uint)std::max(0, std::min(1024, editableInt));
+							ImGui::InputFloat("TemporalTolerance", &g_Settings.RayTracing.Shadow.TemporalFilter.Tolerance);
+							ImGui::InputFloat("TemporalThreshold", &g_Settings.RayTracing.Shadow.TemporalFilter.Threshold);
 							editableInt = (ur_int)g_Settings.RayTracing.Shadow.SpatialFilter.PassCount;
 							ImGui::InputInt("BlurPassCount", &editableInt);
 							g_Settings.RayTracing.Shadow.SpatialFilter.PassCount = (ur_uint)std::max(0, std::min(ur_int(BlurPassCountPerFrame), editableInt));
@@ -2739,9 +2760,11 @@ int HybridRenderingApp::Run()
 							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.SamplesPerFrame;
 							ImGui::InputInt("SamplesPerFrame", &editableInt);
 							g_Settings.RayTracing.IndirectLight.SamplesPerFrame = (ur_uint)std::max(0, std::min(1024, editableInt));
-							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.AccumulationFrames;
+							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.TemporalFilter.AccumulationFrames;
 							ImGui::InputInt("AccumulationFrames", &editableInt);
-							g_Settings.RayTracing.IndirectLight.AccumulationFrames = (ur_uint)std::max(0, std::min(1024, editableInt));
+							g_Settings.RayTracing.IndirectLight.TemporalFilter.AccumulationFrames = (ur_uint)std::max(0, std::min(1024, editableInt));
+							ImGui::InputFloat("TemporalTolerance", &g_Settings.RayTracing.IndirectLight.TemporalFilter.Tolerance);
+							ImGui::InputFloat("TemporalThreshold", &g_Settings.RayTracing.IndirectLight.TemporalFilter.Threshold);
 							editableInt = (ur_int)g_Settings.RayTracing.IndirectLight.BouncesCount;
 							ImGui::InputInt("BouncesCount", &editableInt);
 							g_Settings.RayTracing.IndirectLight.BouncesCount = (ur_uint)std::max(0, std::min(8, editableInt));
