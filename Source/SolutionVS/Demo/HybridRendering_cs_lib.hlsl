@@ -613,7 +613,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 
 		uint4 tracingInfoHistory = g_TracingHistory.Load(int3(dispatchPosPrev.xy, 0));
 
-		#if (0)
+		#if (1)
 
 		// reprojected sample bilateral filtering
 
