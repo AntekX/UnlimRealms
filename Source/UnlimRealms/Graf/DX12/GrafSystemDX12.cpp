@@ -1050,7 +1050,10 @@ namespace UnlimRealms
 
 	Result GrafImageDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		this->grafDefaultSubresource.reset(ur_null);
+		this->d3dResource.reset(nullptr);
+
+		return Result(Success);
 	}
 
 	Result GrafImageDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
@@ -1058,14 +1061,67 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	Result GrafImageDX12::InitializeFromD3DResource(GrafDevice *grafDevice, const InitParams& initParams, ID3D12Resource* d3dResource)
+	Result GrafImageDX12::InitializeFromD3DResource(GrafDevice *grafDevice, const InitParams& initParams, shared_ref<ID3D12Resource>& d3dResource)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		GrafImage::Initialize(grafDevice, initParams);
+
+		// validate device 
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || nullptr == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafImageDX12: failed to initialize, invalid GrafDevice"));
+		}
+
+		// aquire resosurce reference
+
+		this->d3dResource = d3dResource;
+
+		// create subresource views
+
+		if (this->d3dResource.get() != nullptr)
+		{
+			Result res = this->CreateDefaultSubresource();
+			if (Failed(res))
+				return res;
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafImageDX12::CreateDefaultSubresource()
 	{
-		return Result(NotImplemented);
+		if (nullptr == this->d3dResource.get())
+		{
+			return ResultError(InvalidArgs, std::string("GrafImageDX12: failed to create default subresource, d3dResource is nullptr"));
+		}
+
+		GrafSystemDX12& grafSystemDX12 = static_cast<GrafSystemDX12&>(this->GetGrafSystem());
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice()); // device is expected to be validated previously
+
+		Result res = grafSystemDX12.CreateImageSubresource(this->grafDefaultSubresource);
+		if (Failed(res))
+		{
+			return ResultError(InvalidArgs, std::string("GrafImageDX12: failed to create image subresource"));
+		}
+
+		GrafImageSubresource::InitParams grafSubresParams = {};
+		grafSubresParams.Image = this;
+		grafSubresParams.SubresourceDesc.BaseMipLevel = 0;
+		grafSubresParams.SubresourceDesc.LevelCount = this->GetDesc().MipLevels;
+		grafSubresParams.SubresourceDesc.BaseArrayLayer = 0;
+		grafSubresParams.SubresourceDesc.LayerCount = 1;
+
+		res = this->grafDefaultSubresource->Initialize(grafDeviceDX12, grafSubresParams);
+		if (Failed(res))
+		{
+			this->grafDefaultSubresource.reset(ur_null);
+			return ResultError(InvalidArgs, std::string("GrafImageDX12: failed to initialize image subresource"));
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafImageDX12::Write(const ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)

@@ -320,7 +320,7 @@ namespace UnlimRealms
 
 		virtual Result Read(ur_byte*& dataPtr, ur_size dataSize = 0, ur_size srcOffset = 0, ur_size dstOffset = 0);
 
-		Result InitializeFromD3DResource(GrafDevice *grafDevice, const InitParams& initParams, ID3D12Resource* d3dResource);
+		Result InitializeFromD3DResource(GrafDevice *grafDevice, const InitParams& initParams, shared_ref<ID3D12Resource>& d3dResource);
 
 		inline ID3D12Resource* GetD3DResource() const;
 
