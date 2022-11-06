@@ -10,6 +10,11 @@
 namespace UnlimRealms
 {
 
+	inline IDXGIFactory5* GrafSystemDX12::GetDXGIFactory() const
+	{
+		return this->dxgiFactory.get();
+	}
+
 	inline IDXGIAdapter1* GrafSystemDX12::GetDXGIAdapter(ur_uint deviceId) const
 	{
 		return (deviceId < this->dxgiAdapters.size() ? this->dxgiAdapters[deviceId].get() : ur_null);
@@ -18,6 +23,21 @@ namespace UnlimRealms
 	inline ID3D12Device5* GrafDeviceDX12::GetD3DDevice() const
 	{
 		return this->d3dDevice.get();
+	}
+
+	inline ID3D12CommandQueue* GrafDeviceDX12::GetD3DGraphicsCommandQueue() const
+	{
+		return (this->graphicsQueue.get() ? this->graphicsQueue.get()->d3dQueue.get() : nullptr);
+	}
+
+	inline ID3D12CommandQueue* GrafDeviceDX12::GetD3DComputeCommandQueue() const
+	{
+		return (this->computeQueue.get() ? this->computeQueue.get()->d3dQueue.get() : nullptr);
+	}
+
+	inline ID3D12CommandQueue* GrafDeviceDX12::GetD3DTransferCommandQueue() const
+	{
+		return (this->transferQueue.get() ? this->transferQueue.get()->d3dQueue.get() : nullptr);
 	}
 
 	inline GrafDeviceDX12::CommandAllocator* GrafCommandListDX12::GetCommandAllocator() const

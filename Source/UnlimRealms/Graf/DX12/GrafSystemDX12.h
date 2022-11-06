@@ -13,7 +13,7 @@
 
 #include "Graf/GrafSystem.h"
 #include "Sys/Windows/WinUtils.h"
-#include <dxgi1_4.h>
+#include <dxgi1_5.h>
 #include <d3d12.h>
 
 namespace UnlimRealms
@@ -64,13 +64,15 @@ namespace UnlimRealms
 
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
 
+		inline IDXGIFactory5* GetDXGIFactory() const;
+
 		inline IDXGIAdapter1* GetDXGIAdapter(ur_uint deviceId) const;
 
 	private:
 
 		Result Deinitialize();
 
-		shared_ref<IDXGIFactory4> dxgiFactory;
+		shared_ref<IDXGIFactory5> dxgiFactory;
 		std::vector<shared_ref<IDXGIAdapter1>> dxgiAdapters;
 	};
 
@@ -92,6 +94,12 @@ namespace UnlimRealms
 		virtual Result WaitIdle();
 
 		inline ID3D12Device5* GetD3DDevice() const;
+
+		inline ID3D12CommandQueue* GetD3DGraphicsCommandQueue() const;
+
+		inline ID3D12CommandQueue* GetD3DComputeCommandQueue() const;
+
+		inline ID3D12CommandQueue* GetD3DTransferCommandQueue() const;
 
 	private:
 
@@ -287,6 +295,7 @@ namespace UnlimRealms
 
 		Result AcquireNextImage();
 
+		shared_ref<IDXGISwapChain4> dxgiSwapChain;
 		std::vector<std::unique_ptr<GrafImage>> swapChainImages;
 
 		// per frame data
@@ -573,6 +582,8 @@ namespace UnlimRealms
 
 		static inline D3D12_RESOURCE_STATES GrafToD3DBufferState(GrafBufferState state);
 		static inline D3D12_RESOURCE_STATES GrafToD3DImageState(GrafImageState state);
+		static inline DXGI_FORMAT GrafToDXGIFormat(GrafFormat grafFormat);
+		static inline GrafFormat DXGIToGrafFormat(DXGI_FORMAT dxgiFormat);
 	};
 
 } // end namespace UnlimRealms

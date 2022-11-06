@@ -26,8 +26,8 @@ namespace UnlimRealms
 
 	static const char* HResultToString(HRESULT res)
 	{
-		// TODO
-		return (FAILED(res) ? "FAILED" : "SUCCEEDED");
+		_com_error err(res);
+		return (const char*)err.ErrorMessage();
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,7 +104,7 @@ namespace UnlimRealms
 			// create temporary device object to check features support
 
 			shared_ref<ID3D12Device5> d3dDevice;
-			hres = D3D12CreateDevice(dxgiAdapters[iadapter], D3D_FEATURE_LEVEL_11_0, __uuidof(d3dDevice), d3dDevice);
+			hres = D3D12CreateDevice(dxgiAdapters[iadapter], D3D_FEATURE_LEVEL_12_1, __uuidof(d3dDevice), d3dDevice);
 			if (FAILED(hres))
 				continue;
 
@@ -114,7 +114,7 @@ namespace UnlimRealms
 				continue;
 
 			grafDeviceDesc.RayTracing.RayTraceSupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0);
-			grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)false;
+			grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1);
 			grafDeviceDesc.RayTracing.ShaderGroupHandleSize = 8;
 			grafDeviceDesc.RayTracing.RecursionDepthMax = ~ur_uint32(0);
 			grafDeviceDesc.RayTracing.GeometryCountMax = ~ur_uint64(0);
@@ -901,12 +901,119 @@ namespace UnlimRealms
 		this->swapChainImageCount = 0;
 		this->swapChainCurrentImageId = 0;
 
-		return Result(NotImplemented);
+		this->swapChainImages.clear();
+		if (!this->dxgiSwapChain.empty())
+		{
+			this->dxgiSwapChain.reset(nullptr);
+			LogNoteGrafDbg("GrafCanvasDX12: swap chain destroyed");
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafCanvasDX12::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		//return Result(NotImplemented);
+
+		this->Deinitialize();
+
+		LogNoteGrafDbg("GrafCanvasDX12: initialization...");
+
+		GrafCanvas::Initialize(grafDevice, initParams);
+
+		// validate device
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (nullptr == grafDeviceDX12 || nullptr == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafCanvasDX12: failed to initialize, invalid GrafDevice"));
+		}
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		// init DXGI swap chain
+
+		#if defined(_WINDOWS)
+
+		WinCanvas* winCanvas = static_cast<WinCanvas*>(this->GetRealm().GetCanvas());
+		if (ur_null == winCanvas)
+		{
+			return ResultError(InvalidArgs, std::string("GrafCanvasVulkan: failed to initialize, invalid WinCanvas"));
+		}
+
+		GrafSystemDX12& grafSystemDX12 = static_cast<GrafSystemDX12&>(grafDeviceDX12->GetGrafSystem());
+		IDXGIFactory5* dxgiFactory = grafSystemDX12.GetDXGIFactory();
+
+		DXGI_SWAP_CHAIN_DESC1 dxgiChainDesc = {};
+		dxgiChainDesc.Width = std::max((ur_uint)winCanvas->GetClientBound().Width(), ur_uint(1));
+		dxgiChainDesc.Height = std::max((ur_uint)winCanvas->GetClientBound().Height(), ur_uint(1));
+		dxgiChainDesc.Format = GrafUtilsDX12::GrafToDXGIFormat(initParams.Format);
+		dxgiChainDesc.Stereo = false;
+		dxgiChainDesc.SampleDesc.Count = 1;
+		dxgiChainDesc.SampleDesc.Quality = 0;
+		dxgiChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+		dxgiChainDesc.BufferCount = (UINT)initParams.SwapChainImageCount;
+		dxgiChainDesc.Scaling = DXGI_SCALING_STRETCH;
+		dxgiChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+		dxgiChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+		dxgiChainDesc.Flags = (DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+
+		shared_ref<IDXGISwapChain1> dxgiSwapChain1;
+		HRESULT hres = dxgiFactory->CreateSwapChainForHwnd(grafDeviceDX12->GetD3DGraphicsCommandQueue(), winCanvas->GetHwnd(),
+			&dxgiChainDesc, nullptr, nullptr, dxgiSwapChain1);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafCanvasDX12: IDXGIFactory::CreateSwapChainForHwnd failed with HRESULT = ") + HResultToString(hres));
+		}
+		LogNoteGrafDbg("GrafCanvasVulkan: VkSurfaceKHR created");
+
+		hres = dxgiSwapChain1->QueryInterface(__uuidof(IDXGISwapChain4), this->dxgiSwapChain);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafCanvasDX12: QueryInterface(IDXGISwapChain4) failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		// init swap chain images
+
+		this->swapChainImages.reserve(initParams.SwapChainImageCount);
+		for (ur_uint imageIdx = 0; imageIdx < initParams.SwapChainImageCount; ++imageIdx)
+		{
+			shared_ref<ID3D12Resource> d3dImageResource;
+			hres = this->dxgiSwapChain->GetBuffer(imageIdx, __uuidof(ID3D12Resource), d3dImageResource);
+			if (FAILED(hres))
+			{
+				this->Deinitialize();
+				return ResultError(Failure, std::string("GrafCanvasDX12: IDXGISwapChain::GetBuffer failed with HRESULT = ") + HResultToString(hres));
+			}
+
+			GrafImage::InitParams imageParams = {};
+			imageParams.ImageDesc.Type = GrafImageType::Tex2D;
+			imageParams.ImageDesc.Format = GrafUtilsDX12::DXGIToGrafFormat(dxgiChainDesc.Format);
+			imageParams.ImageDesc.Size.x = dxgiChainDesc.Width;
+			imageParams.ImageDesc.Size.y = dxgiChainDesc.Height;
+			imageParams.ImageDesc.Size.z = 0;
+			imageParams.ImageDesc.MipLevels = 1;
+			imageParams.ImageDesc.Usage = GrafImageUsageFlags(GrafImageUsageFlag::ColorRenderTarget);
+			imageParams.ImageDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
+
+			std::unique_ptr<GrafImage> grafImage;
+			grafSystemDX12.CreateImage(grafImage);
+			Result res = static_cast<GrafImageDX12*>(grafImage.get())->InitializeFromD3DResource(grafDevice, imageParams, d3dImageResource);
+			if (Failed(res))
+			{
+				this->Deinitialize();
+				return ResultError(Failure, "GrafCanvasDX12: failed to create swap chain images");
+			}
+			this->swapChainImages.push_back(std::move(grafImage));
+		}
+
+		#else
+
+		return ResultError(NotImplemented, std::string("GrafCanvasDX12: failed to initialize, unsupported platform"));
+
+		#endif
+
+		return Result(Success);
 	}
 
 	Result GrafCanvasDX12::AcquireNextImage()
@@ -1424,6 +1531,198 @@ namespace UnlimRealms
 			break;
 		};
 		return d3dState;
+	}
+
+	static const DXGI_FORMAT GrafToDXGIFormatLUT[ur_uint(GrafFormat::Count)] = {
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_R8_UNORM,
+		DXGI_FORMAT_R8_SNORM,
+		DXGI_FORMAT_R8_UINT,
+		DXGI_FORMAT_R8_SINT,
+		DXGI_FORMAT_R8G8_UINT,
+		DXGI_FORMAT_R8G8_SINT,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		DXGI_FORMAT_R8G8B8A8_SNORM,
+		DXGI_FORMAT_R8G8B8A8_UINT,
+		DXGI_FORMAT_R8G8B8A8_SINT,
+		DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+		DXGI_FORMAT_B8G8R8A8_UNORM,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
+		DXGI_FORMAT_R16_UINT,
+		DXGI_FORMAT_R16_SINT,
+		DXGI_FORMAT_R16_FLOAT,
+		DXGI_FORMAT_R16G16_UINT,
+		DXGI_FORMAT_R16G16_SINT,
+		DXGI_FORMAT_R16G16_FLOAT,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_R16G16B16A16_UNORM,
+		DXGI_FORMAT_R16G16B16A16_SNORM,
+		DXGI_FORMAT_R16G16B16A16_UINT,
+		DXGI_FORMAT_R16G16B16A16_SINT,
+		DXGI_FORMAT_R16G16B16A16_FLOAT,
+		DXGI_FORMAT_R32_UINT,
+		DXGI_FORMAT_R32_SINT,
+		DXGI_FORMAT_R32_FLOAT,
+		DXGI_FORMAT_R32G32_FLOAT,
+		DXGI_FORMAT_R32G32B32_FLOAT,
+		DXGI_FORMAT_R32G32B32A32_FLOAT,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_D16_UNORM,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_D32_FLOAT,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_D24_UNORM_S8_UINT,
+		DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_BC1_UNORM,
+		DXGI_FORMAT_BC1_UNORM_SRGB,
+		DXGI_FORMAT_BC3_UNORM,
+		DXGI_FORMAT_BC3_UNORM_SRGB
+	};
+	DXGI_FORMAT GrafUtilsDX12::GrafToDXGIFormat(GrafFormat grafFormat)
+	{
+		return GrafToDXGIFormatLUT[ur_uint(grafFormat)];
+	}
+
+	GrafFormat DXGIToGrafFormatLUT[] = {
+		GrafFormat::Undefined,				// DXGI_FORMAT_UNKNOWN = 0,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32G32B32A32_TYPELESS = 1,
+		GrafFormat::R32G32B32A32_SFLOAT,	// DXGI_FORMAT_R32G32B32A32_FLOAT = 2,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32G32B32A32_UINT = 3,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32G32B32A32_SINT = 4,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32G32B32_TYPELESS = 5,
+		GrafFormat::R32G32B32_SFLOAT,		// DXGI_FORMAT_R32G32B32_FLOAT = 6,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32G32B32_UINT = 7,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32G32B32_SINT = 8,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R16G16B16A16_TYPELESS = 9,
+		GrafFormat::R16G16B16A16_SFLOAT,	// DXGI_FORMAT_R16G16B16A16_FLOAT = 10,
+		GrafFormat::R16G16B16A16_UNORM,		// DXGI_FORMAT_R16G16B16A16_UNORM = 11,
+		GrafFormat::R16G16B16A16_UINT,		// DXGI_FORMAT_R16G16B16A16_UINT = 12,
+		GrafFormat::R16G16B16A16_SNORM,		// DXGI_FORMAT_R16G16B16A16_SNORM = 13,
+		GrafFormat::R16G16B16A16_SINT,		// DXGI_FORMAT_R16G16B16A16_SINT = 14,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32G32_TYPELESS = 15,
+		GrafFormat::R32G32_SFLOAT,			// DXGI_FORMAT_R32G32_FLOAT = 16,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32G32_UINT = 17,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32G32_SINT = 18,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32G8X24_TYPELESS = 19,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_D32_FLOAT_S8X24_UINT = 20,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS = 21,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_X32_TYPELESS_G8X24_UINT = 22,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R10G10B10A2_TYPELESS = 23,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R10G10B10A2_UNORM = 24,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R10G10B10A2_UINT = 25,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R11G11B10_FLOAT = 26,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R8G8B8A8_TYPELESS = 27,
+		GrafFormat::R8G8B8A8_UNORM,			// DXGI_FORMAT_R8G8B8A8_UNORM = 28,
+		GrafFormat::R8G8B8A8_SRGB,			// DXGI_FORMAT_R8G8B8A8_UNORM_SRGB = 29,
+		GrafFormat::R8G8B8A8_UINT,			// DXGI_FORMAT_R8G8B8A8_UINT = 30,
+		GrafFormat::R8G8B8A8_SNORM,			// DXGI_FORMAT_R8G8B8A8_SNORM = 31,
+		GrafFormat::R8G8B8A8_SINT,			// DXGI_FORMAT_R8G8B8A8_SINT = 32,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R16G16_TYPELESS = 33,
+		GrafFormat::R16G16_SFLOAT,			// DXGI_FORMAT_R16G16_FLOAT = 34,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R16G16_UNORM = 35,
+		GrafFormat::R16G16_UINT,			// DXGI_FORMAT_R16G16_UINT = 36,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R16G16_SNORM = 37,
+		GrafFormat::R16G16_SINT,			// DXGI_FORMAT_R16G16_SINT = 38,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R32_TYPELESS = 39,
+		GrafFormat::D32_SFLOAT,				// DXGI_FORMAT_D32_FLOAT = 40,
+		GrafFormat::R32_SFLOAT,				// DXGI_FORMAT_R32_FLOAT = 41,
+		GrafFormat::R32_UINT,				// DXGI_FORMAT_R32_UINT = 42,
+		GrafFormat::R32_SINT,				// DXGI_FORMAT_R32_SINT = 43,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R24G8_TYPELESS = 44,
+		GrafFormat::D24_UNORM_S8_UINT,		// DXGI_FORMAT_D24_UNORM_S8_UINT = 45,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R24_UNORM_X8_TYPELESS = 46,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_X24_TYPELESS_G8_UINT = 47,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R8G8_TYPELESS = 48,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R8G8_UNORM = 49,
+		GrafFormat::R8G8_UINT,				// DXGI_FORMAT_R8G8_UINT = 50,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R8G8_SNORM = 51,
+		GrafFormat::R8G8_SINT,				// DXGI_FORMAT_R8G8_SINT = 52,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R16_TYPELESS = 53,
+		GrafFormat::R16_SFLOAT,				// DXGI_FORMAT_R16_FLOAT = 54,
+		GrafFormat::D16_UNORM,				// DXGI_FORMAT_D16_UNORM = 55,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R16_UNORM = 56,
+		GrafFormat::R16_UINT,				// DXGI_FORMAT_R16_UINT = 57,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R16_SNORM = 58,
+		GrafFormat::R16_SINT,				// DXGI_FORMAT_R16_SINT = 59,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R8_TYPELESS = 60,
+		GrafFormat::R8_UNORM,				// DXGI_FORMAT_R8_UNORM = 61,
+		GrafFormat::R8_UINT,				// DXGI_FORMAT_R8_UINT = 62,
+		GrafFormat::R8_SNORM,				// DXGI_FORMAT_R8_SNORM = 63,
+		GrafFormat::R8_SINT,				// DXGI_FORMAT_R8_SINT = 64,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_A8_UNORM = 65,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R1_UNORM = 66,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R9G9B9E5_SHAREDEXP = 67,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R8G8_B8G8_UNORM = 68,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_G8R8_G8B8_UNORM = 69,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC1_TYPELESS = 70,
+		GrafFormat::BC1_RGBA_UNORM_BLOCK,	// DXGI_FORMAT_BC1_UNORM = 71,
+		GrafFormat::BC1_RGBA_SRGB_BLOCK,	// DXGI_FORMAT_BC1_UNORM_SRGB = 72,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC2_TYPELESS = 73,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC2_UNORM = 74,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC2_UNORM_SRGB = 75,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC3_TYPELESS = 76,
+		GrafFormat::BC3_UNORM_BLOCK,		// DXGI_FORMAT_BC3_UNORM = 77,
+		GrafFormat::BC3_SRGB_BLOCK,			// DXGI_FORMAT_BC3_UNORM_SRGB = 78,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC4_TYPELESS = 79,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC4_UNORM = 80,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC4_SNORM = 81,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC5_TYPELESS = 82,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC5_UNORM = 83,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC5_SNORM = 84,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_B5G6R5_UNORM = 85,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_B5G5R5A1_UNORM = 86,
+		GrafFormat::B8G8R8A8_UNORM,			// DXGI_FORMAT_B8G8R8A8_UNORM = 87,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_B8G8R8X8_UNORM = 88,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM = 89,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_B8G8R8A8_TYPELESS = 90,
+		GrafFormat::B8G8R8A8_SRGB,			// DXGI_FORMAT_B8G8R8A8_UNORM_SRGB = 91,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_B8G8R8X8_TYPELESS = 92,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_B8G8R8X8_UNORM_SRGB = 93,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC6H_TYPELESS = 94,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC6H_UF16 = 95,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC6H_SF16 = 96,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC7_TYPELESS = 97,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC7_UNORM = 98,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_BC7_UNORM_SRGB = 99,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_AYUV = 100,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_Y410 = 101,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_Y416 = 102,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_NV12 = 103,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_P010 = 104,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_P016 = 105,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_420_OPAQUE = 106,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_YUY2 = 107,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_Y210 = 108,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_Y216 = 109,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_NV11 = 110,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_AI44 = 111,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_IA44 = 112,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_P8 = 113,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_A8P8 = 114,
+		GrafFormat::Unsupported,			// DXGI_FORMAT_B4G4R4A4_UNORM = 115,
+	};
+	GrafFormat GrafUtilsDX12::DXGIToGrafFormat(DXGI_FORMAT dxgiFormat)
+	{
+		ur_uint formatIdx = ur_uint(dxgiFormat);
+		return (formatIdx < ur_array_size(DXGIToGrafFormatLUT) ? DXGIToGrafFormatLUT[formatIdx] : GrafFormat::Unsupported);
 	}
 
 } // end namespace UnlimRealms
