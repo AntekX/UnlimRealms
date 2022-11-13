@@ -13,6 +13,7 @@
 
 #include "Graf/GrafSystem.h"
 #include "Sys/Windows/WinUtils.h"
+#include "Core/Memory.h"
 #include <dxgi1_5.h>
 #include <d3d12.h>
 
@@ -77,6 +78,33 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafDescriptorHeapDX12
+	{
+		// dummy base class for GrafDeviceDX12::DescriptorHeap
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafDescriptorHeapHandleDX12
+	{
+	public:
+
+		inline ur_bool IsValid() const;
+
+		inline D3D12_CPU_DESCRIPTOR_HANDLE GetD3DHandleCPU() const;
+
+		inline D3D12_GPU_DESCRIPTOR_HANDLE GetD3DHandleGPU() const;
+		
+	private:
+
+		friend class GrafDeviceDX12;
+
+		GrafDescriptorHeapDX12* heap;
+		Allocation allocation;
+		D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafDeviceDX12 : public GrafDevice
 	{
 	public:
@@ -100,6 +128,10 @@ namespace UnlimRealms
 		inline ID3D12CommandQueue* GetD3DComputeCommandQueue() const;
 
 		inline ID3D12CommandQueue* GetD3DTransferCommandQueue() const;
+
+		GrafDescriptorHeapHandleDX12 AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count);
+
+		void ReleaseDescriptorRange(const GrafDescriptorHeapHandleDX12& range);
 
 	private:
 
@@ -133,6 +165,19 @@ namespace UnlimRealms
 			std::mutex recordedCommandListsMutex;
 		};
 
+		struct DescriptorHeap : public GrafDescriptorHeapDX12
+		{
+			D3D12_DESCRIPTOR_HEAP_DESC d3dDesc;
+			shared_ref<ID3D12DescriptorHeap> d3dDescriptorHeap;
+			ur_uint descriptorIncrementSize;
+			LinearAllocator allocator;
+		};
+
+		struct DescriptorPool
+		{
+			std::vector<std::unique_ptr<DescriptorHeap>> descriptorHeaps;
+		};
+
 		CommandAllocator* GetGraphicsCommandAllocator();
 		CommandAllocator* GetComputeCommandAllocator();
 		CommandAllocator* GetTransferCommandAllocator();
@@ -143,6 +188,7 @@ namespace UnlimRealms
 		std::unique_ptr<DeviceQueue> graphicsQueue;
 		std::unique_ptr<DeviceQueue> computeQueue;
 		std::unique_ptr<DeviceQueue> transferQueue;
+		std::unique_ptr<DescriptorPool> descriptorPool[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -355,6 +401,8 @@ namespace UnlimRealms
 		Result Deinitialize();
 
 		Result CreateD3DImageView();
+
+		GrafDescriptorHeapHandleDX12 rtvDescriptorHandle;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -582,6 +630,7 @@ namespace UnlimRealms
 
 		static inline D3D12_RESOURCE_STATES GrafToD3DBufferState(GrafBufferState state);
 		static inline D3D12_RESOURCE_STATES GrafToD3DImageState(GrafImageState state);
+		static inline D3D12_RTV_DIMENSION GrafToD3DRTVDimenstion(GrafImageType imageType);
 		static inline DXGI_FORMAT GrafToDXGIFormat(GrafFormat grafFormat);
 		static inline GrafFormat DXGIToGrafFormat(DXGI_FORMAT dxgiFormat);
 	};

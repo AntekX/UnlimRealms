@@ -24,6 +24,22 @@ namespace UnlimRealms
 	#define UR_GRAF_DX12_COMMAND_LIST_SYNC_RESET	1
 	#define UR_GRAF_DX12_SLEEPZERO_WHILE_WAIT		0
 
+	// descritor heap sizes per type
+	static const ur_uint DescriptorHeapSize[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES] = {
+		4 * 1024,	// D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+		1 * 1024,	// D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER
+		1 * 1024,	// D3D12_DESCRIPTOR_HEAP_TYPE_RTV
+		1 * 1024,	// D3D12_DESCRIPTOR_HEAP_TYPE_DSV
+	};
+
+	// descriptor heap default flags per type
+	static const D3D12_DESCRIPTOR_HEAP_FLAGS DescriptorHeapFlags[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES] = {
+		D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,	// D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+		D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,	// D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER
+		D3D12_DESCRIPTOR_HEAP_FLAG_NONE,			// D3D12_DESCRIPTOR_HEAP_TYPE_RTV
+		D3D12_DESCRIPTOR_HEAP_FLAG_NONE,			// D3D12_DESCRIPTOR_HEAP_TYPE_DSV
+	};
+
 	static const char* HResultToString(HRESULT res)
 	{
 		_com_error err(res);
@@ -248,6 +264,10 @@ namespace UnlimRealms
 	{
 		this->WaitIdle();
 
+		for (std::unique_ptr<DescriptorPool>& descriptorPool : this->descriptorPool)
+		{
+			descriptorPool.reset();
+		}
 		this->graphicsQueue.reset();
 		this->computeQueue.reset();
 		this->transferQueue.reset();
@@ -283,10 +303,6 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafDeviceDX12: D3D12CreateDevice failed with HRESULT = ") + HResultToString(hres));
 		}
 
-		// create descriptor heaps
-
-		// TODO
-
 		// initialize graphics command queue
 
 		this->graphicsQueue.reset(new DeviceQueue());
@@ -310,6 +326,30 @@ namespace UnlimRealms
 		{
 			this->Deinitialize();
 			return ResultError(Failure, std::string("GrafDeviceDX12: CreateFence failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		// create default descriptor heaps
+
+		for (ur_uint heapTypeIdx = 0; heapTypeIdx < ur_uint(D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES); ++heapTypeIdx)
+		{
+			std::unique_ptr<DescriptorHeap> heap(new DescriptorHeap());
+			heap->d3dDesc = {};
+			heap->d3dDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE(heapTypeIdx);
+			heap->d3dDesc.Flags = DescriptorHeapFlags[heapTypeIdx];
+			heap->d3dDesc.NumDescriptors = DescriptorHeapSize[heapTypeIdx];
+			heap->descriptorIncrementSize = this->d3dDevice->GetDescriptorHandleIncrementSize(heap->d3dDesc.Type);
+			heap->allocator.Init(ur_size(heap->d3dDesc.NumDescriptors));
+			hres = this->d3dDevice->CreateDescriptorHeap(&heap->d3dDesc, __uuidof(heap->d3dDescriptorHeap), heap->d3dDescriptorHeap);
+			if (FAILED(hres))
+			{
+				this->Deinitialize();
+				return ResultError(Failure, std::string("GrafDeviceDX12: CreateDescriptorHeap failed with HRESULT = ") + HResultToString(hres));
+			}
+
+			std::unique_ptr<DescriptorPool> pool(new DescriptorPool());
+			pool->descriptorHeaps.push_back(std::move(heap));
+
+			this->descriptorPool[heapTypeIdx] = std::move(pool);
 		}
 
 		return Result(Success);
@@ -457,6 +497,35 @@ namespace UnlimRealms
 		// not implemented
 
 		return ur_null;
+	}
+
+	GrafDescriptorHeapHandleDX12 GrafDeviceDX12::AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count)
+	{
+		GrafDescriptorHeapHandleDX12 handle = {};
+
+		if (type >= D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES)
+			return handle; // invalid type
+
+		DescriptorPool* pool = this->descriptorPool[ur_uint(type)].get();
+		if (nullptr == pool || pool->descriptorHeaps.empty())
+			return handle; // not initialized
+
+		DescriptorHeap* heap = pool->descriptorHeaps.back().get();
+		handle.allocation = heap->allocator.Allocate(count);
+		if (0 == handle.allocation.Size)
+			return handle; // out of memory
+
+		handle.heap = heap;
+		handle.cpuHandle.ptr = heap->d3dDescriptorHeap->GetCPUDescriptorHandleForHeapStart().ptr + SIZE_T(handle.allocation.Offset);
+		handle.gpuHandle.ptr = heap->d3dDescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + UINT64(handle.allocation.Offset);
+
+		return handle;
+	}
+
+	void GrafDeviceDX12::ReleaseDescriptorRange(const GrafDescriptorHeapHandleDX12& range)
+	{
+		// TODO:
+		// currently used LinearAllocator can only grow, proper allocator must be implemented/used
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -651,8 +720,8 @@ namespace UnlimRealms
 		if (ur_null == grafImage)
 			return Result(InvalidArgs);
 
-		GrafImageDX12* grafImageVulkan = static_cast<GrafImageDX12*>(grafImage);
-		Result res = this->ImageMemoryBarrier(grafImageVulkan->GetDefaultSubresource(), srcState, dstState);
+		GrafImageDX12* grafImageDX12 = static_cast<GrafImageDX12*>(grafImage);
+		Result res = this->ImageMemoryBarrier(grafImageDX12->GetDefaultSubresource(), srcState, dstState);
 		if (Succeeded(res))
 		{
 			// image state = default subresource state (all mips/layers)
@@ -937,7 +1006,7 @@ namespace UnlimRealms
 		WinCanvas* winCanvas = static_cast<WinCanvas*>(this->GetRealm().GetCanvas());
 		if (ur_null == winCanvas)
 		{
-			return ResultError(InvalidArgs, std::string("GrafCanvasVulkan: failed to initialize, invalid WinCanvas"));
+			return ResultError(InvalidArgs, std::string("GrafCanvasDX12: failed to initialize, invalid WinCanvas"));
 		}
 
 		GrafSystemDX12& grafSystemDX12 = static_cast<GrafSystemDX12&>(grafDeviceDX12->GetGrafSystem());
@@ -964,7 +1033,7 @@ namespace UnlimRealms
 		{
 			return ResultError(Failure, std::string("GrafCanvasDX12: IDXGIFactory::CreateSwapChainForHwnd failed with HRESULT = ") + HResultToString(hres));
 		}
-		LogNoteGrafDbg("GrafCanvasVulkan: VkSurfaceKHR created");
+		LogNoteGrafDbg("GrafCanvasDX12: IDXGISwapChain1 created");
 
 		hres = dxgiSwapChain1->QueryInterface(__uuidof(IDXGISwapChain4), this->dxgiSwapChain);
 		if (FAILED(hres))
@@ -1153,17 +1222,91 @@ namespace UnlimRealms
 
 	Result GrafImageSubresourceDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+
+		if (this->rtvDescriptorHandle.IsValid())
+		{
+			grafDeviceDX12->ReleaseDescriptorRange(this->rtvDescriptorHandle);
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafImageSubresourceDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		GrafImageSubresource::Initialize(grafDevice, initParams);
+
+		// validate device 
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafImageSubresourceDX12: failed to initialize, invalid GrafDevice"));
+		}
+
+		// create view
+
+		Result res = this->CreateD3DImageView();
+		if (Failed(res))
+			return res;
+
+		return Result(Success);
 	}
 
 	Result GrafImageSubresourceDX12::CreateD3DImageView()
 	{
-		return Result(NotImplemented);
+		//return Result(NotImplemented);
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+
+		// validate image
+
+		const GrafImageDX12* grafImageDX12 = static_cast<const GrafImageDX12*>(this->GetImage());
+		if (ur_null == grafImageDX12 || nullptr == grafImageDX12->GetD3DResource())
+		{
+			return ResultError(InvalidArgs, std::string("GrafImageSubresourceDX12: failed to initialize, invalid image"));
+		}
+
+		const GrafImageDesc& grafImageDesc = grafImageDX12->GetDesc();
+		const GrafImageSubresourceDesc& grafSubresDesc = this->GetDesc();
+
+		// create corresponding view(s)
+
+		if (grafImageDesc.Usage & ur_uint(GrafImageUsageFlag::ColorRenderTarget))
+		{
+			D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+			rtvDesc.Format = GrafUtilsDX12::GrafToDXGIFormat(grafImageDesc.Format);
+			rtvDesc.ViewDimension = GrafUtilsDX12::GrafToD3DRTVDimenstion(grafImageDesc.Type);
+			switch (grafImageDesc.Type)
+			{
+			case GrafImageType::Tex1D:
+				rtvDesc.Texture1D.MipSlice = UINT(grafSubresDesc.BaseMipLevel);
+				break;
+			case GrafImageType::Tex2D:
+				rtvDesc.Texture2D.MipSlice = UINT(grafSubresDesc.BaseMipLevel);
+				rtvDesc.Texture2D.PlaneSlice = UINT(grafSubresDesc.BaseArrayLayer);
+				break;
+			case GrafImageType::Tex3D:
+				rtvDesc.Texture3D.MipSlice = UINT(grafSubresDesc.BaseMipLevel);
+				rtvDesc.Texture3D.FirstWSlice = UINT(grafSubresDesc.BaseArrayLayer);
+				rtvDesc.Texture3D.WSize = UINT(grafSubresDesc.LayerCount);
+				break;
+			};
+
+			this->rtvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 1);
+			if (!this->rtvDescriptorHandle.IsValid())
+			{
+				this->Deinitialize();
+				return ResultError(InvalidArgs, std::string("GrafImageSubresourceDX12: failed to allocate RTV descriptor"));
+			}
+			grafDeviceDX12->GetD3DDevice()->CreateRenderTargetView(grafImageDX12->GetD3DResource(), &rtvDesc, this->rtvDescriptorHandle.GetD3DHandleCPU());
+		}
+
+		// TODO: support SRV & UAV
+
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1587,6 +1730,18 @@ namespace UnlimRealms
 			break;
 		};
 		return d3dState;
+	}
+
+	D3D12_RTV_DIMENSION GrafUtilsDX12::GrafToD3DRTVDimenstion(GrafImageType imageType)
+	{
+		D3D12_RTV_DIMENSION d3dRTVDimension = D3D12_RTV_DIMENSION_UNKNOWN;
+		switch (imageType)
+		{
+		case GrafImageType::Tex1D: d3dRTVDimension = D3D12_RTV_DIMENSION_TEXTURE1D; break;
+		case GrafImageType::Tex2D: d3dRTVDimension = D3D12_RTV_DIMENSION_TEXTURE2D; break;
+		case GrafImageType::Tex3D: d3dRTVDimension = D3D12_RTV_DIMENSION_TEXTURE3D; break;
+		};
+		return d3dRTVDimension;
 	}
 
 	static const DXGI_FORMAT GrafToDXGIFormatLUT[ur_uint(GrafFormat::Count)] = {

@@ -20,6 +20,21 @@ namespace UnlimRealms
 		return (deviceId < this->dxgiAdapters.size() ? this->dxgiAdapters[deviceId].get() : ur_null);
 	}
 
+	inline ur_bool GrafDescriptorHeapHandleDX12::IsValid() const
+	{
+		return (this->allocation.Size > 0);
+	}
+
+	inline D3D12_CPU_DESCRIPTOR_HANDLE GrafDescriptorHeapHandleDX12::GetD3DHandleCPU() const
+	{
+		return this->cpuHandle;
+	}
+
+	inline D3D12_GPU_DESCRIPTOR_HANDLE GrafDescriptorHeapHandleDX12::GetD3DHandleGPU() const
+	{
+		return this->gpuHandle;
+	}
+
 	inline ID3D12Device5* GrafDeviceDX12::GetD3DDevice() const
 	{
 		return this->d3dDevice.get();
