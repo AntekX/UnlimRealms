@@ -633,6 +633,8 @@ namespace UnlimRealms
 		static inline D3D12_RESOURCE_STATES GrafToD3DBufferState(GrafBufferState state);
 		static inline D3D12_RESOURCE_STATES GrafToD3DImageState(GrafImageState state);
 		static inline D3D12_RTV_DIMENSION GrafToD3DRTVDimenstion(GrafImageType imageType);
+		static inline D3D12_HEAP_TYPE GrafToD3DHeapType(GrafBufferUsageFlags bufferUsage);
+		static inline D3D12_RESOURCE_STATES GrafToD3DBufferInitialState(GrafBufferUsageFlags bufferUsage);
 		static inline DXGI_FORMAT GrafToDXGIFormat(GrafFormat grafFormat);
 		static inline GrafFormat DXGIToGrafFormat(DXGI_FORMAT dxgiFormat);
 	};

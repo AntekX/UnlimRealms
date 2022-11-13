@@ -578,7 +578,7 @@ namespace UnlimRealms
 
 		GrafCommandList::Initialize(grafDevice);
 
-		// validate device 
+		// validate device
 
 		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
 		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
@@ -1345,7 +1345,51 @@ namespace UnlimRealms
 
 	Result GrafBufferDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		GrafBuffer::Initialize(grafDevice, initParams);
+
+		// validate device
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafBufferDX12: failed to initialize, invalid GrafDevice"));
+		}
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		// create resource
+
+		D3D12_HEAP_PROPERTIES d3dHeapProperties = {};
+		d3dHeapProperties.Type = GrafUtilsDX12::GrafToD3DHeapType(initParams.BufferDesc.Usage);
+		d3dHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		d3dHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		d3dHeapProperties.CreationNodeMask = 0;
+		d3dHeapProperties.VisibleNodeMask = 0;
+
+		D3D12_RESOURCE_DESC d3dResDesc = {};
+		d3dResDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		d3dResDesc.Alignment = 0;
+		d3dResDesc.Width = (UINT64)initParams.BufferDesc.SizeInBytes;
+		d3dResDesc.Height = 1;
+		d3dResDesc.DepthOrArraySize = 1;
+		d3dResDesc.MipLevels = 1;
+		d3dResDesc.Format = DXGI_FORMAT_UNKNOWN;
+		d3dResDesc.SampleDesc.Count = 1;
+		d3dResDesc.SampleDesc.Quality = 0;
+		d3dResDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		d3dResDesc.Flags = (initParams.BufferDesc.Usage & ur_uint(GrafBufferUsageFlag::StorageBuffer) ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE);
+
+		D3D12_RESOURCE_STATES d3dResStates = GrafUtilsDX12::GrafToD3DBufferInitialState(initParams.BufferDesc.Usage);
+
+		HRESULT hres = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResDesc, d3dResStates, ur_null,
+			__uuidof(ID3D12Resource), this->d3dResource);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafBufferDX12: CreateCommittedResource failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafBufferDX12::Write(const ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
@@ -1761,6 +1805,36 @@ namespace UnlimRealms
 		case GrafImageType::Tex3D: d3dRTVDimension = D3D12_RTV_DIMENSION_TEXTURE3D; break;
 		};
 		return d3dRTVDimension;
+	}
+
+	D3D12_HEAP_TYPE GrafUtilsDX12::GrafToD3DHeapType(GrafBufferUsageFlags bufferUsage)
+	{
+		D3D12_HEAP_TYPE d3dHeapType = D3D12_HEAP_TYPE_DEFAULT;
+		if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferSrc))
+			d3dHeapType = D3D12_HEAP_TYPE_UPLOAD;
+		if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferDst))
+			d3dHeapType = D3D12_HEAP_TYPE_READBACK;
+		return d3dHeapType;
+	}
+
+	D3D12_RESOURCE_STATES GrafUtilsDX12::GrafToD3DBufferInitialState(GrafBufferUsageFlags bufferUsage)
+	{
+		D3D12_RESOURCE_STATES d3dStates = D3D12_RESOURCE_STATE_COMMON;
+		if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferSrc))
+			d3dStates = D3D12_RESOURCE_STATE_GENERIC_READ;
+		if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferDst))
+			d3dStates = D3D12_RESOURCE_STATE_COPY_DEST;
+		if (bufferUsage & ur_uint(GrafBufferUsageFlag::VertexBuffer))
+			d3dStates = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		if (bufferUsage & ur_uint(GrafBufferUsageFlag::IndexBuffer))
+			d3dStates = D3D12_RESOURCE_STATE_INDEX_BUFFER;
+		if (bufferUsage & ur_uint(GrafBufferUsageFlag::ConstantBuffer))
+			d3dStates = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		if (bufferUsage & ur_uint(GrafBufferUsageFlag::StorageBuffer))
+			d3dStates = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		if (bufferUsage & ur_uint(GrafBufferUsageFlag::AccelerationStructure))
+			d3dStates = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
+		return d3dStates;
 	}
 
 	static const DXGI_FORMAT GrafToDXGIFormatLUT[ur_uint(GrafFormat::Count)] = {
