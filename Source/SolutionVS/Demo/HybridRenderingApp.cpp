@@ -10,7 +10,6 @@
 #include "Sys/Windows/WinInput.h"
 #include "Core/Math.h"
 #include "Graf/Vulkan/GrafSystemVulkan.h"
-#include "Graf/DX12/GrafSystemDX12.h"
 #include "Graf/GrafRenderer.h"
 #include "ImguiRender/ImguiRender.h"
 #include "GenericRender/GenericRender.h"
@@ -120,7 +119,7 @@ int HybridRenderingApp::Run()
 	do
 	{
 		// create GRAF system
-		std::unique_ptr<GrafSystem> grafSystem(new GrafSystemDX12(realm));
+		std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
 		res = grafSystem->Initialize(realm.GetCanvas());
 		if (Failed(res)) break;
 
