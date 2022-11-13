@@ -378,6 +378,16 @@ namespace UnlimRealms
 		// NOTE: support submission to different queue families
 		// currently everything's done on the graphics queue
 
+		std::vector<ID3D12DescriptorHeap*> d3dDescriptorHeaps;
+		d3dDescriptorHeaps.reserve(ur_array_size(descriptorPool));
+		for (auto& pool : descriptorPool)
+		{
+			for (auto& heap : pool->descriptorHeaps)
+			{
+				d3dDescriptorHeaps.push_back(heap->d3dDescriptorHeap.get());
+			}
+		}
+
 		if (this->graphicsQueue)
 		{
 			this->graphicsQueue->commandPoolsMutex.lock(); // lock pools list modification
@@ -389,9 +399,14 @@ namespace UnlimRealms
 			{
 				GrafCommandListDX12* grafCommandListDX12 = static_cast<GrafCommandListDX12*>(grafCommandList);
 				GrafDeviceDX12::CommandAllocator* grafCmdAllocator = grafCommandListDX12->GetCommandAllocator();
-				ID3D12CommandList* d3dCommandList = grafCommandListDX12->GetD3DCommandList();
+				ID3D12GraphicsCommandList1* d3dGraphicsCommandList = grafCommandListDX12->GetD3DCommandList();
+
+				// bind descriptor heaps
+				d3dGraphicsCommandList->SetDescriptorHeaps((UINT)d3dDescriptorHeaps.size(), &d3dDescriptorHeaps.front());
 				
-				this->graphicsQueue->d3dQueue->ExecuteCommandLists(1, &d3dCommandList);
+				// execute
+				ID3D12CommandList* d3dCommandLists[] = { d3dGraphicsCommandList };
+				this->graphicsQueue->d3dQueue->ExecuteCommandLists(1, d3dCommandLists);
 				
 				grafCommandListDX12->submitFenceValue = this->graphicsQueue->nextSubmitFenceValue;
 				grafCmdAllocator->submitFenceValue = this->graphicsQueue->nextSubmitFenceValue;
@@ -1406,12 +1421,13 @@ namespace UnlimRealms
 
 	Result GrafRenderTargetDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		return Result(Success);
 	}
 
 	Result GrafRenderTargetDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		GrafRenderTarget::Initialize(grafDevice, initParams);
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1608,12 +1624,13 @@ namespace UnlimRealms
 
 	Result GrafRenderPassDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		return Result(Success);
 	}
 
 	Result GrafRenderPassDX12::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		GrafRenderPass::Initialize(grafDevice, initParams);
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -284,7 +284,7 @@ namespace UnlimRealms
 
 		inline GrafDeviceDX12::CommandAllocator* GetCommandAllocator() const;
 
-		inline ID3D12CommandList* GetD3DCommandList() const;
+		inline ID3D12GraphicsCommandList1* GetD3DCommandList() const;
 
 	private:
 
