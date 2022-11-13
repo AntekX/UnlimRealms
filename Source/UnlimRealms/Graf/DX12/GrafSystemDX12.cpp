@@ -345,6 +345,8 @@ namespace UnlimRealms
 				this->Deinitialize();
 				return ResultError(Failure, std::string("GrafDeviceDX12: CreateDescriptorHeap failed with HRESULT = ") + HResultToString(hres));
 			}
+			heap->d3dHeapStartCpuHandle = heap->d3dDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+			heap->d3dHeapStartGpuHandle = heap->d3dDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 
 			std::unique_ptr<DescriptorPool> pool(new DescriptorPool());
 			pool->descriptorHeaps.push_back(std::move(heap));
@@ -516,8 +518,8 @@ namespace UnlimRealms
 			return handle; // out of memory
 
 		handle.heap = heap;
-		handle.cpuHandle.ptr = heap->d3dDescriptorHeap->GetCPUDescriptorHandleForHeapStart().ptr + SIZE_T(handle.allocation.Offset);
-		handle.gpuHandle.ptr = heap->d3dDescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr + UINT64(handle.allocation.Offset);
+		handle.cpuHandle.ptr = heap->d3dHeapStartCpuHandle.ptr + SIZE_T(handle.allocation.Offset * heap->descriptorIncrementSize);
+		handle.gpuHandle.ptr = heap->d3dHeapStartGpuHandle.ptr + UINT64(handle.allocation.Offset * heap->descriptorIncrementSize);
 
 		return handle;
 	}

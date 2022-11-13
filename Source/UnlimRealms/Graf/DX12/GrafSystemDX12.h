@@ -169,6 +169,8 @@ namespace UnlimRealms
 		{
 			D3D12_DESCRIPTOR_HEAP_DESC d3dDesc;
 			shared_ref<ID3D12DescriptorHeap> d3dDescriptorHeap;
+			D3D12_CPU_DESCRIPTOR_HANDLE d3dHeapStartCpuHandle;
+			D3D12_GPU_DESCRIPTOR_HANDLE d3dHeapStartGpuHandle;
 			ur_uint descriptorIncrementSize;
 			LinearAllocator allocator;
 		};
