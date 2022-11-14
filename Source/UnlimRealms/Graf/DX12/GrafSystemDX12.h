@@ -84,7 +84,7 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	class UR_DECL GrafDescriptorHeapHandleDX12
+	class UR_DECL GrafDescriptorHandleDX12
 	{
 	public:
 
@@ -129,9 +129,9 @@ namespace UnlimRealms
 
 		inline ID3D12CommandQueue* GetD3DTransferCommandQueue() const;
 
-		GrafDescriptorHeapHandleDX12 AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count);
+		GrafDescriptorHandleDX12 AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count);
 
-		void ReleaseDescriptorRange(const GrafDescriptorHeapHandleDX12& range);
+		void ReleaseDescriptorRange(const GrafDescriptorHandleDX12& range);
 
 	private:
 
@@ -404,7 +404,7 @@ namespace UnlimRealms
 
 		Result CreateD3DImageView();
 
-		GrafDescriptorHeapHandleDX12 rtvDescriptorHandle;
+		GrafDescriptorHandleDX12 rtvDescriptorHandle;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -447,6 +447,8 @@ namespace UnlimRealms
 	protected:
 
 		Result Deinitialize();
+
+		GrafDescriptorHandleDX12 samplerDescriptorHandle;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -463,6 +465,9 @@ namespace UnlimRealms
 	private:
 
 		Result Deinitialize();
+
+		std::unique_ptr<ur_byte[]> byteCodeBuffer;
+		ur_size byteCodeSize;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -635,6 +640,8 @@ namespace UnlimRealms
 		static inline D3D12_RTV_DIMENSION GrafToD3DRTVDimenstion(GrafImageType imageType);
 		static inline D3D12_HEAP_TYPE GrafToD3DHeapType(GrafBufferUsageFlags bufferUsage);
 		static inline D3D12_RESOURCE_STATES GrafToD3DBufferInitialState(GrafBufferUsageFlags bufferUsage);
+		static inline D3D12_FILTER GrafToD3DFilter(GrafFilterType filterMin, GrafFilterType filterMax, GrafFilterType filterMip);
+		static inline D3D12_TEXTURE_ADDRESS_MODE GrafToD3DAddressMode(GrafAddressMode addressMode);
 		static inline DXGI_FORMAT GrafToDXGIFormat(GrafFormat grafFormat);
 		static inline GrafFormat DXGIToGrafFormat(DXGI_FORMAT dxgiFormat);
 	};

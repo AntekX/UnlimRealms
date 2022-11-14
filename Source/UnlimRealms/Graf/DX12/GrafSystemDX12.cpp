@@ -516,9 +516,9 @@ namespace UnlimRealms
 		return ur_null;
 	}
 
-	GrafDescriptorHeapHandleDX12 GrafDeviceDX12::AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count)
+	GrafDescriptorHandleDX12 GrafDeviceDX12::AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count)
 	{
-		GrafDescriptorHeapHandleDX12 handle = {};
+		GrafDescriptorHandleDX12 handle = {};
 
 		if (type >= D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES)
 			return handle; // invalid type
@@ -539,7 +539,7 @@ namespace UnlimRealms
 		return handle;
 	}
 
-	void GrafDeviceDX12::ReleaseDescriptorRange(const GrafDescriptorHeapHandleDX12& range)
+	void GrafDeviceDX12::ReleaseDescriptorRange(const GrafDescriptorHandleDX12& range)
 	{
 		// TODO:
 		// currently used LinearAllocator can only grow, proper allocator must be implemented/used
@@ -1421,12 +1421,58 @@ namespace UnlimRealms
 
 	Result GrafSamplerDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+
+		if (this->samplerDescriptorHandle.IsValid())
+		{
+			grafDeviceDX12->ReleaseDescriptorRange(this->samplerDescriptorHandle);
+		}
+
+		return Result(Success);
 	}
 
-	Result GrafSamplerDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
+	Result GrafSamplerDX12::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		GrafSampler::Initialize(grafDevice, initParams);
+
+		// validate device
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafSamplerDX12: failed to initialize, invalid GrafDevice"));
+		}
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		// create sampler
+
+		this->samplerDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 1);
+		if (!this->samplerDescriptorHandle.IsValid())
+		{
+			this->Deinitialize();
+			return ResultError(InvalidArgs, std::string("GrafSamplerDX12: failed to allocate sampler descriptor"));
+		}
+
+		D3D12_SAMPLER_DESC d3dSamplerDesc = {};
+		d3dSamplerDesc.Filter = GrafUtilsDX12::GrafToD3DFilter(initParams.SamplerDesc.FilterMin, initParams.SamplerDesc.FilterMag, initParams.SamplerDesc.FilterMip);
+		d3dSamplerDesc.AddressU = GrafUtilsDX12::GrafToD3DAddressMode(initParams.SamplerDesc.AddressModeU);
+		d3dSamplerDesc.AddressV = GrafUtilsDX12::GrafToD3DAddressMode(initParams.SamplerDesc.AddressModeV);
+		d3dSamplerDesc.AddressW = GrafUtilsDX12::GrafToD3DAddressMode(initParams.SamplerDesc.AddressModeW);
+		d3dSamplerDesc.MipLODBias = (FLOAT)initParams.SamplerDesc.MipLodBias;
+		d3dSamplerDesc.MinLOD = (FLOAT)initParams.SamplerDesc.MipLodMin;
+		d3dSamplerDesc.MaxLOD = (FLOAT)initParams.SamplerDesc.MipLodMax;
+		d3dSamplerDesc.MaxAnisotropy = (UINT)initParams.SamplerDesc.AnisoFilterMax;
+		d3dSamplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+		d3dSamplerDesc.BorderColor[0] = (FLOAT)0.0f;
+		d3dSamplerDesc.BorderColor[1] = (FLOAT)0.0f;
+		d3dSamplerDesc.BorderColor[2] = (FLOAT)0.0f;
+		d3dSamplerDesc.BorderColor[3] = (FLOAT)0.0f;
+
+		d3dDevice->CreateSampler(&d3dSamplerDesc, this->samplerDescriptorHandle.GetD3DHandleCPU());
+
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1448,7 +1494,30 @@ namespace UnlimRealms
 
 	Result GrafShaderDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		if (nullptr == initParams.ByteCode || 0 == initParams.ByteCodeSize)
+		{
+			return ResultError(InvalidArgs, std::string("GrafShaderDX12: failed to initialize, invalid byte code"));
+		}
+
+		GrafShader::Initialize(grafDevice, initParams);
+
+		// validate device
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafShaderDX12: failed to initialize, invalid GrafDevice"));
+		}
+
+		// store byte code locally
+
+		this->byteCodeSize = initParams.ByteCodeSize;
+		this->byteCodeBuffer.reset(new ur_byte[this->byteCodeSize]);
+		memcpy(this->byteCodeBuffer.get(), initParams.ByteCode, this->byteCodeSize);
+
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1835,6 +1904,33 @@ namespace UnlimRealms
 		if (bufferUsage & ur_uint(GrafBufferUsageFlag::AccelerationStructure))
 			d3dStates = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
 		return d3dStates;
+	}
+
+	D3D12_FILTER GrafUtilsDX12::GrafToD3DFilter(GrafFilterType filterMin, GrafFilterType filterMax, GrafFilterType filterMip)
+	{
+		if (GrafFilterType::Nearest == filterMin	&& GrafFilterType::Nearest == filterMax		&& GrafFilterType::Nearest == filterMip)	return D3D12_FILTER_MIN_MAG_MIP_POINT;
+		if (GrafFilterType::Nearest == filterMin	&& GrafFilterType::Nearest == filterMax		&& GrafFilterType::Linear == filterMip)		return D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR;
+		if (GrafFilterType::Nearest == filterMin	&& GrafFilterType::Linear == filterMax		&& GrafFilterType::Nearest == filterMip)	return D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
+		if (GrafFilterType::Nearest == filterMin	&& GrafFilterType::Linear == filterMax		&& GrafFilterType::Linear == filterMip)		return D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR;
+		if (GrafFilterType::Linear == filterMin		&& GrafFilterType::Nearest == filterMax		&& GrafFilterType::Nearest == filterMip)	return D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+		if (GrafFilterType::Linear == filterMin		&& GrafFilterType::Nearest == filterMax		&& GrafFilterType::Linear == filterMip)		return D3D12_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
+		if (GrafFilterType::Linear == filterMin		&& GrafFilterType::Linear == filterMax		&& GrafFilterType::Nearest == filterMip)	return D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+		if (GrafFilterType::Linear == filterMin		&& GrafFilterType::Linear == filterMax		&& GrafFilterType::Linear == filterMip)		return D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		return D3D12_FILTER(0);
+	}
+
+	D3D12_TEXTURE_ADDRESS_MODE GrafUtilsDX12::GrafToD3DAddressMode(GrafAddressMode addressMode)
+	{
+		D3D12_TEXTURE_ADDRESS_MODE d3dAddressMode = D3D12_TEXTURE_ADDRESS_MODE(0);
+		switch (addressMode)
+		{
+		case GrafAddressMode::Wrap: d3dAddressMode = D3D12_TEXTURE_ADDRESS_MODE_WRAP; break;
+		case GrafAddressMode::Mirror: d3dAddressMode = D3D12_TEXTURE_ADDRESS_MODE_MIRROR; break;
+		case GrafAddressMode::Clamp: d3dAddressMode = D3D12_TEXTURE_ADDRESS_MODE_CLAMP; break;
+		case GrafAddressMode::Border: d3dAddressMode = D3D12_TEXTURE_ADDRESS_MODE_BORDER; break;
+		case GrafAddressMode::MirrorOnce: d3dAddressMode = D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE; break;
+		}
+		return d3dAddressMode;
 	}
 
 	static const DXGI_FORMAT GrafToDXGIFormatLUT[ur_uint(GrafFormat::Count)] = {
