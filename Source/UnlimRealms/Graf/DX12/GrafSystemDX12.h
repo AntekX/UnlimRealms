@@ -90,6 +90,8 @@ namespace UnlimRealms
 
 		inline ur_bool IsValid() const;
 
+		inline const Allocation& GetAllocation();
+
 		inline D3D12_CPU_DESCRIPTOR_HANDLE GetD3DHandleCPU() const;
 
 		inline D3D12_GPU_DESCRIPTOR_HANDLE GetD3DHandleGPU() const;
@@ -555,9 +557,16 @@ namespace UnlimRealms
 
 		virtual Result SetAccelerationStructure(ur_uint bindingIdx, GrafAccelerationStructure* accelerationStructure);
 
+		inline const D3D12_ROOT_PARAMETER* GetD3DRootParameter() const;
+
 	private:
 
 		Result Deinitialize();
+
+		D3D12_ROOT_PARAMETER d3dRootParameter;
+		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDescriptorRanges;
+		GrafDescriptorHandleDX12 srvUavCbvDescriptorRangeHandle;
+		GrafDescriptorHandleDX12 samplerDescriptorRangeHandle;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -642,6 +651,8 @@ namespace UnlimRealms
 		static inline D3D12_RESOURCE_STATES GrafToD3DBufferInitialState(GrafBufferUsageFlags bufferUsage);
 		static inline D3D12_FILTER GrafToD3DFilter(GrafFilterType filterMin, GrafFilterType filterMax, GrafFilterType filterMip);
 		static inline D3D12_TEXTURE_ADDRESS_MODE GrafToD3DAddressMode(GrafAddressMode addressMode);
+		static inline D3D12_DESCRIPTOR_RANGE_TYPE GrafToD3DDescriptorType(GrafDescriptorType descriptorType);
+		static inline D3D12_SHADER_VISIBILITY GrafToD3DShaderVisibility(GrafShaderStageFlags sgaderStageFlags);
 		static inline DXGI_FORMAT GrafToDXGIFormat(GrafFormat grafFormat);
 		static inline GrafFormat DXGIToGrafFormat(DXGI_FORMAT dxgiFormat);
 	};

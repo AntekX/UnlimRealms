@@ -697,7 +697,7 @@ namespace UnlimRealms
 	{
 		GrafDeviceEntity::Initialize(grafDevice);
 	
-		// keep local copy of layout descriptopn
+		// keep local copy of layout description
 		this->descriptorRanges.resize(initParams.LayoutDesc.DescriptorRangeCount);
 		memcpy(this->descriptorRanges.data(), initParams.LayoutDesc.DescriptorRanges, this->descriptorRanges.size() * sizeof(GrafDescriptorRangeDesc));
 		this->layoutDesc = initParams.LayoutDesc;

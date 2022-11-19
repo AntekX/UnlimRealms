@@ -1557,12 +1557,16 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableLayoutDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		return Result(Success);
 	}
 
 	Result GrafDescriptorTableLayoutDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		GrafDescriptorTableLayout::Initialize(grafDevice, initParams);
+
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1570,6 +1574,7 @@ namespace UnlimRealms
 	GrafDescriptorTableDX12::GrafDescriptorTableDX12(GrafSystem &grafSystem) :
 		GrafDescriptorTable(grafSystem)
 	{
+		this->d3dRootParameter = {};
 	}
 
 	GrafDescriptorTableDX12::~GrafDescriptorTableDX12()
@@ -1579,12 +1584,114 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+
+		if (this->srvUavCbvDescriptorRangeHandle.IsValid())
+		{
+			grafDeviceDX12->ReleaseDescriptorRange(this->srvUavCbvDescriptorRangeHandle);
+		}
+		if (this->samplerDescriptorRangeHandle.IsValid())
+		{
+			grafDeviceDX12->ReleaseDescriptorRange(this->samplerDescriptorRangeHandle);
+		}
+
+		this->d3dRootParameter = {};
+		this->d3dDescriptorRanges.clear();
+
+		return Result(Success);
 	}
 
 	Result GrafDescriptorTableDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		GrafDescriptorTable::Initialize(grafDevice, initParams);
+
+		if (nullptr == this->GetLayout())
+		{
+			return ResultError(InvalidArgs, std::string("GrafDescriptorTableDX12: failed to initialize, invalid layout"));
+		}
+
+		// validate device
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafDescriptorTableDX12: failed to initialize, invalid GrafDevice"));
+		}
+
+		// init D3D ranges & count descriptors per heap type
+
+		const GrafDescriptorTableLayoutDesc& grafTableLayoutDesc = this->GetLayout()->GetLayoutDesc();
+		this->d3dDescriptorRanges.resize(grafTableLayoutDesc.DescriptorRangeCount);
+
+		ur_uint srvUavCbvDescriptorCount = 0;
+		ur_uint samplerDescriptorCount = 0;
+		for (ur_uint layoutRangeIdx = 0; layoutRangeIdx < grafTableLayoutDesc.DescriptorRangeCount; ++layoutRangeIdx)
+		{
+			const GrafDescriptorRangeDesc& grafDescriptorRange = grafTableLayoutDesc.DescriptorRanges[layoutRangeIdx];
+			D3D12_DESCRIPTOR_RANGE d3dDescriptorRange = this->d3dDescriptorRanges[layoutRangeIdx];
+			d3dDescriptorRange.RangeType = GrafUtilsDX12::GrafToD3DDescriptorType(grafDescriptorRange.Type);
+			d3dDescriptorRange.BaseShaderRegister = (UINT)grafDescriptorRange.BindingOffset;
+			d3dDescriptorRange.NumDescriptors = (UINT)grafDescriptorRange.BindingCount;
+			d3dDescriptorRange.RegisterSpace = 0;
+			d3dDescriptorRange.OffsetInDescriptorsFromTableStart = 0;
+
+			if (GrafDescriptorType::ConstantBuffer == grafDescriptorRange.Type ||
+				GrafDescriptorType::Texture == grafDescriptorRange.Type || GrafDescriptorType::Buffer == grafDescriptorRange.Type ||
+				GrafDescriptorType::RWTexture == grafDescriptorRange.Type || GrafDescriptorType::RWBuffer == grafDescriptorRange.Type)
+			{
+				d3dDescriptorRange.OffsetInDescriptorsFromTableStart = srvUavCbvDescriptorCount;
+				srvUavCbvDescriptorCount += grafDescriptorRange.BindingCount;
+			}
+			if (GrafDescriptorType::Sampler == grafDescriptorRange.Type)
+			{
+				d3dDescriptorRange.OffsetInDescriptorsFromTableStart = samplerDescriptorCount;
+				samplerDescriptorCount += grafDescriptorRange.BindingCount;
+			}
+		}
+
+		// allocate ranges in descriptor heap(s)
+
+		if (srvUavCbvDescriptorCount > 0)
+		{
+			this->srvUavCbvDescriptorRangeHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, srvUavCbvDescriptorCount);
+			if (!this->srvUavCbvDescriptorRangeHandle.IsValid())
+			{
+				this->Deinitialize();
+				return ResultError(InvalidArgs, std::string("GrafDescriptorTableDX12: failed to allocate SRV/UAV/CBV descriptor range"));
+			}
+		}
+		if (samplerDescriptorCount > 0)
+		{
+			this->samplerDescriptorRangeHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, samplerDescriptorCount);
+			if (!this->samplerDescriptorRangeHandle.IsValid())
+			{
+				this->Deinitialize();
+				return ResultError(InvalidArgs, std::string("GrafDescriptorTableDX12: failed to allocate sampler descriptor range"));
+			}
+		}
+
+		// init D3D root parameter
+
+		this->d3dRootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		this->d3dRootParameter.ShaderVisibility = GrafUtilsDX12::GrafToD3DShaderVisibility(grafTableLayoutDesc.ShaderStageVisibility);
+		this->d3dRootParameter.DescriptorTable.NumDescriptorRanges = (UINT)this->d3dDescriptorRanges.size();
+		this->d3dRootParameter.DescriptorTable.pDescriptorRanges = &this->d3dDescriptorRanges.front();
+		for (D3D12_DESCRIPTOR_RANGE& d3dDescriptorRange : this->d3dDescriptorRanges)
+		{
+			// ranges share descriptor heaps, offset must be updated correspondingly
+			if (D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER == d3dDescriptorRange.RangeType)
+			{
+				d3dDescriptorRange.OffsetInDescriptorsFromTableStart += (UINT)this->samplerDescriptorRangeHandle.GetAllocation().Offset;
+			}
+			else // SRV/UAV/CBV
+			{
+				d3dDescriptorRange.OffsetInDescriptorsFromTableStart += (UINT)this->srvUavCbvDescriptorRangeHandle.GetAllocation().Offset;
+			}
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafDescriptorTableDX12::SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_size bufferOfs, ur_size bufferRange)
@@ -1931,6 +2038,40 @@ namespace UnlimRealms
 		case GrafAddressMode::MirrorOnce: d3dAddressMode = D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE; break;
 		}
 		return d3dAddressMode;
+	}
+
+	D3D12_DESCRIPTOR_RANGE_TYPE GrafUtilsDX12::GrafToD3DDescriptorType(GrafDescriptorType descriptorType)
+	{
+		D3D12_DESCRIPTOR_RANGE_TYPE d3dDescriptorType = D3D12_DESCRIPTOR_RANGE_TYPE(-1);
+		switch (descriptorType)
+		{
+		case GrafDescriptorType::ConstantBuffer: d3dDescriptorType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV; break;
+		case GrafDescriptorType::Sampler: d3dDescriptorType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER; break;
+		case GrafDescriptorType::Texture: d3dDescriptorType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; break;
+		case GrafDescriptorType::Buffer: d3dDescriptorType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; break;
+		case GrafDescriptorType::RWTexture: d3dDescriptorType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV; break;
+		case GrafDescriptorType::RWBuffer: d3dDescriptorType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV; break;
+		case GrafDescriptorType::AccelerationStructure: d3dDescriptorType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; break;
+		case GrafDescriptorType::TextureDynamicArray: d3dDescriptorType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; break;
+		case GrafDescriptorType::BufferDynamicArray: d3dDescriptorType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; break;
+		}
+		return d3dDescriptorType;
+	}
+
+	D3D12_SHADER_VISIBILITY GrafUtilsDX12::GrafToD3DShaderVisibility(GrafShaderStageFlags sgaderStageFlags)
+	{
+		D3D12_SHADER_VISIBILITY d3dShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		switch (GrafShaderStageFlag(sgaderStageFlags))
+		{
+			case GrafShaderStageFlag::Vertex: d3dShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; break;
+			//case GrafShaderStageFlag::Hull: d3dShaderVisibility = D3D12_SHADER_VISIBILITY_HULL; break;
+			//case GrafShaderStageFlag::Domain: d3dShaderVisibility = D3D12_SHADER_VISIBILITY_DOMAIN; break;
+			//case GrafShaderStageFlag::Geometry: d3dShaderVisibility = D3D12_SHADER_VISIBILITY_GEOMETRY; break;
+			case GrafShaderStageFlag::Pixel: d3dShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; break;
+			//case GrafShaderStageFlag::Amplification: d3dShaderVisibility = D3D12_SHADER_VISIBILITY_AMPLIFICATION; break;
+			//case GrafShaderStageFlag::Mesh: d3dShaderVisibility = D3D12_SHADER_VISIBILITY_MESH; break;
+		}
+		return d3dShaderVisibility;
 	}
 
 	static const DXGI_FORMAT GrafToDXGIFormatLUT[ur_uint(GrafFormat::Count)] = {

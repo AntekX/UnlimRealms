@@ -25,6 +25,11 @@ namespace UnlimRealms
 		return (this->allocation.Size > 0);
 	}
 
+	inline const Allocation& GrafDescriptorHandleDX12::GetAllocation()
+	{
+		return this->allocation;
+	}
+
 	inline D3D12_CPU_DESCRIPTOR_HANDLE GrafDescriptorHandleDX12::GetD3DHandleCPU() const
 	{
 		return this->cpuHandle;
@@ -83,6 +88,11 @@ namespace UnlimRealms
 	inline ID3D12Resource* GrafBufferDX12::GetD3DResource() const
 	{
 		return this->d3dResource.get();
+	}
+
+	inline const D3D12_ROOT_PARAMETER* GrafDescriptorTableDX12::GetD3DRootParameter() const
+	{
+		return &this->d3dRootParameter;
 	}
 
 	inline GrafBuffer* GrafAccelerationStructureDX12::GetScratchBuffer() const
