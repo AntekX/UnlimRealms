@@ -838,12 +838,22 @@ namespace UnlimRealms
 
 	Result GrafCommandListDX12::BindVertexBuffer(GrafBuffer* grafVertexBuffer, ur_uint bindingIdx, ur_size bufferOffset)
 	{
-		return Result(NotImplemented);
+		if (ur_null == grafVertexBuffer)
+			return Result(InvalidArgs);
+
+		this->GetD3DCommandList()->IASetVertexBuffers(0, 1, static_cast<GrafBufferDX12*>(grafVertexBuffer)->GetD3DVertexBufferView());
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::BindIndexBuffer(GrafBuffer* grafIndexBuffer, GrafIndexType indexType, ur_size bufferOffset)
 	{
-		return Result(NotImplemented);
+		if (ur_null == grafIndexBuffer)
+			return Result(InvalidArgs);
+
+		this->GetD3DCommandList()->IASetIndexBuffer(static_cast<GrafBufferDX12*>(grafIndexBuffer)->GetD3DIndexBufferView());
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance)
@@ -1331,6 +1341,8 @@ namespace UnlimRealms
 	GrafBufferDX12::GrafBufferDX12(GrafSystem &grafSystem) :
 		GrafBuffer(grafSystem)
 	{
+		this->d3dVBView = {};
+		this->d3dIBView = {};
 	}
 
 	GrafBufferDX12::~GrafBufferDX12()
@@ -1340,7 +1352,25 @@ namespace UnlimRealms
 
 	Result GrafBufferDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+
+		if (this->cbvDescriptorHandle.IsValid())
+		{
+			grafDeviceDX12->ReleaseDescriptorRange(this->cbvDescriptorHandle);
+		}
+		if (this->srvDescriptorHandle.IsValid())
+		{
+			grafDeviceDX12->ReleaseDescriptorRange(this->srvDescriptorHandle);
+		}
+		if (this->uavDescriptorHandle.IsValid())
+		{
+			grafDeviceDX12->ReleaseDescriptorRange(this->uavDescriptorHandle);
+		}
+
+		this->d3dVBView = {};
+		this->d3dIBView = {};
+
+		return Result(Success);
 	}
 
 	Result GrafBufferDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
@@ -1387,6 +1417,91 @@ namespace UnlimRealms
 		if (FAILED(hres))
 		{
 			return ResultError(Failure, std::string("GrafBufferDX12: CreateCommittedResource failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		// create CBV
+
+		if (ur_uint(GrafBufferUsageFlag::ConstantBuffer) & initParams.BufferDesc.Usage)
+		{
+			this->cbvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+			if (!this->cbvDescriptorHandle.IsValid())
+			{
+				this->Deinitialize();
+				return ResultError(InvalidArgs, std::string("GrafBufferDX12: failed to allocate CBV descriptor"));
+			}
+
+			D3D12_CONSTANT_BUFFER_VIEW_DESC d3dCbvDesc = {};
+			d3dCbvDesc.BufferLocation = this->d3dResource->GetGPUVirtualAddress();
+			d3dCbvDesc.SizeInBytes = (UINT)initParams.BufferDesc.SizeInBytes;
+
+			grafDeviceDX12->GetD3DDevice()->CreateConstantBufferView(&d3dCbvDesc, this->cbvDescriptorHandle.GetD3DHandleCPU());
+		}
+
+		// create SRV
+
+		if (ur_uint(GrafBufferUsageFlag::StorageBuffer) & initParams.BufferDesc.Usage)
+		{
+			this->srvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+			if (!this->srvDescriptorHandle.IsValid())
+			{
+				this->Deinitialize();
+				return ResultError(InvalidArgs, std::string("GrafBufferDX12: failed to allocate SRV descriptor"));
+			}
+
+			D3D12_SHADER_RESOURCE_VIEW_DESC d3dSrvDesc = {};
+			d3dSrvDesc.Format = DXGI_FORMAT_R32_UINT;
+			d3dSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+			d3dSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			d3dSrvDesc.Buffer.FirstElement = 0;
+			d3dSrvDesc.Buffer.NumElements = (UINT)(initParams.BufferDesc.SizeInBytes / sizeof(ur_uint32));
+			d3dSrvDesc.Buffer.StructureByteStride = 0;
+			d3dSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+
+			grafDeviceDX12->GetD3DDevice()->CreateShaderResourceView(this->d3dResource, &d3dSrvDesc, this->srvDescriptorHandle.GetD3DHandleCPU());
+		}
+
+		// create UAV
+
+		if (ur_uint(GrafBufferUsageFlag::StorageBuffer) & initParams.BufferDesc.Usage)
+		{
+			this->uavDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+			if (!this->uavDescriptorHandle.IsValid())
+			{
+				this->Deinitialize();
+				return ResultError(InvalidArgs, std::string("GrafBufferDX12: failed to allocate UAV descriptor"));
+			}
+
+			D3D12_UNORDERED_ACCESS_VIEW_DESC d3dUavDesc = {};
+			d3dUavDesc.Format = DXGI_FORMAT_R32_UINT;
+			d3dUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+			d3dUavDesc.Buffer.FirstElement = 0;
+			d3dUavDesc.Buffer.NumElements = (UINT)(initParams.BufferDesc.SizeInBytes / sizeof(ur_uint32));
+			d3dUavDesc.Buffer.StructureByteStride = 0;
+			d3dUavDesc.Buffer.CounterOffsetInBytes = 0;
+			d3dUavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+
+			grafDeviceDX12->GetD3DDevice()->CreateUnorderedAccessView(this->d3dResource, nullptr, &d3dUavDesc, this->uavDescriptorHandle.GetD3DHandleCPU());
+		}
+
+		// pre-init VB view desc
+
+		if (ur_uint(GrafBufferUsageFlag::VertexBuffer) & initParams.BufferDesc.Usage)
+		{
+			this->d3dVBView.BufferLocation = this->d3dResource->GetGPUVirtualAddress();
+			this->d3dVBView.SizeInBytes = (UINT)initParams.BufferDesc.SizeInBytes;
+			this->d3dVBView.StrideInBytes = (UINT)initParams.BufferDesc.ElementSize;
+		}
+
+		// pre-init IB view desc
+
+		if (ur_uint(GrafBufferUsageFlag::IndexBuffer) & initParams.BufferDesc.Usage)
+		{
+			this->d3dIBView.BufferLocation = this->d3dResource->GetGPUVirtualAddress();
+			this->d3dIBView.SizeInBytes = (UINT)initParams.BufferDesc.SizeInBytes;
+			this->d3dIBView.Format = (
+				initParams.BufferDesc.ElementSize == 32 ? DXGI_FORMAT_R32_UINT :
+				initParams.BufferDesc.ElementSize == 16 ? DXGI_FORMAT_R16_UINT :
+				DXGI_FORMAT_UNKNOWN);
 		}
 
 		return Result(Success);
@@ -1697,6 +1812,12 @@ namespace UnlimRealms
 	Result GrafDescriptorTableDX12::SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_size bufferOfs, ur_size bufferRange)
 	{
 		return Result(NotImplemented);
+
+		ID3D12Device5* d3dDevice = static_cast<GrafDeviceDX12*>(this->GetGrafDevice())->GetD3DDevice();
+		
+		D3D12_CPU_DESCRIPTOR_HANDLE d3dDescriptorHandleSrc = static_cast<GrafBufferDX12*>(buffer)->GetSRVDescriptorHandle().GetD3DHandleCPU();
+		//D3D12_CPU_DESCRIPTOR_HANDLE d3dDescriptorHandleDst = this->srvUavCbvDescriptorRangeHandle.GetD3DHandleCPU();
+		//d3dDevice->CopyDescriptorsSimple(1, d3dDescriptorHandleDst, d3dDescriptorHandleSrc, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	}
 
 	Result GrafDescriptorTableDX12::SetSampledImage(ur_uint bindingIdx, GrafImage* image, GrafSampler* sampler)

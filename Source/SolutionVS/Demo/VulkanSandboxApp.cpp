@@ -176,6 +176,7 @@ int VulkanSandboxApp::Run()
 		grafVBSampleParams.BufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer;
 		grafVBSampleParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 		grafVBSampleParams.BufferDesc.SizeInBytes = sizeof(verticesSample);
+		grafVBSampleParams.BufferDesc.ElementSize = sizeof(VertexSample);
 		grafRes = grafVBSample->Initialize(grafDevice, grafVBSampleParams);
 		if (Failed(grafRes)) return;
 		grafRes = grafVBSample->Write((ur_byte*)verticesSample);

@@ -428,11 +428,29 @@ namespace UnlimRealms
 
 		inline ID3D12Resource* GetD3DResource() const;
 
+		inline const GrafDescriptorHandleDX12& GetCBVDescriptorHandle() const;
+
+		inline const GrafDescriptorHandleDX12& GetSRVDescriptorHandle() const;
+
+		inline const GrafDescriptorHandleDX12& GetUAVDescriptorHandle() const;
+
+		inline const D3D12_VERTEX_BUFFER_VIEW* GetD3DVertexBufferView() const;
+
+		inline const D3D12_INDEX_BUFFER_VIEW* GetD3DIndexBufferView() const;
+
 	private:
 
 		Result Deinitialize();
 
 		shared_ref<ID3D12Resource> d3dResource;
+		GrafDescriptorHandleDX12 cbvDescriptorHandle;
+		GrafDescriptorHandleDX12 srvDescriptorHandle;
+		GrafDescriptorHandleDX12 uavDescriptorHandle;
+		union
+		{
+			D3D12_VERTEX_BUFFER_VIEW d3dVBView;
+			D3D12_INDEX_BUFFER_VIEW d3dIBView;
+		};
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

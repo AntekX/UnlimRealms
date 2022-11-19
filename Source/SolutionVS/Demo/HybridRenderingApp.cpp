@@ -543,6 +543,7 @@ int HybridRenderingApp::Run()
 					ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 				VBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 				VBParams.BufferDesc.SizeInBytes = verticesCount * vertexStride;
+				VBParams.BufferDesc.ElementSize = vertexStride;
 
 				grafSystem->CreateBuffer(this->vertexBuffer);
 				this->vertexBuffer->Initialize(grafDevice, VBParams);
@@ -560,6 +561,7 @@ int HybridRenderingApp::Run()
 					ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 				IBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 				IBParams.BufferDesc.SizeInBytes = indicesCount * indexStride;
+				IBParams.BufferDesc.ElementSize = indexStride;
 
 				grafSystem->CreateBuffer(this->indexBuffer);
 				this->indexBuffer->Initialize(grafDevice, IBParams);
@@ -967,7 +969,7 @@ int HybridRenderingApp::Run()
 
 			static const ur_size InstanceCountMax = 1024 * 4;
 
-			GrafBuffer::InitParams instanceBufferParams;
+			GrafBuffer::InitParams instanceBufferParams = {};
 			instanceBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferDst) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			instanceBufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
 			instanceBufferParams.BufferDesc.SizeInBytes = InstanceCountMax * sizeof(Instance);
@@ -1300,7 +1302,7 @@ int HybridRenderingApp::Run()
 
 				ur_size sgHandleSize = grafDeviceDesc->RayTracing.ShaderGroupHandleSize;
 				ur_size shaderBufferSize = raytracePipelineParams.ShaderGroupCount * sgHandleSize;
-				GrafBuffer::InitParams shaderBufferParams;
+				GrafBuffer::InitParams shaderBufferParams = {};
 				shaderBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress) | ur_uint(GrafBufferUsageFlag::TransferSrc);
 				shaderBufferParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 				shaderBufferParams.BufferDesc.SizeInBytes = shaderBufferSize;

@@ -90,6 +90,31 @@ namespace UnlimRealms
 		return this->d3dResource.get();
 	}
 
+	inline const GrafDescriptorHandleDX12& GrafBufferDX12::GetCBVDescriptorHandle() const
+	{
+		return this->cbvDescriptorHandle;
+	}
+
+	inline const GrafDescriptorHandleDX12& GrafBufferDX12::GetSRVDescriptorHandle() const
+	{
+		return this->srvDescriptorHandle;
+	}
+
+	inline const GrafDescriptorHandleDX12& GrafBufferDX12::GetUAVDescriptorHandle() const
+	{
+		return this->uavDescriptorHandle;
+	}
+
+	inline const D3D12_VERTEX_BUFFER_VIEW* GrafBufferDX12::GetD3DVertexBufferView() const
+	{
+		return &this->d3dVBView;
+	}
+
+	inline const D3D12_INDEX_BUFFER_VIEW* GrafBufferDX12::GetD3DIndexBufferView() const
+	{
+		return &this->d3dIBView;
+	}
+
 	inline const D3D12_ROOT_PARAMETER* GrafDescriptorTableDX12::GetD3DRootParameter() const
 	{
 		return &this->d3dRootParameter;

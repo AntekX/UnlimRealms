@@ -485,6 +485,7 @@ int RayTracingSandboxApp::Run()
 			VBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			VBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			VBParams.BufferDesc.SizeInBytes = VertexCountMax * sizeof(VertexSample);
+			VBParams.BufferDesc.ElementSize = sizeof(VertexSample);
 
 			grafSystem->CreateBuffer(this->vertexBuffer);
 			this->vertexBuffer->Initialize(grafDevice, VBParams);
@@ -496,6 +497,7 @@ int RayTracingSandboxApp::Run()
 			IBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			IBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			IBParams.BufferDesc.SizeInBytes = IndexCountMax * sizeof(IndexSample);
+			IBParams.BufferDesc.ElementSize = sizeof(IndexSample);
 
 			grafSystem->CreateBuffer(this->indexBuffer);
 			this->indexBuffer->Initialize(grafDevice, IBParams);
@@ -503,7 +505,7 @@ int RayTracingSandboxApp::Run()
 
 			// initialize common mesh description buffer
 
-			GrafBuffer::InitParams MBParams;
+			GrafBuffer::InitParams MBParams = {};
 			MBParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			MBParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			MBParams.BufferDesc.SizeInBytes = MeshCountMax * sizeof(MeshDescSample);
@@ -597,7 +599,7 @@ int RayTracingSandboxApp::Run()
 
 			// initialize common instance buffer for TLAS
 
-			GrafBuffer::InitParams instanceBufferParams;
+			GrafBuffer::InitParams instanceBufferParams = {};
 			instanceBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress);
 			instanceBufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
 			instanceBufferParams.BufferDesc.SizeInBytes = InstanceCountMax * sizeof(GrafAccelerationStructureInstance);
@@ -708,7 +710,7 @@ int RayTracingSandboxApp::Run()
 
 			ur_size shaderGroupHandleSize = grafDeviceDesc->RayTracing.ShaderGroupHandleSize;
 			ur_size shaderBufferSize = pipelineParams.ShaderGroupCount * shaderGroupHandleSize;
-			GrafBuffer::InitParams shaderBufferParams;
+			GrafBuffer::InitParams shaderBufferParams = {};
 			shaderBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress) | ur_uint(GrafBufferUsageFlag::TransferSrc);
 			shaderBufferParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			shaderBufferParams.BufferDesc.SizeInBytes = shaderBufferSize;
