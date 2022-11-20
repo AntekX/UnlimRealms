@@ -1809,15 +1809,34 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafDescriptorTableDX12::CopyResourceDescriptorToTable(D3D12_CPU_DESCRIPTOR_HANDLE resourceDescriptorHandle, ur_uint bindingIdx,
+		D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType, D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType)
+	{
+		ID3D12Device5* d3dDevice = static_cast<GrafDeviceDX12*>(this->GetGrafDevice())->GetD3DDevice();
+
+		// find corresponding range
+
+		const D3D12_DESCRIPTOR_RANGE* d3dDescriptorRange = this->FindD3DDescriptorRange(d3dRangeType, bindingIdx);
+		if (nullptr == d3dDescriptorRange)
+			return ResultError(NotFound, std::string("GrafDescriptorTableDX12: failed to find descriptor range"));
+
+		// copy resource descriptor to table's heap region
+
+		D3D12_CPU_DESCRIPTOR_HANDLE d3dDescriptorHandleDst;
+		ur_size rangeOffsetInTable = (ur_size)d3dDescriptorRange->OffsetInDescriptorsFromTableStart - this->srvUavCbvDescriptorRangeHandle.GetAllocation().Offset;
+		ur_size bindingOffsetInTable = (bindingIdx - (ur_size)d3dDescriptorRange->BaseShaderRegister) + rangeOffsetInTable;
+		SIZE_T bindingOffsetHeapSize = (SIZE_T)(bindingOffsetInTable * this->srvUavCbvDescriptorRangeHandle.GetHeap()->GetDescriptorIncrementSize());
+		d3dDescriptorHandleDst.ptr = this->srvUavCbvDescriptorRangeHandle.GetD3DHandleCPU().ptr + bindingOffsetHeapSize;
+
+		d3dDevice->CopyDescriptorsSimple(1, d3dDescriptorHandleDst, resourceDescriptorHandle, d3dHeapType);
+
+		return Result(Success);
+	}
+
 	Result GrafDescriptorTableDX12::SetConstantBuffer(ur_uint bindingIdx, GrafBuffer* buffer, ur_size bufferOfs, ur_size bufferRange)
 	{
-		return Result(NotImplemented);
-
-		ID3D12Device5* d3dDevice = static_cast<GrafDeviceDX12*>(this->GetGrafDevice())->GetD3DDevice();
-		
-		D3D12_CPU_DESCRIPTOR_HANDLE d3dDescriptorHandleSrc = static_cast<GrafBufferDX12*>(buffer)->GetSRVDescriptorHandle().GetD3DHandleCPU();
-		//D3D12_CPU_DESCRIPTOR_HANDLE d3dDescriptorHandleDst = this->srvUavCbvDescriptorRangeHandle.GetD3DHandleCPU();
-		//d3dDevice->CopyDescriptorsSimple(1, d3dDescriptorHandleDst, d3dDescriptorHandleSrc, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		return CopyResourceDescriptorToTable(static_cast<GrafBufferDX12*>(buffer)->GetCBVDescriptorHandle().GetD3DHandleCPU(), bindingIdx,
+			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_RANGE_TYPE_CBV);
 	}
 
 	Result GrafDescriptorTableDX12::SetSampledImage(ur_uint bindingIdx, GrafImage* image, GrafSampler* sampler)
@@ -1832,7 +1851,8 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableDX12::SetSampler(ur_uint bindingIdx, GrafSampler* sampler)
 	{
-		return Result(NotImplemented);
+		return CopyResourceDescriptorToTable(static_cast<GrafSamplerDX12*>(sampler)->GetDescriptorHandle().GetD3DHandleCPU(), bindingIdx,
+			D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER);
 	}
 
 	Result GrafDescriptorTableDX12::SetImage(ur_uint bindingIdx, GrafImage* image)
@@ -1852,7 +1872,8 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableDX12::SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
 	{
-		return Result(NotImplemented);
+		return CopyResourceDescriptorToTable(static_cast<GrafBufferDX12*>(buffer)->GetSRVDescriptorHandle().GetD3DHandleCPU(), bindingIdx,
+			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_RANGE_TYPE_CBV);
 	}
 
 	Result GrafDescriptorTableDX12::SetBufferArray(ur_uint bindingIdx, GrafBuffer** buffers, ur_uint bufferCount)
@@ -1872,7 +1893,8 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableDX12::SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
 	{
-		return Result(NotImplemented);
+		return CopyResourceDescriptorToTable(static_cast<GrafBufferDX12*>(buffer)->GetUAVDescriptorHandle().GetD3DHandleCPU(), bindingIdx,
+			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_RANGE_TYPE_CBV);
 	}
 
 	Result GrafDescriptorTableDX12::SetAccelerationStructure(ur_uint bindingIdx, GrafAccelerationStructure* accelerationStructure)

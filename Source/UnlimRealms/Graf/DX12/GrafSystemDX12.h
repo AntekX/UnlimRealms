@@ -80,7 +80,15 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafDescriptorHeapDX12
 	{
-		// dummy base class for GrafDeviceDX12::DescriptorHeap
+	public:
+
+		// base class for GrafDeviceDX12::DescriptorHeap
+
+		inline ur_size GetDescriptorIncrementSize() const;
+
+	protected:
+
+		ur_size descriptorIncrementSize;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,7 +98,9 @@ namespace UnlimRealms
 
 		inline ur_bool IsValid() const;
 
-		inline const Allocation& GetAllocation();
+		inline const GrafDescriptorHeapDX12* GetHeap() const;
+
+		inline const Allocation& GetAllocation() const;
 
 		inline D3D12_CPU_DESCRIPTOR_HANDLE GetD3DHandleCPU() const;
 
@@ -169,11 +179,11 @@ namespace UnlimRealms
 
 		struct DescriptorHeap : public GrafDescriptorHeapDX12
 		{
+			friend class GrafDeviceDX12;
 			D3D12_DESCRIPTOR_HEAP_DESC d3dDesc;
 			shared_ref<ID3D12DescriptorHeap> d3dDescriptorHeap;
 			D3D12_CPU_DESCRIPTOR_HANDLE d3dHeapStartCpuHandle;
 			D3D12_GPU_DESCRIPTOR_HANDLE d3dHeapStartGpuHandle;
-			ur_uint descriptorIncrementSize;
 			LinearAllocator allocator;
 		};
 
@@ -464,6 +474,8 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
+		inline const GrafDescriptorHandleDX12& GetDescriptorHandle() const;
+
 	protected:
 
 		Result Deinitialize();
@@ -580,6 +592,11 @@ namespace UnlimRealms
 	private:
 
 		Result Deinitialize();
+
+		inline const D3D12_DESCRIPTOR_RANGE* FindD3DDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE rangeType, ur_uint bindingIdx) const;
+
+		Result CopyResourceDescriptorToTable(D3D12_CPU_DESCRIPTOR_HANDLE resourceDescriptorHandle, ur_uint bindingIdx,
+			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType, D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType);
 
 		D3D12_ROOT_PARAMETER d3dRootParameter;
 		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDescriptorRanges;

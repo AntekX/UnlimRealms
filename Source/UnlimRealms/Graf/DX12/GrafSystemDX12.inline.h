@@ -20,12 +20,22 @@ namespace UnlimRealms
 		return (deviceId < this->dxgiAdapters.size() ? this->dxgiAdapters[deviceId].get() : ur_null);
 	}
 
+	inline ur_size GrafDescriptorHeapDX12::GetDescriptorIncrementSize() const
+	{
+		return this->descriptorIncrementSize;
+	}
+
 	inline ur_bool GrafDescriptorHandleDX12::IsValid() const
 	{
 		return (this->allocation.Size > 0);
 	}
 
-	inline const Allocation& GrafDescriptorHandleDX12::GetAllocation()
+	inline const GrafDescriptorHeapDX12* GrafDescriptorHandleDX12::GetHeap() const
+	{
+		return this->heap;
+	}
+
+	inline const Allocation& GrafDescriptorHandleDX12::GetAllocation() const
 	{
 		return this->allocation;
 	}
@@ -118,6 +128,27 @@ namespace UnlimRealms
 	inline const D3D12_ROOT_PARAMETER* GrafDescriptorTableDX12::GetD3DRootParameter() const
 	{
 		return &this->d3dRootParameter;
+	}
+
+	inline const D3D12_DESCRIPTOR_RANGE* GrafDescriptorTableDX12::FindD3DDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE rangeType, ur_uint bindingIdx) const
+	{
+		const D3D12_DESCRIPTOR_RANGE* requestedBindingD3DRangePtr = nullptr;
+		for (const D3D12_DESCRIPTOR_RANGE& d3dDescriptorRange : this->d3dDescriptorRanges)
+		{
+			if (d3dDescriptorRange.RangeType == rangeType &&
+				d3dDescriptorRange.BaseShaderRegister <= bindingIdx &&
+				d3dDescriptorRange.BaseShaderRegister + d3dDescriptorRange.NumDescriptors > bindingIdx)
+			{
+				requestedBindingD3DRangePtr = &d3dDescriptorRange;
+				break;
+			}
+		}
+		return requestedBindingD3DRangePtr;
+	}
+
+	inline const GrafDescriptorHandleDX12& GrafSamplerDX12::GetDescriptorHandle() const
+	{
+		return this->samplerDescriptorHandle;
 	}
 
 	inline GrafBuffer* GrafAccelerationStructureDX12::GetScratchBuffer() const
