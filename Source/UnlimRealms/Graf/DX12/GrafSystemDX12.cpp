@@ -19,6 +19,10 @@
 namespace UnlimRealms
 {
 
+	#if defined(_DEBUG) 
+	#define UR_GRAF_DX12_DEBUG_MODE
+	#endif
+
 	// command buffer synchronisation policy
 	#define UR_GRAF_DX12_COMMAND_LIST_SYNC_DESTROY	1
 	#define UR_GRAF_DX12_COMMAND_LIST_SYNC_RESET	1
@@ -142,6 +146,16 @@ namespace UnlimRealms
 			this->Deinitialize();
 			return ResultError(Failure, std::string("GrafSystemDX12: failed to enumerate adapters with HRESULT = ") + HResultToString(hres));
 		}
+
+		// enable the D3D12 debug layer
+		#if defined(UR_GRAF_DX12_DEBUG_MODE)
+		shared_ref<ID3D12Debug> debugController;
+		hres = D3D12GetDebugInterface(__uuidof(debugController), debugController);
+		if (SUCCEEDED(hres))
+		{
+			debugController->EnableDebugLayer();
+		}
+		#endif
 
 		return Result(Success);
 	}
