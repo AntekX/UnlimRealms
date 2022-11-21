@@ -130,20 +130,32 @@ namespace UnlimRealms
 		return &this->d3dRootParameter;
 	}
 
-	inline const D3D12_DESCRIPTOR_RANGE* GrafDescriptorTableDX12::FindD3DDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE rangeType, ur_uint bindingIdx) const
+	inline const Result GrafDescriptorTableDX12::GetD3DDescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE& d3dHandle,
+		ur_uint bindingIdx, GrafDescriptorHandleDX12& tableHandle,
+		D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType) const
 	{
-		const D3D12_DESCRIPTOR_RANGE* requestedBindingD3DRangePtr = nullptr;
+		// find corresponding range
+		const D3D12_DESCRIPTOR_RANGE* bindingDescriptorRange = nullptr;
 		for (const D3D12_DESCRIPTOR_RANGE& d3dDescriptorRange : this->d3dDescriptorRanges)
 		{
-			if (d3dDescriptorRange.RangeType == rangeType &&
+			if (d3dDescriptorRange.RangeType == d3dRangeType &&
 				d3dDescriptorRange.BaseShaderRegister <= bindingIdx &&
 				d3dDescriptorRange.BaseShaderRegister + d3dDescriptorRange.NumDescriptors > bindingIdx)
 			{
-				requestedBindingD3DRangePtr = &d3dDescriptorRange;
+				bindingDescriptorRange = &d3dDescriptorRange;
 				break;
 			}
 		}
-		return requestedBindingD3DRangePtr;
+		if (nullptr == bindingDescriptorRange)
+			return Result(NotFound);
+
+		// compute descriptor handle
+		ur_size rangeOffsetInTable = (ur_size)bindingDescriptorRange->OffsetInDescriptorsFromTableStart - tableHandle.GetAllocation().Offset;
+		ur_size bindingOffsetInTable = (bindingIdx - (ur_size)bindingDescriptorRange->BaseShaderRegister) + rangeOffsetInTable;
+		SIZE_T bindingOffsetHeapSize = (SIZE_T)(bindingOffsetInTable * tableHandle.GetHeap()->GetDescriptorIncrementSize());
+		d3dHandle.ptr = tableHandle.GetD3DHandleCPU().ptr + bindingOffsetHeapSize;
+
+		return Result(Success);
 	}
 
 	inline const GrafDescriptorHandleDX12& GrafSamplerDX12::GetDescriptorHandle() const

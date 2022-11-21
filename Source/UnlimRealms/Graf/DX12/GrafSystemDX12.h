@@ -593,10 +593,12 @@ namespace UnlimRealms
 
 		Result Deinitialize();
 
-		inline const D3D12_DESCRIPTOR_RANGE* FindD3DDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE rangeType, ur_uint bindingIdx) const;
+		Result CopyResourceDescriptorToTable(ur_uint bindingIdx, GrafDescriptorHandleDX12& tableHandle,
+			const D3D12_CPU_DESCRIPTOR_HANDLE& d3dResourceHandle, D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType, D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType);
 
-		Result CopyResourceDescriptorToTable(D3D12_CPU_DESCRIPTOR_HANDLE resourceDescriptorHandle, ur_uint bindingIdx,
-			D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType, D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType);
+		inline const Result GetD3DDescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE& d3dHandle,
+			ur_uint bindingIdx, GrafDescriptorHandleDX12& tableHandle,
+			D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType) const;
 
 		D3D12_ROOT_PARAMETER d3dRootParameter;
 		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDescriptorRanges;
