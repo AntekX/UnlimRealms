@@ -360,7 +360,11 @@ namespace UnlimRealms
 				return ResultError(Failure, std::string("GrafDeviceDX12: CreateDescriptorHeap failed with HRESULT = ") + HResultToString(hres));
 			}
 			heap->d3dHeapStartCpuHandle = heap->d3dDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-			heap->d3dHeapStartGpuHandle = heap->d3dDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+			heap->d3dHeapStartGpuHandle = {};
+			if (D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE & heap->d3dDesc.Flags)
+			{
+				heap->d3dDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+			}
 
 			std::unique_ptr<DescriptorPool> pool(new DescriptorPool());
 			pool->descriptorHeaps.push_back(std::move(heap));
@@ -1970,12 +1974,78 @@ namespace UnlimRealms
 
 	Result GrafPipelineDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		this->d3dPipelineState.reset(ur_null);
+
+		return Result(Success);
 	}
 
 	Result GrafPipelineDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
 		return Result(NotImplemented);
+		// WIP
+
+		this->Deinitialize();
+
+		if (ur_null == initParams.RenderPass)
+			return Result(InvalidArgs);
+
+		GrafPipeline::Initialize(grafDevice, initParams);
+
+		// validate device
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafPipelineDX12: failed to initialize, invalid GrafDevice"));
+		}
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC d3dPipelineDesc = {};
+
+		// initialize root signature
+
+		D3D12_ROOT_SIGNATURE_DESC d3dRootSigDesc = {};
+
+		shared_ref<ID3DBlob> d3dSignatureBlob;
+		shared_ref<ID3DBlob> d3dErrorBlob;
+		HRESULT hres = D3D12SerializeRootSignature(&d3dRootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, d3dSignatureBlob, d3dErrorBlob);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafPipelineDX12: D3D12SerializeRootSignature failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		
+		//ID3D12RootSignature* pRootSignature;
+		//D3D12_SHADER_BYTECODE VS;
+		//D3D12_SHADER_BYTECODE PS;
+		//D3D12_SHADER_BYTECODE DS;
+		//D3D12_SHADER_BYTECODE HS;
+		//D3D12_SHADER_BYTECODE GS;
+		//D3D12_STREAM_OUTPUT_DESC StreamOutput;
+		//D3D12_BLEND_DESC BlendState;
+		//UINT SampleMask;
+		//D3D12_RASTERIZER_DESC RasterizerState;
+		//D3D12_DEPTH_STENCIL_DESC DepthStencilState;
+		//D3D12_INPUT_LAYOUT_DESC InputLayout;
+		//D3D12_INDEX_BUFFER_STRIP_CUT_VALUE IBStripCutValue;
+		//D3D12_PRIMITIVE_TOPOLOGY_TYPE PrimitiveTopologyType;
+		//UINT NumRenderTargets;
+		//DXGI_FORMAT RTVFormats[8];
+		//DXGI_FORMAT DSVFormat;
+		//DXGI_SAMPLE_DESC SampleDesc;
+		//UINT NodeMask;
+		//D3D12_CACHED_PIPELINE_STATE CachedPSO;
+		//D3D12_PIPELINE_STATE_FLAGS Flags;
+		
+		hres = d3dDevice->CreateGraphicsPipelineState(&d3dPipelineDesc, __uuidof(ID3D12PipelineState), this->d3dPipelineState);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafPipelineDX12: CreateGraphicsPipelineState failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
