@@ -684,7 +684,7 @@ namespace UnlimRealms
 		static inline D3D12_RESOURCE_STATES GrafToD3DBufferState(GrafBufferState state);
 		static inline D3D12_RESOURCE_STATES GrafToD3DImageState(GrafImageState state);
 		static inline D3D12_RTV_DIMENSION GrafToD3DRTVDimenstion(GrafImageType imageType);
-		static inline D3D12_HEAP_TYPE GrafToD3DHeapType(GrafBufferUsageFlags bufferUsage);
+		static inline D3D12_HEAP_TYPE GrafToD3DHeapType(GrafBufferUsageFlags bufferUsage, GrafDeviceMemoryFlags memoryFlags);
 		static inline D3D12_RESOURCE_STATES GrafToD3DBufferInitialState(GrafBufferUsageFlags bufferUsage);
 		static inline D3D12_FILTER GrafToD3DFilter(GrafFilterType filterMin, GrafFilterType filterMax, GrafFilterType filterMip);
 		static inline D3D12_TEXTURE_ADDRESS_MODE GrafToD3DAddressMode(GrafAddressMode addressMode);

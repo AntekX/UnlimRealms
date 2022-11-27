@@ -1405,7 +1405,7 @@ namespace UnlimRealms
 		// create resource
 
 		D3D12_HEAP_PROPERTIES d3dHeapProperties = {};
-		d3dHeapProperties.Type = GrafUtilsDX12::GrafToD3DHeapType(initParams.BufferDesc.Usage);
+		d3dHeapProperties.Type = GrafUtilsDX12::GrafToD3DHeapType(initParams.BufferDesc.Usage, initParams.BufferDesc.MemoryType);
 		d3dHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
 		d3dHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 		d3dHeapProperties.CreationNodeMask = 0;
@@ -1523,12 +1523,45 @@ namespace UnlimRealms
 
 	Result GrafBufferDX12::Write(const ur_byte* dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 	{
-		return Result(NotImplemented);
+		if (0 == dataSize)
+			dataSize = this->GetDesc().SizeInBytes; // entire allocation range
+
+		GrafWriteCallback copyWriteCallback = [&dataPtr, &dataSize, &srcOffset](ur_byte* mappedDataPtr) -> Result
+		{
+			memcpy(mappedDataPtr, dataPtr + srcOffset, dataSize);
+			return Result(Success);
+		};
+
+		return this->Write(copyWriteCallback, dataSize, srcOffset, dstOffset);
 	}
 
 	Result GrafBufferDX12::Write(GrafWriteCallback writeCallback, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 	{
-		return Result(NotImplemented);
+		if (0 == dataSize)
+			dataSize = this->GetDesc().SizeInBytes; // entire allocation range
+
+		if (ur_null == writeCallback || dstOffset + dataSize > this->GetDesc().SizeInBytes)
+			return Result(InvalidArgs);
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		D3D12_RANGE d3dRange;
+		d3dRange.Begin = dstOffset;
+		d3dRange.End = dstOffset + dataSize;
+
+		void* mappedMemoryPtr = nullptr;
+		HRESULT hres = this->d3dResource->Map(0, &d3dRange, &mappedMemoryPtr);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafBufferDX12: Map failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		writeCallback((ur_byte*)mappedMemoryPtr);
+
+		this->d3dResource->Unmap(0, &d3dRange);
+
+		return Result(Success);
 	}
 
 	Result GrafBufferDX12::Read(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
@@ -2147,9 +2180,13 @@ namespace UnlimRealms
 		return d3dRTVDimension;
 	}
 
-	D3D12_HEAP_TYPE GrafUtilsDX12::GrafToD3DHeapType(GrafBufferUsageFlags bufferUsage)
+	D3D12_HEAP_TYPE GrafUtilsDX12::GrafToD3DHeapType(GrafBufferUsageFlags bufferUsage, GrafDeviceMemoryFlags memoryFlags)
 	{
 		D3D12_HEAP_TYPE d3dHeapType = D3D12_HEAP_TYPE_DEFAULT;
+		// by default CPU visible memory is considered to be used for upload,
+		// readback is expected to be done from a copy destination resource (TransferDst)
+		if (memoryFlags & ur_uint(GrafDeviceMemoryFlag::CpuVisible))
+			d3dHeapType = D3D12_HEAP_TYPE_UPLOAD;
 		if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferSrc))
 			d3dHeapType = D3D12_HEAP_TYPE_UPLOAD;
 		if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferDst))
