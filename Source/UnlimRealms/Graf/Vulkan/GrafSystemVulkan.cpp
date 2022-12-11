@@ -904,7 +904,7 @@ namespace UnlimRealms
 		// try to find exisitng command pool for current thread
 
 		std::thread::id thisThreadId = std::this_thread::get_id();
-		auto& poolIter = this->graphicsCommandPools.find(thisThreadId);
+		const auto& poolIter = this->graphicsCommandPools.find(thisThreadId);
 		if (poolIter != this->graphicsCommandPools.end())
 		{
 			return poolIter->second.get();

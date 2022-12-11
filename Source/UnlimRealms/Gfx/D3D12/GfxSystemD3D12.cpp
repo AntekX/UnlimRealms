@@ -10,7 +10,6 @@
 #include "Sys/Log.h"
 #include "Sys/Windows/WinCanvas.h"
 #include "Gfx/D3D12/GfxSystemD3D12.h"
-#include "Gfx/D3D12/d3dx12.h"
 #include "Gfx/DXGIUtils/DXGIUtils.h"
 
 namespace UnlimRealms
@@ -756,7 +755,9 @@ namespace UnlimRealms
 		GfxSystemD3D12 &d3dSystem = static_cast<GfxSystemD3D12&>(this->GetGfxSystem());
 
 		this->d3dCommandList->Close();
-		d3dSystem.AddCommandList(shared_ref<ID3D12CommandList>(this->d3dCommandList.get()));
+
+		shared_ref<ID3D12CommandList> baseCommandList = shared_ref<ID3D12CommandList>(this->d3dCommandList.get());
+		d3dSystem.AddCommandList(baseCommandList);
 
 		return Result(Success);
 	}
@@ -774,11 +775,11 @@ namespace UnlimRealms
 		GfxRenderTargetD3D12 *rtD3D12 = static_cast<GfxRenderTargetD3D12*>(rt);
 		GfxSystemD3D12::Descriptor *rtDescriptor = (rtD3D12 != ur_null ? rtD3D12->GetRTVDescriptor() : ur_null);
 		UINT numRTs = (rtDescriptor != ur_null ? 1 : 0);
-		D3D12_CPU_DESCRIPTOR_HANDLE *d3dRTDescriptors = (rtDescriptor != ur_null ? &rtDescriptor->CpuHandle() : ur_null);
+		const D3D12_CPU_DESCRIPTOR_HANDLE *d3dRTDescriptors = (rtDescriptor != ur_null ? &rtDescriptor->CpuHandle() : ur_null);
 
 		GfxRenderTargetD3D12 *dsD3D12 = static_cast<GfxRenderTargetD3D12*>(ds);
 		GfxSystemD3D12::Descriptor *dsDescriptor = (dsD3D12 != ur_null ? dsD3D12->GetDSVDescriptor() : ur_null);
-		D3D12_CPU_DESCRIPTOR_HANDLE *d3dDSDecsriptor = { dsDescriptor != ur_null ? &dsDescriptor->CpuHandle() : ur_null };
+		const D3D12_CPU_DESCRIPTOR_HANDLE *d3dDSDecsriptor = { dsDescriptor != ur_null ? &dsDescriptor->CpuHandle() : ur_null };
 
 		this->d3dCommandList->OMSetRenderTargets(numRTs, d3dRTDescriptors, FALSE, d3dDSDecsriptor);
 
@@ -804,8 +805,12 @@ namespace UnlimRealms
 		if (this->d3dCommandList.empty())
 			return ResultError(Failure, "GfxContextD3D12::SetViewPort: failed, d3d command list is not initialized");
 
-		this->d3dCommandList->RSSetViewports(1, viewPort != ur_null ?
-			&GfxViewPortToD3D12(*viewPort) : ur_null);
+		D3D12_VIEWPORT d3dViewPort = {};
+		if (viewPort != nullptr)
+		{
+			d3dViewPort = GfxViewPortToD3D12(*viewPort);
+		}
+		this->d3dCommandList->RSSetViewports(1, viewPort != ur_null ? &d3dViewPort : ur_null);
 
 		return Result(Success);
 	}
@@ -1726,7 +1731,8 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(Failure, "GfxSamplerD3D12::OnInitialize: failed to acquire sampler descriptor");
 
-		d3dDevice->CreateSampler(&GfxSamplerStateToD3D12(state), this->descriptor->CpuHandle());
+		D3D12_SAMPLER_DESC d3dSamplerDesc = GfxSamplerStateToD3D12(state);
+		d3dDevice->CreateSampler(&d3dSamplerDesc, this->descriptor->CpuHandle());
 
 		return Result(Success);
 	}

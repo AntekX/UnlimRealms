@@ -145,7 +145,7 @@ iff_chunk iff_begin_read_chunk(ILimage* image, IFFLoadState iffState)
 		return iffState.chunkStack[0];
 	}
 
-	iffState.chunkStack[iffState.chunkDepth].start = io->tell(io);
+	iffState.chunkStack[iffState.chunkDepth].start = (ILuint)io->tell(io);
 	iffState.chunkStack[iffState.chunkDepth].tag = GetBigInt(io);
 	iffState.chunkStack[iffState.chunkDepth].size = GetBigInt(io);
     

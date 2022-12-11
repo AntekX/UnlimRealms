@@ -335,8 +335,12 @@ namespace UnlimRealms
 		if (this->d3dContext.empty())
 			return ResultError(Failure, "GfxContextD3D11::SetViewPort: failed, device context is not ready");
 
-		this->d3dContext->RSSetViewports(1, viewPort != ur_null ?
-			&GfxViewPortToD3D11(*viewPort) : ur_null);
+		D3D11_VIEWPORT d3dViewPort = {};
+		if (viewPort != nullptr)
+		{
+			d3dViewPort = GfxViewPortToD3D11(*viewPort);
+		}
+		this->d3dContext->RSSetViewports(1, viewPort != ur_null ? &d3dViewPort : ur_null);
 
 		return Result(Success);
 	}

@@ -33,7 +33,7 @@ namespace UnlimRealms
 			res = realm.GetGfxSystem()->CreateVertexShader(resOutput);
 			if (Succeeded(res))
 			{
-				res = resOutput->Initialize(std::move(bytecode), sizeInBytes);
+				res = resOutput.get()->Initialize(std::move(bytecode), sizeInBytes);
 			}
 		}
 

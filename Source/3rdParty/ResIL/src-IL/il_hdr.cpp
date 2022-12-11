@@ -166,7 +166,7 @@ ILboolean iLoadHdrInternal(ILimage* image)
 
 	// Seek to start of data
 	auto headerEnd = hstr-header;
-	while (headerEnd < read && header[headerEnd] != 0x0a)
+	while ((size_t)headerEnd < read && header[headerEnd] != 0x0a)
 		++headerEnd;
 	image->io.seek(&image->io, headerEnd+1, IL_SEEK_SET);
 
@@ -277,7 +277,7 @@ typedef struct {
 /* default minimal header. modify if you want more information in header */
 ILboolean RGBE_WriteHeader(ILuint width, ILuint height, rgbe_header_info *info)
 {
-	char *programtype = "RGBE";
+	const char *programtype = "RGBE";
 
 	if (info && (info->valid & RGBE_VALID_PROGRAMTYPE))
 		programtype = (char*) info->programtype;

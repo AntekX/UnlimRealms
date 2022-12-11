@@ -78,22 +78,22 @@ namespace UnlimRealms
 		return this->descriptorCount;
 	}
 
-	inline D3D12_CPU_DESCRIPTOR_HANDLE GfxSystemD3D12::DescriptorSet::FirstCpuHandle() const
+	inline const D3D12_CPU_DESCRIPTOR_HANDLE& GfxSystemD3D12::DescriptorSet::FirstCpuHandle() const
 	{
 		return this->firstCpuHandle;
 	}
 
-	inline D3D12_GPU_DESCRIPTOR_HANDLE GfxSystemD3D12::DescriptorSet::FirstGpuHandle() const
+	inline const D3D12_GPU_DESCRIPTOR_HANDLE& GfxSystemD3D12::DescriptorSet::FirstGpuHandle() const
 	{
 		return this->firstGpuHandle;
 	}
 
-	inline D3D12_CPU_DESCRIPTOR_HANDLE GfxSystemD3D12::Descriptor::CpuHandle() const
+	inline const D3D12_CPU_DESCRIPTOR_HANDLE& GfxSystemD3D12::Descriptor::CpuHandle() const
 	{
 		return this->FirstCpuHandle();
 	}
 
-	inline D3D12_GPU_DESCRIPTOR_HANDLE GfxSystemD3D12::Descriptor::GpuHandle() const
+	inline const D3D12_GPU_DESCRIPTOR_HANDLE& GfxSystemD3D12::Descriptor::GpuHandle() const
 	{
 		return this->FirstGpuHandle();
 	}

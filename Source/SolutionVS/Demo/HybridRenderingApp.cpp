@@ -235,7 +235,7 @@ int HybridRenderingApp::Run()
 	std::unique_ptr<RenderTargetSet> renderTargetSet;
 	std::unique_ptr<LightingBufferSet> lightingBufferSet;
 
-	auto& DestroyFrameBufferObjects = [&](GrafCommandList* syncCmdList = ur_null)
+	auto DestroyFrameBufferObjects = [&](GrafCommandList* syncCmdList = ur_null)
 	{
 		if (renderTargetSet != ur_null)
 		{
@@ -265,7 +265,7 @@ int HybridRenderingApp::Run()
 		}
 	};
 
-	auto& InitFrameBufferObjects = [&](ur_uint width, ur_uint height) -> Result
+	auto InitFrameBufferObjects = [&](ur_uint width, ur_uint height) -> Result
 	{
 		Result res(Success);
 		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
@@ -385,7 +385,7 @@ int HybridRenderingApp::Run()
 		return res;
 	};
 
-	auto& DestroyGrafObjects = [&]()
+	auto DestroyGrafObjects = [&]()
 	{
 		// here we expect that device is idle
 		DestroyFrameBufferObjects();
@@ -393,7 +393,7 @@ int HybridRenderingApp::Run()
 		cmdListPerFrame.clear();
 	};
 
-	auto& InitGrafObjects = [&]() -> Result
+	auto InitGrafObjects = [&]() -> Result
 	{
 		Result res(Success);
 		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
@@ -2282,7 +2282,7 @@ int HybridRenderingApp::Run()
 
 		// update frame
 
-		auto& UpdateFrameJobFunc = [&](Job::Context& ctx) -> void
+		auto UpdateFrameJobFunc = [&](Job::Context& ctx) -> void
 		{
 			// reset update progress fence
 			ctx.progress = 0;
@@ -2359,7 +2359,7 @@ int HybridRenderingApp::Run()
 
 		// render frame
 
-		auto& RenderFrameJobFunc = [&](Job::Context& ctx) -> void
+		auto RenderFrameJobFunc = [&](Job::Context& ctx) -> void
 		{
 			static const ur_float4 DebugLabelColorMain = { 1.0f, 0.8f, 0.7f, 1.0f };
 			static const ur_float4 DebugLabelColorPass = { 0.6f, 1.0f, 0.6f, 1.0f };

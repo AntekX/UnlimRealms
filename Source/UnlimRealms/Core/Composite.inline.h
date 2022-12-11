@@ -31,7 +31,8 @@ namespace UnlimRealms
 	T* Composite::AddComponent(Args&&... args)
 	{
 		static_assert(std::is_base_of<Component, T>(), "Composite::AddComponent: class type is not a component");
-		return static_cast<T*>(this->AddComponent(Component::GetUID<T>(), std::unique_ptr<Component>(new T(args...))));
+		auto componentPtr = std::unique_ptr<Component>(new T(args...));
+		return static_cast<T*>(this->AddComponent(Component::GetUID<T>(), componentPtr));
 	}
 
 	template <class TBase, class TImpl, class ... Args>
@@ -45,7 +46,7 @@ namespace UnlimRealms
 	Component* Composite::AddComponent(Component::UID uid, std::unique_ptr<Component> &component)
 	{
 		if (this->HasComponent(uid))
-			return false;
+			return nullptr;
 		this->components[uid] = std::move(component);
 		return this->components[uid].get();
 	}
@@ -59,7 +60,7 @@ namespace UnlimRealms
 
 	bool Composite::RemoveComponent(Component::UID uid)
 	{
-		auto &ientry = this->components.find(uid);
+		const auto &ientry = this->components.find(uid);
 		if (ientry == this->components.end())
 			return false;
 		this->components.erase(ientry);
@@ -92,7 +93,7 @@ namespace UnlimRealms
 
 	Component* Composite::GetComponent(Component::UID uid) const
 	{
-		auto &ientry = this->components.find(uid);
+		const auto &ientry = this->components.find(uid);
 		if (ientry == this->components.end())
 			return ur_null;
 		return static_cast<Component*>(ientry->second.get());

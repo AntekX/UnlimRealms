@@ -33,7 +33,7 @@ namespace UnlimRealms
 		this->Deinitialize();
 	}
 
-	Result GrafRenderer::Initialize(std::unique_ptr<GrafSystem>& grafSystem, const InitParams& initParams)
+	Result GrafRenderer::Initialize(std::unique_ptr<GrafSystem> grafSystem, const InitParams& initParams)
 	{
 		this->grafSystem.reset(grafSystem.release());
 		if (ur_null == this->grafSystem.get())
@@ -160,7 +160,7 @@ namespace UnlimRealms
 
 		this->grafCommandListCacheMutex.lock();
 		std::thread::id thisThreadId = std::this_thread::get_id();
-		auto& threadCacheIter = this->grafCommandListCache.find(thisThreadId);
+		auto threadCacheIter = this->grafCommandListCache.find(thisThreadId);
 		if (this->grafCommandListCache.end() == threadCacheIter)
 		{
 			std::unique_ptr<CommandListCache> cmdListCache(new CommandListCache);
@@ -425,7 +425,7 @@ namespace UnlimRealms
 			this->pendingCommandListMutex.unlock();
 
 			// execute callbacks
-			auto& executeCallbacksJobFunc = [](Job::Context& ctx) -> void
+			auto executeCallbacksJobFunc = [](Job::Context& ctx) -> void
 			{
 				typedef std::vector<std::unique_ptr<PendingCommandListCallbackData>> CommandListCallbacks;
 				CommandListCallbacks& commandListCallbacks = *reinterpret_cast<CommandListCallbacks*>(ctx.data);

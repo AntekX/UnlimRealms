@@ -176,12 +176,12 @@ namespace UnlimRealms
 
 		T LengthSquared() const
 		{
-			return 0;
+			return (this->x * this->x + this->y * this->y);
 		}
 
 		T Length() const
 		{
-			return 0;
+			return std::sqrt(this->LengthSquared());
 		}
 
 		void Normalize()
@@ -214,26 +214,6 @@ namespace UnlimRealms
 			return r;
 		}
 	};
-
-	float TVector2<float>::LengthSquared() const
-	{
-		return (this->x * this->x + this->y * this->y);
-	}
-
-	double TVector2<double>::LengthSquared() const
-	{
-		return (this->x * this->x + this->y * this->y);
-	}
-
-	float TVector2<float>::Length() const
-	{
-		return sqrtf(this->LengthSquared());
-	}
-
-	double TVector2<double>::Length() const
-	{
-		return sqrt(this->LengthSquared());
-	}
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -419,12 +399,12 @@ namespace UnlimRealms
 
 		T LengthSquared() const
 		{
-			return 0;
+			return (this->x * this->x + this->y * this->y + this->z * this->z);
 		}
 
 		T Length() const
 		{
-			return 0;
+			return std::sqrt(this->LengthSquared());
 		}
 
 		TVector3<T>& Normalize()
@@ -507,26 +487,6 @@ namespace UnlimRealms
 	template <class T>
 	const TVector3<T> TVector3<T>::K = { 0, 0, 1 };
 
-	float TVector3<float>::LengthSquared() const
-	{
-		return (this->x * this->x + this->y * this->y + this->z * this->z);
-	}
-
-	double TVector3<double>::LengthSquared() const
-	{
-		return (this->x * this->x + this->y * this->y + this->z * this->z);
-	}
-
-	float TVector3<float>::Length() const
-	{
-		return sqrtf(this->LengthSquared());
-	}
-
-	double TVector3<double>::Length() const
-	{
-		return sqrt(this->LengthSquared());
-	}
-
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//	4d vector template class
@@ -587,7 +547,7 @@ namespace UnlimRealms
 
 		TVector4<T> operator+ (const TVector4<T> &v) const
 		{
-			TVector r;
+			TVector4<T> r;
 			r.x = x + v.x;
 			r.y = y + v.y;
 			r.z = z + v.z;
@@ -1385,7 +1345,7 @@ namespace UnlimRealms
 		bool Intersects(const TVector4<T>(&frustumPlanes)[6]) const
 		{
 			bool culled = false;
-			for (const Vector4 &plane : frustumPlanes)
+			for (const TVector4<T>& plane : frustumPlanes)
 			{
 				culled |= (
 					(plane.x * this->Min.x + plane.y * this->Min.y + plane.z * this->Min.z + plane.w < 0) &&

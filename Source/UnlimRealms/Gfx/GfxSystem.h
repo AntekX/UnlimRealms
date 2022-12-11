@@ -315,7 +315,7 @@ namespace UnlimRealms
 
 		Result Initialize(ur_byte *byteCode, ur_size sizeInBytes);
 
-		Result Initialize(std::unique_ptr<ur_byte[]> &byteCode, ur_size sizeInBytes);
+		Result Initialize(std::unique_ptr<ur_byte[]> byteCode, ur_size sizeInBytes);
 
 		inline const ur_byte* GetByteCode() const;
 

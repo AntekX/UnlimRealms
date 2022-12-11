@@ -100,7 +100,7 @@ ILboolean iIsValidIlbm(SIO* io)
     ILboolean   is_LBM;
     Uint8 magic[4+4+4];
 
-    start = io->tell(io);
+    start = (int)io->tell(io);
     is_LBM = IL_FALSE;
     if ( io->read(io, magic, sizeof(magic), 1 ) )
     {
@@ -127,14 +127,14 @@ static ILboolean load_ilbm(ILimage* image)
     Uint32      i, j, bytesperline, nbplanes, plane, h;
     Uint32      remainingbytes;
     Uint32      width;
-    BMHD          bmhd;
-    char        *error;
+    BMHD        bmhd;
+    const char* error;
     Uint8       flagHAM,flagEHB;
 
     error   = NULL;
     MiniBuf = NULL;
 
-    start = image->io.tell(&image->io);
+    start = (int)image->io.tell(&image->io);
     if ( !image->io.read(&image->io, id, 4, 1 ) )
     {
         error="error reading IFF chunk";

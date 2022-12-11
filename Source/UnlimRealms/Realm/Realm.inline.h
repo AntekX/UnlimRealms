@@ -36,7 +36,8 @@ namespace UnlimRealms
 	{
 		static_assert(std::is_base_of<Input, TInput>(), "Realm::SetInput: invalid implementation class type");
 		this->RemoveComponent<Input>();
-		this->AddComponent(Component::GetUID<Input>(), std::unique_ptr<Component>(static_cast<Component*>(input.release())));
+		auto componentPtr = std::unique_ptr<Component>(static_cast<Component*>(input.release()));
+		this->AddComponent(Component::GetUID<Input>(), componentPtr);
 	}
 
 	template <class TCanvas>
@@ -44,7 +45,8 @@ namespace UnlimRealms
 	{
 		static_assert(std::is_base_of<Canvas, TCanvas>(), "Realm::SetCanvas: invalid implementation class type");
 		this->RemoveComponent<Canvas>();
-		this->AddComponent(Component::GetUID<Canvas>(), std::unique_ptr<Component>(static_cast<Component*>(canvas.release())));
+		auto componentPtr = std::unique_ptr<Component>(static_cast<Component*>(canvas.release()));
+		this->AddComponent(Component::GetUID<Canvas>(), componentPtr);
 	}
 
 	template <class TGfxSystem>
@@ -52,7 +54,8 @@ namespace UnlimRealms
 	{
 		static_assert(std::is_base_of<GfxSystem, TGfxSystem>(), "Realm::SetGfxSystem: invalid implementation class type");
 		this->RemoveComponent<GfxSystem>();
-		this->AddComponent(Component::GetUID<GfxSystem>(), std::unique_ptr<Component>(static_cast<Component*>(gfxSystem.release())));
+		auto componentPtr = std::unique_ptr<Component>(static_cast<Component*>(gfxSystem.release()));
+		this->AddComponent(Component::GetUID<GfxSystem>(), componentPtr);
 	}
 
 	inline Realm& RealmEntity::GetRealm()

@@ -94,6 +94,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x86;_DEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;$(VULKAN_SDK)/Include;</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -116,6 +117,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x64;_DEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;$(VULKAN_SDK)/Include;</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -140,6 +142,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x86;NDEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;$(VULKAN_SDK)/Include;</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -166,6 +169,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_UNLIMREALMS_DLL;_WIN_x64;NDEBUG;_WINDOWS;_USRDLL;UNLIMREALMS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>../../../Source;../../UnlimRealms;$(VULKAN_SDK)/Include;</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

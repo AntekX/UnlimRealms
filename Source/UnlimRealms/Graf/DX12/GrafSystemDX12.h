@@ -494,6 +494,10 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
+		inline const void* GetByteCodePtr() const;
+
+		inline ur_size GetByteCodeSize() const;
+
 	private:
 
 		Result Deinitialize();
@@ -587,7 +591,13 @@ namespace UnlimRealms
 
 		virtual Result SetAccelerationStructure(ur_uint bindingIdx, GrafAccelerationStructure* accelerationStructure);
 
-		inline const D3D12_ROOT_PARAMETER* GetD3DRootParameter() const;
+		inline const GrafDescriptorHandleDX12& GetSrvUavCbvDescriptorHeapHandle() const;
+
+		inline const GrafDescriptorHandleDX12& GetSamplerDescriptorHeapHandle() const;
+
+		inline const D3D12_ROOT_PARAMETER& GetSrvUavCbvTableD3DRootParameter() const;
+
+		inline const D3D12_ROOT_PARAMETER& GetSamplerTableD3DRootParameter() const;
 
 	private:
 
@@ -600,10 +610,24 @@ namespace UnlimRealms
 			ur_uint bindingIdx, GrafDescriptorHandleDX12& tableHandle,
 			D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType) const;
 
-		D3D12_ROOT_PARAMETER d3dRootParameter;
-		std::vector<D3D12_DESCRIPTOR_RANGE> d3dDescriptorRanges;
-		GrafDescriptorHandleDX12 srvUavCbvDescriptorRangeHandle;
-		GrafDescriptorHandleDX12 samplerDescriptorRangeHandle;
+		enum ShaderVisibleDescriptorHeapType
+		{
+			ShaderVisibleDescriptorHeap_SrvUavCbv = 0,
+			ShaderVisibleDescriptorHeap_Sampler,
+			ShaderVisibleDescriptorHeap_Count
+		};
+		static_assert(ShaderVisibleDescriptorHeap_SrvUavCbv == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		static_assert(ShaderVisibleDescriptorHeap_Sampler == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+
+		struct DescriptorTableData
+		{
+			std::vector<D3D12_DESCRIPTOR_RANGE> d3dDescriptorRanges;
+			GrafDescriptorHandleDX12 descriptorHeapHandle;
+			D3D12_ROOT_PARAMETER d3dRootParameter;
+			ur_uint descriptorCount;
+		};
+
+		DescriptorTableData descriptorTableData[ShaderVisibleDescriptorHeap_Count];
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

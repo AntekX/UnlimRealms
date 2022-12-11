@@ -52,7 +52,7 @@ namespace UnlimRealms
 
 		virtual ~GrafRenderer();
 
-		virtual Result Initialize(std::unique_ptr<GrafSystem>& grafSystem, const InitParams& initParams);
+		virtual Result Initialize(std::unique_ptr<GrafSystem> grafSystem, const InitParams& initParams);
 
 		virtual Result Deinitialize();
 

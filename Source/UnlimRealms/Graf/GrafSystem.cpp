@@ -1355,7 +1355,7 @@ namespace UnlimRealms
 					{
 						crntSubShape.materialIdx = ur_uint(shapeMaterialID >= 0 && shapeMaterialID < (ur_int)meshData.Materials.size() ? shapeMaterialID : defaultMaterialID);
 						crntSubShape.primitiveCount = ur_uint(ip - crntSubShape.primitiveOffset);
-						auto& materialShapesIter = perMaterialSubShapes.find(crntSubShape.materialIdx);
+						auto materialShapesIter = perMaterialSubShapes.find(crntSubShape.materialIdx);
 						if (materialShapesIter == perMaterialSubShapes.end())
 						{
 							SubShapeArrayUPtr subShapeArray(new SubShapeArray);
@@ -1374,7 +1374,7 @@ namespace UnlimRealms
 					{
 						crntSubShape.materialIdx = ur_uint(shapeMaterialID >= 0 && shapeMaterialID < (ur_int)meshData.Materials.size() ? shapeMaterialID : defaultMaterialID);
 						crntSubShape.primitiveCount = ur_uint(ip - crntSubShape.primitiveOffset + 1);
-						auto& materialShapesIter = perMaterialSubShapes.find(crntSubShape.materialIdx);
+						auto materialShapesIter = perMaterialSubShapes.find(crntSubShape.materialIdx);
 						if (materialShapesIter == perMaterialSubShapes.end())
 						{
 							SubShapeArrayUPtr subShapeArray(new SubShapeArray);

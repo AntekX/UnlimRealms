@@ -37,7 +37,8 @@ namespace UnlimRealms
 		if (this->callback != ur_null)
 		{
 			this->state = State::InProgress;
-			this->callback( Context(this->data, this->interrupt, this->progress, this->resultCode) );
+			Context context = Context(this->data, this->interrupt, this->progress, this->resultCode);
+			this->callback(context);
 		}
 		else
 		{
@@ -89,7 +90,7 @@ namespace UnlimRealms
 
 	std::shared_ptr<Job> JobSystem::Add(JobPriority priority, Job::DataPtr jobData, Job::Callback jobCallback)
 	{
-		auto &job = std::make_shared<Job>(*this, jobData, jobCallback);
+		auto job = std::make_shared<Job>(*this, jobData, jobCallback);
 		if (!this->Add(job, priority))
 		{
 			job = ur_null;
@@ -172,7 +173,7 @@ namespace UnlimRealms
 	void JobSystem::OnJobAdded()
 	{
 		// base implementation: synchronous execution
-		auto &job = this->FetchJob();
+		auto job = this->FetchJob();
 		job->Execute();
 	}
 

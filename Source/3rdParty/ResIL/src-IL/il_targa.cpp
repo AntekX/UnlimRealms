@@ -484,8 +484,8 @@ ILboolean iSaveTargaInternal(ILimage* image)
 	ILpal		TempPal;
 	ILimage 	*TempImage = NULL;
 	ILuint		ExtOffset, i;
-	char		*Footer = "TRUEVISION-XFILE.\0";
-	char		*idString = "Developer's Image Library (DevIL)";
+	const char	*Footer = "TRUEVISION-XFILE.\0";
+	const char	*idString = "Developer's Image Library (DevIL)";
 	ILuint		Day, Month, Year, Hour, Minute, Second;
 	char		*TempData;
 

@@ -527,10 +527,10 @@ namespace UnlimRealms
 			byteCodeCopy.reset(new ur_byte[sizeInBytes]);
 			memcpy(byteCodeCopy.get(), byteCode, sizeInBytes);
 		}
-		return this->Initialize(byteCodeCopy, sizeInBytes);
+		return this->Initialize(std::move(byteCodeCopy), sizeInBytes);
 	}
 
-	Result GfxShader::Initialize(std::unique_ptr<ur_byte[]> &byteCode, ur_size sizeInBytes)
+	Result GfxShader::Initialize(std::unique_ptr<ur_byte[]> byteCode, ur_size sizeInBytes)
 	{
 		this->byteCode = std::move(byteCode);
 		this->sizeInBytes = sizeInBytes;

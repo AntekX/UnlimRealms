@@ -14,6 +14,7 @@
 
 #include <dxgi1_4.h>
 #include <d3d12.h>
+#include <Gfx/D3D12/d3dx12.h>
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d12.lib")
 
@@ -162,9 +163,9 @@ namespace UnlimRealms
 
 			inline ur_size GetDescriptorCount() const;
 
-			inline D3D12_CPU_DESCRIPTOR_HANDLE FirstCpuHandle() const;
+			inline const D3D12_CPU_DESCRIPTOR_HANDLE& FirstCpuHandle() const;
 
-			inline D3D12_GPU_DESCRIPTOR_HANDLE FirstGpuHandle() const;
+			inline const D3D12_GPU_DESCRIPTOR_HANDLE& FirstGpuHandle() const;
 
 		private:
 
@@ -186,9 +187,9 @@ namespace UnlimRealms
 
 			~Descriptor();
 
-			inline D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle() const;
+			inline const D3D12_CPU_DESCRIPTOR_HANDLE& CpuHandle() const;
 
-			inline D3D12_GPU_DESCRIPTOR_HANDLE GpuHandle() const;
+			inline const D3D12_GPU_DESCRIPTOR_HANDLE& GpuHandle() const;
 		};
 
 		inline DescriptorHeap* GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType) const;

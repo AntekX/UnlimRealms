@@ -267,7 +267,7 @@ ILboolean iIsValidBmp(SIO* io);
 ILboolean iLoadBitmapInternal(ILimage* image);
 ILboolean iSaveBitmapInternal(ILimage* image);
 
-ILboolean ilSaveCHeader(ILimage* image, char *InternalName);
+ILboolean ilSaveCHeader(ILimage* image, const char *InternalName);
 
 ILboolean iLoadCutInternal(ILimage* image);
 

@@ -72,7 +72,7 @@ int RayTracingSandboxApp::Run()
 	std::unique_ptr<GrafRenderPass> grafPassColorDepth;
 	std::unique_ptr<GrafImage> grafImageRTDepth;
 	std::vector<std::unique_ptr<GrafRenderTarget>> grafTargetColorDepth;
-	auto& initializeGrafRenderTargetObjects = [&]() -> Result
+	auto initializeGrafRenderTargetObjects = [&]() -> Result
 	{
 		Result res(Success);
 		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
@@ -112,7 +112,7 @@ int RayTracingSandboxApp::Run()
 
 		return res;
 	};
-	auto& deinitializeGrafRenderTargetObjects = [&](GrafCommandList* deferredDestroyCmdList = ur_null) -> Result
+	auto deinitializeGrafRenderTargetObjects = [&](GrafCommandList* deferredDestroyCmdList = ur_null) -> Result
 	{
 		if (deferredDestroyCmdList != ur_null)
 		{
@@ -128,7 +128,7 @@ int RayTracingSandboxApp::Run()
 		grafImageRTDepth.reset();
 		return Result(Success);
 	};
-	auto& initializeGrafObjects = [&]() -> Result
+	auto initializeGrafObjects = [&]() -> Result
 	{
 		Result res(Success);
 		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
@@ -173,7 +173,7 @@ int RayTracingSandboxApp::Run()
 
 		return res;
 	};
-	auto& deinitializeGrafObjects = [&]() -> Result
+	auto deinitializeGrafObjects = [&]() -> Result
 	{
 		deinitializeGrafRenderTargetObjects();
 		grafPassColorDepth.reset();

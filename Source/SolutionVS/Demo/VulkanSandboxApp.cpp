@@ -97,7 +97,7 @@ int VulkanSandboxApp::Run()
 	std::unique_ptr<GrafPipeline> grafPipelineSample;
 	std::vector<std::unique_ptr<GrafCommandList>> grafMainCmdList;
 	std::vector<std::unique_ptr<GrafDescriptorTable>> grafBindingSample;
-	auto& deinitializeGrafRenderTargetObjects = [&](GrafCommandList* deferredDestroyCmdList = ur_null) -> void {
+	auto deinitializeGrafRenderTargetObjects = [&](GrafCommandList* deferredDestroyCmdList = ur_null) -> void {
 		if (deferredDestroyCmdList != ur_null)
 		{
 			GrafRenderTarget *grafPrevRT = grafColorDepthTarget.release();
@@ -116,11 +116,11 @@ int VulkanSandboxApp::Run()
 		grafRTImageColor.reset();
 		grafRTImageDepth.reset();
 	};
-	auto& deinitializeGrafFrameObjects = [&]() -> void {
+	auto deinitializeGrafFrameObjects = [&]() -> void {
 		grafBindingSample.clear();
 		grafMainCmdList.clear();
 	};
-	auto& deinitializeGrafObjects = [&]() -> void {
+	auto deinitializeGrafObjects = [&]() -> void {
 		// order matters!
 		deinitializeGrafRenderTargetObjects();
 		deinitializeGrafFrameObjects();
@@ -134,7 +134,7 @@ int VulkanSandboxApp::Run()
 		grafDefaultSampler.reset();
 	};
 	Result grafRes = NotInitialized;
-	auto& initializeGrafObjects = [&]() -> void
+	auto initializeGrafObjects = [&]() -> void
 	{
 		if (ur_null == grafRenderer) return;
 		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
@@ -232,7 +232,7 @@ int VulkanSandboxApp::Run()
 		grafRes = grafPipelineSample->Initialize(grafDevice, samplePipelineParams);
 		if (Failed(grafRes)) return;
 	};
-	auto& initializeGrafFrameObjects = [&]() -> void
+	auto initializeGrafFrameObjects = [&]() -> void
 	{
 		if (Failed(grafRes)) return;
 		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
@@ -264,7 +264,7 @@ int VulkanSandboxApp::Run()
 		}
 		if (Failed(grafRes)) return;
 	};
-	auto& initializeGrafRenderTargetObjects = [&]() -> void
+	auto initializeGrafRenderTargetObjects = [&]() -> void
 	{
 		if (Failed(grafRes)) return;
 		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();

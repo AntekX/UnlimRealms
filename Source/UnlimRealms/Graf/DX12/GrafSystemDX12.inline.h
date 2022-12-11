@@ -125,18 +125,44 @@ namespace UnlimRealms
 		return &this->d3dIBView;
 	}
 
-	inline const D3D12_ROOT_PARAMETER* GrafDescriptorTableDX12::GetD3DRootParameter() const
+	inline const GrafDescriptorHandleDX12& GrafDescriptorTableDX12::GetSrvUavCbvDescriptorHeapHandle() const
 	{
-		return &this->d3dRootParameter;
+		return this->descriptorTableData[ShaderVisibleDescriptorHeap_SrvUavCbv].descriptorHeapHandle;
+	}
+
+	inline const GrafDescriptorHandleDX12& GrafDescriptorTableDX12::GetSamplerDescriptorHeapHandle() const
+	{
+		return this->descriptorTableData[ShaderVisibleDescriptorHeap_Sampler].descriptorHeapHandle;
+	}
+
+	inline const D3D12_ROOT_PARAMETER& GrafDescriptorTableDX12::GetSrvUavCbvTableD3DRootParameter() const
+	{
+		return this->descriptorTableData[ShaderVisibleDescriptorHeap_SrvUavCbv].d3dRootParameter;
+	}
+
+	inline const D3D12_ROOT_PARAMETER& GrafDescriptorTableDX12::GetSamplerTableD3DRootParameter() const
+	{
+		return this->descriptorTableData[ShaderVisibleDescriptorHeap_Sampler].d3dRootParameter;
 	}
 
 	inline const Result GrafDescriptorTableDX12::GetD3DDescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE& d3dHandle,
 		ur_uint bindingIdx, GrafDescriptorHandleDX12& tableHandle,
 		D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType) const
 	{
+		// get heap related table data
+		const DescriptorTableData* descriptorTable = nullptr;
+		if (D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER == d3dRangeType)
+		{
+			descriptorTable = &this->descriptorTableData[ShaderVisibleDescriptorHeap_Sampler];
+		}
+		else
+		{
+			descriptorTable = &this->descriptorTableData[ShaderVisibleDescriptorHeap_SrvUavCbv];
+		}
+
 		// find corresponding range
 		const D3D12_DESCRIPTOR_RANGE* bindingDescriptorRange = nullptr;
-		for (const D3D12_DESCRIPTOR_RANGE& d3dDescriptorRange : this->d3dDescriptorRanges)
+		for (const D3D12_DESCRIPTOR_RANGE& d3dDescriptorRange : descriptorTable->d3dDescriptorRanges)
 		{
 			if (d3dDescriptorRange.RangeType == d3dRangeType &&
 				d3dDescriptorRange.BaseShaderRegister <= bindingIdx &&
@@ -150,9 +176,8 @@ namespace UnlimRealms
 			return Result(NotFound);
 
 		// compute descriptor handle
-		ur_size rangeOffsetInTable = (ur_size)bindingDescriptorRange->OffsetInDescriptorsFromTableStart - tableHandle.GetAllocation().Offset;
-		ur_size bindingOffsetInTable = (bindingIdx - (ur_size)bindingDescriptorRange->BaseShaderRegister) + rangeOffsetInTable;
-		SIZE_T bindingOffsetHeapSize = (SIZE_T)(bindingOffsetInTable * tableHandle.GetHeap()->GetDescriptorIncrementSize());
+		UINT bindingOffsetInTable = ((UINT)bindingIdx - bindingDescriptorRange->BaseShaderRegister) + bindingDescriptorRange->OffsetInDescriptorsFromTableStart;
+		SIZE_T bindingOffsetHeapSize = (SIZE_T)bindingOffsetInTable * (SIZE_T)tableHandle.GetHeap()->GetDescriptorIncrementSize();
 		d3dHandle.ptr = tableHandle.GetD3DHandleCPU().ptr + bindingOffsetHeapSize;
 
 		return Result(Success);
@@ -161,6 +186,16 @@ namespace UnlimRealms
 	inline const GrafDescriptorHandleDX12& GrafSamplerDX12::GetDescriptorHandle() const
 	{
 		return this->samplerDescriptorHandle;
+	}
+
+	inline const void* GrafShaderDX12::GetByteCodePtr() const
+	{
+		return this->byteCodeBuffer.get();
+	}
+
+	inline ur_size GrafShaderDX12::GetByteCodeSize() const
+	{
+		return this->byteCodeSize;
 	}
 
 	inline GrafBuffer* GrafAccelerationStructureDX12::GetScratchBuffer() const
