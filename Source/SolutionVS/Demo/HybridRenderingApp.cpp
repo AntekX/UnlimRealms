@@ -1090,10 +1090,10 @@ int HybridRenderingApp::Run()
 					this->rasterDescTableLayout.get(),
 				};
 				GrafVertexElementDesc vertexElements[] = {
-					{ GrafFormat::R32G32B32_SFLOAT, 0 },	// pos
-					{ GrafFormat::R32G32B32_SFLOAT, 12 },	// normal
-					{ GrafFormat::R32G32B32_SFLOAT, 24 },	// tangent
-					{ GrafFormat::R32G32_SFLOAT, 36 }		// tex coord
+					{ GrafFormat::R32G32B32_SFLOAT, 0, "POSITION" },
+					{ GrafFormat::R32G32B32_SFLOAT, 12, "NORMAL" },
+					{ GrafFormat::R32G32B32_SFLOAT, 24, "TANGENT" },
+					{ GrafFormat::R32G32_SFLOAT, 36, "TEXCOORD" }
 				};
 				GrafVertexInputDesc vertexInputs[] = { {
 					GrafVertexInputType::PerVertex, 0, sizeof(Mesh::Vertex),

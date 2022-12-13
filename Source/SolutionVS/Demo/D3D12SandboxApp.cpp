@@ -150,11 +150,11 @@ int D3D12SandboxApp::Run()
 		if (Failed(grafRes)) return;
 
 		// vertex shader sample
-		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_vs.spv", GrafShaderType::Vertex, grafShaderSampleVS);
+		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_vs.cso", GrafShaderType::Vertex, grafShaderSampleVS);
 		if (Failed(grafRes)) return;
 
 		// pixel shader sample
-		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_ps.spv", GrafShaderType::Pixel, grafShaderSamplePS);
+		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_ps.cso", GrafShaderType::Pixel, grafShaderSamplePS);
 		if (Failed(grafRes)) return;
 
 		// shader bindings layout sample
@@ -217,8 +217,8 @@ int D3D12SandboxApp::Run()
 			grafBindingLayoutSample.get(),
 		};
 		GrafVertexElementDesc sampleVertexElements[] = {
-			{ GrafFormat::R32G32B32_SFLOAT, 0 },
-			{ GrafFormat::R32G32B32_SFLOAT, 12 }
+			{ GrafFormat::R32G32B32_SFLOAT, 0, "POSITION" },
+			{ GrafFormat::R32G32B32_SFLOAT, 12, "COLOR" }
 		};
 		GrafVertexInputDesc sampleVertexInputs[] = {{
 			GrafVertexInputType::PerVertex, 0, sizeof(VertexSample),

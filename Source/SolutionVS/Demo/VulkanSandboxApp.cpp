@@ -214,8 +214,8 @@ int VulkanSandboxApp::Run()
 			grafBindingLayoutSample.get(),
 		};
 		GrafVertexElementDesc sampleVertexElements[] = {
-			{ GrafFormat::R32G32B32_SFLOAT, 0 },
-			{ GrafFormat::R32G32B32_SFLOAT, 12 }
+			{ GrafFormat::R32G32B32_SFLOAT, 0, "POSITION" },
+			{ GrafFormat::R32G32B32_SFLOAT, 12, "COLOR" }
 		};
 		GrafVertexInputDesc sampleVertexInputs[] = {{
 			GrafVertexInputType::PerVertex, 0, sizeof(VertexSample),

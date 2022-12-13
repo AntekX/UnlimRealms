@@ -483,9 +483,9 @@ namespace UnlimRealms
 				this->grafBindingLayout.get(),
 			};
 			GrafVertexElementDesc vertexElements[] = {
-				{ GrafFormat::R32G32_SFLOAT, 0 },
-				{ GrafFormat::R32G32_SFLOAT, 8 },
-				{ GrafFormat::R8G8B8A8_UNORM, 16 }
+				{ GrafFormat::R32G32_SFLOAT, 0, "POSITION" },
+				{ GrafFormat::R32G32_SFLOAT, 8, "TEXCOORD" },
+				{ GrafFormat::R8G8B8A8_UNORM, 16, "COLOR" }
 			};
 			GrafVertexInputDesc vertexInputs[] = { {
 				GrafVertexInputType::PerVertex, 0, sizeof(ImDrawVert),

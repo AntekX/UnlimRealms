@@ -344,7 +344,7 @@ namespace UnlimRealms
 				grafObjects->shaderDescriptorLayout.get(),
 			};
 			GrafVertexElementDesc vertexElements[] = {
-				{ GrafFormat::R32G32B32_SFLOAT, 0 }
+				{ GrafFormat::R32G32B32_SFLOAT, 0, "POSITION" }
 			};
 			GrafVertexInputDesc vertexInputs[] = { {
 				GrafVertexInputType::PerVertex, 0, sizeof(Vertex),

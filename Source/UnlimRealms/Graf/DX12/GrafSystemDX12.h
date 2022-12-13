@@ -78,6 +78,16 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	enum GrafShaderVisibleDescriptorHeapTypeDX12
+	{
+		GrafShaderVisibleDescriptorHeapTypeDX12_SrvUavCbv = 0,
+		GrafShaderVisibleDescriptorHeapTypeDX12_Sampler,
+		GrafShaderVisibleDescriptorHeapTypeDX12_Count
+	};
+	static_assert(GrafShaderVisibleDescriptorHeapTypeDX12_SrvUavCbv == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	static_assert(GrafShaderVisibleDescriptorHeapTypeDX12_Sampler == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafDescriptorHeapDX12
 	{
 	public:
@@ -549,9 +559,28 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
+		inline const D3D12_ROOT_PARAMETER& GetSrvUavCbvTableD3DRootParameter() const;
+
+		inline const D3D12_ROOT_PARAMETER& GetSamplerTableD3DRootParameter() const;
+
+	protected:
+
+		struct DescriptorTableDesc
+		{
+			std::vector<D3D12_DESCRIPTOR_RANGE> d3dDescriptorRanges;
+			D3D12_ROOT_PARAMETER d3dRootParameter;
+			ur_uint descriptorCount;
+		};
+
+		inline const DescriptorTableDesc& GetTableDescForHeapType(GrafShaderVisibleDescriptorHeapTypeDX12 heapType);
+
+		friend class GrafDescriptorTableDX12;
+
 	private:
 
 		Result Deinitialize();
+
+		DescriptorTableDesc descriptorTableDesc[GrafShaderVisibleDescriptorHeapTypeDX12_Count];
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -595,39 +624,20 @@ namespace UnlimRealms
 
 		inline const GrafDescriptorHandleDX12& GetSamplerDescriptorHeapHandle() const;
 
-		inline const D3D12_ROOT_PARAMETER& GetSrvUavCbvTableD3DRootParameter() const;
-
-		inline const D3D12_ROOT_PARAMETER& GetSamplerTableD3DRootParameter() const;
-
 	private:
 
 		Result Deinitialize();
 
-		Result CopyResourceDescriptorToTable(ur_uint bindingIdx, GrafDescriptorHandleDX12& tableHandle,
-			const D3D12_CPU_DESCRIPTOR_HANDLE& d3dResourceHandle, D3D12_DESCRIPTOR_HEAP_TYPE d3dHeapType, D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType);
+		Result CopyResourceDescriptorToTable(ur_uint bindingIdx, const D3D12_CPU_DESCRIPTOR_HANDLE& d3dResourceHandle, D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType);
 
-		inline const Result GetD3DDescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE& d3dHandle,
-			ur_uint bindingIdx, GrafDescriptorHandleDX12& tableHandle,
-			D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType) const;
-
-		enum ShaderVisibleDescriptorHeapType
-		{
-			ShaderVisibleDescriptorHeap_SrvUavCbv = 0,
-			ShaderVisibleDescriptorHeap_Sampler,
-			ShaderVisibleDescriptorHeap_Count
-		};
-		static_assert(ShaderVisibleDescriptorHeap_SrvUavCbv == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		static_assert(ShaderVisibleDescriptorHeap_Sampler == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+		inline const Result GetD3DDescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE& d3dHandle, ur_uint bindingIdx, D3D12_DESCRIPTOR_RANGE_TYPE d3dRangeType) const;
 
 		struct DescriptorTableData
 		{
-			std::vector<D3D12_DESCRIPTOR_RANGE> d3dDescriptorRanges;
 			GrafDescriptorHandleDX12 descriptorHeapHandle;
-			D3D12_ROOT_PARAMETER d3dRootParameter;
-			ur_uint descriptorCount;
 		};
 
-		DescriptorTableData descriptorTableData[ShaderVisibleDescriptorHeap_Count];
+		DescriptorTableData descriptorTableData[GrafShaderVisibleDescriptorHeapTypeDX12_Count];
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -646,6 +656,7 @@ namespace UnlimRealms
 		Result Deinitialize();
 
 		shared_ref<ID3D12PipelineState> d3dPipelineState;
+		shared_ref<ID3D12RootSignature> d3dRootSignature;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -716,6 +727,7 @@ namespace UnlimRealms
 		static inline D3D12_TEXTURE_ADDRESS_MODE GrafToD3DAddressMode(GrafAddressMode addressMode);
 		static inline D3D12_DESCRIPTOR_RANGE_TYPE GrafToD3DDescriptorType(GrafDescriptorType descriptorType);
 		static inline D3D12_SHADER_VISIBILITY GrafToD3DShaderVisibility(GrafShaderStageFlags sgaderStageFlags);
+		static inline const char* ParseVertexElementSemantic(const std::string& semantic, std::string& semanticName, ur_uint& semanticIdx);
 		static inline DXGI_FORMAT GrafToDXGIFormat(GrafFormat grafFormat);
 		static inline GrafFormat DXGIToGrafFormat(DXGI_FORMAT dxgiFormat);
 	};

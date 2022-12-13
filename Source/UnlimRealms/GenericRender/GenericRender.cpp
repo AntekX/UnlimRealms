@@ -134,9 +134,9 @@ namespace UnlimRealms
 					this->grafObjects->shaderDescriptorLayout.get(),
 				};
 				GrafVertexElementDesc vertexElements[] = {
-					{ GrafFormat::R32G32B32_SFLOAT, 0 },
-					{ GrafFormat::R8G8B8A8_UNORM, 12 },
-					{ GrafFormat::R32G32_SFLOAT, 16 }
+					{ GrafFormat::R32G32B32_SFLOAT, 0, "POSITION" },
+					{ GrafFormat::R8G8B8A8_UNORM, 12, "COLOR" },
+					{ GrafFormat::R32G32_SFLOAT, 16, "TEXCOORD" }
 				};
 				GrafVertexInputDesc vertexInputs[] = { {
 					GrafVertexInputType::PerVertex, 0, sizeof(Vertex),

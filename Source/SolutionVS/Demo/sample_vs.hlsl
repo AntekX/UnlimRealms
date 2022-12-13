@@ -1,5 +1,5 @@
 
-#if defined(VK_SAMPLE)
+#if (1)//defined(VK_SAMPLE)
 
 // Vulkan sandbox sample
 
