@@ -727,6 +727,12 @@ namespace UnlimRealms
 		static inline D3D12_TEXTURE_ADDRESS_MODE GrafToD3DAddressMode(GrafAddressMode addressMode);
 		static inline D3D12_DESCRIPTOR_RANGE_TYPE GrafToD3DDescriptorType(GrafDescriptorType descriptorType);
 		static inline D3D12_SHADER_VISIBILITY GrafToD3DShaderVisibility(GrafShaderStageFlags sgaderStageFlags);
+		static inline D3D12_BLEND_OP GrafToD3DBlendOp(GrafBlendOp blendOp);
+		static inline D3D12_BLEND GrafToD3DBlendFactor(GrafBlendFactor blendFactor);
+		static inline D3D12_CULL_MODE GrafToD3DCullMode(GrafCullMode cullMode);
+		static inline D3D12_COMPARISON_FUNC GrafToD3DCompareOp(GrafCompareOp compareOp);
+		static inline D3D12_STENCIL_OP GrafToD3DStencilOp(GrafStencilOp stencilOp);
+		static inline D3D12_PRIMITIVE_TOPOLOGY_TYPE GrafToD3DPrimitiveTopology(GrafPrimitiveTopology topology);
 		static inline const char* ParseVertexElementSemantic(const std::string& semantic, std::string& semanticName, ur_uint& semanticIdx);
 		static inline DXGI_FORMAT GrafToDXGIFormat(GrafFormat grafFormat);
 		static inline GrafFormat DXGIToGrafFormat(DXGI_FORMAT dxgiFormat);

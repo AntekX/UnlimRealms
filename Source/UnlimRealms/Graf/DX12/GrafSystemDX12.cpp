@@ -1990,9 +1990,6 @@ namespace UnlimRealms
 
 	Result GrafPipelineDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
-		//return Result(NotImplemented);
-		// WIP
-
 		this->Deinitialize();
 
 		if (ur_null == initParams.RenderPass)
@@ -2012,6 +2009,7 @@ namespace UnlimRealms
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC d3dPipelineDesc = {};
 
 		d3dPipelineDesc.NodeMask = 0;
+		d3dPipelineDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
 		// initialize root signature
 
@@ -2096,16 +2094,21 @@ namespace UnlimRealms
 		// blend state
 
 		d3dPipelineDesc.BlendState.AlphaToCoverageEnable = FALSE;
-		d3dPipelineDesc.BlendState.IndependentBlendEnable = FALSE;
+		d3dPipelineDesc.BlendState.IndependentBlendEnable = TRUE;
 		for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
 		{
-			d3dPipelineDesc.BlendState.RenderTarget[i] = {
-				FALSE,FALSE,
-				D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-				D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-				D3D12_LOGIC_OP_NOOP,
-				D3D12_COLOR_WRITE_ENABLE_ALL
-			};
+			const GrafColorBlendOpDesc& grafBlendDesc = (i < initParams.ColorBlendOpDescCount ? initParams.ColorBlendOpDesc[i] : GrafColorBlendOpDesc::Default);
+			D3D12_RENDER_TARGET_BLEND_DESC& d3dBlendDesc = d3dPipelineDesc.BlendState.RenderTarget[i];
+			d3dBlendDesc.BlendEnable = grafBlendDesc.BlendEnable;
+			d3dBlendDesc.SrcBlend = GrafUtilsDX12::GrafToD3DBlendFactor(grafBlendDesc.SrcColorFactor);
+			d3dBlendDesc.DestBlend = GrafUtilsDX12::GrafToD3DBlendFactor(grafBlendDesc.DstColorFactor);
+			d3dBlendDesc.BlendOp = GrafUtilsDX12::GrafToD3DBlendOp(grafBlendDesc.ColorOp);
+			d3dBlendDesc.SrcBlendAlpha = GrafUtilsDX12::GrafToD3DBlendFactor(grafBlendDesc.SrcAlphaFactor);
+			d3dBlendDesc.DestBlendAlpha = GrafUtilsDX12::GrafToD3DBlendFactor(grafBlendDesc.DstAlphaFactor);
+			d3dBlendDesc.BlendOpAlpha = GrafUtilsDX12::GrafToD3DBlendOp(grafBlendDesc.AlphaOp);
+			d3dBlendDesc.LogicOpEnable = FALSE;
+			d3dBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
+			d3dBlendDesc.RenderTargetWriteMask = UINT8(grafBlendDesc.WriteMask);
 		}
 
 		d3dPipelineDesc.SampleMask = UINT_MAX;
@@ -2113,8 +2116,8 @@ namespace UnlimRealms
 		// rasterizer state
 
 		d3dPipelineDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-		d3dPipelineDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
-		d3dPipelineDesc.RasterizerState.FrontCounterClockwise = FALSE;
+		d3dPipelineDesc.RasterizerState.CullMode = GrafUtilsDX12::GrafToD3DCullMode(initParams.CullMode);
+		d3dPipelineDesc.RasterizerState.FrontCounterClockwise = BOOL(GrafFrontFaceOrder::CounterClockwise == initParams.FrontFaceOrder);
 		d3dPipelineDesc.RasterizerState.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
 		d3dPipelineDesc.RasterizerState.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
 		d3dPipelineDesc.RasterizerState.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
@@ -2126,14 +2129,20 @@ namespace UnlimRealms
 
 		// depth stencil state
 
-		d3dPipelineDesc.DepthStencilState.DepthEnable = FALSE;
+		d3dPipelineDesc.DepthStencilState.DepthEnable = initParams.DepthTestEnable;
 		d3dPipelineDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-		d3dPipelineDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-		d3dPipelineDesc.DepthStencilState.StencilEnable = FALSE;
+		d3dPipelineDesc.DepthStencilState.DepthFunc = GrafUtilsDX12::GrafToD3DCompareOp(initParams.DepthCompareOp);
+		d3dPipelineDesc.DepthStencilState.StencilEnable = initParams.StencilTestEnable;
 		d3dPipelineDesc.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
 		d3dPipelineDesc.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-		d3dPipelineDesc.DepthStencilState.FrontFace = { D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
-		d3dPipelineDesc.DepthStencilState.BackFace = { D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
+		d3dPipelineDesc.DepthStencilState.FrontFace.StencilFailOp = GrafUtilsDX12::GrafToD3DStencilOp(initParams.StencilFront.FailOp);
+		d3dPipelineDesc.DepthStencilState.FrontFace.StencilDepthFailOp = GrafUtilsDX12::GrafToD3DStencilOp(initParams.StencilFront.DepthFailOp);
+		d3dPipelineDesc.DepthStencilState.FrontFace.StencilPassOp = GrafUtilsDX12::GrafToD3DStencilOp(initParams.StencilFront.PassOp);
+		d3dPipelineDesc.DepthStencilState.FrontFace.StencilFunc = GrafUtilsDX12::GrafToD3DCompareOp(initParams.StencilFront.CompareOp);
+		d3dPipelineDesc.DepthStencilState.BackFace.StencilFailOp = GrafUtilsDX12::GrafToD3DStencilOp(initParams.StencilBack.FailOp);
+		d3dPipelineDesc.DepthStencilState.BackFace.StencilDepthFailOp = GrafUtilsDX12::GrafToD3DStencilOp(initParams.StencilBack.DepthFailOp);
+		d3dPipelineDesc.DepthStencilState.BackFace.StencilPassOp = GrafUtilsDX12::GrafToD3DStencilOp(initParams.StencilBack.PassOp);
+		d3dPipelineDesc.DepthStencilState.BackFace.StencilFunc = GrafUtilsDX12::GrafToD3DCompareOp(initParams.StencilBack.CompareOp);
 
 		// input layout
 
@@ -2175,16 +2184,8 @@ namespace UnlimRealms
 
 		// primitive topology
 
-		d3dPipelineDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		d3dPipelineDesc.PrimitiveTopologyType = GrafUtilsDX12::GrafToD3DPrimitiveTopology(initParams.PrimitiveTopology);
 
-		//ID3D12RootSignature* pRootSignature;
-		//D3D12_STREAM_OUTPUT_DESC StreamOutput;
-		//D3D12_INPUT_LAYOUT_DESC InputLayout;
-		//D3D12_INDEX_BUFFER_STRIP_CUT_VALUE IBStripCutValue;
-		//UINT NodeMask;
-		//D3D12_CACHED_PIPELINE_STATE CachedPSO;
-		//D3D12_PIPELINE_STATE_FLAGS Flags;
-		
 		hres = d3dDevice->CreateGraphicsPipelineState(&d3dPipelineDesc, __uuidof(ID3D12PipelineState), this->d3dPipelineState);
 		if (FAILED(hres))
 		{
@@ -2490,6 +2491,95 @@ namespace UnlimRealms
 			//case GrafShaderStageFlag::Mesh: d3dShaderVisibility = D3D12_SHADER_VISIBILITY_MESH; break;
 		}
 		return d3dShaderVisibility;
+	}
+
+	D3D12_BLEND_OP GrafUtilsDX12::GrafToD3DBlendOp(GrafBlendOp blendOp)
+	{
+		D3D12_BLEND_OP d3dBlendOp = D3D12_BLEND_OP(0);
+		switch (blendOp)
+		{
+		case GrafBlendOp::Add: d3dBlendOp = D3D12_BLEND_OP_ADD; break;
+		case GrafBlendOp::Subtract: d3dBlendOp = D3D12_BLEND_OP_SUBTRACT; break;
+		case GrafBlendOp::ReverseSubtract: d3dBlendOp = D3D12_BLEND_OP_REV_SUBTRACT; break;
+		case GrafBlendOp::Min: d3dBlendOp = D3D12_BLEND_OP_MIN; break;
+		case GrafBlendOp::Max: d3dBlendOp = D3D12_BLEND_OP_MAX; break;
+		};
+		return d3dBlendOp;
+	}
+
+	D3D12_BLEND GrafUtilsDX12::GrafToD3DBlendFactor(GrafBlendFactor blendFactor)
+	{
+		D3D12_BLEND d3dBlendFactor = D3D12_BLEND(0);
+		switch (blendFactor)
+		{
+		case GrafBlendFactor::Zero: d3dBlendFactor = D3D12_BLEND_ZERO; break;
+		case GrafBlendFactor::One: d3dBlendFactor = D3D12_BLEND_ONE; break;
+		case GrafBlendFactor::SrcColor: d3dBlendFactor = D3D12_BLEND_SRC_COLOR; break;
+		case GrafBlendFactor::InvSrcColor: d3dBlendFactor = D3D12_BLEND_INV_SRC_COLOR; break;
+		case GrafBlendFactor::DstColor: d3dBlendFactor = D3D12_BLEND_DEST_COLOR; break;
+		case GrafBlendFactor::InvDstColor: d3dBlendFactor = D3D12_BLEND_INV_DEST_COLOR; break;
+		case GrafBlendFactor::SrcAlpha: d3dBlendFactor = D3D12_BLEND_SRC_ALPHA; break;
+		case GrafBlendFactor::InvSrcAlpha: d3dBlendFactor = D3D12_BLEND_INV_SRC_ALPHA; break;
+		case GrafBlendFactor::DstAlpha: d3dBlendFactor = D3D12_BLEND_DEST_ALPHA; break;
+		case GrafBlendFactor::InvDstAlpha: d3dBlendFactor = D3D12_BLEND_INV_DEST_ALPHA; break;
+		};
+		return d3dBlendFactor;
+	}
+
+	D3D12_CULL_MODE GrafUtilsDX12::GrafToD3DCullMode(GrafCullMode cullMode)
+	{
+		D3D12_CULL_MODE d3dCullMode = D3D12_CULL_MODE(0);
+		switch (cullMode)
+		{
+		case GrafCullMode::None: d3dCullMode = D3D12_CULL_MODE_NONE; break;
+		case GrafCullMode::Front: d3dCullMode = D3D12_CULL_MODE_FRONT; break;
+		case GrafCullMode::Back: d3dCullMode = D3D12_CULL_MODE_BACK; break;
+		};
+		return d3dCullMode;
+	}
+
+	D3D12_COMPARISON_FUNC GrafUtilsDX12::GrafToD3DCompareOp(GrafCompareOp compareOp)
+	{
+		D3D12_COMPARISON_FUNC d3dCompareOp = D3D12_COMPARISON_FUNC(0);
+		switch (compareOp)
+		{
+		case GrafCompareOp::Never: d3dCompareOp = D3D12_COMPARISON_FUNC_NEVER; break;
+		case GrafCompareOp::Less: d3dCompareOp = D3D12_COMPARISON_FUNC_LESS; break;
+		case GrafCompareOp::Equal: d3dCompareOp = D3D12_COMPARISON_FUNC_EQUAL; break;
+		case GrafCompareOp::LessOrEqual: d3dCompareOp = D3D12_COMPARISON_FUNC_LESS_EQUAL; break;
+		case GrafCompareOp::Greater: d3dCompareOp = D3D12_COMPARISON_FUNC_GREATER; break;
+		case GrafCompareOp::NotEqual: d3dCompareOp = D3D12_COMPARISON_FUNC_NOT_EQUAL; break;
+		case GrafCompareOp::GreaterOrEqual: d3dCompareOp = D3D12_COMPARISON_FUNC_GREATER_EQUAL; break;
+		case GrafCompareOp::Always: d3dCompareOp = D3D12_COMPARISON_FUNC_ALWAYS; break;
+		};
+		return d3dCompareOp;
+	}
+
+	D3D12_STENCIL_OP GrafUtilsDX12::GrafToD3DStencilOp(GrafStencilOp stencilOp)
+	{
+		D3D12_STENCIL_OP d3dStencilOp = D3D12_STENCIL_OP(0);
+		switch (stencilOp)
+		{
+		case GrafStencilOp::Keep: d3dStencilOp = D3D12_STENCIL_OP_KEEP; break;
+		case GrafStencilOp::Zero: d3dStencilOp = D3D12_STENCIL_OP_ZERO; break;
+		case GrafStencilOp::Replace: d3dStencilOp = D3D12_STENCIL_OP_REPLACE; break;
+		};
+		return d3dStencilOp;
+	}
+
+	D3D12_PRIMITIVE_TOPOLOGY_TYPE GrafUtilsDX12::GrafToD3DPrimitiveTopology(GrafPrimitiveTopology topology)
+	{
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED;
+		switch (topology)
+		{
+		case GrafPrimitiveTopology::PointList: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT; break;
+		case GrafPrimitiveTopology::LineList: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE; break;
+		case GrafPrimitiveTopology::LineStrip: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED; break;
+		case GrafPrimitiveTopology::TriangleList: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
+		case GrafPrimitiveTopology::TriangleStrip: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED; break;
+		case GrafPrimitiveTopology::TriangleFan: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED; break;
+		};
+		return d3dTopology;
 	}
 
 	const char* GrafUtilsDX12::ParseVertexElementSemantic(const std::string& semantic, std::string& semanticName, ur_uint& semanticIdx)
