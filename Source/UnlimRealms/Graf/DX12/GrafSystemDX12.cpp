@@ -1182,7 +1182,61 @@ namespace UnlimRealms
 
 	Result GrafImageDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		GrafImage::Initialize(grafDevice, initParams);
+
+		// validate device
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (nullptr == grafDeviceDX12 || nullptr == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafImageDX12: failed to initialize, invalid GrafDevice"));
+		}
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		// create resource
+
+		D3D12_RESOURCE_DESC d3dResDesc = {};
+		d3dResDesc.Dimension = GrafUtilsDX12::GrafToD3DResDimension(initParams.ImageDesc.Type);
+		d3dResDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+		d3dResDesc.Width = (UINT64)initParams.ImageDesc.Size.x;
+		d3dResDesc.Height = (UINT64)initParams.ImageDesc.Size.y;
+		d3dResDesc.DepthOrArraySize = (UINT16)initParams.ImageDesc.Size.z;
+		d3dResDesc.MipLevels = (UINT16)initParams.ImageDesc.MipLevels;
+		d3dResDesc.Format = GrafUtilsDX12::GrafToDXGIFormat(initParams.ImageDesc.Format);
+		d3dResDesc.SampleDesc.Count = 1;
+		d3dResDesc.SampleDesc.Quality = 0;
+		d3dResDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+		d3dResDesc.Flags = GrafUtilsDX12::GrafToD3DResourceFlags(initParams.ImageDesc.Usage);
+
+		D3D12_HEAP_PROPERTIES d3dHeapProperties = {};
+		d3dHeapProperties.Type = GrafUtilsDX12::GrafToD3DImageHeapType(initParams.ImageDesc.Usage, initParams.ImageDesc.MemoryType);
+		d3dHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		d3dHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		d3dHeapProperties.CreationNodeMask = 0;
+		d3dHeapProperties.VisibleNodeMask = 0;
+
+		D3D12_RESOURCE_STATES d3dResStates = GrafUtilsDX12::GrafToD3DImageInitialState(initParams.ImageDesc.Usage);
+
+		HRESULT hres = d3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResDesc, d3dResStates, nullptr,
+			__uuidof(ID3D12Resource), d3dResource);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafImageDX12: CreateCommittedResource failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		// create default subresource
+
+		Result res = this->CreateDefaultSubresource();
+		if (Failed(res))
+		{
+			this->Deinitialize();
+			return res;
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafImageDX12::InitializeFromD3DResource(GrafDevice *grafDevice, const InitParams& initParams, shared_ref<ID3D12Resource>& d3dResource)
@@ -1312,8 +1366,6 @@ namespace UnlimRealms
 
 	Result GrafImageSubresourceDX12::CreateD3DImageView()
 	{
-		//return Result(NotImplemented);
-
 		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
 
 		// validate image
@@ -1333,7 +1385,7 @@ namespace UnlimRealms
 		{
 			D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
 			rtvDesc.Format = GrafUtilsDX12::GrafToDXGIFormat(grafImageDesc.Format);
-			rtvDesc.ViewDimension = GrafUtilsDX12::GrafToD3DRTVDimenstion(grafImageDesc.Type);
+			rtvDesc.ViewDimension = GrafUtilsDX12::GrafToD3DRTVDimension(grafImageDesc.Type);
 			switch (grafImageDesc.Type)
 			{
 			case GrafImageType::Tex1D:
@@ -1359,7 +1411,54 @@ namespace UnlimRealms
 			grafDeviceDX12->GetD3DDevice()->CreateRenderTargetView(grafImageDX12->GetD3DResource(), &rtvDesc, this->rtvDescriptorHandle.GetD3DHandleCPU());
 		}
 
-		// TODO: support SRV & UAV
+		if (grafImageDesc.Usage & ur_uint(GrafImageUsageFlag::ShaderRead))
+		{
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+			srvDesc.Format = GrafUtilsDX12::GrafToDXGIFormat(grafImageDesc.Format);
+			srvDesc.ViewDimension = GrafUtilsDX12::GrafToD3DSRVDimension(grafImageDesc.Type);
+			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			switch (grafImageDesc.Type)
+			{
+			case GrafImageType::Tex1D:
+				srvDesc.Texture1D.MostDetailedMip = UINT(grafSubresDesc.BaseMipLevel);
+				srvDesc.Texture1D.MipLevels = UINT(std::max(grafSubresDesc.LevelCount, 1u));
+				srvDesc.Texture1D.ResourceMinLODClamp = 0.0f;
+				break;
+			case GrafImageType::Tex2D:
+				srvDesc.Texture2D.MostDetailedMip = UINT(grafSubresDesc.BaseMipLevel);
+				srvDesc.Texture2D.MipLevels = UINT(std::max(grafSubresDesc.LevelCount, 1u));
+				srvDesc.Texture2D.PlaneSlice = UINT(grafSubresDesc.BaseArrayLayer);
+				srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+				break;
+			case GrafImageType::Tex3D:
+				srvDesc.Texture3D.MostDetailedMip = UINT(grafSubresDesc.BaseMipLevel);
+				srvDesc.Texture3D.MipLevels = UINT(std::max(grafSubresDesc.LevelCount, 1u));
+				srvDesc.Texture3D.ResourceMinLODClamp = 0.0f;
+				break;
+			};
+		}
+
+		if (grafImageDesc.Usage & ur_uint(GrafImageUsageFlag::ShaderReadWrite))
+		{
+			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+			uavDesc.Format = GrafUtilsDX12::GrafToDXGIFormat(grafImageDesc.Format);
+			uavDesc.ViewDimension = GrafUtilsDX12::GrafToD3DUAVDimension(grafImageDesc.Type);
+			switch (grafImageDesc.Type)
+			{
+			case GrafImageType::Tex1D:
+				uavDesc.Texture1D.MipSlice = UINT(grafSubresDesc.BaseMipLevel);
+				break;
+			case GrafImageType::Tex2D:
+				uavDesc.Texture2D.MipSlice = UINT(grafSubresDesc.BaseMipLevel);
+				uavDesc.Texture2D.PlaneSlice = UINT(grafSubresDesc.BaseArrayLayer);
+				break;
+			case GrafImageType::Tex3D:
+				uavDesc.Texture3D.MipSlice = UINT(grafSubresDesc.BaseMipLevel);
+				uavDesc.Texture3D.FirstWSlice = UINT(grafSubresDesc.BaseArrayLayer);
+				uavDesc.Texture3D.WSize = UINT(grafSubresDesc.LayerCount);
+				break;
+			};
+		}
 
 		return Result(Success);
 	}
@@ -1419,7 +1518,7 @@ namespace UnlimRealms
 		// create resource
 
 		D3D12_HEAP_PROPERTIES d3dHeapProperties = {};
-		d3dHeapProperties.Type = GrafUtilsDX12::GrafToD3DHeapType(initParams.BufferDesc.Usage, initParams.BufferDesc.MemoryType);
+		d3dHeapProperties.Type = GrafUtilsDX12::GrafToD3DBufferHeapType(initParams.BufferDesc.Usage, initParams.BufferDesc.MemoryType);
 		d3dHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
 		d3dHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 		d3dHeapProperties.CreationNodeMask = 0;
@@ -1427,7 +1526,7 @@ namespace UnlimRealms
 
 		D3D12_RESOURCE_DESC d3dResDesc = {};
 		d3dResDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		d3dResDesc.Alignment = 0;
+		d3dResDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
 		d3dResDesc.Width = (UINT64)initParams.BufferDesc.SizeInBytes;
 		d3dResDesc.Height = 1;
 		d3dResDesc.DepthOrArraySize = 1;
@@ -2386,7 +2485,31 @@ namespace UnlimRealms
 		return d3dState;
 	}
 
-	D3D12_RTV_DIMENSION GrafUtilsDX12::GrafToD3DRTVDimenstion(GrafImageType imageType)
+	D3D12_RESOURCE_DIMENSION GrafUtilsDX12::GrafToD3DResDimension(GrafImageType imageType)
+	{
+		D3D12_RESOURCE_DIMENSION d3dResDimension = D3D12_RESOURCE_DIMENSION_UNKNOWN;
+		switch (imageType)
+		{
+		case GrafImageType::Tex1D: d3dResDimension = D3D12_RESOURCE_DIMENSION_TEXTURE1D; break;
+		case GrafImageType::Tex2D: d3dResDimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; break;
+		case GrafImageType::Tex3D: d3dResDimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D; break;
+		};
+		return d3dResDimension;
+	}
+
+	D3D12_RESOURCE_FLAGS GrafUtilsDX12::GrafToD3DResourceFlags(GrafImageUsageFlags imageUsageFlags)
+	{
+		D3D12_RESOURCE_FLAGS d3dResFlags = D3D12_RESOURCE_FLAG_NONE;
+		if (imageUsageFlags & ur_uint(GrafImageUsageFlag::ColorRenderTarget))
+			d3dResFlags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+		if (imageUsageFlags & ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget))
+			d3dResFlags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+		if (imageUsageFlags & ur_uint(GrafImageUsageFlag::ShaderReadWrite))
+			d3dResFlags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		return d3dResFlags;
+	}
+
+	D3D12_RTV_DIMENSION GrafUtilsDX12::GrafToD3DRTVDimension(GrafImageType imageType)
 	{
 		D3D12_RTV_DIMENSION d3dRTVDimension = D3D12_RTV_DIMENSION_UNKNOWN;
 		switch (imageType)
@@ -2398,7 +2521,31 @@ namespace UnlimRealms
 		return d3dRTVDimension;
 	}
 
-	D3D12_HEAP_TYPE GrafUtilsDX12::GrafToD3DHeapType(GrafBufferUsageFlags bufferUsage, GrafDeviceMemoryFlags memoryFlags)
+	D3D12_SRV_DIMENSION GrafUtilsDX12::GrafToD3DSRVDimension(GrafImageType imageType)
+	{
+		D3D12_SRV_DIMENSION d3dSRVDimension = D3D12_SRV_DIMENSION_UNKNOWN;
+		switch (imageType)
+		{
+		case GrafImageType::Tex1D: d3dSRVDimension = D3D12_SRV_DIMENSION_TEXTURE1D; break;
+		case GrafImageType::Tex2D: d3dSRVDimension = D3D12_SRV_DIMENSION_TEXTURE2D; break;
+		case GrafImageType::Tex3D: d3dSRVDimension = D3D12_SRV_DIMENSION_TEXTURE3D; break;
+		};
+		return d3dSRVDimension;
+	}
+
+	D3D12_UAV_DIMENSION GrafUtilsDX12::GrafToD3DUAVDimension(GrafImageType imageType)
+	{
+		D3D12_UAV_DIMENSION d3dUAVDimension = D3D12_UAV_DIMENSION_UNKNOWN;
+		switch (imageType)
+		{
+		case GrafImageType::Tex1D: d3dUAVDimension = D3D12_UAV_DIMENSION_TEXTURE1D; break;
+		case GrafImageType::Tex2D: d3dUAVDimension = D3D12_UAV_DIMENSION_TEXTURE2D; break;
+		case GrafImageType::Tex3D: d3dUAVDimension = D3D12_UAV_DIMENSION_TEXTURE3D; break;
+		};
+		return d3dUAVDimension;
+	}
+
+	D3D12_HEAP_TYPE GrafUtilsDX12::GrafToD3DBufferHeapType(GrafBufferUsageFlags bufferUsage, GrafDeviceMemoryFlags memoryFlags)
 	{
 		D3D12_HEAP_TYPE d3dHeapType = D3D12_HEAP_TYPE_DEFAULT;
 		// by default CPU visible memory is considered to be used for upload,
@@ -2408,6 +2555,20 @@ namespace UnlimRealms
 		if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferSrc))
 			d3dHeapType = D3D12_HEAP_TYPE_UPLOAD;
 		if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferDst))
+			d3dHeapType = D3D12_HEAP_TYPE_READBACK;
+		return d3dHeapType;
+	}
+
+	D3D12_HEAP_TYPE GrafUtilsDX12::GrafToD3DImageHeapType(GrafImageUsageFlags imageUsage, GrafDeviceMemoryFlags memoryFlags)
+	{
+		D3D12_HEAP_TYPE d3dHeapType = D3D12_HEAP_TYPE_DEFAULT;
+		// by default CPU visible memory is considered to be used for upload,
+		// readback is expected to be done from a copy destination resource (TransferDst)
+		if (memoryFlags & ur_uint(GrafDeviceMemoryFlag::CpuVisible))
+			d3dHeapType = D3D12_HEAP_TYPE_UPLOAD;
+		if (imageUsage & ur_uint(GrafBufferUsageFlag::TransferSrc))
+			d3dHeapType = D3D12_HEAP_TYPE_UPLOAD;
+		if (imageUsage & ur_uint(GrafBufferUsageFlag::TransferDst))
 			d3dHeapType = D3D12_HEAP_TYPE_READBACK;
 		return d3dHeapType;
 	}
@@ -2429,6 +2590,20 @@ namespace UnlimRealms
 			d3dStates = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		if (bufferUsage & ur_uint(GrafBufferUsageFlag::AccelerationStructure))
 			d3dStates = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
+		return d3dStates;
+	}
+
+	D3D12_RESOURCE_STATES GrafUtilsDX12::GrafToD3DImageInitialState(GrafImageUsageFlags imageUsage)
+	{
+		D3D12_RESOURCE_STATES d3dStates = D3D12_RESOURCE_STATE_COMMON;
+		if (imageUsage & ur_uint(GrafImageUsageFlag::TransferSrc))
+			d3dStates = D3D12_RESOURCE_STATE_COPY_SOURCE;
+		if (imageUsage & ur_uint(GrafImageUsageFlag::TransferDst))
+			d3dStates = D3D12_RESOURCE_STATE_COPY_DEST;
+		if (imageUsage & ur_uint(GrafImageUsageFlag::ColorRenderTarget))
+			d3dStates = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		if (imageUsage & ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget))
+			d3dStates = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 		return d3dStates;
 	}
 
