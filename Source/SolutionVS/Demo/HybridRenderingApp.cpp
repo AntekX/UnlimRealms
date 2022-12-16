@@ -1013,10 +1013,10 @@ int HybridRenderingApp::Run()
 				{ "AnyHitDirect", GrafShaderType::AnyHit },
 				{ "AnyHitIndirect", GrafShaderType::AnyHit },
 			};
-			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_cs_lib.spv", ShaderLibEntries, ur_array_size(ShaderLibEntries), this->shaderLib);
-			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_rt_lib.spv", RTShaderLibEntries, ur_array_size(RTShaderLibEntries), this->shaderLibRT);
-			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_vs.spv", GrafShaderType::Vertex, this->shaderVertex);
-			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_ps.spv", GrafShaderType::Pixel, this->shaderPixel);
+			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_cs_lib", ShaderLibEntries, ur_array_size(ShaderLibEntries), this->shaderLib);
+			GrafUtils::CreateShaderLibFromFile(*grafDevice, "HybridRendering_rt_lib", RTShaderLibEntries, ur_array_size(RTShaderLibEntries), this->shaderLibRT);
+			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_vs", GrafShaderType::Vertex, this->shaderVertex);
+			GrafUtils::CreateShaderFromFile(*grafDevice, "HybridRendering_ps", GrafShaderType::Pixel, this->shaderPixel);
 
 			// samplers
 

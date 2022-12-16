@@ -75,6 +75,8 @@ namespace UnlimRealms
 
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
 
+		virtual const char* GetShaderExtension() const;
+
 		inline VkInstance GetVkInstance() const;
 
 		inline VkPhysicalDevice GetVkPhysicalDevice(ur_uint deviceId) const;

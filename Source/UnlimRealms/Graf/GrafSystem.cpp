@@ -200,6 +200,12 @@ namespace UnlimRealms
 		return recommendedDeviceId;
 	}
 
+	const char* GrafSystem::GetShaderExtension() const
+	{
+		static const char* UndefinedShaderExt = "undefined";
+		return UndefinedShaderExt;
+	}
+
 	GrafEntity::GrafEntity(GrafSystem &grafSystem) :
 		RealmEntity(grafSystem.GetRealm()),
 		grafSystem(grafSystem)
@@ -932,10 +938,12 @@ namespace UnlimRealms
 		return GrafUtils::CreateShaderFromFile(grafDevice, resName, GrafShader::DefaultEntryPoint, shaderType, grafShader);
 	}
 
-	Result GrafUtils::CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resName, const std::string& entryPoint, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader)
+	Result GrafUtils::CreateShaderFromFile(GrafDevice& grafDevice, const std::string& resNameNoExt, const std::string& entryPoint, GrafShaderType shaderType, std::unique_ptr<GrafShader>& grafShader)
 	{
 		Realm& realm = grafDevice.GetRealm();
 		GrafSystem& grafSystem = grafDevice.GetGrafSystem();
+
+		std::string resName = resNameNoExt + "." + grafSystem.GetShaderExtension();
 
 		// load
 
@@ -973,10 +981,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafUtils::CreateShaderLibFromFile(GrafDevice& grafDevice, const std::string& resName, const GrafShaderLib::EntryPoint* entryPoints, ur_uint entryPointCount, std::unique_ptr<GrafShaderLib>& grafShaderLib)
+	Result GrafUtils::CreateShaderLibFromFile(GrafDevice& grafDevice, const std::string& resNameNoExt, const GrafShaderLib::EntryPoint* entryPoints, ur_uint entryPointCount, std::unique_ptr<GrafShaderLib>& grafShaderLib)
 	{
 		Realm& realm = grafDevice.GetRealm();
 		GrafSystem& grafSystem = grafDevice.GetGrafSystem();
+
+		std::string resName = resNameNoExt + "." + grafSystem.GetShaderExtension();
 
 		// load
 

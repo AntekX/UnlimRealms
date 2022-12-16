@@ -65,6 +65,8 @@ namespace UnlimRealms
 
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
 
+		virtual const char* GetShaderExtension() const;
+
 		inline IDXGIFactory5* GetDXGIFactory() const;
 
 		inline IDXGIAdapter1* GetDXGIAdapter(ur_uint deviceId) const;
@@ -420,13 +422,27 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
+		inline const GrafDescriptorHandleDX12& GetRTVDescriptorHandle() const;
+
+		inline const GrafDescriptorHandleDX12& GetDSVDescriptorHandle() const;
+
+		inline const GrafDescriptorHandleDX12& GetSRVDescriptorHandle() const;
+
+		inline const GrafDescriptorHandleDX12& GetUAVDescriptorHandle() const;
+
 	protected:
 
 		Result Deinitialize();
 
 		Result CreateD3DImageView();
 
+		friend class GrafCommandListDX12;
+		inline void SetState(GrafImageState& state);
+
 		GrafDescriptorHandleDX12 rtvDescriptorHandle;
+		GrafDescriptorHandleDX12 dsvDescriptorHandle;
+		GrafDescriptorHandleDX12 srvDescriptorHandle;
+		GrafDescriptorHandleDX12 uavDescriptorHandle;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -723,12 +739,13 @@ namespace UnlimRealms
 		static inline D3D12_RESOURCE_DIMENSION GrafToD3DResDimension(GrafImageType imageType);
 		static inline D3D12_RESOURCE_FLAGS GrafToD3DResourceFlags(GrafImageUsageFlags imageUsageFlags);
 		static inline D3D12_RTV_DIMENSION GrafToD3DRTVDimension(GrafImageType imageType);
+		static inline D3D12_DSV_DIMENSION GrafToD3DDSVDimension(GrafImageType imageType);
 		static inline D3D12_SRV_DIMENSION GrafToD3DSRVDimension(GrafImageType imageType);
 		static inline D3D12_UAV_DIMENSION GrafToD3DUAVDimension(GrafImageType imageType);
 		static inline D3D12_HEAP_TYPE GrafToD3DBufferHeapType(GrafBufferUsageFlags bufferUsage, GrafDeviceMemoryFlags memoryFlags);
+		static inline D3D12_RESOURCE_STATES GrafToD3DBufferInitialState(GrafBufferUsageFlags bufferUsage, GrafDeviceMemoryFlags memoryFlags);
 		static inline D3D12_HEAP_TYPE GrafToD3DImageHeapType(GrafImageUsageFlags imageUsage, GrafDeviceMemoryFlags memoryFlags);
-		static inline D3D12_RESOURCE_STATES GrafToD3DBufferInitialState(GrafBufferUsageFlags bufferUsage);
-		static inline D3D12_RESOURCE_STATES GrafToD3DImageInitialState(GrafImageUsageFlags imageUsage);
+		static inline D3D12_RESOURCE_STATES GrafToD3DImageInitialState(GrafImageUsageFlags imageUsage, GrafDeviceMemoryFlags memoryFlags);
 		static inline D3D12_FILTER GrafToD3DFilter(GrafFilterType filterMin, GrafFilterType filterMax, GrafFilterType filterMip);
 		static inline D3D12_TEXTURE_ADDRESS_MODE GrafToD3DAddressMode(GrafAddressMode addressMode);
 		static inline D3D12_DESCRIPTOR_RANGE_TYPE GrafToD3DDescriptorType(GrafDescriptorType descriptorType);

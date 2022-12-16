@@ -432,12 +432,12 @@ namespace UnlimRealms
 		ur_uint frameCount = this->grafRenderer->GetRecordedFrameCount();
 
 		// VS
-		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Imgui_vs.spv", GrafShaderType::Vertex, this->grafVS);
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Imgui_vs", GrafShaderType::Vertex, this->grafVS);
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to initialize VS");
 
 		// PS
-		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Imgui_ps.spv", GrafShaderType::Pixel, this->grafPS);
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Imgui_ps", GrafShaderType::Pixel, this->grafPS);
 		if (Failed(res))
 			return ResultError(Failure, "ImguiRender::Init: failed to initialize PS");
 

@@ -779,9 +779,11 @@ namespace UnlimRealms
 
 		virtual ur_uint GetRecommendedDeviceId();
 
-		inline ur_uint GetPhysicalDeviceCount();
+		virtual const char* GetShaderExtension() const;
 
-		inline const GrafPhysicalDeviceDesc* GetPhysicalDeviceDesc(ur_uint deviceId);
+		inline ur_uint GetPhysicalDeviceCount() const;
+
+		inline const GrafPhysicalDeviceDesc* GetPhysicalDeviceDesc(ur_uint deviceId) const;
 
 	protected:
 

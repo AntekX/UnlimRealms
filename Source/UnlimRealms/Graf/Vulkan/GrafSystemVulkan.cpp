@@ -563,6 +563,12 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	const char* GrafSystemVulkan::GetShaderExtension() const
+	{
+		static const char* VulkanShaderExt = "spv";
+		return VulkanShaderExt;
+	}
+
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	GrafDeviceVulkan::GrafDeviceVulkan(GrafSystem &grafSystem) :

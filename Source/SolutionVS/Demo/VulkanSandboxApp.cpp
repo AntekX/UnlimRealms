@@ -147,11 +147,11 @@ int VulkanSandboxApp::Run()
 		if (Failed(grafRes)) return;
 
 		// vertex shader sample
-		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_vs.spv", GrafShaderType::Vertex, grafShaderSampleVS);
+		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_vs", GrafShaderType::Vertex, grafShaderSampleVS);
 		if (Failed(grafRes)) return;
 
 		// pixel shader sample
-		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_ps.spv", GrafShaderType::Pixel, grafShaderSamplePS);
+		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_ps", GrafShaderType::Pixel, grafShaderSamplePS);
 		if (Failed(grafRes)) return;
 
 		// shader bindings layout sample

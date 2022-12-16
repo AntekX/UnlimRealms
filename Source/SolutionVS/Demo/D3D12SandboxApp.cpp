@@ -150,11 +150,11 @@ int D3D12SandboxApp::Run()
 		if (Failed(grafRes)) return;
 
 		// vertex shader sample
-		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_vs.cso", GrafShaderType::Vertex, grafShaderSampleVS);
+		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_vs", GrafShaderType::Vertex, grafShaderSampleVS);
 		if (Failed(grafRes)) return;
 
 		// pixel shader sample
-		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_ps.cso", GrafShaderType::Pixel, grafShaderSamplePS);
+		grafRes = GrafUtils::CreateShaderFromFile(*grafDevice, "sample_ps", GrafShaderType::Pixel, grafShaderSamplePS);
 		if (Failed(grafRes)) return;
 
 		// shader bindings layout sample
@@ -556,12 +556,14 @@ int D3D12SandboxApp::Run()
 
 					// immediate mode generic primitives rendering
 
+					#if (0) // TODO
 					const ur_float bbR = 1.0f;
 					const ur_float4 testColor = ur_float4(ur_float3(1.0f) - ur_float3(crntClearColor), 1.0f);
 					const ur_float3 testPtimitiveVertices[] = { {-bbR,-bbR, 0.0f }, { bbR,-bbR, 0.0f }, { bbR, bbR, 0.0f }, {-bbR, bbR, 0.0f } };
 					genericRender->DrawWireBox({ -bbR,-bbR,-bbR }, { bbR, bbR, bbR }, ur_float4(testColor.z, testColor.y, testColor.x, 1.0f));
 					genericRender->DrawConvexPolygon(4, testPtimitiveVertices, testColor);
 					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());
+					#endif
 
 					grafCmdListCrnt->EndRenderPass();
 					
@@ -574,7 +576,7 @@ int D3D12SandboxApp::Run()
 				}
 
 				{ // foreground color render pass (drawing directly into swap chain image)
-
+					#if (0) // TODO
 					grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
 
 					// draw sample primitives
@@ -616,6 +618,7 @@ int D3D12SandboxApp::Run()
 					}
 
 					grafCmdListCrnt->EndRenderPass();
+					#endif
 				}
 
 				// finalize current command list

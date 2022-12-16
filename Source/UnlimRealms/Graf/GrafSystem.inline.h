@@ -10,12 +10,12 @@
 namespace UnlimRealms
 {
 
-	inline ur_uint GrafSystem::GetPhysicalDeviceCount()
+	inline ur_uint GrafSystem::GetPhysicalDeviceCount() const
 	{
 		return (ur_uint)grafPhysicalDeviceDesc.size();
 	}
 
-	inline const GrafPhysicalDeviceDesc* GrafSystem::GetPhysicalDeviceDesc(ur_uint deviceId)
+	inline const GrafPhysicalDeviceDesc* GrafSystem::GetPhysicalDeviceDesc(ur_uint deviceId) const
 	{
 		return (deviceId < GetPhysicalDeviceCount() ? &grafPhysicalDeviceDesc[deviceId] : ur_null);
 	}

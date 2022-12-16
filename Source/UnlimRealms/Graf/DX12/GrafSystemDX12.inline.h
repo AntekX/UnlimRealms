@@ -95,6 +95,31 @@ namespace UnlimRealms
 		this->imageState = state;
 	}
 
+	inline void GrafImageSubresourceDX12::SetState(GrafImageState& state)
+	{
+		this->subresourceState = state;
+	}
+
+	inline const GrafDescriptorHandleDX12& GrafImageSubresourceDX12::GetRTVDescriptorHandle() const
+	{
+		return this->rtvDescriptorHandle;
+	}
+
+	inline const GrafDescriptorHandleDX12& GrafImageSubresourceDX12::GetDSVDescriptorHandle() const
+	{
+		return this->dsvDescriptorHandle;
+	}
+
+	inline const GrafDescriptorHandleDX12& GrafImageSubresourceDX12::GetSRVDescriptorHandle() const
+	{
+		return this->srvDescriptorHandle;
+	}
+
+	inline const GrafDescriptorHandleDX12& GrafImageSubresourceDX12::GetUAVDescriptorHandle() const
+	{
+		return this->uavDescriptorHandle;
+	}
+
 	inline ID3D12Resource* GrafBufferDX12::GetD3DResource() const
 	{
 		return this->d3dResource.get();

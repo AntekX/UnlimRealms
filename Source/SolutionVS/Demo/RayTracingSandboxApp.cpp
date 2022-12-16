@@ -634,7 +634,7 @@ int RayTracingSandboxApp::Run()
 				{ "AOClosestHit", GrafShaderType::ClosestHit },
 				{ "BlurOcclusion", GrafShaderType::Compute },
 			};
-			GrafUtils::CreateShaderLibFromFile(*grafDevice, "sample_raytracing_lib.spv", shaderLibEntries, ur_array_size(shaderLibEntries), this->shaderLib);
+			GrafUtils::CreateShaderLibFromFile(*grafDevice, "sample_raytracing_lib", shaderLibEntries, ur_array_size(shaderLibEntries), this->shaderLib);
 
 			// global shader bindings
 

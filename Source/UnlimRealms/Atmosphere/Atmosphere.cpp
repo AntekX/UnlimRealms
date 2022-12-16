@@ -147,27 +147,27 @@ namespace UnlimRealms
 		std::unique_ptr<GrafObjects> grafObjects(new GrafObjects(*grafSystem));
 
 		// VS
-		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Atmosphere_vs.spv", GrafShaderType::Vertex, grafObjects->VS);
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Atmosphere_vs", GrafShaderType::Vertex, grafObjects->VS);
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize VS");
 
 		// PS
-		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Atmosphere_ps.spv", GrafShaderType::Pixel, grafObjects->PS);
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Atmosphere_ps", GrafShaderType::Pixel, grafObjects->PS);
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize PS");
 
 		// VS fullscreen quad
-		res = GrafUtils::CreateShaderFromFile(*grafDevice, "FullScreenQuad_vs.spv", GrafShaderType::Vertex, grafObjects->fullScreenQuadVS);
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "FullScreenQuad_vs", GrafShaderType::Vertex, grafObjects->fullScreenQuadVS);
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to create shader for FullScreenQuad_vs");
 
 		// PS fullscreen quad
-		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Generic_ps.spv", GrafShaderType::Pixel, grafObjects->fullScreenQuadPS);
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "Generic_ps", GrafShaderType::Pixel, grafObjects->fullScreenQuadPS);
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to create shader for Generic_ps");
 
 		// PS LightShafts
-		res = GrafUtils::CreateShaderFromFile(*grafDevice, "LightShafts_ps.spv", GrafShaderType::Pixel, grafObjects->lightShaftsPS);
+		res = GrafUtils::CreateShaderFromFile(*grafDevice, "LightShafts_ps", GrafShaderType::Pixel, grafObjects->lightShaftsPS);
 		if (Failed(res))
 			return ResultError(Failure, "Atmosphere::CreateGrafObjects: failed to initialize LightShafts PS");
 

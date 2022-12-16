@@ -414,27 +414,27 @@ namespace UnlimRealms
 
 			// shaders
 
-			res = GrafUtils::CreateShaderFromFile(*grafDevice, "FullScreenQuad_vs.spv", GrafShaderType::Vertex, grafObjects->fullScreenQuadVS);
+			res = GrafUtils::CreateShaderFromFile(*grafDevice, "FullScreenQuad_vs", GrafShaderType::Vertex, grafObjects->fullScreenQuadVS);
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to create shader for FullScreenQuad_vs");
 
-			res = GrafUtils::CreateShaderFromFile(*grafDevice, "HDRTargetLuminance_ps.spv", GrafShaderType::Pixel, grafObjects->luminancePS);
+			res = GrafUtils::CreateShaderFromFile(*grafDevice, "HDRTargetLuminance_ps", GrafShaderType::Pixel, grafObjects->luminancePS);
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to create shader for HDRTargetLuminance_ps");
 
-			res = GrafUtils::CreateShaderFromFile(*grafDevice, "AverageLuminance_ps.spv", GrafShaderType::Pixel, grafObjects->luminanceAvgPS);
+			res = GrafUtils::CreateShaderFromFile(*grafDevice, "AverageLuminance_ps", GrafShaderType::Pixel, grafObjects->luminanceAvgPS);
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to create shader for AverageLuminance_ps");
 
-			res = GrafUtils::CreateShaderFromFile(*grafDevice, "BloomLuminance_ps.spv", GrafShaderType::Pixel, grafObjects->bloomPS);
+			res = GrafUtils::CreateShaderFromFile(*grafDevice, "BloomLuminance_ps", GrafShaderType::Pixel, grafObjects->bloomPS);
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to create shader for BloomLuminance_ps");
 
-			res = GrafUtils::CreateShaderFromFile(*grafDevice, "Blur_ps.spv", GrafShaderType::Pixel, grafObjects->blurPS);
+			res = GrafUtils::CreateShaderFromFile(*grafDevice, "Blur_ps", GrafShaderType::Pixel, grafObjects->blurPS);
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to create shader for Blur_ps");
 
-			res = GrafUtils::CreateShaderFromFile(*grafDevice, "ToneMapping_ps.spv", GrafShaderType::Pixel, grafObjects->tonemapPS);
+			res = GrafUtils::CreateShaderFromFile(*grafDevice, "ToneMapping_ps", GrafShaderType::Pixel, grafObjects->tonemapPS);
 			if (Failed(res))
 				return ResultError(Failure, "HDRRender::Init: failed to create shader for ToneMapping_ps");
 
