@@ -21,6 +21,12 @@ namespace UnlimRealms
 
 	#if defined(_DEBUG) 
 	#define UR_GRAF_DX12_DEBUG_MODE
+	D3D12_MESSAGE_ID D3D12DebugLayerMessagesFilter[] =
+	{
+		D3D12_MESSAGE_ID_UNKNOWN,
+		D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+		D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE,
+	};
 	#endif
 
 	// command buffer synchronisation policy
@@ -378,6 +384,20 @@ namespace UnlimRealms
 
 			this->descriptorPool[heapTypeIdx] = std::move(pool);
 		}
+
+		// setup D3D12 debug layer messages filter
+
+		#if defined(UR_GRAF_DX12_DEBUG_MODE)
+		shared_ref<ID3D12InfoQueue> d3dInfoQueue;
+		hres = this->d3dDevice->QueryInterface<ID3D12InfoQueue>(d3dInfoQueue);
+		if (SUCCEEDED(hres))
+		{
+			D3D12_INFO_QUEUE_FILTER d3dInfoQueueFilter = {};
+			d3dInfoQueueFilter.DenyList.NumIDs = _countof(D3D12DebugLayerMessagesFilter);
+			d3dInfoQueueFilter.DenyList.pIDList = D3D12DebugLayerMessagesFilter;
+			d3dInfoQueue->AddStorageFilterEntries(&d3dInfoQueueFilter);
+		}
+		#endif
 
 		return Result(Success);
 	}
