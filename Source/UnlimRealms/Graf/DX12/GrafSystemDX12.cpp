@@ -1195,15 +1195,16 @@ namespace UnlimRealms
 
 	Result GrafCanvasDX12::Deinitialize()
 	{
-		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
-		if (grafDeviceDX12)
+		if (this->GetGrafDevice())
 		{
-			grafDeviceDX12->WaitIdle();
+			// make sure resources are no longer used on GPU
+			this->GetGrafDevice()->Submit();
+			this->GetGrafDevice()->WaitIdle();
 		}
 
 		this->imageTransitionCmdListBegin.clear();
 		this->imageTransitionCmdListEnd.clear();
-
+		
 		this->swapChainImages.clear();
 		if (!this->dxgiSwapChain.empty())
 		{
