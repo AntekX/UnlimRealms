@@ -10,6 +10,7 @@
 #include "Gfx/D3D11/GfxSystemD3D11.h"
 #include "Gfx/D3D12/GfxSystemD3D12.h"
 #include "Graf/Vulkan/GrafSystemVulkan.h"
+#include "Graf/DX12/GrafSystemDX12.h"
 #include "Graf/GrafRenderer.h"
 #include "ImguiRender/ImguiRender.h"
 #include "GenericRender/GenericRender.h"
@@ -396,7 +397,7 @@ int VoxelPlanetApp::Run()
 				grafCmdListCrnt->SetViewport(grafViewport, true);
 
 				GrafClearValue rtClearValue = { 0.025f, 0.025f, 0.05f, 0.0f };
-				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
+				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
 				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), rtClearValue);
 
 				if (hdrRender != ur_null)
@@ -493,6 +494,7 @@ int VoxelPlanetApp::Run()
 					}
 
 					grafCmdListCrnt->EndRenderPass();
+					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
 				}
 
 				// finalize current command list

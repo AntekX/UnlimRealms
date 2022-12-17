@@ -1009,16 +1009,29 @@ namespace UnlimRealms
 
 		// bind descriptor heaps
 
+		ur_uint descriptorHeapCount = 0;
 		ID3D12DescriptorHeap* d3dDescriptorHeaps[2];
-		d3dDescriptorHeaps[0] = descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
-		d3dDescriptorHeaps[1] = descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
+		if (descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().IsValid())
+		{
+			d3dDescriptorHeaps[descriptorHeapCount++] = descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
+		}
+		if (descriptorTableDX12->GetSamplerDescriptorHeapHandle().IsValid())
+		{
+			d3dDescriptorHeaps[descriptorHeapCount++] = descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
+		}
 
-		this->d3dCommandList->SetDescriptorHeaps((UINT)ur_array_size(d3dDescriptorHeaps), d3dDescriptorHeaps);
+		this->d3dCommandList->SetDescriptorHeaps((UINT)descriptorHeapCount, d3dDescriptorHeaps);
 
 		// set table offsets in heaps
 
-		this->d3dCommandList->SetGraphicsRootDescriptorTable(0, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
-		this->d3dCommandList->SetGraphicsRootDescriptorTable(1, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
+		if (descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().IsValid())
+		{
+			this->d3dCommandList->SetGraphicsRootDescriptorTable(0, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
+		}
+		if (descriptorTableDX12->GetSamplerDescriptorHeapHandle().IsValid())
+		{
+			this->d3dCommandList->SetGraphicsRootDescriptorTable(1, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
+		}
 
 		return Result(Success);
 	}
@@ -2274,7 +2287,7 @@ namespace UnlimRealms
 			d3dRootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 			d3dRootParameter.ShaderVisibility = GrafUtilsDX12::GrafToD3DShaderVisibility(grafTableLayoutDesc.ShaderStageVisibility);
 			d3dRootParameter.DescriptorTable.NumDescriptorRanges = (UINT)descriptorTableDesc.d3dDescriptorRanges.size();
-			d3dRootParameter.DescriptorTable.pDescriptorRanges = &descriptorTableDesc.d3dDescriptorRanges.front();
+			d3dRootParameter.DescriptorTable.pDescriptorRanges = (descriptorTableDesc.d3dDescriptorRanges.size() > 0 ? &descriptorTableDesc.d3dDescriptorRanges.front() : NULL);
 		}
 
 		return Result(Success);
@@ -2674,7 +2687,7 @@ namespace UnlimRealms
 				}
 			}
 		}
-		d3dPipelineDesc.InputLayout.pInputElementDescs = &d3dInputElementDescs.front();
+		d3dPipelineDesc.InputLayout.pInputElementDescs = (d3dInputElementDescs.size() > 0 ? &d3dInputElementDescs.front() : NULL);
 		d3dPipelineDesc.InputLayout.NumElements = (UINT)d3dInputElementDescs.size();
 
 		// primitive topology
@@ -2956,14 +2969,15 @@ namespace UnlimRealms
 	D3D12_HEAP_TYPE GrafUtilsDX12::GrafToD3DBufferHeapType(GrafBufferUsageFlags bufferUsage, GrafDeviceMemoryFlags memoryFlags)
 	{
 		D3D12_HEAP_TYPE d3dHeapType = D3D12_HEAP_TYPE_DEFAULT;
-		// by default CPU visible memory is considered to be used for upload,
-		// readback is expected to be done from a copy destination resource (TransferDst)
 		if (memoryFlags & ur_uint(GrafDeviceMemoryFlag::CpuVisible))
-			d3dHeapType = D3D12_HEAP_TYPE_UPLOAD;
-		if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferSrc))
-			d3dHeapType = D3D12_HEAP_TYPE_UPLOAD;
-		if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferDst))
-			d3dHeapType = D3D12_HEAP_TYPE_READBACK;
+		{
+			// by default CPU visible memory is considered to be used for upload,
+			// readback is expected to be done from a copy destination resource (TransferDst)
+			if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferDst))
+				d3dHeapType = D3D12_HEAP_TYPE_READBACK;
+			else
+				d3dHeapType = D3D12_HEAP_TYPE_UPLOAD;
+		}
 		return d3dHeapType;
 	}
 
@@ -2978,11 +2992,9 @@ namespace UnlimRealms
 		}
 		else
 		{
-			if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferSrc))
-				d3dStates = D3D12_RESOURCE_STATE_COPY_SOURCE;
-			if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferDst))
-				d3dStates = D3D12_RESOURCE_STATE_COPY_DEST;
-			if (bufferUsage & ur_uint(GrafBufferUsageFlag::VertexBuffer))
+			// D3D12: Buffers are effectively created in state D3D12_RESOURCE_STATE_COMMON
+			d3dStates = D3D12_RESOURCE_STATE_COMMON;
+			/*if (bufferUsage & ur_uint(GrafBufferUsageFlag::VertexBuffer))
 				d3dStates = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
 			if (bufferUsage & ur_uint(GrafBufferUsageFlag::IndexBuffer))
 				d3dStates = D3D12_RESOURCE_STATE_INDEX_BUFFER;
@@ -2992,6 +3004,10 @@ namespace UnlimRealms
 				d3dStates = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 			if (bufferUsage & ur_uint(GrafBufferUsageFlag::AccelerationStructure))
 				d3dStates = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
+			if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferSrc))
+				d3dStates = D3D12_RESOURCE_STATE_COPY_SOURCE;
+			if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferDst))
+				d3dStates = D3D12_RESOURCE_STATE_COPY_DEST;*/
 		}
 		return d3dStates;
 	}
