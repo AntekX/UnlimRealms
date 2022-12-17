@@ -1894,6 +1894,14 @@ namespace UnlimRealms
 
 		// create resource
 
+		ur_size sizeInBytesAligned = initParams.BufferDesc.SizeInBytes;
+		if (ur_uint(GrafBufferUsageFlag::ConstantBuffer) & initParams.BufferDesc.Usage)
+		{
+			ur_size cbAlignment = grafDeviceDX12->GetPhysicalDeviceDesc()->ConstantBufferOffsetAlignment;
+			sizeInBytesAligned = (initParams.BufferDesc.SizeInBytes + cbAlignment - 1) / cbAlignment * cbAlignment;
+		}
+		this->bufferDesc.SizeInBytes = sizeInBytesAligned;
+
 		D3D12_HEAP_PROPERTIES d3dHeapProperties = {};
 		d3dHeapProperties.Type = GrafUtilsDX12::GrafToD3DBufferHeapType(initParams.BufferDesc.Usage, initParams.BufferDesc.MemoryType);
 		d3dHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
@@ -1904,7 +1912,7 @@ namespace UnlimRealms
 		D3D12_RESOURCE_DESC d3dResDesc = {};
 		d3dResDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 		d3dResDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-		d3dResDesc.Width = (UINT64)initParams.BufferDesc.SizeInBytes;
+		d3dResDesc.Width = (UINT64)sizeInBytesAligned;
 		d3dResDesc.Height = 1;
 		d3dResDesc.DepthOrArraySize = 1;
 		d3dResDesc.MipLevels = 1;
@@ -1936,7 +1944,7 @@ namespace UnlimRealms
 
 			D3D12_CONSTANT_BUFFER_VIEW_DESC d3dCbvDesc = {};
 			d3dCbvDesc.BufferLocation = this->d3dResource->GetGPUVirtualAddress();
-			d3dCbvDesc.SizeInBytes = (UINT)initParams.BufferDesc.SizeInBytes;
+			d3dCbvDesc.SizeInBytes = (UINT)sizeInBytesAligned;
 
 			grafDeviceDX12->GetD3DDevice()->CreateConstantBufferView(&d3dCbvDesc, this->cbvDescriptorHandle.GetD3DHandleCPU());
 		}*/
@@ -2373,7 +2381,7 @@ namespace UnlimRealms
 
 		D3D12_CONSTANT_BUFFER_VIEW_DESC d3dCbvDesc = {};
 		d3dCbvDesc.BufferLocation = grafBufferDX12->GetD3DResource()->GetGPUVirtualAddress() + (UINT64)bufferOfs;
-		d3dCbvDesc.SizeInBytes = (UINT)bufferRange;
+		d3dCbvDesc.SizeInBytes = (UINT)(bufferRange == 0 ? buffer->GetDesc().SizeInBytes : bufferRange);
 
 		d3dDevice->CreateConstantBufferView(&d3dCbvDesc, d3dBindingHandle);
 
