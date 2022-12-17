@@ -1685,10 +1685,11 @@ namespace UnlimRealms
 		Result res = grafSystem->CreateBuffer(grafVB);
 		if (Succeeded(res))
 		{
-			GrafBufferDesc bufferDesc;
+			GrafBufferDesc bufferDesc = {};
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer | (ur_uint)GrafBufferUsageFlag::TransferDst;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 			bufferDesc.SizeInBytes = (ur_size)vertexBuffer.size() * sizeof(Isosurface::Vertex);
+			bufferDesc.ElementSize = sizeof(Isosurface::Vertex);
 			res = grafVB->Initialize(grafDevice, { bufferDesc });
 			if (Succeeded(res))
 			{
@@ -1707,6 +1708,7 @@ namespace UnlimRealms
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::IndexBuffer | (ur_uint)GrafBufferUsageFlag::TransferDst;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 			bufferDesc.SizeInBytes = (ur_size)indexBuffer.size() * sizeof(Isosurface::Index);
+			bufferDesc.ElementSize = sizeof(Isosurface::Index);
 			res = grafIB->Initialize(grafDevice, { bufferDesc });
 			if (Succeeded(res))
 			{

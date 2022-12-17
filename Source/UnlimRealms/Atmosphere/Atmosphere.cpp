@@ -614,10 +614,11 @@ namespace UnlimRealms
 		res = grafSystem->CreateBuffer(this->grafObjects->VB);
 		if (Succeeded(res))
 		{
-			GrafBufferDesc bufferDesc;
+			GrafBufferDesc bufferDesc = {};
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer | (ur_uint)GrafBufferUsageFlag::TransferDst;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 			bufferDesc.SizeInBytes = (ur_size)vertices.size() * sizeof(Atmosphere::Vertex);
+			bufferDesc.ElementSize = sizeof(Atmosphere::Vertex);
 			res = this->grafObjects->VB->Initialize(grafDevice, { bufferDesc });
 			if (Succeeded(res))
 			{
@@ -631,10 +632,11 @@ namespace UnlimRealms
 		res = grafSystem->CreateBuffer(this->grafObjects->IB);
 		if (Succeeded(res))
 		{
-			GrafBufferDesc bufferDesc;
+			GrafBufferDesc bufferDesc = {};
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::IndexBuffer | (ur_uint)GrafBufferUsageFlag::TransferDst;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 			bufferDesc.SizeInBytes = (ur_size)indices.size() * sizeof(Atmosphere::Index);
+			bufferDesc.ElementSize = sizeof(Atmosphere::Index);
 			res = this->grafObjects->IB->Initialize(grafDevice, { bufferDesc });
 			if (Succeeded(res))
 			{

@@ -512,10 +512,11 @@ namespace UnlimRealms
 		res = grafSystem->CreateBuffer(this->grafVB);
 		if (Succeeded(res))
 		{
-			GrafBufferDesc bufferDesc;
+			GrafBufferDesc bufferDesc = {};
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			bufferDesc.SizeInBytes = this->vbSizePerFrame * this->grafRenderer->GetRecordedFrameCount();
+			bufferDesc.ElementSize = sizeof(ImDrawVert);
 			res = this->grafVB->Initialize(grafDevice, { bufferDesc });
 		}
 		if (Failed(res))
@@ -526,10 +527,11 @@ namespace UnlimRealms
 		res = grafSystem->CreateBuffer(this->grafIB);
 		if (Succeeded(res))
 		{
-			GrafBufferDesc bufferDesc;
+			GrafBufferDesc bufferDesc = {};
 			bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::IndexBuffer;
 			bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			bufferDesc.SizeInBytes = this->ibSizePerFrame * this->grafRenderer->GetRecordedFrameCount();
+			bufferDesc.ElementSize = sizeof(ImDrawIdx);
 			res = this->grafIB->Initialize(grafDevice, { bufferDesc });
 		}
 		if (Failed(res))
@@ -627,7 +629,7 @@ namespace UnlimRealms
 			Result res = this->grafRenderer->GetGrafSystem()->CreateBuffer(this->grafCB);
 			if (Succeeded(res))
 			{
-				GrafBufferDesc bufferDesc;
+				GrafBufferDesc bufferDesc = {};
 				bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::ConstantBuffer;
 				bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 				bufferDesc.SizeInBytes = sizeof(VertexTransformCB);

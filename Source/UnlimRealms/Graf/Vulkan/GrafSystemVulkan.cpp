@@ -5365,7 +5365,7 @@ namespace UnlimRealms
 		Result res = grafSystemVulkan.CreateBuffer(this->grafStorageBuffer);
 		if (Succeeded(res))
 		{
-			GrafBuffer::InitParams storageBufferParams;
+			GrafBuffer::InitParams storageBufferParams = {};
 			storageBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::AccelerationStructure) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress) | ur_uint(GrafBufferUsageFlag::StorageBuffer);
 			storageBufferParams.BufferDesc.MemoryType = GrafDeviceMemoryFlags(GrafDeviceMemoryFlag::GpuLocal);
 			storageBufferParams.BufferDesc.SizeInBytes = vkBuildSizeInfo.accelerationStructureSize;

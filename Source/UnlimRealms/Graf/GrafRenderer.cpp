@@ -96,7 +96,7 @@ namespace UnlimRealms
 			crntStageLogName = "dynamic upload buffer";
 			res = this->grafSystem->CreateBuffer(this->grafDynamicUploadBuffer);
 			if (Failed(res)) break;
-			GrafBufferDesc uploadBufferDesc;
+			GrafBufferDesc uploadBufferDesc = {};
 			uploadBufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::TransferSrc;
 			uploadBufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			uploadBufferDesc.SizeInBytes = initParams.DynamicUploadBufferSize;
@@ -108,7 +108,7 @@ namespace UnlimRealms
 			crntStageLogName = "dynamic constant buffer";
 			res = this->grafSystem->CreateBuffer(this->grafDynamicConstantBuffer);
 			if (Failed(res)) break;
-			GrafBufferDesc constantBufferDesc;
+			GrafBufferDesc constantBufferDesc = {};
 			constantBufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::ConstantBuffer;
 			constantBufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			constantBufferDesc.SizeInBytes = initParams.DynamicConstantBufferSize;

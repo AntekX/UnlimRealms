@@ -31,7 +31,7 @@ int D3D12SandboxApp::Run()
 	realm.Initialize();
 
 	// create system canvas
-	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindowMaximized, L"DX12 Sandbox"));
+	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindowMaximized, L"GRAF Sandbox"));
 	canvas->Initialize(RectI(0, 0, (ur_uint)GetSystemMetrics(SM_CXSCREEN), (ur_uint)GetSystemMetrics(SM_CYSCREEN)));
 	realm.SetCanvas(std::move(canvas));
 	ur_uint canvasWidth = realm.GetCanvas()->GetClientBound().Width();
@@ -466,12 +466,10 @@ int D3D12SandboxApp::Run()
 
 		// update sub systems
 		realm.GetInput()->Update();
-		#if (0)
 		if (imguiRender != ur_null)
 		{
 			imguiRender->NewFrame();
 		}
-		#endif
 		cameraControl.Update();
 		camera.SetAspectRatio((float)realm.GetCanvas()->GetClientBound().Width() / realm.GetCanvas()->GetClientBound().Height());
 
@@ -561,14 +559,12 @@ int D3D12SandboxApp::Run()
 
 					// immediate mode generic primitives rendering
 
-					#if (0) // TODO
 					const ur_float bbR = 1.0f;
 					const ur_float4 testColor = ur_float4(ur_float3(1.0f) - ur_float3(crntClearColor), 1.0f);
 					const ur_float3 testPtimitiveVertices[] = { {-bbR,-bbR, 0.0f }, { bbR,-bbR, 0.0f }, { bbR, bbR, 0.0f }, {-bbR, bbR, 0.0f } };
 					genericRender->DrawWireBox({ -bbR,-bbR,-bbR }, { bbR, bbR, bbR }, ur_float4(testColor.z, testColor.y, testColor.x, 1.0f));
 					genericRender->DrawConvexPolygon(4, testPtimitiveVertices, testColor);
 					genericRender->Render(*grafCmdListCrnt, camera.GetViewProj());
-					#endif
 
 					grafCmdListCrnt->EndRenderPass();
 					
@@ -608,7 +604,6 @@ int D3D12SandboxApp::Run()
 					grafCmdListCrnt->Draw(6, 4, 0, 0);
 
 					// draw GUI
-					#if (0)
 					
 					static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
 					static bool showGUI = true;
@@ -623,7 +618,6 @@ int D3D12SandboxApp::Run()
 
 						imguiRender->Render(*grafCmdListCrnt);
 					}
-					#endif
 
 					grafCmdListCrnt->EndRenderPass();
 					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);

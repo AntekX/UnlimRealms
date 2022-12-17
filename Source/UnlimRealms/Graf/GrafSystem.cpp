@@ -1101,7 +1101,7 @@ namespace UnlimRealms
 			if (Failed(res))
 				break;
 
-			GrafBufferDesc mipBufferDesc;
+			GrafBufferDesc mipBufferDesc = {};
 			mipBufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::TransferSrc;
 			mipBufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 			mipBufferDesc.SizeInBytes = mipRowPitch * mipHeight;

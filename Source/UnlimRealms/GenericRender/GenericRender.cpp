@@ -737,10 +737,11 @@ namespace UnlimRealms
 			Result res = this->grafRenderer->GetGrafSystem()->CreateBuffer(this->grafObjects->VB);
 			if (Succeeded(res))
 			{
-				GrafBufferDesc bufferDesc;
+				GrafBufferDesc bufferDesc = {};
 				bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::VertexBuffer;
 				bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 				bufferDesc.SizeInBytes = vbSizeRequired;
+				bufferDesc.ElementSize = sizeof(Vertex);
 				res = this->grafObjects->VB->Initialize(this->grafRenderer->GetGrafDevice(), { bufferDesc });
 			}
 			if (Failed(res))
@@ -765,10 +766,11 @@ namespace UnlimRealms
 			Result res = this->grafRenderer->GetGrafSystem()->CreateBuffer(this->grafObjects->IB);
 			if (Succeeded(res))
 			{
-				GrafBufferDesc bufferDesc;
+				GrafBufferDesc bufferDesc = {};
 				bufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::IndexBuffer;
 				bufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 				bufferDesc.SizeInBytes = ibSizeRequired;
+				bufferDesc.ElementSize = sizeof(Index);
 				res = this->grafObjects->IB->Initialize(this->grafRenderer->GetGrafDevice(), { bufferDesc });
 			}
 			if (Failed(res))

@@ -2003,8 +2003,8 @@ namespace UnlimRealms
 			this->d3dIBView.BufferLocation = this->d3dResource->GetGPUVirtualAddress();
 			this->d3dIBView.SizeInBytes = (UINT)initParams.BufferDesc.SizeInBytes;
 			this->d3dIBView.Format = (
-				initParams.BufferDesc.ElementSize == 32 ? DXGI_FORMAT_R32_UINT :
-				initParams.BufferDesc.ElementSize == 16 ? DXGI_FORMAT_R16_UINT :
+				initParams.BufferDesc.ElementSize == 4 ? DXGI_FORMAT_R32_UINT :
+				initParams.BufferDesc.ElementSize == 2 ? DXGI_FORMAT_R16_UINT :
 				DXGI_FORMAT_UNKNOWN);
 		}
 
@@ -2046,6 +2046,8 @@ namespace UnlimRealms
 		{
 			return ResultError(Failure, std::string("GrafBufferDX12: Map failed with HRESULT = ") + HResultToString(hres));
 		}
+
+		mappedMemoryPtr = (void*)((ur_byte*)mappedMemoryPtr + dstOffset);
 
 		writeCallback((ur_byte*)mappedMemoryPtr);
 
