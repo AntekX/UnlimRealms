@@ -159,7 +159,9 @@ namespace UnlimRealms
 
 		inline ID3D12CommandQueue* GetD3DTransferCommandQueue() const;
 
-		GrafDescriptorHandleDX12 AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count);
+		GrafDescriptorHandleDX12 AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count);
+
+		GrafDescriptorHandleDX12 AllocateDescriptorRangeGPU(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count);
 
 		void ReleaseDescriptorRange(const GrafDescriptorHandleDX12& range);
 
@@ -206,7 +208,8 @@ namespace UnlimRealms
 
 		struct DescriptorPool
 		{
-			std::vector<std::unique_ptr<DescriptorHeap>> descriptorHeaps;
+			std::unique_ptr<DescriptorHeap> descriptorHeapCPU;
+			std::unique_ptr<DescriptorHeap> descriptorHeapGPU;
 		};
 
 		CommandAllocator* GetGraphicsCommandAllocator();
@@ -675,12 +678,19 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
+		inline ID3D12PipelineState* GetD3DPipelineState() const;
+		
+		inline ID3D12RootSignature* GetD3DRootSignature() const;
+
+		inline D3D12_PRIMITIVE_TOPOLOGY GetD3DPrimitiveTopology() const;
+
 	protected:
 
 		Result Deinitialize();
 
 		shared_ref<ID3D12PipelineState> d3dPipelineState;
 		shared_ref<ID3D12RootSignature> d3dRootSignature;
+		D3D_PRIMITIVE_TOPOLOGY d3dPrimitiveTopology;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -763,7 +773,8 @@ namespace UnlimRealms
 		static inline D3D12_CULL_MODE GrafToD3DCullMode(GrafCullMode cullMode);
 		static inline D3D12_COMPARISON_FUNC GrafToD3DCompareOp(GrafCompareOp compareOp);
 		static inline D3D12_STENCIL_OP GrafToD3DStencilOp(GrafStencilOp stencilOp);
-		static inline D3D12_PRIMITIVE_TOPOLOGY_TYPE GrafToD3DPrimitiveTopology(GrafPrimitiveTopology topology);
+		static inline D3D12_PRIMITIVE_TOPOLOGY GrafToD3DPrimitiveTopology(GrafPrimitiveTopology topology);
+		static inline D3D12_PRIMITIVE_TOPOLOGY_TYPE GrafToD3DPrimitiveTopologyType(GrafPrimitiveTopology topology);
 		static inline const char* ParseVertexElementSemantic(const std::string& semantic, std::string& semanticName, ur_uint& semanticIdx);
 		static inline DXGI_FORMAT GrafToDXGIFormat(GrafFormat grafFormat);
 		static inline GrafFormat DXGIToGrafFormat(DXGI_FORMAT dxgiFormat);

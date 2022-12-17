@@ -358,29 +358,52 @@ namespace UnlimRealms
 
 		for (ur_uint heapTypeIdx = 0; heapTypeIdx < ur_uint(D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES); ++heapTypeIdx)
 		{
-			std::unique_ptr<DescriptorHeap> heap(new DescriptorHeap());
-			heap->d3dDesc = {};
-			heap->d3dDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE(heapTypeIdx);
-			heap->d3dDesc.Flags = DescriptorHeapFlags[heapTypeIdx];
-			heap->d3dDesc.NumDescriptors = DescriptorHeapSize[heapTypeIdx];
-			heap->descriptorIncrementSize = this->d3dDevice->GetDescriptorHandleIncrementSize(heap->d3dDesc.Type);
-			heap->allocator.Init(ur_size(heap->d3dDesc.NumDescriptors));
-			heap->isShaderVisible = (D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE & heap->d3dDesc.Flags);
-			hres = this->d3dDevice->CreateDescriptorHeap(&heap->d3dDesc, __uuidof(heap->d3dDescriptorHeap), heap->d3dDescriptorHeap);
-			if (FAILED(hres))
+			std::unique_ptr<DescriptorPool> pool(new DescriptorPool());
+
+			// CPU read / write heap
 			{
-				this->Deinitialize();
-				return ResultError(Failure, std::string("GrafDeviceDX12: CreateDescriptorHeap failed with HRESULT = ") + HResultToString(hres));
-			}
-			heap->d3dHeapStartCpuHandle = heap->d3dDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-			heap->d3dHeapStartGpuHandle = {};
-			if (D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE & heap->d3dDesc.Flags)
-			{
-				heap->d3dHeapStartGpuHandle = heap->d3dDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+				std::unique_ptr<DescriptorHeap> heap(new DescriptorHeap());
+				heap->d3dDesc = {};
+				heap->d3dDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE(heapTypeIdx);
+				heap->d3dDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+				heap->d3dDesc.NumDescriptors = DescriptorHeapSize[heapTypeIdx];
+				heap->descriptorIncrementSize = this->d3dDevice->GetDescriptorHandleIncrementSize(heap->d3dDesc.Type);
+				heap->allocator.Init(ur_size(heap->d3dDesc.NumDescriptors));
+				heap->isShaderVisible = false;
+				hres = this->d3dDevice->CreateDescriptorHeap(&heap->d3dDesc, __uuidof(heap->d3dDescriptorHeap), heap->d3dDescriptorHeap);
+				if (FAILED(hres))
+				{
+					this->Deinitialize();
+					return ResultError(Failure, std::string("GrafDeviceDX12: CreateDescriptorHeap failed with HRESULT = ") + HResultToString(hres));
+				}
+				heap->d3dHeapStartCpuHandle = heap->d3dDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+				heap->d3dHeapStartGpuHandle = {};
+
+				pool->descriptorHeapCPU = std::move(heap);
 			}
 
-			std::unique_ptr<DescriptorPool> pool(new DescriptorPool());
-			pool->descriptorHeaps.push_back(std::move(heap));
+			// CPU write / GPU read heap
+			if (D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE & DescriptorHeapFlags[heapTypeIdx])
+			{
+				std::unique_ptr<DescriptorHeap> heap(new DescriptorHeap());
+				heap->d3dDesc = {};
+				heap->d3dDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE(heapTypeIdx);
+				heap->d3dDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+				heap->d3dDesc.NumDescriptors = DescriptorHeapSize[heapTypeIdx];
+				heap->descriptorIncrementSize = this->d3dDevice->GetDescriptorHandleIncrementSize(heap->d3dDesc.Type);
+				heap->allocator.Init(ur_size(heap->d3dDesc.NumDescriptors));
+				heap->isShaderVisible = true;
+				hres = this->d3dDevice->CreateDescriptorHeap(&heap->d3dDesc, __uuidof(heap->d3dDescriptorHeap), heap->d3dDescriptorHeap);
+				if (FAILED(hres))
+				{
+					this->Deinitialize();
+					return ResultError(Failure, std::string("GrafDeviceDX12: CreateDescriptorHeap failed with HRESULT = ") + HResultToString(hres));
+				}
+				heap->d3dHeapStartCpuHandle = heap->d3dDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+				heap->d3dHeapStartGpuHandle = heap->d3dDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+
+				pool->descriptorHeapGPU = std::move(heap);
+			}
 
 			this->descriptorPool[heapTypeIdx] = std::move(pool);
 		}
@@ -548,7 +571,7 @@ namespace UnlimRealms
 		return ur_null;
 	}
 
-	GrafDescriptorHandleDX12 GrafDeviceDX12::AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count)
+	GrafDescriptorHandleDX12 GrafDeviceDX12::AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count)
 	{
 		GrafDescriptorHandleDX12 handle = {};
 
@@ -556,20 +579,39 @@ namespace UnlimRealms
 			return handle; // invalid type
 
 		DescriptorPool* pool = this->descriptorPool[ur_uint(type)].get();
-		if (nullptr == pool || pool->descriptorHeaps.empty())
+		if (nullptr == pool || nullptr == pool->descriptorHeapCPU.get())
 			return handle; // not initialized
 
-		DescriptorHeap* heap = pool->descriptorHeaps.back().get();
+		DescriptorHeap* heap = pool->descriptorHeapCPU.get();
 		handle.allocation = heap->allocator.Allocate(count);
 		if (0 == handle.allocation.Size)
 			return handle; // out of memory
 
 		handle.heap = heap;
 		handle.cpuHandle.ptr = heap->d3dHeapStartCpuHandle.ptr + SIZE_T(handle.allocation.Offset * heap->descriptorIncrementSize);
-		if (heap->isShaderVisible)
-		{
-			handle.gpuHandle.ptr = heap->d3dHeapStartGpuHandle.ptr + UINT64(handle.allocation.Offset * heap->descriptorIncrementSize);
-		}
+
+		return handle;
+	}
+
+	GrafDescriptorHandleDX12 GrafDeviceDX12::AllocateDescriptorRangeGPU(D3D12_DESCRIPTOR_HEAP_TYPE type, ur_size count)
+	{
+		GrafDescriptorHandleDX12 handle = {};
+
+		if (type >= D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES)
+			return handle; // invalid type
+
+		DescriptorPool* pool = this->descriptorPool[ur_uint(type)].get();
+		if (nullptr == pool || nullptr == pool->descriptorHeapGPU.get())
+			return handle; // not initialized
+
+		DescriptorHeap* heap = pool->descriptorHeapGPU.get();
+		handle.allocation = heap->allocator.Allocate(count);
+		if (0 == handle.allocation.Size)
+			return handle; // out of memory
+
+		handle.heap = heap;
+		handle.cpuHandle.ptr = heap->d3dHeapStartCpuHandle.ptr + SIZE_T(handle.allocation.Offset * heap->descriptorIncrementSize);
+		handle.gpuHandle.ptr = heap->d3dHeapStartGpuHandle.ptr + UINT64(handle.allocation.Offset * heap->descriptorIncrementSize);
 
 		return handle;
 	}
@@ -947,7 +989,15 @@ namespace UnlimRealms
 
 	Result GrafCommandListDX12::BindPipeline(GrafPipeline* grafPipeline)
 	{
-		return Result(NotImplemented);
+		GrafPipelineDX12* grafPipelineDX12 = static_cast<GrafPipelineDX12*>(grafPipeline);
+
+		this->d3dCommandList->SetPipelineState(grafPipelineDX12->GetD3DPipelineState());
+
+		this->d3dCommandList->IASetPrimitiveTopology(grafPipelineDX12->GetD3DPrimitiveTopology());
+
+		this->d3dCommandList->SetGraphicsRootSignature(grafPipelineDX12->GetD3DRootSignature());
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::BindDescriptorTable(GrafDescriptorTable* descriptorTable, GrafPipeline* grafPipeline)
@@ -957,9 +1007,6 @@ namespace UnlimRealms
 
 		GrafDescriptorTableDX12* descriptorTableDX12 = static_cast<GrafDescriptorTableDX12*>(descriptorTable);
 
-		this->d3dCommandList->SetGraphicsRootDescriptorTable(0, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
-		this->d3dCommandList->SetGraphicsRootDescriptorTable(1, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
-
 		// bind descriptor heaps
 
 		ID3D12DescriptorHeap* d3dDescriptorHeaps[2];
@@ -967,6 +1014,11 @@ namespace UnlimRealms
 		d3dDescriptorHeaps[1] = descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
 
 		this->d3dCommandList->SetDescriptorHeaps((UINT)ur_array_size(d3dDescriptorHeaps), d3dDescriptorHeaps);
+
+		// set table offsets in heaps
+
+		this->d3dCommandList->SetGraphicsRootDescriptorTable(0, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
+		this->d3dCommandList->SetGraphicsRootDescriptorTable(1, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
 
 		return Result(Success);
 	}
@@ -993,12 +1045,16 @@ namespace UnlimRealms
 
 	Result GrafCommandListDX12::Draw(ur_uint vertexCount, ur_uint instanceCount, ur_uint firstVertex, ur_uint firstInstance)
 	{
-		return Result(NotImplemented);
+		this->d3dCommandList->DrawInstanced((UINT)vertexCount, (UINT)instanceCount, (UINT)firstVertex, (UINT)firstInstance);
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::DrawIndexed(ur_uint indexCount, ur_uint instanceCount, ur_uint firstIndex, ur_uint firstVertex, ur_uint firstInstance)
 	{
-		return Result(NotImplemented);
+		this->d3dCommandList->DrawIndexedInstanced((UINT)indexCount, (UINT)instanceCount, (UINT)firstIndex, (UINT)firstVertex, (UINT)firstInstance);
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::Copy(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
@@ -1682,7 +1738,7 @@ namespace UnlimRealms
 				break;
 			};
 
-			this->rtvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 1);
+			this->rtvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 1);
 			if (!this->rtvDescriptorHandle.IsValid())
 			{
 				this->Deinitialize();
@@ -1707,7 +1763,7 @@ namespace UnlimRealms
 				break;
 			};
 
-			this->dsvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1);
+			this->dsvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1);
 			if (!this->dsvDescriptorHandle.IsValid())
 			{
 				this->Deinitialize();
@@ -1742,7 +1798,7 @@ namespace UnlimRealms
 				break;
 			};
 
-			this->srvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+			this->srvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
 			if (!this->srvDescriptorHandle.IsValid())
 			{
 				this->Deinitialize();
@@ -1772,7 +1828,7 @@ namespace UnlimRealms
 				break;
 			};
 
-			this->uavDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+			this->uavDescriptorHandle = grafDeviceDX12->AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
 			if (!this->srvDescriptorHandle.IsValid())
 			{
 				this->Deinitialize();
@@ -1871,7 +1927,7 @@ namespace UnlimRealms
 
 		/*if (ur_uint(GrafBufferUsageFlag::ConstantBuffer) & initParams.BufferDesc.Usage)
 		{
-			this->cbvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+			this->cbvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
 			if (!this->cbvDescriptorHandle.IsValid())
 			{
 				this->Deinitialize();
@@ -1889,7 +1945,7 @@ namespace UnlimRealms
 
 		if (ur_uint(GrafBufferUsageFlag::StorageBuffer) & initParams.BufferDesc.Usage)
 		{
-			this->srvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+			this->srvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
 			if (!this->srvDescriptorHandle.IsValid())
 			{
 				this->Deinitialize();
@@ -1912,7 +1968,7 @@ namespace UnlimRealms
 
 		if (ur_uint(GrafBufferUsageFlag::StorageBuffer) & initParams.BufferDesc.Usage)
 		{
-			this->uavDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+			this->uavDescriptorHandle = grafDeviceDX12->AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
 			if (!this->uavDescriptorHandle.IsValid())
 			{
 				this->Deinitialize();
@@ -2044,7 +2100,7 @@ namespace UnlimRealms
 
 		// create sampler
 
-		this->samplerDescriptorHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 1);
+		this->samplerDescriptorHandle = grafDeviceDX12->AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 1);
 		if (!this->samplerDescriptorHandle.IsValid())
 		{
 			this->Deinitialize();
@@ -2274,7 +2330,7 @@ namespace UnlimRealms
 			auto& tableData = this->descriptorTableData[heapIdx];
 			if (tableDesc.descriptorCount > 0)
 			{
-				tableData.descriptorHeapHandle = grafDeviceDX12->AllocateDescriptorRange(D3D12_DESCRIPTOR_HEAP_TYPE(heapIdx), tableDesc.descriptorCount);
+				tableData.descriptorHeapHandle = grafDeviceDX12->AllocateDescriptorRangeGPU(D3D12_DESCRIPTOR_HEAP_TYPE(heapIdx), tableDesc.descriptorCount);
 				if (!tableData.descriptorHeapHandle.IsValid())
 				{
 					this->Deinitialize();
@@ -2400,6 +2456,7 @@ namespace UnlimRealms
 	GrafPipelineDX12::GrafPipelineDX12(GrafSystem &grafSystem) :
 		GrafPipeline(grafSystem)
 	{
+		this->d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 	}
 
 	GrafPipelineDX12::~GrafPipelineDX12()
@@ -2411,6 +2468,7 @@ namespace UnlimRealms
 	{
 		this->d3dPipelineState.reset(ur_null);
 		this->d3dRootSignature.reset(ur_null);
+		this->d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 
 		return Result(Success);
 	}
@@ -2611,7 +2669,8 @@ namespace UnlimRealms
 
 		// primitive topology
 
-		d3dPipelineDesc.PrimitiveTopologyType = GrafUtilsDX12::GrafToD3DPrimitiveTopology(initParams.PrimitiveTopology);
+		d3dPipelineDesc.PrimitiveTopologyType = GrafUtilsDX12::GrafToD3DPrimitiveTopologyType(initParams.PrimitiveTopology);
+		this->d3dPrimitiveTopology = GrafUtilsDX12::GrafToD3DPrimitiveTopology(initParams.PrimitiveTopology);
 
 		hres = d3dDevice->CreateGraphicsPipelineState(&d3dPipelineDesc, __uuidof(ID3D12PipelineState), this->d3dPipelineState);
 		if (FAILED(hres))
@@ -3083,19 +3142,34 @@ namespace UnlimRealms
 		return d3dStencilOp;
 	}
 
-	D3D12_PRIMITIVE_TOPOLOGY_TYPE GrafUtilsDX12::GrafToD3DPrimitiveTopology(GrafPrimitiveTopology topology)
+	D3D12_PRIMITIVE_TOPOLOGY GrafUtilsDX12::GrafToD3DPrimitiveTopology(GrafPrimitiveTopology topology)
 	{
-		D3D12_PRIMITIVE_TOPOLOGY_TYPE d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED;
+		D3D12_PRIMITIVE_TOPOLOGY d3dTopology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 		switch (topology)
 		{
-		case GrafPrimitiveTopology::PointList: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT; break;
-		case GrafPrimitiveTopology::LineList: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE; break;
-		case GrafPrimitiveTopology::LineStrip: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED; break;
-		case GrafPrimitiveTopology::TriangleList: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
-		case GrafPrimitiveTopology::TriangleStrip: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED; break;
-		case GrafPrimitiveTopology::TriangleFan: d3dTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED; break;
+		case GrafPrimitiveTopology::PointList: d3dTopology = D3D_PRIMITIVE_TOPOLOGY_POINTLIST; break;
+		case GrafPrimitiveTopology::LineList: d3dTopology = D3D_PRIMITIVE_TOPOLOGY_LINELIST; break;
+		case GrafPrimitiveTopology::LineStrip: d3dTopology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP; break;
+		case GrafPrimitiveTopology::TriangleList: d3dTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST; break;
+		case GrafPrimitiveTopology::TriangleStrip: d3dTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP; break;
+		case GrafPrimitiveTopology::TriangleFan: d3dTopology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED; break;
 		};
 		return d3dTopology;
+	}
+
+	D3D12_PRIMITIVE_TOPOLOGY_TYPE GrafUtilsDX12::GrafToD3DPrimitiveTopologyType(GrafPrimitiveTopology topology)
+	{
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE d3dTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED;
+		switch (topology)
+		{
+		case GrafPrimitiveTopology::PointList: d3dTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT; break;
+		case GrafPrimitiveTopology::LineList: d3dTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE; break;
+		case GrafPrimitiveTopology::LineStrip: d3dTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE; break;
+		case GrafPrimitiveTopology::TriangleList: d3dTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
+		case GrafPrimitiveTopology::TriangleStrip: d3dTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
+		case GrafPrimitiveTopology::TriangleFan: d3dTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
+		};
+		return d3dTopologyType;
 	}
 
 	const char* GrafUtilsDX12::ParseVertexElementSemantic(const std::string& semantic, std::string& semanticName, ur_uint& semanticIdx)

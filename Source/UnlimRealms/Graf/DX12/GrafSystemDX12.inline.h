@@ -248,6 +248,21 @@ namespace UnlimRealms
 		return this->byteCodeSize;
 	}
 
+	inline ID3D12PipelineState* GrafPipelineDX12::GetD3DPipelineState() const
+	{
+		return this->d3dPipelineState.get();
+	}
+
+	inline ID3D12RootSignature* GrafPipelineDX12::GetD3DRootSignature() const
+	{
+		return this->d3dRootSignature.get();
+	}
+
+	inline D3D12_PRIMITIVE_TOPOLOGY GrafPipelineDX12::GetD3DPrimitiveTopology() const
+	{
+		return this->d3dPrimitiveTopology;
+	}
+
 	inline GrafBuffer* GrafAccelerationStructureDX12::GetScratchBuffer() const
 	{
 		return this->grafScratchBuffer.get();

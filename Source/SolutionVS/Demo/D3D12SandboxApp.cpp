@@ -17,7 +17,10 @@ using namespace UnlimRealms;
 
 #if defined(UR_GRAF)
 
+#define UR_GRAF_SYSTEM GrafSystemDX12
+
 #include "Graf/DX12/GrafSystemDX12.h"
+#include "Graf/Vulkan/GrafSystemVulkan.h"
 #include "Graf/GrafRenderer.h"
 
 int D3D12SandboxApp::Run()
@@ -46,7 +49,7 @@ int D3D12SandboxApp::Run()
 	do
 	{
 		// create GRAF system
-		std::unique_ptr<GrafSystem> grafSystem(new GrafSystemDX12(realm));
+		std::unique_ptr<GrafSystem> grafSystem(new UR_GRAF_SYSTEM(realm));
 		res = grafSystem->Initialize(realm.GetCanvas());
 		if (Failed(res)) break;
 
@@ -578,7 +581,8 @@ int D3D12SandboxApp::Run()
 				}
 
 				{ // foreground color render pass (drawing directly into swap chain image)
-					#if (0) // TODO
+
+					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
 					grafCmdListCrnt->BeginRenderPass(grafRenderer->GetCanvasRenderPass(), grafRenderer->GetCanvasRenderTarget());
 
 					// draw sample primitives
@@ -604,7 +608,8 @@ int D3D12SandboxApp::Run()
 					grafCmdListCrnt->Draw(6, 4, 0, 0);
 
 					// draw GUI
-
+					#if (0)
+					
 					static const ImVec2 imguiDemoWndSize(300.0f, (float)canvasHeight);
 					static bool showGUI = true;
 					showGUI = (realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
@@ -618,9 +623,10 @@ int D3D12SandboxApp::Run()
 
 						imguiRender->Render(*grafCmdListCrnt);
 					}
+					#endif
 
 					grafCmdListCrnt->EndRenderPass();
-					#endif
+					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
 				}
 
 				// finalize current command list
