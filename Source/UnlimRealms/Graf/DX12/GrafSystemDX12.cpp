@@ -959,7 +959,7 @@ namespace UnlimRealms
 			if (ur_uint(GrafImageUsageFlag::ColorRenderTarget) & grafImageDX12->GetDesc().Usage)
 			{
 				d3dColorTargetDescriptors[colorTargetCount++] = grafImageSubresourceDX12->GetRTVDescriptorHandle().GetD3DHandleCPU();
-				if (rtClearValues != nullptr)
+				if (rtClearValues != nullptr && grafRenderPass->GetImageDesc(imageIdx).LoadOp == GrafRenderPassDataOp::Clear)
 				{
 					this->ClearColorImage(grafImageSubresourceDX12, rtClearValues[imageIdx]);
 				}
@@ -968,7 +968,7 @@ namespace UnlimRealms
 			{
 				d3dDepthStencilDescriptor = grafImageSubresourceDX12->GetDSVDescriptorHandle().GetD3DHandleCPU();
 				++depthStencilCount;
-				if (rtClearValues != nullptr)
+				if (rtClearValues != nullptr && grafRenderPass->GetImageDesc(imageIdx).LoadOp == GrafRenderPassDataOp::Clear)
 				{
 					this->ClearDepthStencilImage(grafImageSubresourceDX12, rtClearValues[imageIdx]);
 				}
@@ -1072,7 +1072,12 @@ namespace UnlimRealms
 
 	Result GrafCommandListDX12::Copy(GrafBuffer* srcBuffer, GrafBuffer* dstBuffer, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 	{
-		return Result(NotImplemented);
+		GrafBufferDX12* srcBufferDX12 = static_cast<GrafBufferDX12*>(srcBuffer);
+		GrafBufferDX12* dstBufferDX12 = static_cast<GrafBufferDX12*>(dstBuffer);
+
+		this->d3dCommandList->CopyBufferRegion(dstBufferDX12->GetD3DResource(), (UINT64)dstOffset, srcBufferDX12->GetD3DResource(), (UINT64)srcOffset, (UINT64)dataSize);;
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::Copy(GrafBuffer* srcBuffer, GrafImage* dstImage, ur_size bufferOffset, BoxI imageRegion)
@@ -1590,6 +1595,19 @@ namespace UnlimRealms
 		// aquire resosurce reference
 
 		this->d3dResource = d3dResource;
+
+		// initial state for image and default subreasource
+
+		GrafImageState initialState = GrafImageState::Common;
+		/*if (initParams.ImageDesc.Usage & ur_uint(GrafImageUsageFlag::TransferSrc))
+			initialState = GrafImageState::TransferSrc;
+		if (initParams.ImageDesc.Usage & ur_uint(GrafImageUsageFlag::TransferDst))
+			initialState = GrafImageState::TransferDst;
+		if (initParams.ImageDesc.Usage & ur_uint(GrafImageUsageFlag::ColorRenderTarget))
+			initialState = GrafImageState::ColorWrite;
+		if (initParams.ImageDesc.Usage & ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget))
+			initialState = GrafImageState::DepthStencilWrite;*/
+		this->SetState(initialState);
 
 		// create subresource views
 

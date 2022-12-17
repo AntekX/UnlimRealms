@@ -25,6 +25,8 @@ using namespace UnlimRealms;
 
 #if defined(UR_GRAF)
 
+#define UR_GRAF_SYSTEM GrafSystemVulkan
+
 int VoxelPlanetApp::Run()
 {
 	// create realm
@@ -50,7 +52,7 @@ int VoxelPlanetApp::Run()
 	do
 	{
 		// create GRAF system
-		std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
+		std::unique_ptr<GrafSystem> grafSystem(new UR_GRAF_SYSTEM(realm));
 		res = grafSystem->Initialize(realm.GetCanvas());
 		if (Failed(res)) break;
 
@@ -396,9 +398,9 @@ int VoxelPlanetApp::Run()
 				grafViewport.Far = 1.0f;
 				grafCmdListCrnt->SetViewport(grafViewport, true);
 
-				GrafClearValue rtClearValue = { 0.025f, 0.025f, 0.05f, 0.0f };
-				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
-				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), rtClearValue);
+				//GrafClearValue rtClearValue = { 0.025f, 0.025f, 0.05f, 1.0f };
+				//grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
+				//grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), rtClearValue);
 
 				if (hdrRender != ur_null)
 				{ 
@@ -494,7 +496,7 @@ int VoxelPlanetApp::Run()
 					}
 
 					grafCmdListCrnt->EndRenderPass();
-					grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
+					//grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
 				}
 
 				// finalize current command list
