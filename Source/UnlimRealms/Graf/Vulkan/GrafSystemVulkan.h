@@ -416,7 +416,7 @@ namespace UnlimRealms
 		Result Deinitialize();
 
 		friend class GrafCommandListVulkan;
-		inline void SetState(GrafBufferState& state);
+		inline void SetState(GrafBufferState state);
 
 		VkBuffer vkBuffer;
 		VkDeviceMemory vkDeviceMemory;

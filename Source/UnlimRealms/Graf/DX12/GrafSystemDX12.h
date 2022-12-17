@@ -96,11 +96,17 @@ namespace UnlimRealms
 
 		// base class for GrafDeviceDX12::DescriptorHeap
 
+		inline ur_bool GetIsShaderVisible() const;
+
 		inline ur_size GetDescriptorIncrementSize() const;
+
+		inline ID3D12DescriptorHeap* GetD3DDescriptorHeap() const;
 
 	protected:
 
+		ur_bool isShaderVisible;
 		ur_size descriptorIncrementSize;
+		shared_ref<ID3D12DescriptorHeap> d3dDescriptorHeap;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -193,7 +199,6 @@ namespace UnlimRealms
 		{
 			friend class GrafDeviceDX12;
 			D3D12_DESCRIPTOR_HEAP_DESC d3dDesc;
-			shared_ref<ID3D12DescriptorHeap> d3dDescriptorHeap;
 			D3D12_CPU_DESCRIPTOR_HANDLE d3dHeapStartCpuHandle;
 			D3D12_GPU_DESCRIPTOR_HANDLE d3dHeapStartGpuHandle;
 			LinearAllocator allocator;
@@ -371,8 +376,8 @@ namespace UnlimRealms
 		std::vector<std::unique_ptr<GrafImage>> swapChainImages;
 
 		// per frame data
-		ur_uint32 frameCount;
-		ur_uint32 frameIdx;
+		std::vector<std::unique_ptr<GrafCommandList>> imageTransitionCmdListBegin;
+		std::vector<std::unique_ptr<GrafCommandList>> imageTransitionCmdListEnd;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -405,7 +410,7 @@ namespace UnlimRealms
 		Result CreateDefaultSubresource();
 
 		friend class GrafCommandListDX12;
-		inline void SetState(GrafImageState& state);
+		inline void SetState(GrafImageState state);
 
 		shared_ref<ID3D12Resource> d3dResource;
 		std::unique_ptr<GrafImageSubresource> grafDefaultSubresource;
@@ -437,7 +442,7 @@ namespace UnlimRealms
 		Result CreateD3DImageView();
 
 		friend class GrafCommandListDX12;
-		inline void SetState(GrafImageState& state);
+		inline void SetState(GrafImageState state);
 
 		GrafDescriptorHandleDX12 rtvDescriptorHandle;
 		GrafDescriptorHandleDX12 dsvDescriptorHandle;
@@ -477,6 +482,9 @@ namespace UnlimRealms
 	private:
 
 		Result Deinitialize();
+
+		friend class GrafCommandListDX12;
+		inline void SetState(GrafBufferState& state);
 
 		shared_ref<ID3D12Resource> d3dResource;
 		GrafDescriptorHandleDX12 cbvDescriptorHandle;

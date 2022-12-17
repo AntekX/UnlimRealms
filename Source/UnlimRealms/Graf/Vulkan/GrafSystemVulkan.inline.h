@@ -100,7 +100,7 @@ namespace UnlimRealms
 		return this->vkBuffer;
 	}
 
-	inline void GrafBufferVulkan::SetState(GrafBufferState& state)
+	inline void GrafBufferVulkan::SetState(GrafBufferState state)
 	{
 		this->bufferState = state;
 	}

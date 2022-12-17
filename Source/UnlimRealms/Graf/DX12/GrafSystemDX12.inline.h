@@ -20,9 +20,19 @@ namespace UnlimRealms
 		return (deviceId < this->dxgiAdapters.size() ? this->dxgiAdapters[deviceId].get() : ur_null);
 	}
 
+	inline ur_bool GrafDescriptorHeapDX12::GetIsShaderVisible() const
+	{
+		return this->isShaderVisible;
+	}
+
 	inline ur_size GrafDescriptorHeapDX12::GetDescriptorIncrementSize() const
 	{
 		return this->descriptorIncrementSize;
+	}
+
+	inline ID3D12DescriptorHeap* GrafDescriptorHeapDX12::GetD3DDescriptorHeap() const
+	{
+		return this->d3dDescriptorHeap.get();
 	}
 
 	inline ur_bool GrafDescriptorHandleDX12::IsValid() const
@@ -90,12 +100,12 @@ namespace UnlimRealms
 		return this->grafDefaultSubresource.get();
 	}
 
-	inline void GrafImageDX12::SetState(GrafImageState& state)
+	inline void GrafImageDX12::SetState(GrafImageState state)
 	{
 		this->imageState = state;
 	}
 
-	inline void GrafImageSubresourceDX12::SetState(GrafImageState& state)
+	inline void GrafImageSubresourceDX12::SetState(GrafImageState state)
 	{
 		this->subresourceState = state;
 	}
@@ -148,6 +158,11 @@ namespace UnlimRealms
 	inline const D3D12_INDEX_BUFFER_VIEW* GrafBufferDX12::GetD3DIndexBufferView() const
 	{
 		return &this->d3dIBView;
+	}
+
+	inline void GrafBufferDX12::SetState(GrafBufferState& state)
+	{
+		this->bufferState = state;
 	}
 
 	inline const GrafDescriptorHandleDX12& GrafDescriptorTableDX12::GetSrvUavCbvDescriptorHeapHandle() const

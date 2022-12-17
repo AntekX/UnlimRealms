@@ -359,6 +359,7 @@ namespace UnlimRealms
 			heap->d3dDesc.NumDescriptors = DescriptorHeapSize[heapTypeIdx];
 			heap->descriptorIncrementSize = this->d3dDevice->GetDescriptorHandleIncrementSize(heap->d3dDesc.Type);
 			heap->allocator.Init(ur_size(heap->d3dDesc.NumDescriptors));
+			heap->isShaderVisible = (D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE & heap->d3dDesc.Flags);
 			hres = this->d3dDevice->CreateDescriptorHeap(&heap->d3dDesc, __uuidof(heap->d3dDescriptorHeap), heap->d3dDescriptorHeap);
 			if (FAILED(hres))
 			{
@@ -369,7 +370,7 @@ namespace UnlimRealms
 			heap->d3dHeapStartGpuHandle = {};
 			if (D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE & heap->d3dDesc.Flags)
 			{
-				heap->d3dDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+				heap->d3dHeapStartGpuHandle = heap->d3dDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 			}
 
 			std::unique_ptr<DescriptorPool> pool(new DescriptorPool());
@@ -402,16 +403,6 @@ namespace UnlimRealms
 		// NOTE: support submission to different queue families
 		// currently everything's done on the graphics queue
 
-		std::vector<ID3D12DescriptorHeap*> d3dDescriptorHeaps;
-		d3dDescriptorHeaps.reserve(ur_array_size(descriptorPool));
-		for (auto& pool : descriptorPool)
-		{
-			for (auto& heap : pool->descriptorHeaps)
-			{
-				d3dDescriptorHeaps.push_back(heap->d3dDescriptorHeap.get());
-			}
-		}
-
 		if (this->graphicsQueue)
 		{
 			this->graphicsQueue->commandPoolsMutex.lock(); // lock pools list modification
@@ -425,9 +416,6 @@ namespace UnlimRealms
 				GrafDeviceDX12::CommandAllocator* grafCmdAllocator = grafCommandListDX12->GetCommandAllocator();
 				ID3D12GraphicsCommandList1* d3dGraphicsCommandList = grafCommandListDX12->GetD3DCommandList();
 
-				// bind descriptor heaps
-				d3dGraphicsCommandList->SetDescriptorHeaps((UINT)d3dDescriptorHeaps.size(), &d3dDescriptorHeaps.front());
-				
 				// execute
 				ID3D12CommandList* d3dCommandLists[] = { d3dGraphicsCommandList };
 				this->graphicsQueue->d3dQueue->ExecuteCommandLists(1, d3dCommandLists);
@@ -558,7 +546,10 @@ namespace UnlimRealms
 
 		handle.heap = heap;
 		handle.cpuHandle.ptr = heap->d3dHeapStartCpuHandle.ptr + SIZE_T(handle.allocation.Offset * heap->descriptorIncrementSize);
-		handle.gpuHandle.ptr = heap->d3dHeapStartGpuHandle.ptr + UINT64(handle.allocation.Offset * heap->descriptorIncrementSize);
+		if (heap->isShaderVisible)
+		{
+			handle.gpuHandle.ptr = heap->d3dHeapStartGpuHandle.ptr + UINT64(handle.allocation.Offset * heap->descriptorIncrementSize);
+		}
 
 		return handle;
 	}
@@ -752,6 +743,8 @@ namespace UnlimRealms
 		d3dBarrier.Transition.StateAfter = GrafUtilsDX12::GrafToD3DBufferState(dstState);
 
 		this->d3dCommandList->ResourceBarrier(1, &d3dBarrier);
+
+		static_cast<GrafBufferDX12*>(grafBuffer)->SetState(dstState);
 		
 		return Result(Success);
 	}
@@ -777,12 +770,13 @@ namespace UnlimRealms
 		if (ur_null == grafImageSubresource)
 			return Result(InvalidArgs);
 
-		const GrafImageDX12* grafImageDX12 = static_cast<const GrafImageDX12*>(grafImageSubresource->GetImage());
-		if (ur_null == grafImageDX12)
-			return Result(InvalidArgs);
-
 		srcState = (GrafImageState::Current == srcState ? grafImageSubresource->GetState() : srcState);
+		D3D12_RESOURCE_STATES d3dStateSrc = GrafUtilsDX12::GrafToD3DImageState(srcState);
+		D3D12_RESOURCE_STATES d3dStateDst = GrafUtilsDX12::GrafToD3DImageState(dstState);
+		if (d3dStateSrc == d3dStateDst)
+			return Result(Success);
 
+		const GrafImageDX12* grafImageDX12 = static_cast<const GrafImageDX12*>(grafImageSubresource->GetImage());
 		ID3D12Resource* d3dResource = grafImageDX12->GetD3DResource();
 
 		ur_uint32 subresFirst = grafImageSubresource->GetDesc().BaseMipLevel;
@@ -796,8 +790,8 @@ namespace UnlimRealms
 			d3dBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
 			d3dBarrier.Transition.pResource = d3dResource;
 			d3dBarrier.Transition.Subresource = subresFirst + subresIdx;
-			d3dBarrier.Transition.StateBefore = GrafUtilsDX12::GrafToD3DImageState(srcState);
-			d3dBarrier.Transition.StateAfter = GrafUtilsDX12::GrafToD3DImageState(dstState);
+			d3dBarrier.Transition.StateBefore = d3dStateSrc;
+			d3dBarrier.Transition.StateAfter = d3dStateDst;
 		}
 
 		this->d3dCommandList->ResourceBarrier(UINT(subresCount), d3dBarriers.data());
@@ -941,8 +935,16 @@ namespace UnlimRealms
 
 		GrafDescriptorTableDX12* descriptorTableDX12 = static_cast<GrafDescriptorTableDX12*>(descriptorTable);
 
-		this->GetD3DCommandList()->SetGraphicsRootDescriptorTable(0, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
-		this->GetD3DCommandList()->SetGraphicsRootDescriptorTable(1, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
+		this->d3dCommandList->SetGraphicsRootDescriptorTable(0, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
+		this->d3dCommandList->SetGraphicsRootDescriptorTable(1, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
+
+		// bind descriptor heaps
+
+		ID3D12DescriptorHeap* d3dDescriptorHeaps[2];
+		d3dDescriptorHeaps[0] = descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
+		d3dDescriptorHeaps[1] = descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
+
+		this->d3dCommandList->SetDescriptorHeaps((UINT)ur_array_size(d3dDescriptorHeaps), d3dDescriptorHeaps);
 
 		return Result(Success);
 	}
@@ -1130,8 +1132,6 @@ namespace UnlimRealms
 	GrafCanvasDX12::GrafCanvasDX12(GrafSystem &grafSystem) :
 		GrafCanvas(grafSystem)
 	{
-		this->frameCount = 0;
-		this->frameIdx = 0;
 	}
 
 	GrafCanvasDX12::~GrafCanvasDX12()
@@ -1141,10 +1141,11 @@ namespace UnlimRealms
 
 	Result GrafCanvasDX12::Deinitialize()
 	{
-		this->frameCount = 0;
-		this->frameIdx = 0;
 		this->swapChainImageCount = 0;
 		this->swapChainCurrentImageId = 0;
+
+		this->imageTransitionCmdListBegin.clear();
+		this->imageTransitionCmdListEnd.clear();
 
 		this->swapChainImages.clear();
 		if (!this->dxgiSwapChain.empty())
@@ -1218,10 +1219,18 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafCanvasDX12: QueryInterface(IDXGISwapChain4) failed with HRESULT = ") + HResultToString(hres));
 		}
 
+		#else
+
+		return ResultError(NotImplemented, std::string("GrafCanvasDX12: failed to initialize, unsupported platform"));
+
+		#endif
+
 		// init swap chain images
 
-		this->swapChainImages.reserve(initParams.SwapChainImageCount);
-		for (ur_uint imageIdx = 0; imageIdx < initParams.SwapChainImageCount; ++imageIdx)
+		this->swapChainImageCount = initParams.SwapChainImageCount;
+		this->swapChainCurrentImageId = ur_uint32(this->swapChainImageCount - 1); // first AcquireNextImage will make it 0
+		this->swapChainImages.reserve(this->swapChainImageCount);
+		for (ur_uint imageIdx = 0; imageIdx < this->swapChainImageCount; ++imageIdx)
 		{
 			shared_ref<ID3D12Resource> d3dImageResource;
 			hres = this->dxgiSwapChain->GetBuffer(imageIdx, __uuidof(ID3D12Resource), d3dImageResource);
@@ -1252,23 +1261,82 @@ namespace UnlimRealms
 			this->swapChainImages.push_back(std::move(grafImage));
 		}
 
-		#else
+		// per frame objects
 
-		return ResultError(NotImplemented, std::string("GrafCanvasDX12: failed to initialize, unsupported platform"));
+		this->imageTransitionCmdListBegin.resize(this->swapChainImageCount);
+		this->imageTransitionCmdListEnd.resize(this->swapChainImageCount);
+		for (ur_uint32 iframe = 0; iframe < this->swapChainImageCount; ++iframe)
+		{
+			Result urRes = Success;
+			urRes &= this->GetGrafSystem().CreateCommandList(this->imageTransitionCmdListBegin[iframe]);
+			urRes &= this->GetGrafSystem().CreateCommandList(this->imageTransitionCmdListEnd[iframe]);
+			if (Succeeded(urRes))
+			{
+				urRes &= this->imageTransitionCmdListBegin[iframe]->Initialize(grafDevice);
+				urRes &= this->imageTransitionCmdListEnd[iframe]->Initialize(grafDevice);
+			}
+			if (Failed(urRes))
+			{
+				this->Deinitialize();
+				return ResultError(Failure, "GrafCanvasVulkan: failed to create transition command list");
+			}
+		}
 
-		#endif
+		// acquire an image to use as a current RT
+
+		Result urRes = this->AcquireNextImage();
+		if (Failed(urRes))
+		{
+			this->Deinitialize();
+			return urRes;
+		}
 
 		return Result(Success);
 	}
 
 	Result GrafCanvasDX12::AcquireNextImage()
 	{
-		return Result(NotImplemented);
+		this->swapChainCurrentImageId = (this->swapChainCurrentImageId + 1) % this->swapChainImageCount;
+
+		return Result(Success);
 	}
 
 	Result GrafCanvasDX12::Present()
 	{
-		return Result(NotImplemented);
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		// do image layout transition to presentation state
+
+		GrafImage* swapChainCurrentImage = this->swapChainImages[this->swapChainCurrentImageId].get();
+		GrafCommandList* imageTransitionCmdListEndCrnt = this->imageTransitionCmdListEnd[this->swapChainCurrentImageId].get();
+		imageTransitionCmdListEndCrnt->Begin();
+		imageTransitionCmdListEndCrnt->ImageMemoryBarrier(swapChainCurrentImage, GrafImageState::Current, GrafImageState::Present);
+		imageTransitionCmdListEndCrnt->End();
+		ID3D12CommandList* d3dCommandListsEnd[] = { static_cast<GrafCommandListDX12*>(imageTransitionCmdListEndCrnt)->GetD3DCommandList() };
+		grafDeviceDX12->GetD3DGraphicsCommandQueue()->ExecuteCommandLists(1, d3dCommandListsEnd);
+
+		// present current image
+
+		this->dxgiSwapChain->Present(1, 0);
+
+		// acquire next available image to use as RT
+
+		Result res = this->AcquireNextImage();
+		if (Failed(res))
+			return res;
+
+		// do image layout transition to common state
+
+		GrafImage* swapChainNextImage = this->swapChainImages[this->swapChainCurrentImageId].get();
+		GrafCommandList* imageTransitionCmdListBeginNext = this->imageTransitionCmdListBegin[this->swapChainCurrentImageId].get();
+		imageTransitionCmdListBeginNext->Begin();
+		imageTransitionCmdListBeginNext->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
+		imageTransitionCmdListBeginNext->End();
+		ID3D12CommandList* d3dCommandListsBegin[] = { static_cast<GrafCommandListDX12*>(imageTransitionCmdListBeginNext)->GetD3DCommandList() };
+		grafDeviceDX12->GetD3DGraphicsCommandQueue()->ExecuteCommandLists(1, d3dCommandListsBegin);
+
+		return Result(Success);
 	}
 
 	GrafImage* GrafCanvasDX12::GetCurrentImage()
@@ -1349,6 +1417,19 @@ namespace UnlimRealms
 			this->Deinitialize();
 			return ResultError(Failure, std::string("GrafImageDX12: CreateCommittedResource failed with HRESULT = ") + HResultToString(hres));
 		}
+
+		// initial state for image and default subreasource
+
+		GrafImageState initialState = GrafImageState::Common;
+		if (d3dResStates & D3D12_RESOURCE_STATE_COPY_SOURCE)
+			initialState = GrafImageState::TransferSrc;
+		if (d3dResStates & D3D12_RESOURCE_STATE_COPY_DEST)
+			initialState = GrafImageState::TransferDst;
+		if (d3dResStates & D3D12_RESOURCE_STATE_RENDER_TARGET)
+			initialState = GrafImageState::ColorWrite;
+		if (d3dResStates & D3D12_RESOURCE_STATE_DEPTH_WRITE)
+			initialState = GrafImageState::DepthStencilWrite;
+		this->SetState(initialState);
 
 		// create default subresource
 
@@ -1488,19 +1569,6 @@ namespace UnlimRealms
 			return ResultError(InvalidArgs, std::string("GrafImageSubresourceDX12: failed to initialize, invalid GrafDevice"));
 		}
 
-		// create view
-
-		Result res = this->CreateD3DImageView();
-		if (Failed(res))
-			return res;
-
-		return Result(Success);
-	}
-
-	Result GrafImageSubresourceDX12::CreateD3DImageView()
-	{
-		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
-
 		// validate image
 
 		const GrafImageDX12* grafImageDX12 = static_cast<const GrafImageDX12*>(this->GetImage());
@@ -1509,6 +1577,24 @@ namespace UnlimRealms
 			return ResultError(InvalidArgs, std::string("GrafImageSubresourceDX12: failed to initialize, invalid image"));
 		}
 
+		// create view
+
+		Result res = this->CreateD3DImageView();
+		if (Failed(res))
+			return res;
+
+		// set initial state from parent resource
+
+		this->SetState(grafImageDX12->GetState());
+
+		return Result(Success);
+	}
+
+	Result GrafImageSubresourceDX12::CreateD3DImageView()
+	{
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+
+		const GrafImageDX12* grafImageDX12 = static_cast<const GrafImageDX12*>(this->GetImage());
 		const GrafImageDesc& grafImageDesc = grafImageDX12->GetDesc();
 		const GrafImageSubresourceDesc& grafSubresDesc = this->GetDesc();
 

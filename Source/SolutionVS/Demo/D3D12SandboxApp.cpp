@@ -463,10 +463,12 @@ int D3D12SandboxApp::Run()
 
 		// update sub systems
 		realm.GetInput()->Update();
+		#if (0)
 		if (imguiRender != ur_null)
 		{
 			imguiRender->NewFrame();
 		}
+		#endif
 		cameraControl.Update();
 		camera.SetAspectRatio((float)realm.GetCanvas()->GetClientBound().Width() / realm.GetCanvas()->GetClientBound().Height());
 
