@@ -466,7 +466,7 @@ int D3D12SandboxApp::Run()
 
 		// update sub systems
 		realm.GetInput()->Update();
-		if (imguiRender != ur_null)
+		if (imguiRender != ur_null && canvasValid)
 		{
 			imguiRender->NewFrame();
 		}
