@@ -148,8 +148,8 @@ namespace UnlimRealms
 			if (FAILED(hres))
 				continue;
 
-			grafDeviceDesc.RayTracing.RayTraceSupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0);
-			grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1);
+			grafDeviceDesc.RayTracing.RayTraceSupported = false;//(ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0);
+			grafDeviceDesc.RayTracing.RayQuerySupported = false;//(ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1);
 			grafDeviceDesc.RayTracing.ShaderGroupHandleSize = 8;
 			grafDeviceDesc.RayTracing.RecursionDepthMax = ~ur_uint32(0);
 			grafDeviceDesc.RayTracing.GeometryCountMax = ~ur_uint64(0);
@@ -226,6 +226,12 @@ namespace UnlimRealms
 	Result GrafSystemDX12::CreateShader(std::unique_ptr<GrafShader>& grafShader)
 	{
 		grafShader.reset(new GrafShaderDX12(*this));
+		return Result(Success);
+	}
+
+	Result GrafSystemDX12::CreateShaderLib(std::unique_ptr<GrafShaderLib>& grafShaderLib)
+	{
+		grafShaderLib.reset(new GrafShaderLibDX12(*this));
 		return Result(Success);
 	}
 
@@ -1442,7 +1448,7 @@ namespace UnlimRealms
 			if (Failed(urRes))
 			{
 				this->Deinitialize();
-				return ResultError(Failure, "GrafCanvasVulkan: failed to create transition command list");
+				return ResultError(Failure, "GrafCanvasDX12: failed to create transition command list");
 			}
 		}
 
@@ -2215,7 +2221,7 @@ namespace UnlimRealms
 
 	Result GrafShaderDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		return Result(Success);
 	}
 
 	Result GrafShaderDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
@@ -2244,6 +2250,72 @@ namespace UnlimRealms
 		memcpy(this->byteCodeBuffer.get(), initParams.ByteCode, this->byteCodeSize);
 
 		return Result(Success);
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GrafShaderLibDX12::GrafShaderLibDX12(GrafSystem& grafSystem) :
+		GrafShaderLib(grafSystem)
+	{
+	}
+
+	GrafShaderLibDX12::~GrafShaderLibDX12()
+	{
+		this->Deinitialize();
+	}
+
+	Result GrafShaderLibDX12::Deinitialize()
+	{
+		this->shaders.clear();
+
+		return Result(Success);
+	}
+
+	Result GrafShaderLibDX12::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
+	{
+		this->Deinitialize();
+
+		if (nullptr == initParams.ByteCode || 0 == initParams.ByteCodeSize)
+		{
+			return ResultError(InvalidArgs, std::string("GrafShaderDX12: failed to initialize, invalid byte code"));
+		}
+
+		GrafShaderLib::Initialize(grafDevice, initParams);
+
+		// validate device
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafShaderDX12: failed to initialize, invalid GrafDevice"));
+		}
+
+		// initialize shaders
+
+		Result res(Success);
+		this->shaders.reserve(initParams.EntryPointCount);
+		for (ur_uint ientry = 0; ientry < initParams.EntryPointCount; ++ientry)
+		{
+			const GrafShaderLib::EntryPoint& libEntryPoint = initParams.EntryPoints[ientry];
+			GrafShader::InitParams grafShaderParams = {};
+			grafShaderParams.ShaderType = libEntryPoint.Type;
+			grafShaderParams.EntryPoint = libEntryPoint.Name;
+
+			std::unique_ptr<GrafShader> grafShader;
+			this->GetGrafSystem().CreateShader(grafShader);
+			Result shaderRes = NotImplemented;
+			// TODO: initialize shader for an entry
+			if (Failed(shaderRes))
+			{
+				LogError(std::string("GrafShaderLibDX12: failed to initialize shader for entry point = ") + libEntryPoint.Name);
+				continue;
+			}
+			res &= shaderRes;
+
+			this->shaders.push_back(std::move(grafShader));
+		}
+
+		return res;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2746,6 +2818,8 @@ namespace UnlimRealms
 		d3dPipelineDesc.PrimitiveTopologyType = GrafUtilsDX12::GrafToD3DPrimitiveTopologyType(initParams.PrimitiveTopology);
 		this->d3dPrimitiveTopology = GrafUtilsDX12::GrafToD3DPrimitiveTopology(initParams.PrimitiveTopology);
 
+		// create pipeline
+
 		hres = d3dDevice->CreateGraphicsPipelineState(&d3dPipelineDesc, __uuidof(ID3D12PipelineState), this->d3dPipelineState);
 		if (FAILED(hres))
 		{
@@ -2770,12 +2844,93 @@ namespace UnlimRealms
 
 	Result GrafComputePipelineDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		this->d3dPipelineState.reset(ur_null);
+		this->d3dRootSignature.reset(ur_null);
+
+		return Result(Success);
 	}
 
 	Result GrafComputePipelineDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		GrafComputePipeline::Initialize(grafDevice, initParams);
+
+		// validate device
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafComputePipelineDX12: failed to initialize, invalid GrafDevice"));
+		}
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		D3D12_COMPUTE_PIPELINE_STATE_DESC d3dPipelineDesc = {};
+
+		d3dPipelineDesc.NodeMask = 0;
+		d3dPipelineDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+		// initialize root signature
+
+		D3D12_ROOT_SIGNATURE_DESC d3dRootSigDesc = {};
+		d3dRootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+		std::vector<D3D12_ROOT_PARAMETER> d3dRootParameters;
+		for (ur_uint descriptorLayoutIdx = 0; descriptorLayoutIdx < initParams.DescriptorTableLayoutCount; ++descriptorLayoutIdx)
+		{
+			GrafDescriptorTableLayoutDX12* tableLayoutDX12 = static_cast<GrafDescriptorTableLayoutDX12*>(initParams.DescriptorTableLayouts[descriptorLayoutIdx]);
+			const D3D12_ROOT_PARAMETER& tableSrvUavCbvD3DRootPatameter = tableLayoutDX12->GetSrvUavCbvTableD3DRootParameter();
+			if (tableSrvUavCbvD3DRootPatameter.DescriptorTable.NumDescriptorRanges > 0)
+			{
+				d3dRootParameters.emplace_back(tableSrvUavCbvD3DRootPatameter);
+				d3dRootSigDesc.NumParameters += 1;
+			}
+			const D3D12_ROOT_PARAMETER& tableSamplerD3DRootPatameter = tableLayoutDX12->GetSamplerTableD3DRootParameter();
+			if (tableSamplerD3DRootPatameter.DescriptorTable.NumDescriptorRanges > 0)
+			{
+				d3dRootParameters.emplace_back(tableSamplerD3DRootPatameter);
+				d3dRootSigDesc.NumParameters += 1;
+			}
+		}
+		d3dRootSigDesc.pParameters = &d3dRootParameters.front();
+
+		shared_ref<ID3DBlob> d3dSignatureBlob;
+		shared_ref<ID3DBlob> d3dErrorBlob;
+		HRESULT hres = D3D12SerializeRootSignature(&d3dRootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, d3dSignatureBlob, d3dErrorBlob);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafComputePipelineDX12: D3D12SerializeRootSignature failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		hres = d3dDevice->CreateRootSignature(d3dPipelineDesc.NodeMask, d3dSignatureBlob->GetBufferPointer(), d3dSignatureBlob->GetBufferSize(),
+			__uuidof(this->d3dRootSignature), this->d3dRootSignature);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafComputePipelineDX12: CreateRootSignature failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		d3dPipelineDesc.pRootSignature = this->d3dRootSignature.get();
+
+		// initialize shader
+
+		GrafShaderDX12* grafShaderDX12 = static_cast<GrafShaderDX12*>(initParams.ShaderStage);
+		if (grafShaderDX12 != nullptr)
+		{
+			d3dPipelineDesc.CS.pShaderBytecode = grafShaderDX12->GetByteCodePtr();
+			d3dPipelineDesc.CS.BytecodeLength = (SIZE_T)grafShaderDX12->GetByteCodeSize();
+		}
+
+		// create pipeline
+
+		hres = d3dDevice->CreateComputePipelineState(&d3dPipelineDesc, __uuidof(ID3D12PipelineState), this->d3dPipelineState);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafComputePipelineDX12: CreateComputePipelineState failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -10,6 +10,7 @@
 #include "Sys/Windows/WinInput.h"
 #include "Core/Math.h"
 #include "Graf/Vulkan/GrafSystemVulkan.h"
+#include "Graf/DX12/GrafSystemDX12.h"
 #include "Graf/GrafRenderer.h"
 #include "ImguiRender/ImguiRender.h"
 #include "GenericRender/GenericRender.h"
@@ -19,6 +20,8 @@
 #include "HybridRenderingCommon.h"
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
+
+#define UR_GRAF_SYSTEM GrafSystemVulkan
 
 #define SCENE_TYPE_MEDIEVAL_BUILDINGS 0
 #define SCENE_TYPE_SPONZA 1
@@ -119,7 +122,7 @@ int HybridRenderingApp::Run()
 	do
 	{
 		// create GRAF system
-		std::unique_ptr<GrafSystem> grafSystem(new GrafSystemVulkan(realm));
+		std::unique_ptr<GrafSystem> grafSystem(new UR_GRAF_SYSTEM(realm));
 		res = grafSystem->Initialize(realm.GetCanvas());
 		if (Failed(res)) break;
 

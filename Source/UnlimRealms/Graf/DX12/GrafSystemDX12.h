@@ -49,6 +49,8 @@ namespace UnlimRealms
 
 		virtual Result CreateShader(std::unique_ptr<GrafShader>& grafShader);
 
+		virtual Result CreateShaderLib(std::unique_ptr<GrafShaderLib>& grafShaderLib);
+
 		virtual Result CreateRenderPass(std::unique_ptr<GrafRenderPass>& grafRenderPass);
 
 		virtual Result CreateRenderTarget(std::unique_ptr<GrafRenderTarget>& grafRenderTarget);
@@ -545,6 +547,22 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafShaderLibDX12 : public GrafShaderLib
+	{
+	public:
+
+		GrafShaderLibDX12(GrafSystem& grafSystem);
+
+		~GrafShaderLibDX12();
+
+		virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams);
+
+	protected:
+
+		Result Deinitialize();
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafRenderPassDX12 : public GrafRenderPass
 	{
 	public:
@@ -708,6 +726,9 @@ namespace UnlimRealms
 	protected:
 
 		Result Deinitialize();
+
+		shared_ref<ID3D12PipelineState> d3dPipelineState;
+		shared_ref<ID3D12RootSignature> d3dRootSignature;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
