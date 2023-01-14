@@ -170,29 +170,28 @@ namespace UnlimRealms
 		CommandListCache& cmdListCache = *threadCacheIter->second.get();
 		this->grafCommandListCacheMutex.unlock();
 
-		// try to recycle command list
+		// acquire available command list (recycle) or create a new one
 
 		std::lock_guard<std::mutex> lockCmdLists(cmdListCache.cmdListsMutex);
 
+		std::unique_ptr<GrafCommandList> acquiredCmdList;
 		if (!cmdListCache.availableCmdLists.empty())
 		{
-			std::unique_ptr<GrafCommandList> recycledCmdList = std::move(cmdListCache.availableCmdLists.back());
-			ur_assert(recycledCmdList->Wait(0) == Success);
+			acquiredCmdList = std::move(cmdListCache.availableCmdLists.back());
+			ur_assert(acquiredCmdList->Wait(0) == Success);
 			cmdListCache.availableCmdLists.pop_back();
-			grafCommandList = recycledCmdList.get();
-			cmdListCache.acquiredCmdLists.emplace_back(std::move(recycledCmdList));
-			return res;
 		}
-
-		// create new command list
-
-		std::unique_ptr<GrafCommandList> newCmdList;
-		res = this->grafSystem->CreateCommandList(newCmdList);
-		if (Failed(res)) return res;
-		res = newCmdList->Initialize(this->grafDevice.get());
-		if (Failed(res)) return res;
-		grafCommandList = newCmdList.get();
-		cmdListCache.acquiredCmdLists.emplace_back(std::move(newCmdList));
+		else
+		{
+			res = this->grafSystem->CreateCommandList(acquiredCmdList);
+			if (Failed(res)) return res;
+			res = acquiredCmdList->Initialize(this->grafDevice.get());
+			if (Failed(res)) return res;
+		}
+		
+		grafCommandList = acquiredCmdList.get();
+		grafCommandList->Begin(); // return command list in open state to ensure UpdateCommandListCache does not reuse it in other thread right after unlock
+		cmdListCache.acquiredCmdLists.emplace_back(std::move(acquiredCmdList));
 		
 		return res;
 	}
@@ -516,11 +515,10 @@ namespace UnlimRealms
 		}
 		else
 		{
-			// TODO: reconsider the usage of dynamic buffers in multithreaded scenarios
-			std::lock_guard<std::mutex> lock(this->uploadBufferMutex);
-
 			// allocate
+			this->uploadBufferMutex.lock();
 			Allocation uploadBufferAlloc = this->uploadBufferAllocator.Allocate(dataSize);
+			this->uploadBufferMutex.unlock();
 			if (0 == uploadBufferAlloc.Size)
 				return Result(OutOfMemory);
 
@@ -573,10 +571,10 @@ namespace UnlimRealms
 		if (ur_null == dataPtr || 0 == dataSize || ur_null == dstImage)
 			return Result(InvalidArgs);
 
-		std::lock_guard<std::mutex> lock(this->uploadBufferMutex);
-
 		// allocate
+		this->uploadBufferMutex.lock();
 		Allocation uploadBufferAlloc = this->uploadBufferAllocator.Allocate(dataSize);
+		this->uploadBufferMutex.unlock();
 		if (0 == uploadBufferAlloc.Size)
 			return Result(OutOfMemory);
 

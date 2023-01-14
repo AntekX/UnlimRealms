@@ -1025,6 +1025,7 @@ namespace UnlimRealms
 		this->commandPool = ur_null;
 		this->vkCommandBuffer = VK_NULL_HANDLE;
 		this->vkSubmitFence = VK_NULL_HANDLE;
+		this->isOpen = false;
 	}
 
 	GrafCommandListVulkan::~GrafCommandListVulkan()
@@ -1052,6 +1053,7 @@ namespace UnlimRealms
 		}
 
 		this->commandPool = ur_null;
+		this->isOpen = false;
 
 		return Result(Success);
 	}
@@ -1114,6 +1116,11 @@ namespace UnlimRealms
 		if (VK_NULL_HANDLE == this->vkCommandBuffer)
 			return Result(NotInitialized);
 
+		if (this->isOpen)
+			return Result(Success);
+
+		this->isOpen = true;
+
 		VkDevice vkDevice = static_cast<GrafDeviceVulkan*>(this->GetGrafDevice())->GetVkDevice();
 		#if (UR_GRAF_VULKAN_COMMAND_BUFFER_SYNC_RESET)
 		vkWaitForFences(vkDevice, 1, &this->vkSubmitFence, true, ~ur_uint64(0)); // make sure command buffer is no longer used (previous submission can still be executed)
@@ -1142,6 +1149,7 @@ namespace UnlimRealms
 		
 		VkResult vkRes = vkEndCommandBuffer(this->vkCommandBuffer);
 		this->commandPool->accessMutex.unlock();
+		this->isOpen = false;
 		if (vkRes != VK_SUCCESS)
 			return ResultError(Failure, std::string("GrafCommandListVulkan: vkEndCommandBuffer failed with VkResult = ") + VkResultToString(vkRes));
 

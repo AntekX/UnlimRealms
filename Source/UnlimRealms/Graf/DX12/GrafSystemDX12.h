@@ -183,7 +183,7 @@ namespace UnlimRealms
 		struct CommandAllocatorPool
 		{
 			std::vector<std::unique_ptr<CommandAllocator>> commandAllocators;
-			std::mutex commandAllocatorsMutex;
+			//std::mutex commandAllocatorsMutex;
 		};
 
 		struct DeviceQueue
@@ -192,9 +192,10 @@ namespace UnlimRealms
 			shared_ref<ID3D12Fence1> d3dSubmitFence;
 			ur_uint64 nextSubmitFenceValue;
 			std::unordered_map<std::thread::id, std::unique_ptr<CommandAllocatorPool>> commandPools;
-			std::mutex commandPoolsMutex;
+			//std::mutex commandPoolsMutex;
 			std::vector<GrafCommandList*> recordedCommandLists;
-			std::mutex recordedCommandListsMutex;
+			//std::mutex recordedCommandListsMutex;
+			std::mutex submitMutex;
 		};
 
 		struct DescriptorHeap : public GrafDescriptorHeapDX12
@@ -326,8 +327,8 @@ namespace UnlimRealms
 
 		GrafDeviceDX12::CommandAllocator* commandAllocator;
 		shared_ref<ID3D12GraphicsCommandList1> d3dCommandList;
-		ur_uint64 submitFenceValue;
 		ur_bool closed;
+		ur_uint64 submitFenceValue;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -257,6 +257,7 @@ namespace UnlimRealms
 		GrafDeviceVulkan::ThreadCommandPool* commandPool;
 		VkCommandBuffer vkCommandBuffer;
 		VkFence vkSubmitFence;
+		ur_bool isOpen;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

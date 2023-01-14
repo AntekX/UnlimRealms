@@ -818,8 +818,8 @@ namespace UnlimRealms
 		if (this->grafObjects->lightShaftsRTImage == ur_null ||
 			this->grafObjects->lightShaftsRTImage->GetDesc().Size != renderTarget.GetImage(0)->GetDesc().Size)
 		{
-			if (this->grafObjects->lightShaftsRTImage) this->grafRenderer->SafeDelete(this->grafObjects->lightShaftsRTImage.release());
-			if (this->grafObjects->lightShaftsRT) this->grafRenderer->SafeDelete(this->grafObjects->lightShaftsRT.release());
+			if (this->grafObjects->lightShaftsRTImage) this->grafRenderer->SafeDelete(this->grafObjects->lightShaftsRTImage.release(), &grafCmdList);
+			if (this->grafObjects->lightShaftsRT) this->grafRenderer->SafeDelete(this->grafObjects->lightShaftsRT.release(), &grafCmdList);
 			
 			res = this->grafRenderer->GetGrafSystem()->CreateImage(this->grafObjects->lightShaftsRTImage);
 			if (Succeeded(res))

@@ -19,6 +19,7 @@
 namespace UnlimRealms
 {
 
+	// hidden warnings
 	#if defined(_DEBUG) 
 	#define UR_GRAF_DX12_DEBUG_MODE
 	D3D12_MESSAGE_ID D3D12DebugLayerMessagesFilter[] =
@@ -50,10 +51,18 @@ namespace UnlimRealms
 		D3D12_DESCRIPTOR_HEAP_FLAG_NONE,			// D3D12_DESCRIPTOR_HEAP_TYPE_DSV
 	};
 
-	static const char* HResultToString(HRESULT res)
+	static std::string HResultToString(HRESULT res)
 	{
 		_com_error err(res);
-		return (const char*)err.ErrorMessage();
+		#ifdef _UNICODE
+		#pragma warning(push)
+		#pragma warning(disable: 4996) // std::wstring_convert is depricated
+		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> strConverter;
+		return std::string(strConverter.to_bytes(err.ErrorMessage()));
+		#pragma warning(pop)
+		#else
+		return std::string(err.ErrorMessage());
+		#endif
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -433,10 +442,14 @@ namespace UnlimRealms
 
 		if (this->graphicsQueue != ur_null)
 		{
-			std::lock_guard<std::mutex> lock(this->graphicsQueue->recordedCommandListsMutex);
+			//std::lock_guard<std::mutex> lock(this->graphicsQueue->recordedCommandListsMutex);
+			GrafCommandListDX12* grafCommandListDX12 = static_cast<GrafCommandListDX12*>(grafCommandList);
+			ur_assert(grafCommandListDX12->submitFenceValue <= this->graphicsQueue->nextSubmitFenceValue);
 			this->graphicsQueue->recordedCommandLists.push_back(grafCommandList);
 			res = Success;
 		}
+
+		this->graphicsQueue->submitMutex.unlock();
 
 		return Result(res);
 	}
@@ -448,9 +461,10 @@ namespace UnlimRealms
 
 		if (this->graphicsQueue)
 		{
-			this->graphicsQueue->commandPoolsMutex.lock(); // lock pools list modification
-			for (auto& pool : this->graphicsQueue->commandPools) pool.second->commandAllocatorsMutex.lock(); // lock per thread allocators write access
-			this->graphicsQueue->recordedCommandListsMutex.lock(); // lock recording
+			//this->graphicsQueue->commandPoolsMutex.lock(); // lock pools list modification
+			//for (auto& pool : this->graphicsQueue->commandPools) pool.second->commandAllocatorsMutex.lock(); // lock per thread allocators write access
+			//this->graphicsQueue->recordedCommandListsMutex.lock(); // lock recording
+			this->graphicsQueue->submitMutex.lock();
 			
 			// execute command lists
 			for (auto& grafCommandList : this->graphicsQueue->recordedCommandLists)
@@ -464,17 +478,19 @@ namespace UnlimRealms
 				this->graphicsQueue->d3dQueue->ExecuteCommandLists(1, d3dCommandLists);
 				
 				grafCommandListDX12->submitFenceValue = this->graphicsQueue->nextSubmitFenceValue;
+				grafCommandListDX12->closed = true; // make sure GrafCommandList::Wait() fails ater opening/begin and until submitted & executed
 				grafCmdAllocator->submitFenceValue = this->graphicsQueue->nextSubmitFenceValue;
 			}
 			this->graphicsQueue->recordedCommandLists.clear();
 
-			this->graphicsQueue->recordedCommandListsMutex.unlock();
-			for (auto& pool : this->graphicsQueue->commandPools) pool.second->commandAllocatorsMutex.unlock();
-			this->graphicsQueue->commandPoolsMutex.unlock();
-
 			// signal submission fence
 			this->graphicsQueue->d3dQueue->Signal(this->graphicsQueue->d3dSubmitFence, this->graphicsQueue->nextSubmitFenceValue);
 			this->graphicsQueue->nextSubmitFenceValue += 1;
+
+			//this->graphicsQueue->recordedCommandListsMutex.unlock();
+			//for (auto& pool : this->graphicsQueue->commandPools) pool.second->commandAllocatorsMutex.unlock();
+			//this->graphicsQueue->commandPoolsMutex.unlock();
+			this->graphicsQueue->submitMutex.unlock();
 		}
 		
 		return Result(Success);
@@ -506,11 +522,13 @@ namespace UnlimRealms
 		if (ur_null == this->graphicsQueue)
 			return ur_null;
 
+		this->graphicsQueue->submitMutex.lock();
+
 		// get an existing pool for current thread or create a new one
 
 		CommandAllocatorPool* commandAllocatorPool = ur_null;
 		std::thread::id thisThreadId = std::this_thread::get_id();
-		this->graphicsQueue->commandPoolsMutex.lock();
+		//this->graphicsQueue->commandPoolsMutex.lock();
 		const auto& poolIter = this->graphicsQueue->commandPools.find(thisThreadId);
 		if (poolIter != this->graphicsQueue->commandPools.end())
 		{
@@ -522,13 +540,13 @@ namespace UnlimRealms
 			commandAllocatorPool = newPool.get();
 			this->graphicsQueue->commandPools[thisThreadId] = std::move(newPool);
 		}
-		this->graphicsQueue->commandPoolsMutex.unlock();
+		//this->graphicsQueue->commandPoolsMutex.unlock();
 
 		// get a reusable allocator or create a mew one
 
 		CommandAllocator* commandAllocator = ur_null;
 		ur_uint64 completedFenceValue = this->graphicsQueue->d3dSubmitFence->GetCompletedValue();
-		commandAllocatorPool->commandAllocatorsMutex.lock();
+		//commandAllocatorPool->commandAllocatorsMutex.lock();
 		for (auto& cachedAllocator : commandAllocatorPool->commandAllocators)
 		{
 			if (cachedAllocator->submitFenceValue > completedFenceValue)
@@ -552,7 +570,22 @@ namespace UnlimRealms
 			commandAllocator = newAllocator.get();
 			commandAllocatorPool->commandAllocators.push_back(std::move(newAllocator));
 		}
-		commandAllocatorPool->commandAllocatorsMutex.unlock();
+
+		// reset allocator the first time it is accessed after the last submit
+
+		if (commandAllocator->resetFenceValue <= commandAllocator->submitFenceValue)
+		{
+			HRESULT hres = commandAllocator->d3dCommandAllocator->Reset();
+			if (FAILED(hres))
+			{
+				//commandAllocatorPool->commandAllocatorsMutex.unlock();
+				LogError(std::string("GrafCommandListDX12: d3dCommandAllocator->Reset() failed with HRESULT = ") + HResultToString(hres));
+				return nullptr;
+			}
+			commandAllocator->resetFenceValue = commandAllocator->submitFenceValue + 1;
+		}
+
+		//commandAllocatorPool->commandAllocatorsMutex.unlock();
 
 		return commandAllocator;
 	}
@@ -628,8 +661,8 @@ namespace UnlimRealms
 		GrafCommandList(grafSystem)
 	{
 		this->commandAllocator = ur_null;
-		this->submitFenceValue = 0;
 		this->closed = true;
+		this->submitFenceValue = 0;
 	}
 
 	GrafCommandListDX12::~GrafCommandListDX12()
@@ -642,9 +675,9 @@ namespace UnlimRealms
 		#if (UR_GRAF_DX12_COMMAND_LIST_SYNC_DESTROY)
 		this->Wait(ur_uint64(-1));
 		#endif
+		this->closed = true;
 		this->submitFenceValue = 0;
 		this->commandAllocator = ur_null;
-		this->closed = true;
 		
 		return Result(Success);
 	}
@@ -684,6 +717,9 @@ namespace UnlimRealms
 		if (ur_null == this->d3dCommandList.get())
 			return Result(NotInitialized);
 
+		if (!this->closed)
+			return Result(Success); // already open
+
 		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
 		
 		#if (UR_GRAF_DX12_COMMAND_LIST_SYNC_RESET)
@@ -701,19 +737,7 @@ namespace UnlimRealms
 
 		// update allocator's fence
 
-		this->commandAllocator->pool->commandAllocatorsMutex.lock();
-
-		if (this->commandAllocator->resetFenceValue <= this->commandAllocator->submitFenceValue)
-		{
-			// first time allocator reset after submitted commands done
-			HRESULT hres = this->commandAllocator->d3dCommandAllocator->Reset();
-			if (FAILED(hres))
-			{
-				this->commandAllocator->pool->commandAllocatorsMutex.unlock();
-				return ResultError(Failure, std::string("GrafCommandListDX12: d3dCommandAllocator->Reset() failed with HRESULT = ") + HResultToString(hres));
-			}
-			this->commandAllocator->resetFenceValue = this->commandAllocator->submitFenceValue + 1;
-		}
+		//this->commandAllocator->pool->commandAllocatorsMutex.lock();
 
 		if (this->closed)
 		{
@@ -722,7 +746,7 @@ namespace UnlimRealms
 			HRESULT hres = this->d3dCommandList->Reset(this->commandAllocator->d3dCommandAllocator, ur_null);
 			if (FAILED(hres))
 			{
-				this->commandAllocator->pool->commandAllocatorsMutex.unlock();
+				//this->commandAllocator->pool->commandAllocatorsMutex.unlock();
 				return ResultError(Failure, std::string("GrafCommandListDX12: d3dCommandList->Reset() failed with HRESULT = ") + HResultToString(hres));
 			}
 		}
@@ -734,8 +758,7 @@ namespace UnlimRealms
 	{
 		// close command list
 		HRESULT hres = this->d3dCommandList->Close();
-		this->closed = true;
-		this->commandAllocator->pool->commandAllocatorsMutex.unlock();
+		//this->commandAllocator->pool->commandAllocatorsMutex.unlock();
 		if (FAILED(hres))
 		{
 			return ResultError(Failure, std::string("GrafCommandListDX12: d3dCommandList->Close() failed with HRESULT = ") + HResultToString(hres));
@@ -751,7 +774,10 @@ namespace UnlimRealms
 
 		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
 		Result res(Success);
-		while (this->submitFenceValue > grafDeviceDX12->graphicsQueue->d3dSubmitFence->GetCompletedValue())
+		// note: waiting for closed to be true to prevent command list from being reused after opening and before submission in caching strategies
+		// (current cache implementation in GrafRenderer checks for Wait() to decide whether a list is reusable)
+		// this means that any open command list must be submitted, otherwise Wait() will never succeed
+		while (!this->closed || this->submitFenceValue > grafDeviceDX12->graphicsQueue->d3dSubmitFence->GetCompletedValue())
 		{
 			if (timeout != ur_uint64(-1))
 			{
@@ -1288,6 +1314,7 @@ namespace UnlimRealms
 
 		this->swapChainImageCount = 0;
 		this->swapChainCurrentImageId = 0;
+		this->swapChainSyncInterval = 0;
 
 		return Result(Success);
 	}
@@ -1359,6 +1386,8 @@ namespace UnlimRealms
 		return ResultError(NotImplemented, std::string("GrafCanvasDX12: failed to initialize, unsupported platform"));
 
 		#endif
+
+		this->swapChainSyncInterval = (GrafPresentMode::Immediate == initParams.PresentMode ? 0 : 1);
 
 		// init swap chain images
 
@@ -1448,12 +1477,14 @@ namespace UnlimRealms
 		imageTransitionCmdListEndCrnt->Begin();
 		imageTransitionCmdListEndCrnt->ImageMemoryBarrier(swapChainCurrentImage, GrafImageState::Current, GrafImageState::Present);
 		imageTransitionCmdListEndCrnt->End();
-		ID3D12CommandList* d3dCommandListsEnd[] = { static_cast<GrafCommandListDX12*>(imageTransitionCmdListEndCrnt)->GetD3DCommandList() };
-		grafDeviceDX12->GetD3DGraphicsCommandQueue()->ExecuteCommandLists(1, d3dCommandListsEnd);
+		//ID3D12CommandList* d3dCommandListsEnd[] = { static_cast<GrafCommandListDX12*>(imageTransitionCmdListEndCrnt)->GetD3DCommandList() };
+		//grafDeviceDX12->GetD3DGraphicsCommandQueue()->ExecuteCommandLists(1, d3dCommandListsEnd);
+		grafDeviceDX12->Record(imageTransitionCmdListEndCrnt);
+		grafDeviceDX12->Submit();
 
 		// present current image
 
-		this->dxgiSwapChain->Present(1, 0);
+		this->dxgiSwapChain->Present((UINT)this->swapChainSyncInterval, 0);
 
 		// acquire next available image to use as RT
 
@@ -1468,8 +1499,10 @@ namespace UnlimRealms
 		imageTransitionCmdListBeginNext->Begin();
 		imageTransitionCmdListBeginNext->ImageMemoryBarrier(swapChainNextImage, GrafImageState::Current, GrafImageState::Common);
 		imageTransitionCmdListBeginNext->End();
-		ID3D12CommandList* d3dCommandListsBegin[] = { static_cast<GrafCommandListDX12*>(imageTransitionCmdListBeginNext)->GetD3DCommandList() };
-		grafDeviceDX12->GetD3DGraphicsCommandQueue()->ExecuteCommandLists(1, d3dCommandListsBegin);
+		//ID3D12CommandList* d3dCommandListsBegin[] = { static_cast<GrafCommandListDX12*>(imageTransitionCmdListBeginNext)->GetD3DCommandList() };
+		//grafDeviceDX12->GetD3DGraphicsCommandQueue()->ExecuteCommandLists(1, d3dCommandListsBegin);
+		grafDeviceDX12->Record(imageTransitionCmdListBeginNext);
+		grafDeviceDX12->Submit();
 
 		return Result(Success);
 	}
