@@ -12,9 +12,11 @@
 #endif
 #include "Gfx/D3D12/d3dx12.h"
 #include "Gfx/DXGIUtils/DXGIUtils.h"
+#include "3rdParty/DXCompiler/inc/dxcapi.h"
 #include "comdef.h"
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "../../../Source/3rdParty/DXCompiler/lib/x64/dxcompiler.lib")
 
 namespace UnlimRealms
 {
@@ -51,15 +53,36 @@ namespace UnlimRealms
 		D3D12_DESCRIPTOR_HEAP_FLAG_NONE,			// D3D12_DESCRIPTOR_HEAP_TYPE_DSV
 	};
 
+	// default target shader model (for run time linker)
+	static const std::wstring DXCLinkerShaderModel = L"6_3";
+
+	// string utils
+
+	void StringToWstring(const std::string& src, std::wstring& dst)
+	{
+		#pragma warning(push)
+		#pragma warning(disable: 4996) // std::wstring_convert is depricated
+		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> strConverter;
+		dst = std::wstring(strConverter.from_bytes(src));
+		#pragma warning(pop)
+	}
+
+	void WstringToString(const std::wstring& src, std::string& dst)
+	{
+		#pragma warning(push)
+		#pragma warning(disable: 4996) // std::wstring_convert is depricated
+		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> strConverter;
+		dst = std::string(strConverter.to_bytes(src));
+		#pragma warning(pop)
+	}
+
 	static std::string HResultToString(HRESULT res)
 	{
 		_com_error err(res);
 		#ifdef _UNICODE
-		#pragma warning(push)
-		#pragma warning(disable: 4996) // std::wstring_convert is depricated
-		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> strConverter;
-		return std::string(strConverter.to_bytes(err.ErrorMessage()));
-		#pragma warning(pop)
+		std::string errStr;
+		WstringToString(err.ErrorMessage(), errStr);
+		return errStr;
 		#else
 		return std::string(err.ErrorMessage());
 		#endif
@@ -2277,7 +2300,7 @@ namespace UnlimRealms
 
 		if (nullptr == initParams.ByteCode || 0 == initParams.ByteCodeSize)
 		{
-			return ResultError(InvalidArgs, std::string("GrafShaderDX12: failed to initialize, invalid byte code"));
+			return ResultError(InvalidArgs, std::string("GrafShaderLibDX12: failed to initialize, invalid byte code"));
 		}
 
 		GrafShaderLib::Initialize(grafDevice, initParams);
@@ -2287,7 +2310,38 @@ namespace UnlimRealms
 		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
 		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
 		{
-			return ResultError(InvalidArgs, std::string("GrafShaderDX12: failed to initialize, invalid GrafDevice"));
+			return ResultError(InvalidArgs, std::string("GrafShaderLibDX12: failed to initialize, invalid GrafDevice"));
+		}
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		// initialize DXC linker
+
+		shared_ref<IDxcUtils> dxcUtils;
+		HRESULT hres = DxcCreateInstance(CLSID_DxcUtils, __uuidof(IDxcUtils), dxcUtils);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafShaderLibDX12: DxcCreateInstance(CLSID_DxcUtils) failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		shared_ref<IDxcBlob> dxcLibrary;
+		dxcUtils->CreateBlobFromPinned(initParams.ByteCode, (UINT32)initParams.ByteCodeSize, 0, dxcLibrary);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafShaderLibDX12: CreateBlobFromPinned failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		shared_ref<IDxcLinker> dxcLinker;
+		hres = DxcCreateInstance(CLSID_DxcLinker, __uuidof(IDxcLinker), dxcLinker);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafShaderLibDX12: DxcCreateInstance(CLSID_DxcLinker) failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		LPCWSTR linkLibNames[] = { L"Library" };
+		hres = dxcLinker->RegisterLibrary(linkLibNames[0], dxcLibrary);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafShaderLibDX12: RegisterLibrary failed with HRESULT = ") + HResultToString(hres));
 		}
 
 		// initialize shaders
@@ -2297,14 +2351,52 @@ namespace UnlimRealms
 		for (ur_uint ientry = 0; ientry < initParams.EntryPointCount; ++ientry)
 		{
 			const GrafShaderLib::EntryPoint& libEntryPoint = initParams.EntryPoints[ientry];
-			GrafShader::InitParams grafShaderParams = {};
-			grafShaderParams.ShaderType = libEntryPoint.Type;
-			grafShaderParams.EntryPoint = libEntryPoint.Name;
+
+			// link shader byte code
+
+			std::wstring linkEntryPoint;
+			StringToWstring(libEntryPoint.Name, linkEntryPoint);
+
+			std::wstring linkTargetProfile;
+			switch (libEntryPoint.Type)
+			{
+			case GrafShaderType::Vertex: linkTargetProfile = L"vs_"; break;
+			case GrafShaderType::Pixel: linkTargetProfile = L"ps_"; break;
+			case GrafShaderType::Compute: linkTargetProfile = L"cs_"; break;
+			default: linkTargetProfile = L"unknown_";
+			};
+			linkTargetProfile += DXCLinkerShaderModel;
+
+			shared_ref<IDxcOperationResult> dxcLinkResult;
+			hres = dxcLinker->Link(linkEntryPoint.c_str(), linkTargetProfile.c_str(), linkLibNames, ur_array_size(linkLibNames), nullptr, 0, dxcLinkResult);
+			if (FAILED(hres))
+			{
+				LogError(std::string("GrafShaderLibDX12: Link failed with HRESULT = ") + HResultToString(hres));
+				continue;
+			}
+
+			shared_ref<IDxcBlob> dxcShader;
+			hres = dxcLinkResult->GetResult(dxcShader);
+			if (FAILED(hres) || nullptr == dxcShader.get())
+			{
+				shared_ref<IDxcBlob> dxcErrorBuffer;
+				dxcLinkResult->GetErrorBuffer(dxcErrorBuffer);
+				char* errorMsg = (char*)dxcErrorBuffer->GetBufferPointer();
+				LogError(std::string("GrafShaderLibDX12: failed to link shader ") + libEntryPoint.Name + ":\n" + errorMsg);
+				continue;
+			}
+
+			// create shader
+
+			GrafShader::InitParams shaderParams = {};
+			shaderParams.ByteCode = (ur_byte*)dxcShader->GetBufferPointer();
+			shaderParams.ByteCodeSize = (ur_size)dxcShader->GetBufferSize();
+			shaderParams.ShaderType = libEntryPoint.Type;
+			shaderParams.EntryPoint = libEntryPoint.Name;
 
 			std::unique_ptr<GrafShader> grafShader;
 			this->GetGrafSystem().CreateShader(grafShader);
-			Result shaderRes = NotImplemented;
-			// TODO: initialize shader for an entry
+			Result shaderRes = grafShader.get()->Initialize(grafDeviceDX12, shaderParams);
 			if (Failed(shaderRes))
 			{
 				LogError(std::string("GrafShaderLibDX12: failed to initialize shader for entry point = ") + libEntryPoint.Name);
