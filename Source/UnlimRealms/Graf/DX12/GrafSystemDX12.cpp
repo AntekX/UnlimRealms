@@ -2355,6 +2355,8 @@ namespace UnlimRealms
 			return ResultError(Failure, std::string("GrafShaderLibDX12: RegisterLibrary failed with HRESULT = ") + HResultToString(hres));
 		}
 
+		LPCWSTR linkArguments[] = { L"" };
+
 		// initialize shaders
 
 		Result res(Success);
@@ -2379,21 +2381,29 @@ namespace UnlimRealms
 			linkTargetProfile += DXCLinkerShaderModel;
 
 			shared_ref<IDxcOperationResult> dxcLinkResult;
-			hres = dxcLinker->Link(linkEntryPoint.c_str(), linkTargetProfile.c_str(), linkLibNames, ur_array_size(linkLibNames), nullptr, 0, dxcLinkResult);
+			hres = dxcLinker->Link(linkEntryPoint.c_str(), linkTargetProfile.c_str(),
+				linkLibNames, ur_array_size(linkLibNames),
+				linkArguments, ur_array_size(linkArguments),
+				dxcLinkResult);
 			if (FAILED(hres))
 			{
 				LogError(std::string("GrafShaderLibDX12: Link failed with HRESULT = ") + HResultToString(hres));
 				continue;
 			}
 
+			shared_ref<IDxcBlob> dxcErrorBuffer;
+			dxcLinkResult->GetErrorBuffer(dxcErrorBuffer);
+			if (dxcErrorBuffer.get() && dxcErrorBuffer->GetBufferSize() > 0)
+			{
+				char* errorMsg = (char*)dxcErrorBuffer->GetBufferPointer();
+				LogError(std::string("GrafShaderLibDX12: error message while linking ") + libEntryPoint.Name + ": " + errorMsg);
+			}
+
 			shared_ref<IDxcBlob> dxcShader;
 			hres = dxcLinkResult->GetResult(dxcShader);
 			if (FAILED(hres) || nullptr == dxcShader.get())
 			{
-				shared_ref<IDxcBlob> dxcErrorBuffer;
-				dxcLinkResult->GetErrorBuffer(dxcErrorBuffer);
-				char* errorMsg = (char*)dxcErrorBuffer->GetBufferPointer();
-				LogError(std::string("GrafShaderLibDX12: failed to link shader ") + libEntryPoint.Name + ":\n" + errorMsg);
+				LogError(std::string("GrafShaderLibDX12: failed to link shader ") + libEntryPoint.Name);
 				continue;
 			}
 
