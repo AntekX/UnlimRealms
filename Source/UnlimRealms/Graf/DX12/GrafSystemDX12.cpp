@@ -1082,13 +1082,14 @@ namespace UnlimRealms
 
 		// set table offsets in heaps
 
+		ur_uint rootParameterIdx = 0;
 		if (descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().IsValid())
 		{
-			this->d3dCommandList->SetGraphicsRootDescriptorTable(0, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
+			this->d3dCommandList->SetGraphicsRootDescriptorTable(rootParameterIdx++, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
 		}
 		if (descriptorTableDX12->GetSamplerDescriptorHeapHandle().IsValid())
 		{
-			this->d3dCommandList->SetGraphicsRootDescriptorTable(1, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
+			this->d3dCommandList->SetGraphicsRootDescriptorTable(rootParameterIdx++, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
 		}
 
 		return Result(Success);
@@ -1276,13 +1277,14 @@ namespace UnlimRealms
 
 		// set table offsets in heaps
 
+		ur_uint rootParameterIdx = 0;
 		if (descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().IsValid())
 		{
-			this->d3dCommandList->SetGraphicsRootDescriptorTable(0, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
+			this->d3dCommandList->SetComputeRootDescriptorTable(rootParameterIdx++, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
 		}
 		if (descriptorTableDX12->GetSamplerDescriptorHeapHandle().IsValid())
 		{
-			this->d3dCommandList->SetGraphicsRootDescriptorTable(1, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
+			this->d3dCommandList->SetComputeRootDescriptorTable(rootParameterIdx++, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
 		}
 
 		return Result(Success);

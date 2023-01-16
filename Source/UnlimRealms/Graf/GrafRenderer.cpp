@@ -102,7 +102,7 @@ namespace UnlimRealms
 			uploadBufferDesc.SizeInBytes = initParams.DynamicUploadBufferSize;
 			res = this->grafDynamicUploadBuffer->Initialize(this->grafDevice.get(), { uploadBufferDesc });
 			if (Failed(res)) break;
-			this->uploadBufferAllocator.Init(uploadBufferDesc.SizeInBytes, 512, true);
+			this->uploadBufferAllocator.Init(uploadBufferDesc.SizeInBytes, 512, true); // TODO: replace 512 with proper alignment value from graphics system
 
 			// dynamic constant buffer
 			crntStageLogName = "dynamic constant buffer";
