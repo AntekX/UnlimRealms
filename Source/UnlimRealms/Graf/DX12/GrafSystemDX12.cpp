@@ -1168,7 +1168,7 @@ namespace UnlimRealms
 		D3D12_TEXTURE_COPY_LOCATION d3dDstLocation = {};
 		d3dDstLocation.pResource = dstImageDX12->GetD3DResource();
 		d3dDstLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		d3dDstLocation.SubresourceIndex = 0;// (UINT)dstImageSubresource->GetDesc().BaseMipLevel;
+		d3dDstLocation.SubresourceIndex = (UINT)dstImageSubresource->GetDesc().BaseMipLevel;
 
 		D3D12_TEXTURE_COPY_LOCATION d3dSrcLocation = {};
 		d3dSrcLocation.pResource = srcBufferDX12->GetD3DResource();
@@ -2735,12 +2735,16 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableDX12::SetRWImage(ur_uint bindingIdx, GrafImage* image)
 	{
-		return Result(NotImplemented);
+		GrafImageDX12* imageDX12 = static_cast<GrafImageDX12*>(image);
+		return this->SetRWImage(bindingIdx, imageDX12->GetDefaultSubresource());
 	}
 
 	Result GrafDescriptorTableDX12::SetRWImage(ur_uint bindingIdx, GrafImageSubresource* imageSubresource)
 	{
-		return Result(NotImplemented);
+		GrafImageSubresourceDX12* imageSubresourceDX12 = static_cast<GrafImageSubresourceDX12*>(imageSubresource);
+		return CopyResourceDescriptorToTable(bindingIdx,
+			imageSubresourceDX12->GetUAVDescriptorHandle().GetD3DHandleCPU(),
+			D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
 	}
 
 	Result GrafDescriptorTableDX12::SetRWBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
