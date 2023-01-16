@@ -1891,6 +1891,17 @@ namespace UnlimRealms
 				break;
 			};
 
+			if (grafImageDesc.Usage & ur_uint(GrafImageUsageFlag::DepthStencilRenderTarget))
+			{
+				// depth stencil SRV format override
+				switch (grafImageDesc.Format)
+				{
+				case GrafFormat::D24_UNORM_S8_UINT:
+					srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+					break;
+				};
+			}
+
 			this->srvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
 			if (!this->srvDescriptorHandle.IsValid())
 			{
@@ -2054,7 +2065,7 @@ namespace UnlimRealms
 			}
 
 			D3D12_SHADER_RESOURCE_VIEW_DESC d3dSrvDesc = {};
-			d3dSrvDesc.Format = DXGI_FORMAT_R32_UINT;
+			d3dSrvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
 			d3dSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 			d3dSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 			d3dSrvDesc.Buffer.FirstElement = 0;
@@ -2077,7 +2088,7 @@ namespace UnlimRealms
 			}
 
 			D3D12_UNORDERED_ACCESS_VIEW_DESC d3dUavDesc = {};
-			d3dUavDesc.Format = DXGI_FORMAT_R32_UINT;
+			d3dUavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
 			d3dUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 			d3dUavDesc.Buffer.FirstElement = 0;
 			d3dUavDesc.Buffer.NumElements = (UINT)(initParams.BufferDesc.SizeInBytes / sizeof(ur_uint32));
