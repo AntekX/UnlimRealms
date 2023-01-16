@@ -723,6 +723,10 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice *grafDevice, const InitParams& initParams);
 
+		inline ID3D12PipelineState* GetD3DPipelineState() const;
+
+		inline ID3D12RootSignature* GetD3DRootSignature() const;
+
 	protected:
 
 		Result Deinitialize();

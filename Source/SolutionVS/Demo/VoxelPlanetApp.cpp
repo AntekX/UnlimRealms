@@ -398,9 +398,9 @@ int VoxelPlanetApp::Run()
 				grafViewport.Far = 1.0f;
 				grafCmdListCrnt->SetViewport(grafViewport, true);
 
-				//GrafClearValue rtClearValue = { 0.025f, 0.025f, 0.05f, 1.0f };
-				//grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::Common);
-				//grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), rtClearValue);
+				GrafClearValue rtClearValue = { 0.025f, 0.025f, 0.05f, 1.0f };
+				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorClear);
+				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), rtClearValue);
 
 				if (hdrRender != ur_null)
 				{ 

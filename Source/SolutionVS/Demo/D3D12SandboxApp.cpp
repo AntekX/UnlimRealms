@@ -544,8 +544,8 @@ int D3D12SandboxApp::Run()
 				grafViewport.Far = 1.0f;
 				grafCmdListCrnt->SetViewport(grafViewport, true);
 				grafCmdListCrnt->SetScissorsRect({ 0, 0, (ur_int)grafViewport.Width, (ur_int)grafViewport.Height });
-				//grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
-				//grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), { 1.0f, 0.0f, 0.0f, 1.0f }); // clear swap chain image directly
+				grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorClear);
+				grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), { 1.0f, 0.0f, 0.0f, 1.0f }); // clear swap chain image directly
 
 				{ // color & depth render pass
 

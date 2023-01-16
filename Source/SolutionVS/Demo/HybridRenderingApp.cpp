@@ -347,7 +347,7 @@ int HybridRenderingApp::Run()
 				GrafImageType::Tex2D,
 				LightingImageFormat[imageUsage],
 				ur_uint3(lightingBufferWidth, lightingBufferHeight, 1), imageMipCount,
-				ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ShaderRead) | ur_uint(GrafImageUsageFlag::ShaderReadWrite),
+				ur_uint(GrafImageUsageFlag::ColorRenderTarget) | ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ShaderRead) | ur_uint(GrafImageUsageFlag::ShaderReadWrite),
 				ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 			};
 			res = image->Initialize(grafDevice, { imageDesc });
@@ -614,7 +614,7 @@ int HybridRenderingApp::Run()
 						resImage.reset();
 						return result;
 					}
-					
+
 					std::vector<std::unique_ptr<GrafImageSubresource>> resImageMips;
 					resImageMips.resize(imageData->Desc.MipLevels);
 					for (ur_uint imip = 0; imip < imageData->Desc.MipLevels; ++imip)
@@ -673,7 +673,7 @@ int HybridRenderingApp::Run()
 					initializeGrafImage(grafRenderer, cmdList, materialDesc.ColorTexName, subMesh.colorImage);
 					initializeGrafImage(grafRenderer, cmdList, materialDesc.MaskTexName, subMesh.maskImage);
 					initializeGrafImage(grafRenderer, cmdList, materialDesc.NormalTexName, subMesh.normalImage);
-					
+
 					if (subMesh.colorImage != ur_null)
 					{
 						// use material color only if there is no color texture
@@ -1451,14 +1451,14 @@ int HybridRenderingApp::Run()
 						GrafImageType::Tex2D,
 						format,
 						ur_uint3(4, 4, 1), 1,
-						ur_uint(GrafImageUsageFlag::ShaderRead) | ur_uint(GrafImageUsageFlag::TransferDst),
+						ur_uint(GrafImageUsageFlag::ShaderRead) | ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ColorRenderTarget),
 						ur_uint(GrafDeviceMemoryFlag::GpuLocal)
 					};
 					grafSystem->CreateImage(defaultImage);
 					Result res = defaultImage->Initialize(grafDevice, { imageDesc });
 					if (Succeeded(res))
 					{
-						cmdList->ImageMemoryBarrier(defaultImage.get(), GrafImageState::Current, GrafImageState::TransferDst);
+						cmdList->ImageMemoryBarrier(defaultImage.get(), GrafImageState::Current, GrafImageState::ColorClear);
 						cmdList->ClearColorImage(defaultImage.get(), fillColor);
 						cmdList->ImageMemoryBarrier(defaultImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
 					}
@@ -2169,7 +2169,7 @@ int HybridRenderingApp::Run()
 		res = hdrRender->Init(canvasWidth, canvasHeight, ur_null);
 		if (Failed(res))
 		{
-			realm.GetLog().WriteLine("VoxelPlanetApp: failed to initialize HDRRender", Log::Error);
+			realm.GetLog().WriteLine("HybridRenderingApp: failed to initialize HDRRender", Log::Error);
 			hdrRender.reset();
 		}
 	}
@@ -2364,6 +2364,8 @@ int HybridRenderingApp::Run()
 
 		auto RenderFrameJobFunc = [&](Job::Context& ctx) -> void
 		{
+			updateFrameJob->Wait(); // make sure async update is done
+
 			static const ur_float4 DebugLabelColorMain = { 1.0f, 0.8f, 0.7f, 1.0f };
 			static const ur_float4 DebugLabelColorPass = { 0.6f, 1.0f, 0.6f, 1.0f };
 			static const ur_float4 DebugLabelColorRender = { 0.8f, 0.8f, 1.0f, 1.0f };
@@ -2385,10 +2387,8 @@ int HybridRenderingApp::Run()
 			grafCmdListCrnt->SetViewport(grafViewport, true);
 
 			GrafClearValue rtClearValue = { 0.8f, 0.9f, 1.0f, 0.0f };
-			grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::TransferDst);
+			grafCmdListCrnt->ImageMemoryBarrier(grafCanvas->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorClear);
 			grafCmdListCrnt->ClearColorImage(grafCanvas->GetCurrentImage(), rtClearValue);
-
-			updateFrameJob->Wait(); // make sure async update is done
 
 			// rasterization pass
 			{
@@ -2397,14 +2397,15 @@ int HybridRenderingApp::Run()
 				for (ur_uint imageId = 0; imageId < RenderTargetImageCount; ++imageId)
 				{
 					ur_uint imageUsage = (imageId % RenderTargetImageCount);
-					grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::TransferDst);
 					if (RenderTargetImageUsage_Depth == imageUsage)
 					{
+						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::DepthStencilClear);
 						grafCmdListCrnt->ClearDepthStencilImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
 						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::DepthStencilWrite);
 					}
 					else
 					{
+						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::ColorClear);
 						grafCmdListCrnt->ClearColorImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
 						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::ColorWrite);
 					}
@@ -2457,13 +2458,14 @@ int HybridRenderingApp::Run()
 					if (renderTargetSet->resetHistory)
 					{
 						ur_uint imageUsage = (imageId % RenderTargetImageCount);
-						grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::TransferDst);
 						if (RenderTargetImageUsage_Depth == imageUsage)
 						{
+							grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::DepthStencilClear);
 							grafCmdListCrnt->ClearDepthStencilImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
 						}
 						else
 						{
+							grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::ColorClear);
 							grafCmdListCrnt->ClearColorImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
 						}
 					}
@@ -2478,7 +2480,7 @@ int HybridRenderingApp::Run()
 					if (renderTargetSet->resetHistory)
 					{
 						ur_uint imageUsage = (imageId % LightingImageCount);
-						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::TransferDst);
+						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ColorClear);
 						grafCmdListCrnt->ClearColorImage(lightingBufferSet->images[imageId].get(), LightingBufferClearValues[imageUsage]);
 					}
 					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::RayTracingRead);
@@ -2571,13 +2573,14 @@ int HybridRenderingApp::Run()
 						if (renderTargetSet->resetHistory)
 						{
 							ur_uint imageUsage = (imageId % RenderTargetImageCount);
-							grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::TransferDst);
 							if (RenderTargetImageUsage_Depth == imageUsage)
 							{
+								grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::DepthStencilClear);
 								grafCmdListCrnt->ClearDepthStencilImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
 							}
 							else
 							{
+								grafCmdListCrnt->ImageMemoryBarrier(renderTargetSet->images[imageId], GrafImageState::Current, GrafImageState::ColorClear);
 								grafCmdListCrnt->ClearColorImage(renderTargetSet->images[imageId], RenderTargetClearValues[imageUsage]);
 							}
 						}
@@ -2588,7 +2591,7 @@ int HybridRenderingApp::Run()
 						if (renderTargetSet->resetHistory)
 						{
 							ur_uint imageUsage = (imageId % LightingImageCount);
-							grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::TransferDst);
+							grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ColorClear);
 							grafCmdListCrnt->ClearColorImage(lightingBufferSet->images[imageId].get(), LightingBufferClearValues[imageUsage]);
 						}
 						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeRead);
@@ -2644,7 +2647,7 @@ int HybridRenderingApp::Run()
 					if (!grafDeviceDesc->RayTracing.RayTraceSupported)
 					{
 						ur_uint imageUsage = (imageId % LightingImageCount);
-						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::TransferDst);
+						grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ColorClear);
 						grafCmdListCrnt->ClearColorImage(lightingBufferSet->images[imageId].get(), LightingBufferClearValues[imageUsage]);
 					}
 					grafCmdListCrnt->ImageMemoryBarrier(lightingBufferSet->images[imageId].get(), GrafImageState::Current, GrafImageState::ComputeRead);

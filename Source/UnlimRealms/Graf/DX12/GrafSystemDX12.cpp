@@ -22,7 +22,7 @@ namespace UnlimRealms
 {
 
 	// hidden warnings
-	#if defined(_DEBUG) 
+	#if defined(_DEBUG)
 	#define UR_GRAF_DX12_DEBUG_MODE
 	D3D12_MESSAGE_ID D3D12DebugLayerMessagesFilter[] =
 	{
@@ -1044,6 +1044,9 @@ namespace UnlimRealms
 
 	Result GrafCommandListDX12::BindPipeline(GrafPipeline* grafPipeline)
 	{
+		if (ur_null == grafPipeline)
+			return Result(InvalidArgs);
+
 		GrafPipelineDX12* grafPipelineDX12 = static_cast<GrafPipelineDX12*>(grafPipeline);
 
 		this->d3dCommandList->SetPipelineState(grafPipelineDX12->GetD3DPipelineState());
@@ -1165,7 +1168,7 @@ namespace UnlimRealms
 		D3D12_TEXTURE_COPY_LOCATION d3dDstLocation = {};
 		d3dDstLocation.pResource = dstImageDX12->GetD3DResource();
 		d3dDstLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		d3dDstLocation.SubresourceIndex = 0;
+		d3dDstLocation.SubresourceIndex = 0;// (UINT)dstImageSubresource->GetDesc().BaseMipLevel;
 
 		D3D12_TEXTURE_COPY_LOCATION d3dSrcLocation = {};
 		d3dSrcLocation.pResource = srcBufferDX12->GetD3DResource();
@@ -1237,17 +1240,59 @@ namespace UnlimRealms
 
 	Result GrafCommandListDX12::BindComputePipeline(GrafComputePipeline* grafPipeline)
 	{
-		return Result(NotImplemented);
+		if (ur_null == grafPipeline)
+			return Result(InvalidArgs);
+
+		GrafComputePipelineDX12* grafPipelineDX12 = static_cast<GrafComputePipelineDX12*>(grafPipeline);
+
+		this->d3dCommandList->SetPipelineState(grafPipelineDX12->GetD3DPipelineState());
+
+		this->d3dCommandList->SetComputeRootSignature(grafPipelineDX12->GetD3DRootSignature());
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::BindComputeDescriptorTable(GrafDescriptorTable* descriptorTable, GrafComputePipeline* grafPipeline)
 	{
-		return Result(NotImplemented);
+		if (ur_null == descriptorTable || ur_null == grafPipeline)
+			return Result(InvalidArgs);
+
+		GrafDescriptorTableDX12* descriptorTableDX12 = static_cast<GrafDescriptorTableDX12*>(descriptorTable);
+
+		// bind descriptor heaps
+
+		ur_uint descriptorHeapCount = 0;
+		ID3D12DescriptorHeap* d3dDescriptorHeaps[2];
+		if (descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().IsValid())
+		{
+			d3dDescriptorHeaps[descriptorHeapCount++] = descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
+		}
+		if (descriptorTableDX12->GetSamplerDescriptorHeapHandle().IsValid())
+		{
+			d3dDescriptorHeaps[descriptorHeapCount++] = descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
+		}
+
+		this->d3dCommandList->SetDescriptorHeaps((UINT)descriptorHeapCount, d3dDescriptorHeaps);
+
+		// set table offsets in heaps
+
+		if (descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().IsValid())
+		{
+			this->d3dCommandList->SetGraphicsRootDescriptorTable(0, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
+		}
+		if (descriptorTableDX12->GetSamplerDescriptorHeapHandle().IsValid())
+		{
+			this->d3dCommandList->SetGraphicsRootDescriptorTable(1, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::Dispatch(ur_uint groupCountX, ur_uint groupCountY, ur_uint groupCountZ)
 	{
-		return Result(NotImplemented);
+		this->d3dCommandList->Dispatch((UINT)groupCountX, (UINT)groupCountY, (UINT)groupCountZ);
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount)
@@ -2376,7 +2421,7 @@ namespace UnlimRealms
 			case GrafShaderType::Vertex: linkTargetProfile = L"vs_"; break;
 			case GrafShaderType::Pixel: linkTargetProfile = L"ps_"; break;
 			case GrafShaderType::Compute: linkTargetProfile = L"cs_"; break;
-			default: linkTargetProfile = L"unknown_";
+			default: linkTargetProfile = L"lib_";
 			};
 			linkTargetProfile += DXCLinkerShaderModel;
 
@@ -3183,8 +3228,14 @@ namespace UnlimRealms
 		case GrafImageState::Present:
 			d3dState = D3D12_RESOURCE_STATE_PRESENT;
 			break;
+		case GrafImageState::ColorClear:
+			d3dState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+			break;
 		case GrafImageState::ColorWrite:
 			d3dState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+			break;
+		case GrafImageState::DepthStencilClear:
+			d3dState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 			break;
 		case GrafImageState::DepthStencilWrite:
 			d3dState = D3D12_RESOURCE_STATE_DEPTH_WRITE;

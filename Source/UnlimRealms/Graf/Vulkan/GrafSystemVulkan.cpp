@@ -1426,9 +1426,17 @@ namespace UnlimRealms
 			vkImageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 			vkStageSrc = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			break;
+		case GrafImageState::ColorClear:
+			vkImageBarrier.srcAccessMask = (VK_ACCESS_TRANSFER_WRITE_BIT);
+			vkStageSrc = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
 		case GrafImageState::ColorWrite:
 			vkImageBarrier.srcAccessMask = (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
 			vkStageSrc = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			break;
+		case GrafImageState::DepthStencilClear:
+			vkImageBarrier.srcAccessMask = (VK_ACCESS_TRANSFER_WRITE_BIT);
+			vkStageSrc = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			break;
 		case GrafImageState::DepthStencilWrite:
 			vkImageBarrier.srcAccessMask = (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
@@ -1476,9 +1484,17 @@ namespace UnlimRealms
 			vkImageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 			vkStageDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			break;
+		case GrafImageState::ColorClear:
+			vkImageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
 		case GrafImageState::ColorWrite:
 			vkImageBarrier.dstAccessMask = (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
 			vkStageDst = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			break;
+		case GrafImageState::DepthStencilClear:
+			vkImageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			vkStageDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			break;
 		case GrafImageState::DepthStencilWrite:
 			vkImageBarrier.dstAccessMask = (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
@@ -5508,7 +5524,9 @@ namespace UnlimRealms
 		case GrafImageState::TransferSrc: vkImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL; break;
 		case GrafImageState::TransferDst: vkImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; break;
 		case GrafImageState::Present: vkImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; break;
+		case GrafImageState::ColorClear: vkImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; break;
 		case GrafImageState::ColorWrite: vkImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; break;
+		case GrafImageState::DepthStencilClear: vkImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; break;
 		case GrafImageState::DepthStencilWrite: vkImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL; break;
 		case GrafImageState::DepthStencilRead: vkImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL; break;
 		case GrafImageState::ShaderRead: vkImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; break;
