@@ -1077,21 +1077,24 @@ namespace UnlimRealms
 		outputImageData.Desc.Usage = (ur_uint)GrafImageUsageFlag::TransferDst | (ur_uint)GrafImageUsageFlag::ShaderRead;
 		outputImageData.Desc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
 		outputImageData.RowPitch = (ur_uint)ilWidth * ilBpp * ilBpc;
+		ur_uint compRate = 1;
 		switch (ilDXTFormat)
 		{
 		case IL_DXT1:
 			outputImageData.Desc.Format = GrafFormat::BC1_RGBA_UNORM_BLOCK;
-			outputImageData.RowPitch /= 6;
+			compRate = 6;
 			break;
-		case IL_DXT5: outputImageData.Desc.Format = GrafFormat::BC3_UNORM_BLOCK;
-			outputImageData.RowPitch /= 4;
+		case IL_DXT5:
+			outputImageData.Desc.Format = GrafFormat::BC3_UNORM_BLOCK;
+			compRate = 4;
 			break;
 		}
 
 		// copy mip levels into cpu visible buffers
 
 		Result res = Result(Success);
-		ur_uint mipRowPitch = outputImageData.RowPitch;
+		ur_uint pitchAlignment = 256; // == D3D12_TEXTURE_DATA_PITCH_ALIGNMENT, TODO: get from device
+		ur_uint mipRowPitch = (outputImageData.RowPitch + pitchAlignment - 1) / pitchAlignment * pitchAlignment;
 		ur_uint mipHeight = outputImageData.Desc.Size.y;
 		outputImageData.MipBuffers.reserve(ilMips + 1);
 		for (ur_uint imip = 0; imip < outputImageData.Desc.MipLevels; ++imip)
@@ -1104,30 +1107,32 @@ namespace UnlimRealms
 			GrafBufferDesc mipBufferDesc = {};
 			mipBufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::TransferSrc;
 			mipBufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-			mipBufferDesc.SizeInBytes = mipRowPitch * mipHeight;
+			mipBufferDesc.SizeInBytes = mipRowPitch * mipHeight / compRate;
 			res = mipBuffer->Initialize(&grafDevice, { mipBufferDesc });
 			if (Failed(res))
 				break;
 
-			ur_byte* mipDataPtr = ur_null;
+			ur_byte* srcDataPtr = ur_null;
+			ur_uint srcRowPitch = outputImageData.RowPitch / (1 << imip); // non aligned
+			ur_uint srcDataSize = srcRowPitch * mipHeight / compRate;
 			if (ilDXTFormat != IL_DXT_NO_COMP)
 			{
-				mipDataPtr = (ur_byte*)(0 == imip ? ilGetDXTCData() : ilGetMipDXTCData(imip - 1));
+				srcDataPtr = (ur_byte*)(0 == imip ? ilGetDXTCData() : ilGetMipDXTCData(imip - 1));
 			}
 			else
 			{
-				mipDataPtr = (ur_byte*)(0 == imip ? ilGetData() : ilGetMipData(imip - 1));
+				srcDataPtr = (ur_byte*)(0 == imip ? ilGetData() : ilGetMipData(imip - 1));
 			}
 		
-			res = mipBuffer->Write(mipDataPtr);
+			res = mipBuffer->Write(srcDataPtr, srcDataSize);
 			if (Failed(res))
 				break;
 
 			outputImageData.MipBuffers.push_back(std::move(mipBuffer));
 
-			mipRowPitch = std::max(mipRowPitch / 2, 1u);
+			mipRowPitch = std::max(mipRowPitch / 2, pitchAlignment);
 			mipHeight = std::max(mipHeight / 2, 1u);
-			if (ilDXTFormat != IL_DXT_NO_COMP && mipRowPitch < 4)
+			if (ilDXTFormat != IL_DXT_NO_COMP && srcRowPitch <= 16)
 			{
 				outputImageData.Desc.MipLevels = imip + 1;
 			}
