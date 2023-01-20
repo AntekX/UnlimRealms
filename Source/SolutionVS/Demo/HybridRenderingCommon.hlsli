@@ -6,7 +6,7 @@
 // TEMP
 #define RT_GI_TEST 1
 #define RT_REFLECTION_TEST 0
-#define RT_ALPHATEST 0
+#define RT_ALPHATEST 1
 #define RT_ALPHATEST_VALUE 0.25
 
 // constant buffers
@@ -51,6 +51,12 @@ struct SceneConstants
 	MeshMaterialDesc Material;
 };
 
+struct SubMeshConstants
+{
+	CUINT		(InstanceOfs);
+	CUINT3		(__pad0);
+};
+
 struct BlurPassConstants
 {
 	CUINT		(PassIdx);
@@ -81,7 +87,8 @@ static const CUINT(IndexSize) = 4; // sizeof(Mesh::Index)
 // descriptors
 
 DESCRIPTOR_ConstantBuffer(SceneConstants,		g_SceneCB,						0);
-DESCRIPTOR_ConstantBuffer(BlurPassConstants,	g_BlurPassCB,					1);
+DESCRIPTOR_ConstantBuffer(SubMeshConstants,		g_SubMeshCB,					1);
+DESCRIPTOR_ConstantBuffer(BlurPassConstants,	g_BlurPassCB,					2);
 DESCRIPTOR_Sampler(								g_SamplerPoint,					0);
 DESCRIPTOR_Sampler(								g_SamplerBilinear,				1);
 DESCRIPTOR_Sampler(								g_SamplerBilinearWrap,			2);

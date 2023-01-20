@@ -606,7 +606,7 @@ int HybridRenderingApp::Run()
 					Result result = GrafUtils::LoadImageFromFile(*grafDevice, resName, *imageData);
 					if (Failed(result))
 						return result;
-						
+
 					grafSystem->CreateImage(resImage);
 					result = resImage->Initialize(grafDevice, { imageData->Desc });
 					if (Failed(result))
@@ -1059,6 +1059,7 @@ int HybridRenderingApp::Run()
 
 			GrafDescriptorRangeDesc rasterDescTableLayoutRanges[] = {
 				g_SceneCBDescriptor,
+				g_SubMeshCBDescriptor,
 				g_InstanceBufferDescriptor,
 				g_MeshDescBufferDescriptor,
 				g_MaterialDescBufferDescriptor,
@@ -1792,12 +1793,22 @@ int HybridRenderingApp::Run()
 					if (0 == subMesh.instanceCount)
 						continue;
 
+					// update & upload sub mesh constants
+
+					SubMeshConstants subMeshConstants;
+					subMeshConstants.InstanceOfs = subMesh.instanceOfs;
+
+					Allocation subMeshCBAlloc = this->grafRenderer->GetDynamicConstantBufferAllocation(sizeof(SceneConstants));
+					dynamicCB->Write((ur_byte*)&subMeshConstants, sizeof(SubMeshConstants), 0, subMeshCBAlloc.Offset);
+
 					// update descriptor table
+
 					GrafImage* colorImage = (subMesh.colorImage.get() ? subMesh.colorImage.get() : this->defaultImageWhite.get());
 					GrafImage* normalImage = (subMesh.normalImage.get() ? subMesh.normalImage.get() : this->defaultImageNormal.get());
 					GrafImage* maskImage = (subMesh.maskImage.get() ? subMesh.maskImage.get() : this->defaultImageWhite.get());
 					GrafDescriptorTable* descriptorTable = subMesh.descTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 					descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, dynamicCB, this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
+					descriptorTable->SetConstantBuffer(g_SubMeshCBDescriptor, dynamicCB, subMeshCBAlloc.Offset, subMeshCBAlloc.Size);
 					descriptorTable->SetBuffer(g_InstanceBufferDescriptor, this->instanceBuffer.get());
 					descriptorTable->SetBuffer(g_MeshDescBufferDescriptor, this->gpuResourceRegistry->GetSubMeshDescBuffer());
 					descriptorTable->SetBuffer(g_MaterialDescBufferDescriptor, this->gpuResourceRegistry->GetMaterialDescBuffer());
@@ -1807,9 +1818,10 @@ int HybridRenderingApp::Run()
 					descriptorTable->SetImage(g_MaskTextureDescriptor, maskImage);
 					
 					// draw
+
 					grafCmdList->BindDescriptorTable(descriptorTable, this->rasterPipelineState.get());
 					grafCmdList->DrawIndexed(subMesh.primitivesCount * 3, subMesh.instanceCount,
-						subMesh.primitivesOffset, 0, subMesh.instanceOfs);
+						subMesh.primitivesOffset, 0, 0);
 				}
 			}
 		}
