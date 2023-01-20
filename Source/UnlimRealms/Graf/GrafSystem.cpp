@@ -1096,6 +1096,7 @@ namespace UnlimRealms
 		ur_uint pitchAlignment = 256; // == D3D12_TEXTURE_DATA_PITCH_ALIGNMENT, TODO: get from device
 		ur_uint mipRowPitch = (outputImageData.RowPitch + pitchAlignment - 1) / pitchAlignment * pitchAlignment;
 		ur_uint mipHeight = outputImageData.Desc.Size.y;
+		std::vector<ur_byte> mipData(mipRowPitch * mipHeight / compRate);
 		outputImageData.MipBuffers.reserve(ilMips + 1);
 		for (ur_uint imip = 0; imip < outputImageData.Desc.MipLevels; ++imip)
 		{
@@ -1114,7 +1115,6 @@ namespace UnlimRealms
 
 			ur_byte* srcDataPtr = ur_null;
 			ur_uint srcRowPitch = outputImageData.RowPitch / (1 << imip); // non aligned
-			ur_uint srcDataSize = srcRowPitch * mipHeight / compRate;
 			if (ilDXTFormat != IL_DXT_NO_COMP)
 			{
 				srcDataPtr = (ur_byte*)(0 == imip ? ilGetDXTCData() : ilGetMipDXTCData(imip - 1));
@@ -1123,8 +1123,19 @@ namespace UnlimRealms
 			{
 				srcDataPtr = (ur_byte*)(0 == imip ? ilGetData() : ilGetMipData(imip - 1));
 			}
-		
-			res = mipBuffer->Write(srcDataPtr, srcDataSize);
+
+			ur_byte* srcDataRow = srcDataPtr;
+			ur_byte* dstRowPtr = mipData.data();
+			ur_uint srcRowSizeInBytes = srcRowPitch / compRate;
+			ur_uint dstRowSizeInBytes = mipRowPitch / compRate;
+			for (ur_uint irow = 0; irow < mipHeight; ++irow)
+			{
+				memcpy(dstRowPtr, srcDataRow, dstRowSizeInBytes);
+				srcDataRow += srcRowSizeInBytes;
+				dstRowPtr += dstRowSizeInBytes;
+			}
+
+			res = mipBuffer->Write(mipData.data(), mipBufferDesc.SizeInBytes);
 			if (Failed(res))
 				break;
 
