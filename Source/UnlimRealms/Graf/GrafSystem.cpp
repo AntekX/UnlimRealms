@@ -1039,9 +1039,12 @@ namespace UnlimRealms
 		ILconst_string ilResName;
 		#ifdef _UNICODE
 		// convert name
+		#pragma warning(push)
+		#pragma warning(disable: 4996) // std::wstring_convert is depricated
 		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> strConverter;
 		std::wstring resNameW = strConverter.from_bytes(resName);
 		ilResName = resNameW.c_str();
+		#pragma warning(pop)
 		#else
 		ilResName = resName.c_str();
 		#endif
@@ -1057,12 +1060,13 @@ namespace UnlimRealms
 		if (ilLoadImage(ilResName) == IL_FALSE)
 			return LogResult(Failure, realm.GetLog(), Log::Error, "LoadImageFromFile: failed to load image " + resName);
 
-		ILint ilWidth, ilHeight, ilMips, ilFormat, ilDXTFormat, ilBpp, ilBpc;
+		ILint ilWidth, ilHeight, ilMips, ilFormat, ilDXTFormat, ilBpp, ilBpc, ilBytesPerPixel;
 		ilGetImageInteger(IL_IMAGE_WIDTH, &ilWidth);
 		ilGetImageInteger(IL_IMAGE_HEIGHT, &ilHeight);
 		ilGetImageInteger(IL_IMAGE_FORMAT, &ilFormat);
 		ilGetImageInteger(IL_IMAGE_BPP, &ilBpp);
 		ilGetImageInteger(IL_IMAGE_BPC, &ilBpc);
+		ilGetImageInteger(IL_IMAGE_BYTES_PER_PIXEL, &ilBytesPerPixel);
 		ilGetImageInteger(IL_NUM_MIPMAPS, &ilMips);
 		ilGetImageInteger(IL_DXTC_DATA_FORMAT, &ilDXTFormat);
 
@@ -1076,7 +1080,7 @@ namespace UnlimRealms
 		outputImageData.Desc.MipLevels = (ur_uint)ilMips + 1;
 		outputImageData.Desc.Usage = (ur_uint)GrafImageUsageFlag::TransferDst | (ur_uint)GrafImageUsageFlag::ShaderRead;
 		outputImageData.Desc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
-		outputImageData.RowPitch = (ur_uint)ilWidth * ilBpp * ilBpc;
+		outputImageData.RowPitch = (ur_uint)ilWidth * ilBpp;
 		ur_uint compRate = 1;
 		switch (ilDXTFormat)
 		{
@@ -1089,14 +1093,16 @@ namespace UnlimRealms
 			compRate = 4;
 			break;
 		}
+		outputImageData.RowPitch /= compRate;
 
 		// copy mip levels into cpu visible buffers
 
 		Result res = Result(Success);
 		ur_uint pitchAlignment = 256; // == D3D12_TEXTURE_DATA_PITCH_ALIGNMENT, TODO: get from device
-		ur_uint mipRowPitch = (outputImageData.RowPitch + pitchAlignment - 1) / pitchAlignment * pitchAlignment;
+		ur_uint mipWidth = outputImageData.Desc.Size.x;
 		ur_uint mipHeight = outputImageData.Desc.Size.y;
-		std::vector<ur_byte> mipData(mipRowPitch * mipHeight / compRate);
+		ur_uint mipRowPitch = (outputImageData.RowPitch + pitchAlignment - 1) / pitchAlignment * pitchAlignment;
+		std::vector<ur_byte> mipData(mipRowPitch * mipHeight);
 		outputImageData.MipBuffers.reserve(ilMips + 1);
 		for (ur_uint imip = 0; imip < outputImageData.Desc.MipLevels; ++imip)
 		{
@@ -1108,13 +1114,13 @@ namespace UnlimRealms
 			GrafBufferDesc mipBufferDesc = {};
 			mipBufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::TransferSrc;
 			mipBufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-			mipBufferDesc.SizeInBytes = mipRowPitch * mipHeight / compRate;
+			mipBufferDesc.SizeInBytes = mipRowPitch * mipHeight;
 			res = mipBuffer->Initialize(&grafDevice, { mipBufferDesc });
 			if (Failed(res))
 				break;
 
 			ur_byte* srcDataPtr = ur_null;
-			ur_uint srcRowPitch = outputImageData.RowPitch / (1 << imip); // non aligned
+			ur_uint srcRowPitch = mipWidth * ilBpp / compRate; // non aligned
 			if (ilDXTFormat != IL_DXT_NO_COMP)
 			{
 				srcDataPtr = (ur_byte*)(0 == imip ? ilGetDXTCData() : ilGetMipDXTCData(imip - 1));
@@ -1124,16 +1130,16 @@ namespace UnlimRealms
 				srcDataPtr = (ur_byte*)(0 == imip ? ilGetData() : ilGetMipData(imip - 1));
 			}
 
-			ur_byte* srcDataRow = srcDataPtr;
+			memset(mipData.data(), 0x00, mipData.size());
+			ur_byte* srcRowPtr = srcDataPtr;
 			ur_byte* dstRowPtr = mipData.data();
-			ur_uint srcRowSizeInBytes = srcRowPitch / compRate;
-			ur_uint dstRowSizeInBytes = mipRowPitch / compRate;
-			for (ur_uint irow = 0; irow < mipHeight; ++irow)
+			/*for (ur_uint irow = 0; irow < mipHeight; ++irow)
 			{
-				memcpy(dstRowPtr, srcDataRow, dstRowSizeInBytes);
-				srcDataRow += srcRowSizeInBytes;
-				dstRowPtr += dstRowSizeInBytes;
-			}
+				memcpy(dstRowPtr, srcRowPtr, srcRowPitch);
+				srcRowPtr += srcRowPitch;
+				dstRowPtr += mipRowPitch;
+			}*/
+			memcpy(mipData.data(), srcDataPtr, mipHeight * srcRowPitch);
 
 			res = mipBuffer->Write(mipData.data(), mipBufferDesc.SizeInBytes);
 			if (Failed(res))
@@ -1141,9 +1147,10 @@ namespace UnlimRealms
 
 			outputImageData.MipBuffers.push_back(std::move(mipBuffer));
 
-			mipRowPitch = std::max(mipRowPitch / 2, pitchAlignment);
+			mipWidth = std::max(mipWidth / 2, 1u);
 			mipHeight = std::max(mipHeight / 2, 1u);
-			if (ilDXTFormat != IL_DXT_NO_COMP && srcRowPitch <= 16)
+			mipRowPitch = (mipWidth * ilBpp / compRate + pitchAlignment - 1) / pitchAlignment * pitchAlignment;
+			if (ilDXTFormat != IL_DXT_NO_COMP && srcRowPitch <= 64)
 			{
 				outputImageData.Desc.MipLevels = imip + 1;
 			}
