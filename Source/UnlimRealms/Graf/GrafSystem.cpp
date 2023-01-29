@@ -1080,29 +1080,40 @@ namespace UnlimRealms
 		outputImageData.Desc.MipLevels = (ur_uint)ilMips + 1;
 		outputImageData.Desc.Usage = (ur_uint)GrafImageUsageFlag::TransferDst | (ur_uint)GrafImageUsageFlag::ShaderRead;
 		outputImageData.Desc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::GpuLocal;
-		outputImageData.RowPitch = (ur_uint)ilWidth * ilBpp;
+		ur_uint rowPitch = (ur_uint)ilWidth * ilBpp;
+		ur_uint rowCount = (ur_uint)ilHeight;
 		ur_uint compRate = 1;
+		ur_uint compBlockWidth = 1;
+		ur_uint compBlockSizeInBytes = (ur_uint)ilBpp;
 		switch (ilDXTFormat)
 		{
 		case IL_DXT1:
 			outputImageData.Desc.Format = GrafFormat::BC1_RGBA_UNORM_BLOCK;
-			compRate = 6;
+			compBlockWidth = 4;
+			compBlockSizeInBytes = 8;
+			rowPitch = ur_align((ur_uint)ilWidth, compBlockWidth) / compBlockWidth * compBlockSizeInBytes;
+			rowCount = ur_align((ur_uint)ilHeight, compBlockWidth) / compBlockWidth;
 			break;
 		case IL_DXT5:
 			outputImageData.Desc.Format = GrafFormat::BC3_UNORM_BLOCK;
-			compRate = 4;
+			compBlockWidth = 4;
+			compBlockSizeInBytes = 16;
+			rowPitch = ur_align((ur_uint)ilWidth, compBlockWidth) / compBlockWidth * compBlockSizeInBytes;
+			rowCount = ur_align((ur_uint)ilHeight, compBlockWidth) / compBlockWidth;
 			break;
 		}
-		outputImageData.RowPitch /= compRate;
+		outputImageData.RowPitch = rowPitch;
 
 		// copy mip levels into cpu visible buffers
 
 		Result res = Result(Success);
-		ur_uint pitchAlignment = 256; // == D3D12_TEXTURE_DATA_PITCH_ALIGNMENT, TODO: get from device
+		ur_uint pitchAlignment = (ur_uint)grafDevice.GetPhysicalDeviceDesc()->ImageDataPitchAlignment;
+		ur_uint placementAlignment = (ur_uint)grafDevice.GetPhysicalDeviceDesc()->ImageDataPlacementAlignment;
 		ur_uint mipWidth = outputImageData.Desc.Size.x;
 		ur_uint mipHeight = outputImageData.Desc.Size.y;
-		ur_uint mipRowPitch = (outputImageData.RowPitch + pitchAlignment - 1) / pitchAlignment * pitchAlignment;
-		std::vector<ur_byte> mipData(mipRowPitch * mipHeight);
+		ur_uint mipRowPitch = ur_align(rowPitch, pitchAlignment);
+		ur_uint mipRowCount = rowCount;
+		std::vector<ur_byte> mipData((mipRowPitch * mipRowCount + placementAlignment - 1) / placementAlignment * placementAlignment);
 		outputImageData.MipBuffers.reserve(ilMips + 1);
 		for (ur_uint imip = 0; imip < outputImageData.Desc.MipLevels; ++imip)
 		{
@@ -1114,13 +1125,14 @@ namespace UnlimRealms
 			GrafBufferDesc mipBufferDesc = {};
 			mipBufferDesc.Usage = (ur_uint)GrafBufferUsageFlag::TransferSrc;
 			mipBufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
-			mipBufferDesc.SizeInBytes = mipRowPitch * mipHeight;
+			mipBufferDesc.SizeInBytes = (mipRowPitch * mipRowCount + placementAlignment - 1) / placementAlignment * placementAlignment;
 			res = mipBuffer->Initialize(&grafDevice, { mipBufferDesc });
 			if (Failed(res))
 				break;
 
 			ur_byte* srcDataPtr = ur_null;
-			ur_uint srcRowPitch = mipWidth * ilBpp / compRate; // non aligned
+			ur_uint srcRowPitch = ur_align(mipWidth, compBlockWidth) / compBlockWidth * compBlockSizeInBytes;
+			ur_uint srcRowCount = ur_align(mipHeight, compBlockWidth) / compBlockWidth;
 			if (ilDXTFormat != IL_DXT_NO_COMP)
 			{
 				srcDataPtr = (ur_byte*)(0 == imip ? ilGetDXTCData() : ilGetMipDXTCData(imip - 1));
@@ -1130,16 +1142,14 @@ namespace UnlimRealms
 				srcDataPtr = (ur_byte*)(0 == imip ? ilGetData() : ilGetMipData(imip - 1));
 			}
 
-			memset(mipData.data(), 0x00, mipData.size());
 			ur_byte* srcRowPtr = srcDataPtr;
 			ur_byte* dstRowPtr = mipData.data();
-			/*for (ur_uint irow = 0; irow < mipHeight; ++irow)
+			for (ur_uint irow = 0; irow < srcRowCount; ++irow)
 			{
 				memcpy(dstRowPtr, srcRowPtr, srcRowPitch);
 				srcRowPtr += srcRowPitch;
 				dstRowPtr += mipRowPitch;
-			}*/
-			memcpy(mipData.data(), srcDataPtr, mipHeight * srcRowPitch);
+			}
 
 			res = mipBuffer->Write(mipData.data(), mipBufferDesc.SizeInBytes);
 			if (Failed(res))
@@ -1149,11 +1159,9 @@ namespace UnlimRealms
 
 			mipWidth = std::max(mipWidth / 2, 1u);
 			mipHeight = std::max(mipHeight / 2, 1u);
-			mipRowPitch = (mipWidth * ilBpp / compRate + pitchAlignment - 1) / pitchAlignment * pitchAlignment;
-			if (ilDXTFormat != IL_DXT_NO_COMP && srcRowPitch <= 64)
-			{
-				outputImageData.Desc.MipLevels = imip + 1;
-			}
+			mipRowPitch = ur_align(mipWidth, compBlockWidth) / compBlockWidth * compBlockSizeInBytes;
+			mipRowPitch = ur_align(mipRowPitch, pitchAlignment);
+			mipRowCount = ur_align(mipHeight, compBlockWidth) / compBlockWidth;
 		}
 
 		// release IL resources

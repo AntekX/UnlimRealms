@@ -347,12 +347,22 @@ int D3D12SandboxApp::Run()
 			// create image in gpu local memory
 			grafRes = grafSystem->CreateImage(grafImageSample);
 			if (Failed(grafRes)) break;
-			GrafImageDesc grafImageDesc = imageInitData->imageData.Desc;
-			grafImageDesc.MipLevels = 1; // TODO: fill all mips
-			grafRes = grafImageSample->Initialize(grafDevice, { grafImageDesc });
+			grafRes = grafImageSample->Initialize(grafDevice, { imageInitData->imageData.Desc });
 			if (Failed(grafRes)) break;
 
-			// upload to gpu image
+			std::vector<std::unique_ptr<GrafImageSubresource>> resImageMips;
+			resImageMips.resize(imageInitData->imageData.Desc.MipLevels);
+			for (ur_uint imip = 0; imip < imageInitData->imageData.Desc.MipLevels; ++imip)
+			{
+				auto& imageMip = resImageMips[imip];
+				GrafImageSubresourceDesc mipDesc = {
+					imip, 1, 0, 1
+				};
+				grafSystem->CreateImageSubresource(imageMip);
+				imageMip->Initialize(grafDevice, { grafImageSample.get(), mipDesc });
+			}
+
+			// image upload cmd list
 			grafRes = grafSystem->CreateCommandList(imageInitData->uploadCmdList);
 			if (Failed(grafRes)) break;
 			grafRes = imageInitData->uploadCmdList->Initialize(grafDevice);
@@ -361,8 +371,13 @@ int D3D12SandboxApp::Run()
 			// record commands performing required image memory transitions and cpu->gpu memory copies
 			imageInitData->uploadCmdList->Begin();
 			imageInitData->uploadCmdList->ImageMemoryBarrier(grafImageSample.get(), GrafImageState::Current, GrafImageState::TransferDst);
-			imageInitData->uploadCmdList->Copy(imageInitData->imageData.MipBuffers[0].get(), grafImageSample.get());
-			imageInitData->uploadCmdList->ImageMemoryBarrier(grafImageSample.get(), GrafImageState::Current, GrafImageState::ShaderRead);
+			ur_uint3 mipSize = imageInitData->imageData.Desc.Size;
+			for (ur_uint imip = 0; imip < imageInitData->imageData.Desc.MipLevels; ++imip)
+			{
+				auto& imageMip = resImageMips[imip];
+				imageInitData->uploadCmdList->ImageMemoryBarrier(imageMip.get(), GrafImageState::Current, GrafImageState::TransferDst);
+				imageInitData->uploadCmdList->Copy(imageInitData->imageData.MipBuffers[imip].get(), imageMip.get());
+			}
 			imageInitData->uploadCmdList->End();
 			grafDevice->Record(imageInitData->uploadCmdList.get());
 

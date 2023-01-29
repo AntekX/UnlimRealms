@@ -105,7 +105,7 @@ int HybridRenderingApp::Run()
 	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindowMaximized, L"HybridRenderingDemo"));
 	canvas->Initialize(RectI(0, 0, (ur_uint)GetSystemMetrics(SM_CXSCREEN), (ur_uint)GetSystemMetrics(SM_CYSCREEN)));
 	realm.SetCanvas(std::move(canvas));
-	ur_float canvasScale = 1;
+	ur_float canvasScale = 0.8f;
 	ur_uint canvasWidth = ur_uint(realm.GetCanvas()->GetClientBound().Width() * canvasScale);
 	ur_uint canvasHeight = ur_uint(realm.GetCanvas()->GetClientBound().Height() * canvasScale);
 	ur_bool canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
@@ -631,13 +631,8 @@ int HybridRenderingApp::Run()
 					for (ur_uint imip = 0; imip < imageData->Desc.MipLevels; ++imip)
 					{
 						auto& imageMip = resImageMips[imip];
-						BoxI mipRegion;
-						mipRegion.Min = ur_int3(0, 0, 0);
-						mipRegion.Max = ur_int3(mipSize.x, mipSize.y, 1);
-						mipSize.x = std::max(mipSize.x / 2, 1u);
-						mipSize.y = std::max(mipSize.y / 2, 1u);
 						uploadCmdList->ImageMemoryBarrier(imageMip.get(), GrafImageState::Current, GrafImageState::TransferDst);
-						uploadCmdList->Copy(imageData->MipBuffers[imip].get(), imageMip.get(), 0, mipRegion);
+						uploadCmdList->Copy(imageData->MipBuffers[imip].get(), imageMip.get());
 					}
 					uploadCmdList->ImageMemoryBarrier(resImage.get(), GrafImageState::TransferDst, GrafImageState::ShaderRead);
 					GrafUtils::ImageData* imageDataPtr = imageData.release();
@@ -950,7 +945,7 @@ int HybridRenderingApp::Run()
 			this->sampleInstanceCount = 320;
 			this->sampleInstanceScatterRadius = 100.0f;
 			#endif
-			this->animationEnabled = true;
+			this->animationEnabled = false;
 			this->animationCycleTime = 30.0f;
 			this->animationElapsedTime = 0.0f;
 		}
@@ -2169,11 +2164,11 @@ int HybridRenderingApp::Run()
 	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
-		hdrParams.LumWhite = 1.0f;
+		hdrParams.LumWhite = 10.0f;
 		#if (SCENE_TYPE_FOREST == SCENE_TYPE)
 		hdrParams.LumAdaptationMin = 2800.0;
 		#else
-		hdrParams.LumAdaptationMin = 1000.0;
+		hdrParams.LumAdaptationMin = 200.0;
 		#endif
 		hdrParams.BloomThreshold = 4.0f;
 		hdrParams.BloomIntensity = 0.5f;

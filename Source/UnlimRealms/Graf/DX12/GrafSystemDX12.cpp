@@ -39,7 +39,7 @@ namespace UnlimRealms
 
 	// descritor heap sizes per type
 	static const ur_uint DescriptorHeapSize[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES] = {
-		4 * 1024,	// D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+		8 * 1024,	// D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
 		1 * 1024,	// D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER
 		1 * 1024,	// D3D12_DESCRIPTOR_HEAP_TYPE_RTV
 		1 * 1024,	// D3D12_DESCRIPTOR_HEAP_TYPE_DSV
@@ -153,6 +153,8 @@ namespace UnlimRealms
 			grafDeviceDesc.LocalMemoryHostVisible = grafDeviceDesc.LocalMemory;
 			grafDeviceDesc.SystemMemory = (ur_size)(dxgiAdapterDesc.SharedSystemMemory + dxgiAdapterDesc.DedicatedSystemMemory);
 			grafDeviceDesc.ConstantBufferOffsetAlignment = 256;
+			grafDeviceDesc.ImageDataPlacementAlignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
+			grafDeviceDesc.ImageDataPitchAlignment = D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
 
 			#if defined(UR_GRAF_LOG_LEVEL_DEBUG)
 			LogNoteGrafDbg(std::string("GrafSystemDX12: device available ") + grafDeviceDesc.Description +
@@ -1176,9 +1178,9 @@ namespace UnlimRealms
 		d3dSrcLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
 		d3dSrcLocation.PlacedFootprint.Offset = (UINT64)bufferOffset;
 		d3dSrcLocation.PlacedFootprint.Footprint.Format = d3dDstResFootprint.Footprint.Format;
-		d3dSrcLocation.PlacedFootprint.Footprint.Width = (UINT)(imageRegion.SizeX() > 0 ? imageRegion.SizeX() : dstImageDX12->GetDesc().Size.x);
-		d3dSrcLocation.PlacedFootprint.Footprint.Height = (UINT)(imageRegion.SizeY() > 0 ? imageRegion.SizeY() : dstImageDX12->GetDesc().Size.y);
-		d3dSrcLocation.PlacedFootprint.Footprint.Depth = (UINT)(imageRegion.SizeZ() > 0 ? imageRegion.SizeZ() : dstImageDX12->GetDesc().Size.z);
+		d3dSrcLocation.PlacedFootprint.Footprint.Width = (UINT)(imageRegion.SizeX() > 0 ? imageRegion.SizeX() : d3dDstResFootprint.Footprint.Width);
+		d3dSrcLocation.PlacedFootprint.Footprint.Height = (UINT)(imageRegion.SizeY() > 0 ? imageRegion.SizeY() : d3dDstResFootprint.Footprint.Height);
+		d3dSrcLocation.PlacedFootprint.Footprint.Depth = (UINT)(imageRegion.SizeZ() > 0 ? imageRegion.SizeZ() : d3dDstResFootprint.Footprint.Depth);
 		d3dSrcLocation.PlacedFootprint.Footprint.RowPitch = d3dDstResFootprint.Footprint.RowPitch;
 
 		this->d3dCommandList->CopyTextureRegion(&d3dDstLocation, (UINT)imageRegion.Min.x, (UINT)imageRegion.Min.y, (UINT)imageRegion.Min.z,
@@ -2048,8 +2050,7 @@ namespace UnlimRealms
 		ur_size sizeInBytesAligned = initParams.BufferDesc.SizeInBytes;
 		if (ur_uint(GrafBufferUsageFlag::ConstantBuffer) & initParams.BufferDesc.Usage)
 		{
-			ur_size cbAlignment = grafDeviceDX12->GetPhysicalDeviceDesc()->ConstantBufferOffsetAlignment;
-			sizeInBytesAligned = (initParams.BufferDesc.SizeInBytes + cbAlignment - 1) / cbAlignment * cbAlignment;
+			sizeInBytesAligned = ur_align(initParams.BufferDesc.SizeInBytes, grafDeviceDX12->GetPhysicalDeviceDesc()->ConstantBufferOffsetAlignment);
 		}
 		this->bufferDesc.SizeInBytes = sizeInBytesAligned;
 

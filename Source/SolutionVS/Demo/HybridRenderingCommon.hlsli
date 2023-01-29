@@ -6,7 +6,7 @@
 // TEMP
 #define RT_GI_TEST 1
 #define RT_REFLECTION_TEST 0
-#define RT_ALPHATEST 1
+#define RT_ALPHATEST 0
 #define RT_ALPHATEST_VALUE 0.25
 
 // constant buffers

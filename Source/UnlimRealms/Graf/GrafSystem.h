@@ -72,6 +72,8 @@ namespace UnlimRealms
 		ur_size LocalMemoryHostVisible; // device memory visible to host
 		ur_size SystemMemory; // part of system memory dedicated to or shared with device
 		ur_size ConstantBufferOffsetAlignment;
+		ur_size ImageDataPlacementAlignment;
+		ur_size ImageDataPitchAlignment;
 		GrafRayTracingProperties RayTracing;
 	};
 

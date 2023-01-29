@@ -356,6 +356,8 @@ namespace UnlimRealms
 			grafDeviceDesc.VendorId = (ur_uint)vkDeviceProperties.vendorID;
 			grafDeviceDesc.DeviceId = (ur_uint)vkDeviceProperties.deviceID;
 			grafDeviceDesc.ConstantBufferOffsetAlignment = (ur_size)vkDeviceProperties.limits.minUniformBufferOffsetAlignment;
+			grafDeviceDesc.ImageDataPlacementAlignment = 1;
+			grafDeviceDesc.ImageDataPitchAlignment = 1;
 			std::vector<VkMemoryPropertyFlags> perHeapFlags(vkDeviceMemoryProperties.memoryHeapCount);
 			for (ur_uint32 memTypeIdx = 0; memTypeIdx < vkDeviceMemoryProperties.memoryTypeCount; ++memTypeIdx)
 			{
@@ -1806,6 +1808,11 @@ namespace UnlimRealms
 
 		const GrafImage* dstImage = dstImageSubresource->GetImage();
 
+		ur_uint3 subResSize = dstImage->GetDesc().Size;
+		subResSize.x = std::max(1u, dstImage->GetDesc().Size.x >> dstImageSubresource->GetDesc().BaseMipLevel);
+		subResSize.y = std::max(1u, dstImage->GetDesc().Size.y >> dstImageSubresource->GetDesc().BaseMipLevel);
+		subResSize.z = std::max(1u, dstImage->GetDesc().Size.z >> dstImageSubresource->GetDesc().BaseMipLevel);
+
 		VkBufferImageCopy vkBufferImageCopy = {};
 		vkBufferImageCopy.bufferOffset = bufferOffset;
 		vkBufferImageCopy.bufferRowLength = 0;
@@ -1813,9 +1820,9 @@ namespace UnlimRealms
 		vkBufferImageCopy.imageOffset.x = (ur_int32)imageRegion.Min.x;
 		vkBufferImageCopy.imageOffset.y = (ur_int32)imageRegion.Min.y;
 		vkBufferImageCopy.imageOffset.z = (ur_int32)imageRegion.Min.z;
-		vkBufferImageCopy.imageExtent.width = (ur_uint32)(imageRegion.SizeX() > 0 ? imageRegion.SizeX() : dstImage->GetDesc().Size.x);
-		vkBufferImageCopy.imageExtent.height = (ur_uint32)(imageRegion.SizeY() > 0 ? imageRegion.SizeY() : dstImage->GetDesc().Size.y);
-		vkBufferImageCopy.imageExtent.depth = (ur_uint32)(imageRegion.SizeZ() > 0 ? imageRegion.SizeZ() : dstImage->GetDesc().Size.z);
+		vkBufferImageCopy.imageExtent.width = (ur_uint32)(imageRegion.SizeX() > 0 ? imageRegion.SizeX() : subResSize.x);
+		vkBufferImageCopy.imageExtent.height = (ur_uint32)(imageRegion.SizeY() > 0 ? imageRegion.SizeY() : subResSize.y);
+		vkBufferImageCopy.imageExtent.depth = (ur_uint32)(imageRegion.SizeZ() > 0 ? imageRegion.SizeZ() : subResSize.z);
 		vkBufferImageCopy.imageSubresource.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(dstImage->GetDesc().Usage);
 		vkBufferImageCopy.imageSubresource.mipLevel = dstImageSubresource->GetDesc().BaseMipLevel;
 		vkBufferImageCopy.imageSubresource.baseArrayLayer = dstImageSubresource->GetDesc().BaseArrayLayer;
@@ -1845,6 +1852,11 @@ namespace UnlimRealms
 			return Result(InvalidArgs);
 
 		const GrafImage* srcImage = srcImageSubresource->GetImage();
+
+		ur_uint3 subResSize = srcImage->GetDesc().Size;
+		subResSize.x = std::max(1u, srcImage->GetDesc().Size.x >> srcImageSubresource->GetDesc().BaseMipLevel);
+		subResSize.y = std::max(1u, srcImage->GetDesc().Size.y >> srcImageSubresource->GetDesc().BaseMipLevel);
+		subResSize.z = std::max(1u, srcImage->GetDesc().Size.z >> srcImageSubresource->GetDesc().BaseMipLevel);
 
 		VkBufferImageCopy vkBufferImageCopy = {};
 		vkBufferImageCopy.bufferOffset = bufferOffset;
@@ -1893,6 +1905,11 @@ namespace UnlimRealms
 		const GrafImage* srcImage = srcImageSubresource->GetImage();
 		const GrafImage* dstImage = dstImageSubresource->GetImage();
 
+		ur_uint3 subResSize = srcImage->GetDesc().Size;
+		subResSize.x = std::max(1u, srcImage->GetDesc().Size.x >> srcImageSubresource->GetDesc().BaseMipLevel);
+		subResSize.y = std::max(1u, srcImage->GetDesc().Size.y >> srcImageSubresource->GetDesc().BaseMipLevel);
+		subResSize.z = std::max(1u, srcImage->GetDesc().Size.z >> srcImageSubresource->GetDesc().BaseMipLevel);
+
 		VkImageCopy vkImageCopy = {};
 		vkImageCopy.srcSubresource.aspectMask = GrafUtilsVulkan::GrafToVkImageUsageAspect(srcImage->GetDesc().Usage);
 		vkImageCopy.srcSubresource.mipLevel = srcImageSubresource->GetDesc().BaseMipLevel;
@@ -1908,9 +1925,9 @@ namespace UnlimRealms
 		vkImageCopy.dstOffset.x = (ur_int32)srcRegion.Min.x;
 		vkImageCopy.dstOffset.y = (ur_int32)srcRegion.Min.y;
 		vkImageCopy.dstOffset.z = (ur_int32)srcRegion.Min.z;
-		vkImageCopy.extent.width = (ur_uint32)(srcSize.x > 0 ? srcSize.x : srcImage->GetDesc().Size.x);
-		vkImageCopy.extent.height = (ur_uint32)(srcSize.y > 0 ? srcSize.y : srcImage->GetDesc().Size.y);
-		vkImageCopy.extent.depth = (ur_uint32)(srcSize.z > 0 ? srcSize.z : srcImage->GetDesc().Size.z);
+		vkImageCopy.extent.width = (ur_uint32)(srcSize.x > 0 ? srcSize.x : subResSize.x);
+		vkImageCopy.extent.height = (ur_uint32)(srcSize.y > 0 ? srcSize.y : subResSize.y);
+		vkImageCopy.extent.depth = (ur_uint32)(srcSize.z > 0 ? srcSize.z : subResSize.z);
 
 		vkCmdCopyImage(this->vkCommandBuffer,
 			static_cast<const GrafImageVulkan*>(srcImage)->GetVkImage(),
