@@ -105,7 +105,7 @@ int HybridRenderingApp::Run()
 	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindowMaximized, L"HybridRenderingDemo"));
 	canvas->Initialize(RectI(0, 0, (ur_uint)GetSystemMetrics(SM_CXSCREEN), (ur_uint)GetSystemMetrics(SM_CYSCREEN)));
 	realm.SetCanvas(std::move(canvas));
-	ur_float canvasScale = 0.8f;
+	ur_float canvasScale = 1.0f;
 	ur_uint canvasWidth = ur_uint(realm.GetCanvas()->GetClientBound().Width() * canvasScale);
 	ur_uint canvasHeight = ur_uint(realm.GetCanvas()->GetClientBound().Height() * canvasScale);
 	ur_bool canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
@@ -919,7 +919,7 @@ int HybridRenderingApp::Run()
 			this->sceneConstants.DirectLightFactor = 1.0f;
 			this->sceneConstants.IndirectLightFactor = 1.0f;
 			this->blurDescTableIdx = 0;
-			this->debugVec0 = ur_float4(0.0f, 0.5f, 0.01f, 0.0f);
+			this->debugVec0 = ur_float4(0.0f, 0.5f, 0.01f, 2.0f);
 			this->debugVec1 = ur_float4(0.0f, 0.0f, 0.1f, 16.0f);
 			this->debugVec2 = ur_float4(0.1f, 0.02f, 1.0f, 1.0f);
 			this->debugVec3 = ur_float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -2165,11 +2165,8 @@ int HybridRenderingApp::Run()
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
 		hdrParams.LumWhite = 10.0f;
-		#if (SCENE_TYPE_FOREST == SCENE_TYPE)
-		hdrParams.LumAdaptationMin = 2800.0;
-		#else
-		hdrParams.LumAdaptationMin = 200.0;
-		#endif
+		hdrParams.LumAdaptationMin = 100.0;
+		hdrParams.LumAdaptationMax = 1000.0;
 		hdrParams.BloomThreshold = 4.0f;
 		hdrParams.BloomIntensity = 0.5f;
 		hdrRender->SetParams(hdrParams);

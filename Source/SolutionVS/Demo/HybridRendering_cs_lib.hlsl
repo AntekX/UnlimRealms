@@ -529,7 +529,7 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 
 // lighting result temporal accumulation filter
 
-#define ACCUMULATE_NEIGHBOURHOOD_CLIP 0
+#define ACCUMULATE_NEIGHBOURHOOD_CLIP 1
 static const uint AccumulateNeighbourhoodSize = 9;
 static const float2 AccumulateNeighbourhoodOfs[AccumulateNeighbourhoodSize] = {
 	float2( 0, 0), float2(-1,-1), float2( 0,-1),
@@ -743,7 +743,16 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		// accumulate indirect light
 
 		#if (ACCUMULATE_NEIGHBOURHOOD_CLIP)
-		indirectLightHistory = ClipAABB(indirectMin.xyz, indirectMax.xyz, float4(indirectLightHistory.xyz, 1.0), float4(indirectLightHistory.xyz, 1.0));
+		//indirectLightHistory = ClipAABB(indirectMin.xyz, indirectMax.xyz, float4(indirectLightHistory.xyz, 1.0), float4(indirectLightHistory.xyz, 1.0));
+		// clamp fireflies
+		#if (1)
+		float indirectLightLum = ComputeLuminance(indirectLight.xyz);
+		float indirectAdjLum = ComputeLuminance((indirectMu1.xyz - indirectLight.xyz) / (AccumulateNeighbourhoodSize - 1));
+		float3 indirectLightClamped = indirectLight.xyz * saturate(pow(indirectAdjLum / max(indirectLightLum, 1.0e-4), max(0, g_SceneCB.DebugVec0[3])));
+		#else
+		float3 indirectLightClamped = indirectMu1.xyz / AccumulateNeighbourhoodSize;
+		#endif
+		indirectLight.xyz = lerp(indirectLightClamped.xyz, indirectLight.xyz, indirectLightHistoryWeight * indirectLightHistoryWeight);
 		#endif
 		indirectLight = lerp(indirectLight, indirectLightHistory, indirectLightHistoryWeight);
 	}

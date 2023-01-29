@@ -173,8 +173,8 @@ namespace UnlimRealms
 			if (FAILED(hres))
 				continue;
 
-			grafDeviceDesc.RayTracing.RayTraceSupported = false;//(ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0);
-			grafDeviceDesc.RayTracing.RayQuerySupported = false;//(ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1);
+			grafDeviceDesc.RayTracing.RayTraceSupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0);
+			grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1);
 			grafDeviceDesc.RayTracing.ShaderGroupHandleSize = 8;
 			grafDeviceDesc.RayTracing.RecursionDepthMax = ~ur_uint32(0);
 			grafDeviceDesc.RayTracing.GeometryCountMax = ~ur_uint64(0);

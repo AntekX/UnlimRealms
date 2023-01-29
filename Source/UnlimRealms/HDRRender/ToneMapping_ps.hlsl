@@ -74,10 +74,10 @@ float4 main(GenericQuadVertex input) : SV_Target
 
 	// apply tonemapping
 
-#if (1)
+#if (0)
 	// ACES filmic
 	color = filmicACES(color) / filmicACES(LumWhite);
-#elif (0)
+#elif (1)
 	// Filmic Uncharted2
 	color = filmicF(color) / filmicF(LumWhite);
 #elif (0)
