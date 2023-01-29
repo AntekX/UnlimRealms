@@ -530,6 +530,7 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 // lighting result temporal accumulation filter
 
 #define ACCUMULATE_NEIGHBOURHOOD_CLIP 1
+
 static const uint AccumulateNeighbourhoodSize = 9;
 static const float2 AccumulateNeighbourhoodOfs[AccumulateNeighbourhoodSize] = {
 	float2( 0, 0), float2(-1,-1), float2( 0,-1),
@@ -702,7 +703,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		indirectLightHistoryConfidence = saturate((indirectLightHistoryConfidence - g_SceneCB.DebugVec1[1]) / (1.0 - g_SceneCB.DebugVec1[1]));
 		#else
 		float3 worldPosPrev = ClipPosToWorldPos(float3(clipPosPrev.xy, clipDepthPrev), g_SceneCB.ViewProjInvPrev);
-		float toleranceScale = gbData.ClipDepth;// ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
+		float toleranceScale = ClipDepthToViewDepth(gbData.ClipDepth, g_SceneCB.Proj);
 		float shadowHistoryConfidence = 1.0 - saturate(abs(dot(worldPos - worldPosPrev, gbData.Normal)) / (g_SceneCB.ShadowTemporalTolerance * toleranceScale));
 		shadowHistoryConfidence = saturate((shadowHistoryConfidence - g_SceneCB.ShadowTemporalThreshold) / (1.0 - g_SceneCB.ShadowTemporalThreshold));
 		float indirectLightHistoryConfidence = 1.0 - saturate(abs(dot(worldPos - worldPosPrev, gbData.Normal)) / (g_SceneCB.IndirectTemporalTolerance * toleranceScale));

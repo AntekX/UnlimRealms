@@ -325,7 +325,6 @@ void RayGenMain()
 			ray.TMin = 1.0e-3;// ray.TMax * 1.0e-4;
 
 			float3x3 surfaceTBN = ComputeSamplingBasis(gbData.Normal);
-			float3 skyLight = 0.0;
 			uint sampleCount = g_SceneCB.IndirectSamplesPerFrame * (g_SceneCB.IndirectAccumulationFrames + 1);
 			uint sampleIdOfs = g_SceneCB.FrameNumber * g_SceneCB.IndirectSamplesPerFrame * g_SceneCB.PerFrameJitter + dispatchConstHash;
 			for (uint isample = 0; isample < g_SceneCB.IndirectSamplesPerFrame; ++isample)
@@ -369,6 +368,14 @@ void RayGenMain()
 				indirectLight += rayData.luminance * NdotL;
 			}
 			indirectLight /= g_SceneCB.IndirectSamplesPerFrame;
+
+			#if (RT_GI_MIN_FAKE_AMBIENT)
+			// minimal fake ambient
+			float3 skyDir = float3(gbData.Normal.x, max(gbData.Normal.y, 0.0), gbData.Normal.z);
+			skyDir = normalize(skyDir * 0.5 + WorldUp);
+			float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, worldPos, skyDir).xyz;
+			indirectLight = max(indirectLight, skyLight * 0.035);
+			#endif
 		}
 		else
 		{
