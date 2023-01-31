@@ -66,8 +66,8 @@ struct IndirectLightSettings
 	ur_uint BouncesCount = 1;
 	TemporalFilterSettings TemporalFilter = {
 		64, // AccumulationFrames
-		0.1f, // Tolerance
-		0.5f, // Threshold
+		0.02f, // Tolerance
+		0.80f, // Threshold
 	};
 	SpatialFilterSettings SpatialFilter = {
 		4, // PassCount
@@ -920,7 +920,7 @@ int HybridRenderingApp::Run()
 			this->sceneConstants.IndirectLightFactor = 1.0f;
 			this->blurDescTableIdx = 0;
 			this->debugVec0 = ur_float4(0.0f, 0.5f, 0.01f, 2.0f);
-			this->debugVec1 = ur_float4(0.0f, 0.0f, 0.1f, 16.0f);
+			this->debugVec1 = ur_float4(100.0f, 0.0f, 0.1f, 16.0f);
 			this->debugVec2 = ur_float4(0.1f, 0.02f, 1.0f, 1.0f);
 			this->debugVec3 = ur_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			
@@ -2870,5 +2870,5 @@ int HybridRenderingApp::Run()
 	realm.RemoveComponent<GenericRender>();
 	realm.RemoveComponent<GrafRenderer>();
 
-	return 0;\
+	return 0;
 }

@@ -368,14 +368,6 @@ void RayGenMain()
 				indirectLight += rayData.luminance * NdotL;
 			}
 			indirectLight /= g_SceneCB.IndirectSamplesPerFrame;
-
-			#if (RT_GI_MIN_FAKE_AMBIENT)
-			// minimal fake ambient
-			float3 skyDir = float3(gbData.Normal.x, max(gbData.Normal.y, 0.0), gbData.Normal.z);
-			skyDir = normalize(skyDir * 0.5 + WorldUp);
-			float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, worldPos, skyDir).xyz;
-			indirectLight = max(indirectLight, skyLight * 0.035);
-			#endif
 		}
 		else
 		{
@@ -513,6 +505,15 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		float NoL = saturate(dot(material.normal, ray.Direction));
 		rayData.luminance = rayData.luminance * material.baseColor.xyz * NoL * g_SceneCB.DebugVec2[3];
 	}
+	#if (RT_GI_MIN_FAKE_AMBIENT)
+	else
+	{
+		float3 skyDir = float3(material.normal.x, max(material.normal.y, 0.0), material.normal.z);
+		skyDir = normalize(skyDir * 0.5 + WorldUp);
+		float3 ambientLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, skyDir).xyz;
+		rayData.luminance = ambientLight / ComputeLuminance(ambientLight) * g_SceneCB.DebugVec1[0];
+	}
+	#endif
 
 	// calculate reflected radiance
 	
@@ -600,7 +601,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		skyDir = reflect(skyDir, material.normal);
 		absorption = material.baseColor.xyz;
 	}
-	rayData.luminance += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldDist, skyDir).xyz * absorption * (1.0 - sampleOcclusion);
+	rayData.luminance += GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, skyDir).xyz * absorption * (1.0 - sampleOcclusion);
 
 #endif
 }
