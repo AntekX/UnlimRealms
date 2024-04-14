@@ -527,10 +527,10 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 	#if (RT_GI_MIN_FAKE_AMBIENT)
 	else
 	{
-		float3 skyDir = float3(material.normal.x, max(material.normal.y, 0.0), material.normal.z);
-		skyDir = normalize(skyDir * 0.5 + WorldUp);
-		float3 ambientLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, skyDir).xyz;
-		rayData.luminance = ambientLight * g_SceneCB.DebugVec1[0];
+		float3 rayDirection = float3(material.normal.x, max(material.normal.y, 0.0), material.normal.z);
+		rayDirection = normalize(rayDirection + WorldUp);
+		float3 ambientLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, rayDirection).xyz;
+		rayData.luminance = material.baseColor.xyz * ambientLight * g_SceneCB.DebugVec1[0];
 	}
 	#endif
 
