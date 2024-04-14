@@ -238,7 +238,6 @@
     <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_vtf.h" />
     <ClInclude Include="..\..\3rdParty\ResIL\src-IL\il_wdp.h" />
     <ClInclude Include="..\..\3rdParty\TinyObjLoader\tiny_obj_loader.h" />
-    <ClInclude Include="..\..\3rdParty\VulkanMemoryAllocator\vk_mem_alloc.h" />
     <ClInclude Include="..\..\UnlimRealms\Atmosphere\Atmosphere.h" />
     <ClInclude Include="..\..\UnlimRealms\Atmosphere\AtmosphereCommon.h" />
     <ClInclude Include="..\..\UnlimRealms\Camera\Camera.h" />

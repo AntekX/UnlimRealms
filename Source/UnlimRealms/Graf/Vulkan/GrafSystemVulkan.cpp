@@ -12,7 +12,7 @@
 #endif
 #pragma comment(lib, "vulkan-1.lib")
 #define VMA_IMPLEMENTATION
-#include "3rdParty/VulkanMemoryAllocator/vk_mem_alloc.h"
+#include "vma/vk_mem_alloc.h"
 
 namespace UnlimRealms
 {
@@ -27,7 +27,7 @@ namespace UnlimRealms
 	#endif
 	#define UR_GRAF_VULKAN_DEBUG_LAYER_ASSERT 0
 
-	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_2
+	#define UR_GRAF_VULKAN_VERSION VK_API_VERSION_1_3
 	#define UR_GRAF_VULKAN_DEBUG_LABLES 1
 	#define UR_GRAF_VULKAN_VMA_ENABLED 1
 	#define UR_GRAF_VULKAN_IMPLICIT_WAIT_DEVICE 1
@@ -850,7 +850,6 @@ namespace UnlimRealms
 		vmaAllocatorInfo.physicalDevice = vkPhysicalDevice;
 		vmaAllocatorInfo.device = this->vkDevice;
 		vmaAllocatorInfo.preferredLargeHeapBlockSize = 0;
-		vmaAllocatorInfo.frameInUseCount = 0;
 		vmaAllocatorInfo.pHeapSizeLimit = ur_null;
 		vmaAllocatorInfo.instance = grafSystemVulkan.GetVkInstance();
 		vmaAllocatorInfo.vulkanApiVersion = UR_GRAF_VULKAN_VERSION;
@@ -5447,7 +5446,7 @@ namespace UnlimRealms
 		vkAccelStructCreateInfo.offset = 0;
 		vkAccelStructCreateInfo.size = vkBuildSizeInfo.accelerationStructureSize;
 		vkAccelStructCreateInfo.type = GrafUtilsVulkan::GrafToVkAccelerationStructureType(initParams.StructureType);
-		vkAccelStructCreateInfo.deviceAddress = VK_NULL_HANDLE;
+		vkAccelStructCreateInfo.deviceAddress = VkDeviceAddress(0);
 
 		vkRes = vkCreateAccelerationStructureKHR(vkDevice, &vkAccelStructCreateInfo, ur_null, &this->vkAccelerationStructure);
 		if (vkRes != VK_SUCCESS)

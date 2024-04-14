@@ -860,6 +860,7 @@ int HybridRenderingApp::Run()
 		std::unique_ptr<GrafImage> defaultImageWhite;
 		std::unique_ptr<GrafImage> defaultImageBlack;
 		std::unique_ptr<GrafImage> defaultImageNormal;
+		std::unique_ptr<GrafImage> blueNoiseImage;
 		std::unique_ptr<GPUResourceRegistry> gpuResourceRegistry;
 		std::vector<std::unique_ptr<Mesh>> meshes;
 		std::unique_ptr<GrafBuffer> instanceBuffer;
@@ -1161,6 +1162,7 @@ int HybridRenderingApp::Run()
 				g_SceneCBDescriptor,
 				g_SamplerBilinearWrapDescriptor,
 				g_SamplerTrilinearDescriptor,
+				g_BlueNoiseImageDescriptor,
 				g_GeometryDepthDescriptor,
 				g_GeometryImage0Descriptor,
 				g_GeometryImage1Descriptor,
@@ -1220,6 +1222,7 @@ int HybridRenderingApp::Run()
 				GrafDescriptorRangeDesc raytraceDescTableLayoutRanges[] = {
 					g_SceneCBDescriptor,
 					g_SamplerBilinearWrapDescriptor,
+					g_BlueNoiseImageDescriptor,
 					g_GeometryDepthDescriptor,
 					g_GeometryImage0Descriptor,
 					g_GeometryImage1Descriptor,
@@ -1440,6 +1443,7 @@ int HybridRenderingApp::Run()
 			{
 				GrafCommandList* cmdList = grafRenderer->GetTransientCommandList();
 				cmdList->Begin();
+
 				auto createDefaultImage = [&grafSystem, &grafDevice, &cmdList]
 				(std::unique_ptr<GrafImage>& defaultImage, GrafFormat format, GrafClearValue fillColor) -> Result
 				{
@@ -1460,9 +1464,38 @@ int HybridRenderingApp::Run()
 					}
 					return res;
 				};
-				createDefaultImage(defaultImageWhite, GrafFormat::R8G8B8A8_UNORM, { 1.0f, 1.0f, 1.0f, 1.0f });
-				createDefaultImage(defaultImageBlack, GrafFormat::R8G8B8A8_UNORM, { 0.0f, 0.0f, 0.0f, 0.0f });
-				createDefaultImage(defaultImageNormal, GrafFormat::R8G8B8A8_UNORM, { 0.5f, 0.5f, 0.0f, 0.0f });
+				createDefaultImage(this->defaultImageWhite, GrafFormat::R8G8B8A8_UNORM, { 1.0f, 1.0f, 1.0f, 1.0f });
+				createDefaultImage(this->defaultImageBlack, GrafFormat::R8G8B8A8_UNORM, { 0.0f, 0.0f, 0.0f, 0.0f });
+				createDefaultImage(this->defaultImageNormal, GrafFormat::R8G8B8A8_UNORM, { 0.5f, 0.5f, 0.0f, 0.0f });
+
+				// blue noise image
+				{
+					std::unique_ptr<GrafUtils::ImageData> imageData(new GrafUtils::ImageData());
+					Result result = GrafUtils::LoadImageFromFile(*grafDevice, "../Res/BlueNoise64_R8G8_0.dds", *imageData);
+					if (Succeeded(result))
+					{
+						grafSystem->CreateImage(this->blueNoiseImage);
+						result = this->blueNoiseImage->Initialize(grafDevice, { imageData->Desc });
+						if (Succeeded(result))
+						{
+							cmdList->ImageMemoryBarrier(this->blueNoiseImage.get(), GrafImageState::Current, GrafImageState::TransferDst);
+							cmdList->Copy(imageData->MipBuffers[0].get(), this->blueNoiseImage.get());
+							cmdList->ImageMemoryBarrier(this->blueNoiseImage.get(), GrafImageState::Current, GrafImageState::ShaderRead);
+							GrafUtils::ImageData* imageDataPtr = imageData.release();
+							grafRenderer->AddCommandListCallback(cmdList, { imageDataPtr }, [](GrafCallbackContext& ctx) -> Result
+							{
+								GrafUtils::ImageData* imageDataPtr = reinterpret_cast<GrafUtils::ImageData*>(ctx.DataPtr);
+								delete imageDataPtr;
+								return Result(Success);
+							});
+						}
+						else
+						{
+							this->blueNoiseImage.reset();
+						}
+					}
+				}
+
 				cmdList->End();
 				grafDevice->Record(cmdList);
 			}
@@ -1875,6 +1908,7 @@ int HybridRenderingApp::Run()
 			GrafDescriptorTable* descriptorTable = this->raytraceDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
 			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 			descriptorTable->SetSampler(g_SamplerBilinearWrapDescriptor, this->samplerBilinearWrap.get());
+			descriptorTable->SetImage(g_BlueNoiseImageDescriptor, this->blueNoiseImage.get());
 			descriptorTable->SetImage(g_GeometryDepthDescriptor, renderTargetSet->images[RenderTargetImageUsage_Depth]);
 			descriptorTable->SetImage(g_GeometryImage0Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry0]);
 			descriptorTable->SetImage(g_GeometryImage1Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry1]);
@@ -2062,6 +2096,7 @@ int HybridRenderingApp::Run()
 			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 			descriptorTable->SetSampler(g_SamplerBilinearWrapDescriptor, this->samplerBilinearWrap.get());
 			descriptorTable->SetSampler(g_SamplerTrilinearDescriptor, this->samplerTrilinear.get());
+			descriptorTable->SetImage(g_BlueNoiseImageDescriptor, this->blueNoiseImage.get());
 			descriptorTable->SetImage(g_GeometryDepthDescriptor, renderTargetSet->images[RenderTargetImageUsage_Depth]);
 			descriptorTable->SetImage(g_GeometryImage0Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry0]);
 			descriptorTable->SetImage(g_GeometryImage1Descriptor, renderTargetSet->images[RenderTargetImageUsage_Geometry1]);
@@ -2164,7 +2199,7 @@ int HybridRenderingApp::Run()
 	std::unique_ptr<HDRRender> hdrRender(new HDRRender(realm));
 	{
 		HDRRender::Params hdrParams = HDRRender::Params::Default;
-		hdrParams.LumWhite = 10.0f;
+		hdrParams.LumWhite = 3.0f;
 		hdrParams.LumAdaptationMin = 100.0;
 		hdrParams.LumAdaptationMax = 1000.0;
 		hdrParams.BloomThreshold = 4.0f;

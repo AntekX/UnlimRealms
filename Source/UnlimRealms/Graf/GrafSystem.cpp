@@ -1060,7 +1060,7 @@ namespace UnlimRealms
 		if (ilLoadImage(ilResName) == IL_FALSE)
 			return LogResult(Failure, realm.GetLog(), Log::Error, "LoadImageFromFile: failed to load image " + resName);
 
-		ILint ilWidth, ilHeight, ilMips, ilFormat, ilDXTFormat, ilBpp, ilBpc, ilBytesPerPixel;
+		ILint ilWidth, ilHeight, ilMips, ilFormat, ilBpp, ilBpc, ilBytesPerPixel, ilDXTFormat;
 		ilGetImageInteger(IL_IMAGE_WIDTH, &ilWidth);
 		ilGetImageInteger(IL_IMAGE_HEIGHT, &ilHeight);
 		ilGetImageInteger(IL_IMAGE_FORMAT, &ilFormat);
@@ -1073,7 +1073,7 @@ namespace UnlimRealms
 		// fill destination image description
 
 		outputImageData.Desc.Type = GrafImageType::Tex2D;
-		outputImageData.Desc.Format = GrafFormat::R8G8B8A8_UNORM;
+		outputImageData.Desc.Format = GrafFormat::B8G8R8A8_UNORM;
 		outputImageData.Desc.Size.x = (ur_uint)ilWidth;
 		outputImageData.Desc.Size.y = (ur_uint)ilHeight;
 		outputImageData.Desc.Size.z = 1;

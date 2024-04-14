@@ -239,7 +239,7 @@ ILboolean AllocImage(ILimage* image, DDSHEAD * header, ILuint CompFormat,
 	{
 		case PF_RGB:
 			if (!il2TexImage(image, header->Width, header->Height, header->Depth, 3, IL_RGB, 
-				IL_UNSIGNED_BYTE, NULL))
+				IL_UNSIGNED_BYTE, CompData))
 			{
 				return IL_FALSE;
 			}
@@ -247,7 +247,7 @@ ILboolean AllocImage(ILimage* image, DDSHEAD * header, ILuint CompFormat,
 
 		case PF_ARGB:
 			if (!il2TexImage(image, header->Width, header->Height, header->Depth, 4, IL_RGBA, 
-				Has16BitComponents ? IL_UNSIGNED_SHORT : IL_UNSIGNED_BYTE, NULL))
+				Has16BitComponents ? IL_UNSIGNED_SHORT : IL_UNSIGNED_BYTE, CompData))
 			{
 				return IL_FALSE;
 			}

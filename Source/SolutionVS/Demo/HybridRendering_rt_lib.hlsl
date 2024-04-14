@@ -3,33 +3,50 @@
 
 // common functions
 
-float3 GetDiskSampleDirection(uint sampleId, uint sampleCount)
+#define COSINE_WEIGHTED_SAMPLING 1
+
+float3 GetDiskSampleDirection(uint sampleId)
 {
-	#if (1)
 	float2 dir2d = BlueNoiseDiskLUT64[sampleId % 64]; // [-1, 1]
 	return float3(dir2d.xy, 1.0);
-	#else
-	float2 p2d = Hammersley(sampleId % sampleCount, sampleCount);
-	float3 dir = HemisphereSampleUniform(p2d.x, p2d.y);
-	return dir.xyz;
-	#endif
 }
 
-float3 GetHemisphereSampleDirection(uint sampleId, uint sampleCount)
+float3 GetHemisphereSampleDirection(uint2 imagePos, uint samplingSeed, uint accumulatedSampleCount)
 {
-	#if (0)
-	float2 p2d = Hammersley(sampleId % sampleCount + 1, sampleCount + 1);
+	// 2d random point
+#if (1)
+	uint noiseImageSize = 64;
+	uint noiseImageSampleCount = noiseImageSize * noiseImageSize;
+	uint sampleId = samplingSeed % noiseImageSampleCount;
+	uint2 samplePos = uint2(sampleId % noiseImageSize, sampleId / noiseImageSize);
+	float2 p2d = g_BlueNoiseImage.Load(int3(samplePos.xy, 0)).xy;
+#elif (0)
+	float2 p2d = Rand2D(float2(imagePos) + float2(samplingSeed, 0));
+#elif (0)
+	float2 p2d = Hammersley(samplingSeed + 1, accumulatedSampleCount + 1);
+#elif (0)
+	float2 p2d = Halton(samplingSeed);
+#elif (0)
+	float2 p2d = BlueNoiseDiskLUT64[samplingSeed % 64];
+	return float3(p2d, sqrt(1.0 - dot(p2d, p2d)));
+#endif
+	// direction
+#if (COSINE_WEIGHTED_SAMPLING)
 	float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
-	#elif (0)
-	float2 p2d = Halton(sampleId % sampleCount);
-	float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
-	#elif (1)
-	float2 p2d = BlueNoiseDiskLUT64[sampleId % 64]; // [-1, 1]
-	float3 dir = float3(p2d.x, p2d.y, sqrt(1.0 - dot(p2d.xy, p2d.xy)));
-	//p2d.xy = (p2d.xy + 1.0) * 0.5;
-	//float3 dir = HemisphereSampleCosine(p2d.x, p2d.y);
-	#endif
+#else
+	float3 dir = HemisphereSampleUniform(p2d.x, p2d.y);
+#endif
 	return dir.xyz;
+}
+
+float3x3 ComputeSamplingBasis(const float3 direction)
+{
+	float3x3 sampleTBN;
+	sampleTBN[2] = direction;
+	sampleTBN[0] = (direction.x < 0.7 ? float3(1, 0, 0) : float3(0,-1, 0));
+	sampleTBN[1] = normalize(cross(sampleTBN[2], sampleTBN[0]));
+	sampleTBN[0] = cross(sampleTBN[1], sampleTBN[2]);
+	return sampleTBN;
 }
 
 float3x3 ComputeLightSamplingBasis(const float3 worldPos, const LightDesc lightDesc)
@@ -43,25 +60,12 @@ float3x3 ComputeLightSamplingBasis(const float3 worldPos, const LightDesc lightD
 		dirToLight /= dist;
 		halfAngleTangent = lightDesc.Size / dist;
 	}
-	float3x3 lightTBN;
-	lightTBN[2] = dirToLight;
-	lightTBN[0] = float3(1, 0, 0);
-	lightTBN[1] = normalize(cross(lightTBN[2], lightTBN[0]));
-	lightTBN[0] = cross(lightTBN[1], lightTBN[2]);
-	lightTBN[0] *= halfAngleTangent; 
+
+	float3x3 lightTBN = ComputeSamplingBasis(dirToLight);
+	lightTBN[0] *= halfAngleTangent;
 	lightTBN[1] *= halfAngleTangent;
 
 	return lightTBN;
-}
-
-float3x3 ComputeSamplingBasis(const float3 direction)
-{
-	float3x3 sampleTBN;
-	sampleTBN[2] = direction;
-	sampleTBN[0] = float3(1, 0, 0);
-	sampleTBN[1] = normalize(cross(sampleTBN[2], sampleTBN[0]));
-	sampleTBN[0] = cross(sampleTBN[1], sampleTBN[2]);
-	return sampleTBN;
 }
 
 float2 InterpolatedVertexAttribute2(float2 attributes[3], float3 barycentrics)
@@ -194,7 +198,7 @@ void RayGenMain()
 		float worldDist = length(worldPos - g_SceneCB.CameraPos.xyz);
 		float distBasedEps = worldDist * 5.0e-3;
 
-		uint dispatchConstHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x);
+		uint dispatchConstHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x) % (dispatchSize.x * dispatchSize.y);
 		uint dispatchCrntHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x * (1 + g_SceneCB.FrameNumber * g_SceneCB.PerFrameJitter));
 		float2 dispathNoise2d = BlueNoiseDiskLUT64[dispatchCrntHash % 64];
 		float3x3 dispatchSamplingFrame;
@@ -227,8 +231,9 @@ void RayGenMain()
 				uint sampleIdOfs = g_SceneCB.FrameNumber * g_SceneCB.ShadowSamplesPerLight * g_SceneCB.PerFrameJitter + dispatchConstHash;
 				for (uint isample = 0; isample < g_SceneCB.ShadowSamplesPerLight; ++isample)
 				{
-					float3 sampleDir = GetDiskSampleDirection(isample + sampleIdOfs, sampleCount);
-					ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), lightDirTBN);
+					float3 sampleDir = GetDiskSampleDirection(isample + sampleIdOfs);
+					sampleDir = mul(sampleDir, dispatchSamplingFrame);
+					ray.Direction = mul(sampleDir, lightDirTBN);
 					ray.TMax = (LightType_Directional == lightDesc.Type ? 1.0e+4 : length(lightDesc.Position - ray.Origin) - lightDesc.Size);
 
 					RayDataDirect rayData = (RayDataDirect)0;
@@ -314,8 +319,8 @@ void RayGenMain()
 
 		if (g_SceneCB.IndirectSamplesPerFrame > 0)
 		{
-			#if (RT_REFLECTION_TEST) || (RT_GI_TEST)
-			float rayTraceDist = 100.0;
+			#if (RT_GI) || (RT_REFLECTION)
+			float rayTraceDist = 1000.0;
 			#else
 			float rayTraceDist = 20.0;
 			#endif
@@ -329,9 +334,9 @@ void RayGenMain()
 			uint sampleIdOfs = g_SceneCB.FrameNumber * g_SceneCB.IndirectSamplesPerFrame * g_SceneCB.PerFrameJitter + dispatchConstHash;
 			for (uint isample = 0; isample < g_SceneCB.IndirectSamplesPerFrame; ++isample)
 			{
-				float3 sampleDir = GetHemisphereSampleDirection(isample + sampleIdOfs, sampleCount);
-				ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
-				#if (RT_REFLECTION_TEST)
+				float3 sampleDir = GetHemisphereSampleDirection(dispatchIdx.xy, isample + sampleIdOfs, sampleCount);
+				ray.Direction = mul(sampleDir, surfaceTBN);
+				#if (RT_REFLECTION)
 				// TEST: specular lobe importance sampling
 				if (gbData.Normal.y > 0.9)
 				{
@@ -364,8 +369,14 @@ void RayGenMain()
 					missShaderIndex,
 					ray, rayData);
 
+				// accumulate
+				// BRDF & PDF are applied at this point, albedo during final image lighting evaluation (full resolution)
+				#if (COSINE_WEIGHTED_SAMPLING)
+				indirectLight += rayData.luminance; // pdf = cosO/Pi -> L * cosO * brdf/pdf = L * cosO * (1/Pi)/(cosO/Pi) = L
+				#else
 				float NdotL = saturate(dot(gbData.Normal, ray.Direction));
-				indirectLight += rayData.luminance * NdotL;
+				indirectLight += rayData.luminance * NdotL * 2; // pdf = 1/2Pi -> L * cosO * brdf/pdf = L * cosO * (1/Pi)/(1/2Pi) = L * cosO * 2
+				#endif
 			}
 			indirectLight /= g_SceneCB.IndirectSamplesPerFrame;
 		}
@@ -444,7 +455,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 	const float3 hitWorldPos = WorldRayHitPoint();
 	MaterialInputs material = GetMeshMaterialAtRayHitPoint(attribs);
 
-#if (RT_GI_TEST)
+#if (RT_GI)
 
 	// recursive bounces
 	const uint IndirectLightBounces = min(8, (uint)g_SceneCB.IndirectBouncesCount);
@@ -459,7 +470,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		// sample direction
 		uint3 dispatchIdx = DispatchRaysIndex();
 		uint3 dispatchSize = DispatchRaysDimensions();
-		uint dispatchConstHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x);
+		uint dispatchConstHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x) % (dispatchSize.x * dispatchSize.y);
 		uint dispatchCrntHash = HashUInt(dispatchIdx.x + dispatchIdx.y * dispatchSize.x * (1 + g_SceneCB.FrameNumber * g_SceneCB.PerFrameJitter));
 		float2 dispathNoise2d = BlueNoiseDiskLUT64[dispatchCrntHash % 64];
 		float3x3 dispatchSamplingFrame;
@@ -469,12 +480,15 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		uint sampleId = g_SceneCB.FrameNumber * g_SceneCB.PerFrameJitter + dispatchConstHash;
 		uint sampleCount = g_SceneCB.IndirectAccumulationFrames + 1;
 		float3x3 surfaceTBN = ComputeSamplingBasis(material.normal);
-		//float3 sampleDir = GetHemisphereSampleDirection(sampleId, sampleCount);
 		float2 p2d = Hammersley(sampleId % sampleCount, sampleCount);
+		#if (COSINE_WEIGHTED_SAMPLING)
 		float3 sampleDir = HemisphereSampleCosine(p2d.x, p2d.y);
+		#else
+		float3 sampleDir = HemisphereSampleUniform(p2d.x, p2d.y);
+		#endif
 		ray.Direction = mul(mul(sampleDir, dispatchSamplingFrame), surfaceTBN);
 
-		#if (RT_REFLECTION_TEST)
+		#if (RT_REFLECTION)
 		// TEST: specular lobe importance sampling
 		if (material.normal.y > 0.9)
 		{
@@ -502,8 +516,13 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 			missShaderIndex,
 			ray, rayData);
 
-		float NoL = saturate(dot(material.normal, ray.Direction));
-		rayData.luminance = rayData.luminance * material.baseColor.xyz * NoL * g_SceneCB.DebugVec2[3];
+		#if (COSINE_WEIGHTED_SAMPLING)
+		rayData.luminance *= material.baseColor.xyz;
+		#else
+		float NdotL = saturate(dot(material.normal, ray.Direction));
+		rayData.luminance *= material.baseColor.xyz * NdotL * 2;
+		#endif
+		rayData.luminance *= g_SceneCB.DebugVec2[3];
 	}
 	#if (RT_GI_MIN_FAKE_AMBIENT)
 	else
@@ -567,8 +586,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 
 		float NoL = saturate(dot(lightDir, lightingParams.normal));
 		#if (1)
-		// TODO: check corectness of irradiance intensity
-		directLight += GetLightIntensity(lightingParams, light) * shadowFactor * NoL * lightingParams.diffuseColor.xyz;
+		directLight += GetLightIntensity(lightingParams, light) * shadowFactor * NoL * lightingParams.diffuseColor.xyz * Fd_Lambert();
 		#else
 		shadowFactor *= saturate(NoL * 10.0); // approximate self shadowing at grazing angles
 		float specularOcclusion = shadowFactor;
@@ -579,7 +597,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 
 	// ambient approximation
 	// TODO: consider as fallback when bounces limit reached
-	#if (RT_REFLECTION_TEST) && 0
+	#if (RT_REFLECTION) && 0
 	float3 skyDir = float3(material.normal.x, max(material.normal.y, 0.0), material.normal.z);
 	skyDir = normalize(skyDir * 0.5 + WorldUp);
 	float3 skyLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, skyDir).xyz;

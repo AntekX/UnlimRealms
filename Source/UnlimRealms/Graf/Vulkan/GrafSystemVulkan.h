@@ -23,7 +23,7 @@
 
 #include "Graf/GrafSystem.h"
 #include "vulkan/vulkan.h"
-#include "3rdParty/VulkanMemoryAllocator/vk_mem_alloc.h"
+#include "vma/vk_mem_alloc.h"
 
 namespace UnlimRealms
 {

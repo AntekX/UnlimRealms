@@ -4,9 +4,9 @@
 #include "ShaderLib/CommonTypes.hlsli"
 
 // TEMP
-#define RT_GI_TEST 1
-#define RT_GI_MIN_FAKE_AMBIENT 1
-#define RT_REFLECTION_TEST 0
+#define RT_GI 1
+#define RT_GI_MIN_FAKE_AMBIENT 0
+#define RT_REFLECTION 0
 #define RT_ALPHATEST 0
 #define RT_ALPHATEST_VALUE 0.25
 
@@ -99,23 +99,24 @@ DESCRIPTOR_AccelerationStructure(				g_SceneStructure,				0);
 DESCRIPTOR_ByteAddressBuffer(					g_InstanceBuffer,				1);
 DESCRIPTOR_ByteAddressBuffer(					g_MeshDescBuffer,				2);
 DESCRIPTOR_ByteAddressBuffer(					g_MaterialDescBuffer,			3);
-DESCRIPTOR_Texture2D(float,						g_GeometryDepth,				4);
-DESCRIPTOR_Texture2D(float4,					g_GeometryImage0,				5);
-DESCRIPTOR_Texture2D(float4,					g_GeometryImage1,				6);
-DESCRIPTOR_Texture2D(float4,					g_GeometryImage2,				7);
-DESCRIPTOR_Texture2D(float4,					g_ColorTexture,					8);
-DESCRIPTOR_Texture2D(float4,					g_NormalTexture,				9);
-DESCRIPTOR_Texture2D(float4,					g_MaskTexture,					10);
-DESCRIPTOR_Texture2D(float4,					g_PrecomputedSky,				11);
-DESCRIPTOR_Texture2D(uint4,						g_TracingInfo,					12);
-DESCRIPTOR_Texture2D(float4,					g_ShadowResult,					13);
-DESCRIPTOR_Texture2D(float4,					g_IndirectLight,				14);
-DESCRIPTOR_Texture2D(float,						g_DepthHistory,					15);
-DESCRIPTOR_Texture2D(uint4,						g_TracingHistory,				16);
-DESCRIPTOR_Texture2D(float4,					g_ShadowHistory,				17);
-DESCRIPTOR_Texture2D(float4,					g_IndirectLightHistory,			18);
-DESCRIPTOR_Texture2D(float4,					g_ShadowMips,					19);
-DESCRIPTOR_Texture2D(float4,					g_BlurSource,					20);
+DESCRIPTOR_Texture2D(float4,					g_BlueNoiseImage,				4);
+DESCRIPTOR_Texture2D(float,						g_GeometryDepth,				5);
+DESCRIPTOR_Texture2D(float4,					g_GeometryImage0,				6);
+DESCRIPTOR_Texture2D(float4,					g_GeometryImage1,				7);
+DESCRIPTOR_Texture2D(float4,					g_GeometryImage2,				8);
+DESCRIPTOR_Texture2D(float4,					g_ColorTexture,					9);
+DESCRIPTOR_Texture2D(float4,					g_NormalTexture,				10);
+DESCRIPTOR_Texture2D(float4,					g_MaskTexture,					11);
+DESCRIPTOR_Texture2D(float4,					g_PrecomputedSky,				12);
+DESCRIPTOR_Texture2D(uint4,						g_TracingInfo,					13);
+DESCRIPTOR_Texture2D(float4,					g_ShadowResult,					14);
+DESCRIPTOR_Texture2D(float4,					g_IndirectLight,				15);
+DESCRIPTOR_Texture2D(float,						g_DepthHistory,					16);
+DESCRIPTOR_Texture2D(uint4,						g_TracingHistory,				17);
+DESCRIPTOR_Texture2D(float4,					g_ShadowHistory,				18);
+DESCRIPTOR_Texture2D(float4,					g_IndirectLightHistory,			19);
+DESCRIPTOR_Texture2D(float4,					g_ShadowMips,					20);
+DESCRIPTOR_Texture2D(float4,					g_BlurSource,					21);
 DESCRIPTOR_RWTexture2D(float4,					g_PrecomputedSkyTarget,			0);
 DESCRIPTOR_RWTexture2D(float4,					g_LightingTarget,				1);
 DESCRIPTOR_RWTexture2D(uint4,					g_TracingInfoTarget,			2);

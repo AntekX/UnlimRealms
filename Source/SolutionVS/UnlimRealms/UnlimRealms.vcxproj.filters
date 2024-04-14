@@ -303,9 +303,6 @@
     <ClInclude Include="..\..\UnlimRealms\Graf\GrafRenderer.inline.h">
       <Filter>Graf</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\3rdParty\VulkanMemoryAllocator\vk_mem_alloc.h">
-      <Filter>3rdParty\VulkanMemoryAllocator</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\UnlimRealms\ShaderLib\LightingCommon.h">
       <Filter>ShaderLib</Filter>
     </ClInclude>
@@ -783,9 +780,6 @@
     </Filter>
     <Filter Include="Graf\Vulkan">
       <UniqueIdentifier>{b997b7e5-03d4-486e-976b-cd917e550a6f}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="3rdParty\VulkanMemoryAllocator">
-      <UniqueIdentifier>{39c5ecb3-0375-4fe3-84cc-b10897eb37c5}</UniqueIdentifier>
     </Filter>
     <Filter Include="3rdParty\TinyObjLoader">
       <UniqueIdentifier>{a1e2dd6b-336e-4adf-8187-c50c4ed725cb}</UniqueIdentifier>
