@@ -530,7 +530,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		float3 skyDir = float3(material.normal.x, max(material.normal.y, 0.0), material.normal.z);
 		skyDir = normalize(skyDir * 0.5 + WorldUp);
 		float3 ambientLight = GetSkyLight(g_SceneCB, g_PrecomputedSky, g_SamplerBilinearWrap, hitWorldPos, skyDir).xyz;
-		rayData.luminance = ambientLight / ComputeLuminance(ambientLight) * g_SceneCB.DebugVec1[0];
+		rayData.luminance = ambientLight * g_SceneCB.DebugVec1[0];
 	}
 	#endif
 

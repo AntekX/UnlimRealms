@@ -5,7 +5,7 @@
 
 // TEMP
 #define RT_GI 1
-#define RT_GI_MIN_FAKE_AMBIENT 0
+#define RT_GI_MIN_FAKE_AMBIENT 1
 #define RT_REFLECTION 0
 #define RT_ALPHATEST 0
 #define RT_ALPHATEST_VALUE 0.25
