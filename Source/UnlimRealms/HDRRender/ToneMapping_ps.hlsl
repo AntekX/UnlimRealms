@@ -15,6 +15,49 @@ Texture2D HDRTexture	: register(t0);
 Texture2D LumTexture	: register(t1);
 Texture2D BloomTexture	: register(t2);
 
+#define TONEMAP_ACES_FITTED 1
+#define TONEMAP_ACES_FILMIC 2
+#define TONEMAP_UNCHARTED 3
+#define TONEMAP_REINHARD 4
+#define TONEMAP_TYPE TONEMAP_ACES_FILMIC
+
+// sRGB => XYZ => D65_2_D60 => AP1 => RRT_SAT
+static const float3x3 ACESInputMat =
+{
+	{0.59719, 0.35458, 0.04823},
+	{0.07600, 0.90834, 0.01566},
+	{0.02840, 0.13383, 0.83777}
+};
+
+// ODT_SAT => XYZ => D60_2_D65 => sRGB
+static const float3x3 ACESOutputMat =
+{
+	{ 1.60475, -0.53108, -0.07367},
+	{-0.10208,  1.10813, -0.00605},
+	{-0.00327, -0.07276,  1.07602}
+};
+
+float3 RRTAndODTFit(float3 v)
+{
+	float3 a = v * (v + 0.0245786f) - 0.000090537f;
+	float3 b = v * (0.983729f * v + 0.4329510f) + 0.238081f;
+	return a / b;
+}
+
+float3 ACESFitted(float3 color)
+{
+	color = mul(ACESInputMat, color);
+
+	// Apply RRT and ODT
+	color = RRTAndODTFit(color);
+
+	color = mul(ACESOutputMat, color);
+
+	// Clamp to [0, 1]
+	color = saturate(color);
+
+	return color;
+}
 
 float4 filmicF(float4 x)
 {
@@ -74,13 +117,15 @@ float4 main(GenericQuadVertex input) : SV_Target
 
 	// apply tonemapping
 
-#if (0)
+#if (TONEMAP_ACES_FITTED == TONEMAP_TYPE)
+	color.xyz = ACESFitted(color.xyz) / ACESFitted(LumWhite);
+#elif (TONEMAP_ACES_FILMIC == TONEMAP_TYPE)
 	// ACES filmic
 	color = filmicACES(color) / filmicACES(LumWhite);
-#elif (1)
+#elif (TONEMAP_UNCHARTED == TONEMAP_TYPE)
 	// Filmic Uncharted2
 	color = filmicF(color) / filmicF(LumWhite);
-#elif (0)
+#elif (TONEMAP_REINHARD == TONEMAP_TYPE)
 	// Simple
 	color = color / (color + 1.0);
 #endif
