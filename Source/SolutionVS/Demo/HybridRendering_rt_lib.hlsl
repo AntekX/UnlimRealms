@@ -43,7 +43,7 @@ float3 GetHemisphereSampleDirection(uint2 imagePos, uint sampleSeed, uint sample
 	float2 p2d = Rand2D(float2(imagePos) + float2(sampleSeed + sampleId, 0));
 #elif (1)
 	float2 p2d = Hammersley((sampleSeed + sampleId) % 0xffff, 0xffff);
-#elif (1)
+#elif (0)
 	float2 p2d = Halton(sampleSeed + sampleId);
 #elif (0)
 	float2 p2d = (BlueNoiseDiskLUT64[(sampleSeed + sampleId) % 64] + 1.0) * 0.5;
