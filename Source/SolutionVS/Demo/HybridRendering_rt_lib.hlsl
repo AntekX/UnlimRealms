@@ -11,24 +11,42 @@ float3 GetDiskSampleDirection(uint sampleId)
 	return float3(dir2d.xy, 1.0);
 }
 
-float3 GetHemisphereSampleDirection(uint2 imagePos, uint samplingSeed, uint accumulatedSampleCount)
+static const uint2 NoiseImageSize = uint2(64, 64);
+static const uint NoiseImageTransformCount = 4;
+static const float2x2 NoiseImageTransform[NoiseImageTransformCount] = {
+	{ 1, 0, 0, 1 },
+	{ 0,-1, 1, 0 },
+	{-1, 0, 0,-1 },
+	{ 0, 1,-1, 0 },
+	//{-1, 0, 0, 1 },
+	//{ 1, 0, 0,-1 },
+};
+
+float3 GetHemisphereSampleDirection(uint2 imagePos, uint sampleSeed, uint sampleId, uint accumulatedSampleCount)
 {
 	// 2d random point
-#if (1)
-	uint noiseImageSize = 64;
-	uint noiseImageSampleCount = noiseImageSize * noiseImageSize;
-	uint sampleId = samplingSeed % noiseImageSampleCount;
-	uint2 samplePos = uint2(sampleId % noiseImageSize, sampleId / noiseImageSize);
+#if (0)
+	#if (1)
+	uint2 noiseSamplePos = (imagePos.xy % NoiseImageSize.xy);
+	uint noiseSampleId = (noiseSamplePos.x + noiseSamplePos.y * NoiseImageSize.x + sampleSeed + sampleId) % (NoiseImageSize.x * NoiseImageSize.y);
+	noiseSamplePos = uint2(noiseSampleId % NoiseImageSize.x, noiseSampleId / NoiseImageSize.y);
+	float2 p2d = g_BlueNoiseImage.Load(int3(noiseSamplePos.xy, 0)).xy;
+	#else
+	uint2 quadPos = uint2(floor(imagePos.x / NoiseImageSize.x), floor(imagePos.y / NoiseImageSize.y));
+	uint2 quadCount = ceil(g_SceneCB.TargetSize.xy / NoiseImageSize.xy);
+	uint quadHash = HashUInt((quadPos.x + quadPos.y * quadCount.x) * (sampleId + 1)) % (quadCount.x * quadCount.y);
+	uint transfromId = uint(quadPos.x + quadPos.y * quadCount.x + quadHash + g_SceneCB.FrameNumber) % NoiseImageTransformCount;
+	uint2 samplePos = uint2(mul(float2(imagePos % NoiseImageSize), NoiseImageTransform[transfromId]) + NoiseImageSize) % NoiseImageSize;
 	float2 p2d = g_BlueNoiseImage.Load(int3(samplePos.xy, 0)).xy;
+	#endif
 #elif (0)
-	float2 p2d = Rand2D(float2(imagePos) + float2(samplingSeed, 0));
+	float2 p2d = Rand2D(float2(imagePos) + float2(sampleSeed + sampleId, 0));
+#elif (1)
+	float2 p2d = Hammersley((sampleSeed + sampleId) % 0xffff, 0xffff);
+#elif (1)
+	float2 p2d = Halton(sampleSeed + sampleId);
 #elif (0)
-	float2 p2d = Hammersley(samplingSeed + 1, accumulatedSampleCount + 1);
-#elif (0)
-	float2 p2d = Halton(samplingSeed);
-#elif (0)
-	float2 p2d = BlueNoiseDiskLUT64[samplingSeed % 64];
-	return float3(p2d, sqrt(1.0 - dot(p2d, p2d)));
+	float2 p2d = (BlueNoiseDiskLUT64[(sampleSeed + sampleId) % 64] + 1.0) * 0.5;
 #endif
 	// direction
 #if (COSINE_WEIGHTED_SAMPLING)
@@ -331,17 +349,17 @@ void RayGenMain()
 
 			float3x3 surfaceTBN = ComputeSamplingBasis(gbData.Normal);
 			uint sampleCount = g_SceneCB.IndirectSamplesPerFrame * (g_SceneCB.IndirectAccumulationFrames + 1);
-			uint sampleIdOfs = g_SceneCB.FrameNumber * g_SceneCB.IndirectSamplesPerFrame * g_SceneCB.PerFrameJitter + dispatchConstHash;
+			uint sampleSeed = g_SceneCB.FrameNumber * g_SceneCB.IndirectSamplesPerFrame * g_SceneCB.PerFrameJitter + dispatchConstHash;
 			for (uint isample = 0; isample < g_SceneCB.IndirectSamplesPerFrame; ++isample)
 			{
-				float3 sampleDir = GetHemisphereSampleDirection(dispatchIdx.xy, isample + sampleIdOfs, sampleCount);
+				float3 sampleDir = GetHemisphereSampleDirection(dispatchIdx.xy, sampleSeed, isample, sampleCount);
 				ray.Direction = mul(sampleDir, surfaceTBN);
 				#if (RT_REFLECTION)
 				// TEST: specular lobe importance sampling
 				if (gbData.Normal.y > 0.9)
 				{
 					float3 viewVec = normalize(g_SceneCB.CameraPos.xyz - worldPos);
-					float2 xi = Hammersley((isample + sampleIdOfs) % sampleCount, sampleCount);
+					float2 xi = Hammersley((isample + sampleSeed) % sampleCount, sampleCount);
 					xi = mul(float3(xi.xy, 1.0), dispatchSamplingFrame).xy;
 					ray.Direction = ImportanceSampleGGX(xi, g_SceneCB.Material.Roughness, gbData.Normal, viewVec);
 				}
