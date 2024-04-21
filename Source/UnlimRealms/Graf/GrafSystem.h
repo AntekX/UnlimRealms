@@ -56,7 +56,6 @@ namespace UnlimRealms
 		ur_uint32 ShaderGroupHandleSize;
 		ur_uint32 ShaderGroupBaseAlignment;
 		ur_uint32 RecursionDepthMax;
-		ur_uint64 GeometryCountMax;
 		ur_uint64 InstanceCountMax;
 		ur_uint64 PrimitiveCountMax;
 	};

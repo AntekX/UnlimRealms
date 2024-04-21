@@ -177,7 +177,6 @@ namespace UnlimRealms
 			grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1);
 			grafDeviceDesc.RayTracing.ShaderGroupHandleSize = 8;
 			grafDeviceDesc.RayTracing.RecursionDepthMax = ~ur_uint32(0);
-			grafDeviceDesc.RayTracing.GeometryCountMax = ~ur_uint64(0);
 			grafDeviceDesc.RayTracing.InstanceCountMax = ~ur_uint64(0);
 			grafDeviceDesc.RayTracing.PrimitiveCountMax = ~ur_uint64(0);
 		}

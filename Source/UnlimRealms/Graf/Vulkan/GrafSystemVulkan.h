@@ -16,10 +16,6 @@
 #endif
 
 #define UR_GRAF_VULKAN_RAY_TRACING_KHR 1 // enables KHR ray tracing support
-#define UR_GRAF_VULKAN_RAY_TRACING_KHR_PROV 0 // TEMP: enbale provisionary version
-#if (UR_GRAF_VULKAN_RAY_TRACING_KHR_PROV)
-#define VK_ENABLE_BETA_EXTENSIONS
-#endif
 
 #include "Graf/GrafSystem.h"
 #include "vulkan/vulkan.h"
