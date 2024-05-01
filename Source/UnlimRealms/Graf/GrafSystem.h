@@ -631,7 +631,8 @@ namespace UnlimRealms
 		AllowUpdate = (1 << 0),
 		AllowCompaction = (1 << 1),
 		PreferFastTrace = (1 << 2),
-		PreferFastBuild = (1 << 3)
+		PreferFastBuild = (1 << 3),
+		MinimizeMemory = (1 << 4)
 	};
 	typedef ur_uint GrafAccelerationStructureBuildFlags;
 
@@ -677,8 +678,8 @@ namespace UnlimRealms
 	struct UR_DECL GrafAccelerationStructureTrianglesData
 	{
 		GrafFormat VertexFormat;
-		ur_size VertexStride;
-		ur_size VertexCount;
+		ur_uint32 VertexStride;
+		ur_uint32 VertexCount;
 		ur_uint64 VerticesDeviceAddress;
 		void* VerticesHostAddress;
 		GrafIndexType IndexType;
@@ -699,7 +700,7 @@ namespace UnlimRealms
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GrafAccelerationStructureAabbsData
 	{
-		ur_size Stride;
+		ur_uint32 Stride;
 		ur_uint64 DeviceAddress;
 		void* HostAddress;
 	};

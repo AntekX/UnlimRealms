@@ -319,7 +319,7 @@ namespace UnlimRealms
 
 		inline GrafDeviceDX12::CommandAllocator* GetCommandAllocator() const;
 
-		inline ID3D12GraphicsCommandList1* GetD3DCommandList() const;
+		inline ID3D12GraphicsCommandList4* GetD3DCommandList() const;
 
 	private:
 
@@ -328,7 +328,7 @@ namespace UnlimRealms
 		Result Deinitialize();
 
 		GrafDeviceDX12::CommandAllocator* commandAllocator;
-		shared_ref<ID3D12GraphicsCommandList1> d3dCommandList;
+		shared_ref<ID3D12GraphicsCommandList4> d3dCommandList;
 		ur_bool closed;
 		ur_uint64 submitFenceValue;
 	};
@@ -771,6 +771,7 @@ namespace UnlimRealms
 		Result Deinitialize();
 
 		std::unique_ptr<GrafBuffer> grafScratchBuffer;
+		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO d3dPrebuildInfo;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -802,8 +803,14 @@ namespace UnlimRealms
 		static inline D3D12_PRIMITIVE_TOPOLOGY GrafToD3DPrimitiveTopology(GrafPrimitiveTopology topology);
 		static inline D3D12_PRIMITIVE_TOPOLOGY_TYPE GrafToD3DPrimitiveTopologyType(GrafPrimitiveTopology topology);
 		static inline const char* ParseVertexElementSemantic(const std::string& semantic, std::string& semanticName, ur_uint& semanticIdx);
+		static inline DXGI_FORMAT GrafToDXGIFormat(GrafIndexType indexType);
 		static inline DXGI_FORMAT GrafToDXGIFormat(GrafFormat grafFormat);
 		static inline GrafFormat DXGIToGrafFormat(DXGI_FORMAT dxgiFormat);
+		//static inline VkRayTracingShaderGroupTypeKHR GrafToVkRayTracingShaderGroupType(GrafRayTracingShaderGroupType shaderGroupType);
+		static inline D3D12_RAYTRACING_GEOMETRY_TYPE GrafToD3DAccelerationStructureGeometryType(GrafAccelerationStructureGeometryType geometryType);
+		static inline D3D12_RAYTRACING_GEOMETRY_FLAGS GrafToD3DAccelerationStructureGeometryFlags(GrafAccelerationStructureGeometryFlags geometryFlags);
+		static inline D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE GrafToD3DAccelerationStructureType(GrafAccelerationStructureType structureType);
+		static inline D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS GrafToD3DAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlags buildFlags);
 	};
 
 } // end namespace UnlimRealms

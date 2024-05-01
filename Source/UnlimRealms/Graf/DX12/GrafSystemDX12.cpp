@@ -501,7 +501,7 @@ namespace UnlimRealms
 			{
 				GrafCommandListDX12* grafCommandListDX12 = static_cast<GrafCommandListDX12*>(grafCommandList);
 				GrafDeviceDX12::CommandAllocator* grafCmdAllocator = grafCommandListDX12->GetCommandAllocator();
-				ID3D12GraphicsCommandList1* d3dGraphicsCommandList = grafCommandListDX12->GetD3DCommandList();
+				ID3D12GraphicsCommandList4* d3dGraphicsCommandList = grafCommandListDX12->GetD3DCommandList();
 
 				// execute
 				ID3D12CommandList* d3dCommandLists[] = { d3dGraphicsCommandList };
@@ -1300,7 +1300,88 @@ namespace UnlimRealms
 
 	Result GrafCommandListDX12::BuildAccelerationStructure(GrafAccelerationStructure* dstStructrure, GrafAccelerationStructureGeometryData* geometryData, ur_uint geometryCount)
 	{
-		return Result(NotImplemented);
+		GrafAccelerationStructureDX12* dstStructureDX12 = static_cast<GrafAccelerationStructureDX12*>(dstStructrure);
+		if (ur_null == dstStructureDX12 || ur_null == dstStructureDX12->GetScratchBuffer() || ur_null == geometryData || 0 == geometryCount)
+			return Result(InvalidArgs);
+
+		// fill geometry data structures
+
+		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC d3dBuildDesc = {};
+		d3dBuildDesc.DestAccelerationStructureData = D3D12_GPU_VIRTUAL_ADDRESS(dstStructureDX12->GetDeviceAddress());
+		d3dBuildDesc.SourceAccelerationStructureData = D3D12_GPU_VIRTUAL_ADDRESS(0);
+		d3dBuildDesc.ScratchAccelerationStructureData = D3D12_GPU_VIRTUAL_ADDRESS(dstStructureDX12->GetScratchBuffer()->GetDeviceAddress());
+		d3dBuildDesc.Inputs.Type = GrafUtilsDX12::GrafToD3DAccelerationStructureType(dstStructureDX12->GetStructureType());
+		d3dBuildDesc.Inputs.Flags = GrafUtilsDX12::GrafToD3DAccelerationStructureBuildFlags(dstStructureDX12->GetStructureBuildFlags());
+		d3dBuildDesc.Inputs.NumDescs = geometryCount;
+		d3dBuildDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+
+		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> d3dGeometryDescArray;
+		if (GrafAccelerationStructureType::TopLevel == dstStructureDX12->GetStructureType())
+		{
+			for (ur_uint32 igeom = 0; igeom < geometryCount; ++igeom)
+			{
+				GrafAccelerationStructureGeometryData& geometry = geometryData[igeom];
+				if (ur_null == geometry.InstancesData || 0 == geometry.InstancesData->DeviceAddress)
+				{
+					LogError(std::string("GrafCommandListDX12::BuildAccelerationStructure: top level AS must have instance data with valid device address"));
+					return Result(InvalidArgs);
+				}
+				if (geometry.InstancesData->IsPointersArray)
+				{
+					LogError(std::string("GrafCommandListDX12::BuildAccelerationStructure: IsPointersArray per geomtry is not supported"));
+					return Result(InvalidArgs);
+				}
+				d3dBuildDesc.Inputs.InstanceDescs = geometryData->InstancesData->DeviceAddress;
+			}
+		}
+		else if (GrafAccelerationStructureType::BottomLevel == dstStructureDX12->GetStructureType())
+		{
+			d3dGeometryDescArray.resize(geometryCount);
+			for (ur_uint32 igeom = 0; igeom < geometryCount; ++igeom)
+			{
+				GrafAccelerationStructureGeometryData& geometry = geometryData[igeom];
+				D3D12_RAYTRACING_GEOMETRY_DESC& d3dGeometryDesc = d3dGeometryDescArray[igeom];
+				d3dGeometryDesc = {};
+				d3dGeometryDesc.Type = GrafUtilsDX12::GrafToD3DAccelerationStructureGeometryType(geometry.GeometryType);
+				d3dGeometryDesc.Flags = GrafUtilsDX12::GrafToD3DAccelerationStructureGeometryFlags(geometry.GeometryFlags);
+				if (GrafAccelerationStructureGeometryType::Triangles == geometry.GeometryType)
+				{
+					if (ur_null == geometry.TrianglesData || 0 == geometry.TrianglesData->VerticesDeviceAddress)
+					{
+						LogError(std::string("GrafCommandListDX12::BuildAccelerationStructure: bottom level AS triangles data is invalid"));
+						return Result(InvalidArgs);
+					}
+					D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC& d3dGeometryTriangles = d3dGeometryDesc.Triangles;
+					d3dGeometryTriangles.IndexFormat = GrafUtilsDX12::GrafToDXGIFormat(geometry.TrianglesData->IndexType);
+					d3dGeometryTriangles.VertexFormat = GrafUtilsDX12::GrafToDXGIFormat(geometry.TrianglesData->VertexFormat);
+					d3dGeometryTriangles.IndexCount = geometry.PrimitiveCount * 3;
+					d3dGeometryTriangles.VertexCount = geometry.TrianglesData->VertexCount;
+					d3dGeometryTriangles.VertexBuffer.StrideInBytes = geometry.TrianglesData->VertexStride;
+					d3dGeometryTriangles.VertexBuffer.StartAddress = geometry.TrianglesData->VerticesDeviceAddress;
+					d3dGeometryTriangles.IndexBuffer = geometry.TrianglesData->IndicesDeviceAddress;
+					d3dGeometryTriangles.Transform3x4 = geometry.TrianglesData->TransformsDeviceAddress;
+				}
+				else if (GrafAccelerationStructureGeometryType::AABBs == geometry.GeometryType)
+				{
+					if (ur_null == geometry.AabbsData || 0 == geometry.AabbsData->DeviceAddress)
+					{
+						LogError(std::string("GrafCommandListDX12::BuildAccelerationStructure: bottom level AS aabbs data is invalid"));
+						return Result(InvalidArgs);
+					}
+					D3D12_RAYTRACING_GEOMETRY_AABBS_DESC& d3dGeometryAabbs = d3dGeometryDesc.AABBs;
+					d3dGeometryAabbs.AABBCount = geometry.PrimitiveCount;
+					d3dGeometryAabbs.AABBs.StrideInBytes = geometry.AabbsData->Stride;
+					d3dGeometryAabbs.AABBs.StartAddress = D3D12_GPU_VIRTUAL_ADDRESS(geometry.AabbsData->DeviceAddress);
+				}
+			}
+			d3dBuildDesc.Inputs.pGeometryDescs = d3dGeometryDescArray.data();
+		}
+
+		// build
+
+		this->d3dCommandList->BuildRaytracingAccelerationStructure(&d3dBuildDesc, 0, ur_null);
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::BindRayTracingPipeline(GrafRayTracingPipeline* grafPipeline)
@@ -3161,12 +3242,95 @@ namespace UnlimRealms
 
 	Result GrafAccelerationStructureDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		this->grafScratchBuffer.reset();
+		this->d3dPrebuildInfo = {};
+
+		return Result(Success);
 	}
 
 	Result GrafAccelerationStructureDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		GrafAccelerationStructure::Initialize(grafDevice, initParams);
+
+		// validate device
+
+		GrafSystemDX12& grafSystemDX12 = static_cast<GrafSystemDX12&>(this->GetGrafSystem());
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafAccelerationStructureDX12: failed to initialize, invalid GrafDevice"));
+		}
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		// request prebuild info
+
+		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS d3dBuildInputs = {};
+		d3dBuildInputs.Type = GrafUtilsDX12::GrafToD3DAccelerationStructureType(initParams.StructureType);
+		d3dBuildInputs.Flags = GrafUtilsDX12::GrafToD3DAccelerationStructureBuildFlags(initParams.BuildFlags);
+		d3dBuildInputs.NumDescs = initParams.GeometryCount;
+		d3dBuildInputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+
+		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> d3dGeometryDescArray;
+		if (GrafAccelerationStructureType::TopLevel == initParams.StructureType)
+		{
+			d3dBuildInputs.InstanceDescs = D3D12_GPU_VIRTUAL_ADDRESS(0); // not required for prebuild
+		}
+		else if (GrafAccelerationStructureType::BottomLevel == initParams.StructureType)
+		{
+			d3dGeometryDescArray.resize(initParams.GeometryCount);
+			for (ur_uint32 igeom = 0; igeom < initParams.GeometryCount; ++igeom)
+			{
+				GrafAccelerationStructureGeometryDesc& grafGeometryDesc = initParams.Geometry[igeom];
+				D3D12_RAYTRACING_GEOMETRY_DESC& d3dGeometryDesc = d3dGeometryDescArray[igeom];
+				d3dGeometryDesc = {};
+				d3dGeometryDesc.Type = GrafUtilsDX12::GrafToD3DAccelerationStructureGeometryType(grafGeometryDesc.GeometryType);
+				d3dGeometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+				if (GrafAccelerationStructureGeometryType::Triangles == grafGeometryDesc.GeometryType)
+				{
+					D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC& d3dGeometryTriangles = d3dGeometryDesc.Triangles;
+					d3dGeometryTriangles.IndexFormat = GrafUtilsDX12::GrafToDXGIFormat(grafGeometryDesc.IndexType);
+					d3dGeometryTriangles.VertexFormat = GrafUtilsDX12::GrafToDXGIFormat(grafGeometryDesc.VertexFormat);
+					d3dGeometryTriangles.IndexCount = grafGeometryDesc.PrimitiveCountMax * 3;
+					d3dGeometryTriangles.VertexCount = grafGeometryDesc.VertexCountMax;
+					d3dGeometryTriangles.VertexBuffer.StrideInBytes = grafGeometryDesc.VertexStride;
+					d3dGeometryTriangles.Transform3x4 = D3D12_GPU_VIRTUAL_ADDRESS(0); // not required for prebuild
+					d3dGeometryTriangles.IndexBuffer = D3D12_GPU_VIRTUAL_ADDRESS(0);
+					d3dGeometryTriangles.VertexBuffer.StartAddress = D3D12_GPU_VIRTUAL_ADDRESS(0);
+				}
+				else if (GrafAccelerationStructureGeometryType::AABBs == grafGeometryDesc.GeometryType)
+				{
+					D3D12_RAYTRACING_GEOMETRY_AABBS_DESC& d3dGeometryAabbs = d3dGeometryDesc.AABBs;
+					d3dGeometryAabbs.AABBCount = grafGeometryDesc.PrimitiveCountMax;
+					d3dGeometryAabbs.AABBs.StrideInBytes = 0;
+					d3dGeometryAabbs.AABBs.StartAddress = D3D12_GPU_VIRTUAL_ADDRESS(0); // not required for prebuild
+				}
+			}
+			d3dBuildInputs.pGeometryDescs = d3dGeometryDescArray.data();
+		}
+
+		d3dDevice->GetRaytracingAccelerationStructurePrebuildInfo(&d3dBuildInputs, &this->d3dPrebuildInfo);
+
+		// scratch buffer
+
+		Result res = grafSystemDX12.CreateBuffer(this->grafScratchBuffer);
+		if (Succeeded(res))
+		{
+			GrafBuffer::InitParams scrathBufferParams = {};
+			scrathBufferParams.BufferDesc.Usage = GrafBufferUsageFlags(ur_uint(GrafBufferUsageFlag::AccelerationStructure) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress));
+			scrathBufferParams.BufferDesc.MemoryType = GrafDeviceMemoryFlags(GrafDeviceMemoryFlag::GpuLocal);
+			scrathBufferParams.BufferDesc.SizeInBytes = std::max(this->d3dPrebuildInfo.ScratchDataSizeInBytes, this->d3dPrebuildInfo.UpdateScratchDataSizeInBytes);
+
+			res = this->grafScratchBuffer->Initialize(grafDeviceDX12, scrathBufferParams);
+		}
+		if (Failed(res))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, "GrafAccelerationStructureDX12: failed to create scratch buffer");
+		}
+
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3590,6 +3754,65 @@ namespace UnlimRealms
 			semanticName = semantic;
 		}
 		return semanticName.c_str();
+	}
+
+	D3D12_RAYTRACING_GEOMETRY_TYPE GrafUtilsDX12::GrafToD3DAccelerationStructureGeometryType(GrafAccelerationStructureGeometryType geometryType)
+	{
+		D3D12_RAYTRACING_GEOMETRY_TYPE d3dGeometryType = D3D12_RAYTRACING_GEOMETRY_TYPE(-1);
+		switch (geometryType)
+		{
+		case GrafAccelerationStructureGeometryType::Triangles: d3dGeometryType = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES; break;
+		case GrafAccelerationStructureGeometryType::AABBs: d3dGeometryType = D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS; break;
+		};
+		return d3dGeometryType;
+	}
+
+	D3D12_RAYTRACING_GEOMETRY_FLAGS GrafUtilsDX12::GrafToD3DAccelerationStructureGeometryFlags(GrafAccelerationStructureGeometryFlags geometryFlags)
+	{
+		D3D12_RAYTRACING_GEOMETRY_FLAGS d3dGeometryFlags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+		if (ur_uint(GrafAccelerationStructureGeometryFlag::Opaque) & geometryFlags)
+			d3dGeometryFlags |= D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+		if (ur_uint(GrafAccelerationStructureGeometryFlag::NoDuplicateAnyHit) & geometryFlags)
+			d3dGeometryFlags |= D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
+		return d3dGeometryFlags;
+	}
+
+	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE GrafUtilsDX12::GrafToD3DAccelerationStructureType(GrafAccelerationStructureType structureType)
+	{
+		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE d3dAccelStructType = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE(-1);
+		switch (structureType)
+		{
+		case GrafAccelerationStructureType::TopLevel: d3dAccelStructType = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL; break;
+		case GrafAccelerationStructureType::BottomLevel: d3dAccelStructType = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL; break;
+		};
+		return d3dAccelStructType;
+	}
+
+	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS GrafUtilsDX12::GrafToD3DAccelerationStructureBuildFlags(GrafAccelerationStructureBuildFlags buildFlags)
+	{
+		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS d3dAccelStructBuildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
+		if (ur_uint(GrafAccelerationStructureBuildFlag::AllowUpdate) & buildFlags)
+			d3dAccelStructBuildFlags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+		if (ur_uint(GrafAccelerationStructureBuildFlag::AllowCompaction) & buildFlags)
+			d3dAccelStructBuildFlags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+		if (ur_uint(GrafAccelerationStructureBuildFlag::PreferFastTrace) & buildFlags)
+			d3dAccelStructBuildFlags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+		if (ur_uint(GrafAccelerationStructureBuildFlag::PreferFastBuild) & buildFlags)
+			d3dAccelStructBuildFlags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+		if (ur_uint(GrafAccelerationStructureBuildFlag::MinimizeMemory) & buildFlags)
+			d3dAccelStructBuildFlags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_MINIMIZE_MEMORY;
+		return d3dAccelStructBuildFlags;
+	}
+
+	DXGI_FORMAT GrafUtilsDX12::GrafToDXGIFormat(GrafIndexType indexType)
+	{
+		DXGI_FORMAT dxgiIndexFormat = DXGI_FORMAT_UNKNOWN;
+		switch (indexType)
+		{
+		case GrafIndexType::UINT16: dxgiIndexFormat = DXGI_FORMAT_R16_UINT; break;
+		case GrafIndexType::UINT32: dxgiIndexFormat = DXGI_FORMAT_R32_UINT; break;
+		};
+		return dxgiIndexFormat;
 	}
 
 	static const DXGI_FORMAT GrafToDXGIFormatLUT[ur_uint(GrafFormat::Count)] = {

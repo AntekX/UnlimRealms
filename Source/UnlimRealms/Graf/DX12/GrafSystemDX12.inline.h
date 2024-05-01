@@ -85,7 +85,7 @@ namespace UnlimRealms
 		return this->commandAllocator;
 	}
 
-	inline ID3D12GraphicsCommandList1* GrafCommandListDX12::GetD3DCommandList() const
+	inline ID3D12GraphicsCommandList4* GrafCommandListDX12::GetD3DCommandList() const
 	{
 		return this->d3dCommandList.get();
 	}

@@ -349,7 +349,7 @@ int RayTracingSandboxApp::Run()
 
 				GrafAccelerationStructureTrianglesData trianglesData = {};
 				trianglesData.VertexFormat = GrafFormat::R32G32B32_SFLOAT;
-				trianglesData.VertexStride = vertexStride;
+				trianglesData.VertexStride = ur_uint32(vertexStride);
 				trianglesData.VertexCount = ur_uint32(verticesCount);
 				trianglesData.VerticesDeviceAddress = vertexBuffer->GetDeviceAddress() + this->vertexBufferRegion.Offset;
 				trianglesData.IndexType = indexType;
