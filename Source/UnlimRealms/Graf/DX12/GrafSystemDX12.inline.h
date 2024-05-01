@@ -273,6 +273,16 @@ namespace UnlimRealms
 		return this->d3dRootSignature.get();
 	}
 
+	inline ID3D12StateObject* GrafRayTracingPipelineDX12::GetD3DStateObject() const
+	{
+		return this->d3dStateObject.get();
+	}
+
+	inline ID3D12RootSignature* GrafRayTracingPipelineDX12::GetD3DRootSignature() const
+	{
+		return this->d3dRootSignature.get();
+	}
+
 	inline GrafBuffer* GrafAccelerationStructureDX12::GetScratchBuffer() const
 	{
 		return this->grafScratchBuffer.get();

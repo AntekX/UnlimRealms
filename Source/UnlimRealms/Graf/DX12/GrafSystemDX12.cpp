@@ -1386,7 +1386,17 @@ namespace UnlimRealms
 
 	Result GrafCommandListDX12::BindRayTracingPipeline(GrafRayTracingPipeline* grafPipeline)
 	{
-		return Result(NotImplemented);
+		if (ur_null == grafPipeline)
+			return Result(InvalidArgs);
+
+		GrafRayTracingPipelineDX12* grafPipelineDX12 = static_cast<GrafRayTracingPipelineDX12*>(grafPipeline);
+
+		this->d3dCommandList->SetPipelineState1(grafPipelineDX12->GetD3DStateObject());
+
+		// TODO
+		//this->d3dCommandList->SetComputeRootSignature(grafPipelineDX12->GetD3DRootSignature());
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::BindRayTracingDescriptorTable(GrafDescriptorTable* descriptorTable, GrafRayTracingPipeline* grafPipeline)
@@ -3192,12 +3202,170 @@ namespace UnlimRealms
 
 	Result GrafRayTracingPipelineDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		this->d3dRootSignature.reset(ur_null);
+		this->d3dStateObject.reset(ur_null);
+
+		return Result(Success);
 	}
 
 	Result GrafRayTracingPipelineDX12::Initialize(GrafDevice *grafDevice, const InitParams& initParams)
 	{
-		return Result(NotImplemented);
+		this->Deinitialize();
+
+		GrafRayTracingPipeline::Initialize(grafDevice, initParams);
+
+		// validate device
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafRayTracingPipelineDX12: failed to initialize, invalid GrafDevice"));
+		}
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		// shader library
+
+		std::vector<std::wstring> shaderLibEntryPoints;
+		shaderLibEntryPoints.resize(initParams.ShaderStageCount);
+		for (ur_uint ishader = 0; ishader < initParams.ShaderStageCount; ++ishader)
+		{
+			StringToWstring(initParams.ShaderStages[ishader]->GetEntryPoint(), shaderLibEntryPoints[ishader]);
+		}
+
+		std::vector<D3D12_EXPORT_DESC> d3dShaderLibExports;
+		d3dShaderLibExports.resize(initParams.ShaderStageCount);
+		for (ur_uint ishader = 0; ishader < initParams.ShaderStageCount; ++ishader)
+		{
+			D3D12_EXPORT_DESC& d3dExportDesc = d3dShaderLibExports[ishader];
+			d3dExportDesc = {};
+			d3dExportDesc.Name = shaderLibEntryPoints[ishader].c_str();
+		}
+
+		D3D12_DXIL_LIBRARY_DESC d3dShaderLibDesc = {};
+		d3dShaderLibDesc.NumExports = (UINT)d3dShaderLibExports.size();
+		d3dShaderLibDesc.pExports = d3dShaderLibExports.data();
+		d3dShaderLibDesc.DXILLibrary.pShaderBytecode = ur_null;// TODO
+		d3dShaderLibDesc.DXILLibrary.BytecodeLength = 0;
+
+		// shader hit groups
+
+		std::vector<D3D12_HIT_GROUP_DESC> d3dHitGroups;
+		std::vector<std::wstring> hitGroupNames;
+		char hitGroupScratch[16];
+		d3dHitGroups.reserve(initParams.ShaderGroupCount);
+		hitGroupNames.reserve(initParams.ShaderGroupCount);
+		for (ur_uint igroup = 0; igroup < initParams.ShaderGroupCount; ++igroup)
+		{
+			const GrafRayTracingShaderGroupDesc& grafGroupDesc = initParams.ShaderGroups[igroup];
+			if (GrafRayTracingShaderGroupType::TrianglesHit == grafGroupDesc.Type)
+			{
+				d3dHitGroups.resize(d3dHitGroups.size() + 1);
+				hitGroupNames.resize(hitGroupNames.size() + 1);
+				D3D12_HIT_GROUP_DESC& d3dHitGroupDesc = d3dHitGroups.back();
+				d3dHitGroupDesc.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+				std::snprintf(hitGroupScratch, ur_array_size(hitGroupScratch), "hit_group_%i", igroup);
+				StringToWstring(hitGroupScratch, hitGroupNames.back());
+				d3dHitGroupDesc.HitGroupExport = hitGroupNames.back().c_str();
+				if (grafGroupDesc.AnyHitShaderIdx != GrafRayTracingShaderGroupDesc::UnusedShaderIdx)
+					d3dHitGroupDesc.AnyHitShaderImport = shaderLibEntryPoints[grafGroupDesc.AnyHitShaderIdx].c_str();
+				if (grafGroupDesc.ClosestHitShaderIdx != GrafRayTracingShaderGroupDesc::UnusedShaderIdx)
+					d3dHitGroupDesc.ClosestHitShaderImport = shaderLibEntryPoints[grafGroupDesc.ClosestHitShaderIdx].c_str();
+			}
+			else if (GrafRayTracingShaderGroupType::ProceduralHit == grafGroupDesc.Type)
+			{
+				d3dHitGroups.resize(d3dHitGroups.size() + 1);
+				hitGroupNames.resize(hitGroupNames.size() + 1);
+				D3D12_HIT_GROUP_DESC& d3dHitGroupDesc = d3dHitGroups.back();
+				d3dHitGroupDesc.Type = D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE;
+				std::snprintf(hitGroupScratch, ur_array_size(hitGroupScratch), "hit_group_%i", igroup);
+				StringToWstring(hitGroupScratch, hitGroupNames.back());
+				d3dHitGroupDesc.HitGroupExport = hitGroupNames.back().c_str();
+				if (grafGroupDesc.IntersectionShaderIdx != GrafRayTracingShaderGroupDesc::UnusedShaderIdx)
+					d3dHitGroupDesc.IntersectionShaderImport = shaderLibEntryPoints[grafGroupDesc.IntersectionShaderIdx].c_str();
+			}
+		}
+
+		// shader config
+
+		D3D12_RAYTRACING_SHADER_CONFIG d3dShaderConfig = {};
+		d3dShaderConfig.MaxPayloadSizeInBytes = sizeof(ur_float) * 4; // float4 color
+		d3dShaderConfig.MaxAttributeSizeInBytes = sizeof(ur_float) * 2; // float2 barycentrics
+
+		// pipeline config
+
+		D3D12_RAYTRACING_PIPELINE_CONFIG d3dPipelineConfig = {};
+		d3dPipelineConfig.MaxTraceRecursionDepth = initParams.MaxRecursionDepth;
+
+		// root signature
+
+		D3D12_ROOT_SIGNATURE_DESC d3dRootSigDesc = {};
+		d3dRootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+		std::vector<D3D12_ROOT_PARAMETER> d3dRootParameters;
+		for (ur_uint descriptorLayoutIdx = 0; descriptorLayoutIdx < initParams.DescriptorTableLayoutCount; ++descriptorLayoutIdx)
+		{
+			GrafDescriptorTableLayoutDX12* tableLayoutDX12 = static_cast<GrafDescriptorTableLayoutDX12*>(initParams.DescriptorTableLayouts[descriptorLayoutIdx]);
+			const D3D12_ROOT_PARAMETER& tableSrvUavCbvD3DRootPatameter = tableLayoutDX12->GetSrvUavCbvTableD3DRootParameter();
+			if (tableSrvUavCbvD3DRootPatameter.DescriptorTable.NumDescriptorRanges > 0)
+			{
+				d3dRootParameters.emplace_back(tableSrvUavCbvD3DRootPatameter);
+				d3dRootSigDesc.NumParameters += 1;
+			}
+			const D3D12_ROOT_PARAMETER& tableSamplerD3DRootPatameter = tableLayoutDX12->GetSamplerTableD3DRootParameter();
+			if (tableSamplerD3DRootPatameter.DescriptorTable.NumDescriptorRanges > 0)
+			{
+				d3dRootParameters.emplace_back(tableSamplerD3DRootPatameter);
+				d3dRootSigDesc.NumParameters += 1;
+			}
+		}
+		d3dRootSigDesc.pParameters = &d3dRootParameters.front();
+
+		shared_ref<ID3DBlob> d3dSignatureBlob;
+		shared_ref<ID3DBlob> d3dErrorBlob;
+		HRESULT hres = D3D12SerializeRootSignature(&d3dRootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, d3dSignatureBlob, d3dErrorBlob);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafRayTracingPipelineDX12: D3D12SerializeRootSignature failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		UINT nodeMask = 0;
+		hres = d3dDevice->CreateRootSignature(nodeMask, d3dSignatureBlob->GetBufferPointer(), d3dSignatureBlob->GetBufferSize(),
+			__uuidof(this->d3dRootSignature), this->d3dRootSignature);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafRayTracingPipelineDX12: CreateRootSignature failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		D3D12_GLOBAL_ROOT_SIGNATURE d3dRootSignature = {};
+		d3dRootSignature.pGlobalRootSignature = this->d3dRootSignature.get();
+
+		// state object
+
+		std::vector<D3D12_STATE_SUBOBJECT> d3dStateSubobjects;
+		d3dStateSubobjects.reserve(4 + d3dHitGroups.size());
+		d3dStateSubobjects.emplace_back(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &d3dRootSignature);
+		d3dStateSubobjects.emplace_back(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &d3dPipelineConfig);
+		d3dStateSubobjects.emplace_back(D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &d3dShaderLibDesc);
+		d3dStateSubobjects.emplace_back(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &d3dShaderConfig);
+		for (D3D12_HIT_GROUP_DESC& d3dHitGroup : d3dHitGroups)
+		{
+			d3dStateSubobjects.emplace_back(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &d3dHitGroup);
+		}
+
+		D3D12_STATE_OBJECT_DESC d3dStateDesc = {};
+		d3dStateDesc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
+		d3dStateDesc.pSubobjects = d3dStateSubobjects.data();
+		d3dStateDesc.NumSubobjects = (UINT)d3dStateSubobjects.size();
+
+		hres = d3dDevice->CreateStateObject(&d3dStateDesc, __uuidof(ID3D12StateObject), this->d3dStateObject);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafRayTracingPipelineDX12: CreateStateObject failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafRayTracingPipelineDX12::GetShaderGroupHandles(ur_uint firstGroup, ur_uint groupCount, ur_size dstBufferSize, ur_byte* dstBufferPtr)

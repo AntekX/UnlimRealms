@@ -748,9 +748,16 @@ namespace UnlimRealms
 
 		virtual Result GetShaderGroupHandles(ur_uint firstGroup, ur_uint groupCount, ur_size dstBufferSize, ur_byte* dstBufferPtr);
 
+		inline ID3D12StateObject* GetD3DStateObject() const;
+
+		inline ID3D12RootSignature* GetD3DRootSignature() const;
+
 	protected:
 
 		Result Deinitialize();
+
+		shared_ref<ID3D12StateObject> d3dStateObject;
+		shared_ref<ID3D12RootSignature> d3dRootSignature;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
