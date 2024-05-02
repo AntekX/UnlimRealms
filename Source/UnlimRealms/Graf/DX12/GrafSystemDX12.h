@@ -765,6 +765,7 @@ namespace UnlimRealms
 
 		shared_ref<ID3D12StateObject> d3dStateObject;
 		shared_ref<ID3D12RootSignature> d3dRootSignature;
+		std::vector<std::wstring> shaderGroupNames;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

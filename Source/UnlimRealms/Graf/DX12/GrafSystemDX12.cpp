@@ -175,7 +175,8 @@ namespace UnlimRealms
 
 			grafDeviceDesc.RayTracing.RayTraceSupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0);
 			grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1);
-			grafDeviceDesc.RayTracing.ShaderGroupHandleSize = 8;
+			grafDeviceDesc.RayTracing.ShaderGroupHandleSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+			grafDeviceDesc.RayTracing.ShaderGroupBaseAlignment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
 			grafDeviceDesc.RayTracing.RecursionDepthMax = ~ur_uint32(0);
 			grafDeviceDesc.RayTracing.InstanceCountMax = ~ur_uint64(0);
 			grafDeviceDesc.RayTracing.PrimitiveCountMax = ~ur_uint64(0);
@@ -3315,6 +3316,7 @@ namespace UnlimRealms
 	{
 		this->d3dRootSignature.reset(ur_null);
 		this->d3dStateObject.reset(ur_null);
+		this->shaderGroupNames.clear();
 
 		return Result(Success);
 	}
@@ -3367,22 +3369,21 @@ namespace UnlimRealms
 		// shader hit groups
 
 		std::vector<D3D12_HIT_GROUP_DESC> d3dHitGroups;
-		std::vector<std::wstring> hitGroupNames;
-		char hitGroupScratch[16];
 		d3dHitGroups.reserve(initParams.ShaderGroupCount);
-		hitGroupNames.reserve(initParams.ShaderGroupCount);
+		this->shaderGroupNames.resize(initParams.ShaderGroupCount);
+		char groupNameScratch[16];
 		for (ur_uint igroup = 0; igroup < initParams.ShaderGroupCount; ++igroup)
 		{
 			const GrafRayTracingShaderGroupDesc& grafGroupDesc = initParams.ShaderGroups[igroup];
+			std::wstring& shaderGroupName = this->shaderGroupNames[igroup];
 			if (GrafRayTracingShaderGroupType::TrianglesHit == grafGroupDesc.Type)
 			{
 				d3dHitGroups.resize(d3dHitGroups.size() + 1);
-				hitGroupNames.resize(hitGroupNames.size() + 1);
 				D3D12_HIT_GROUP_DESC& d3dHitGroupDesc = d3dHitGroups.back();
 				d3dHitGroupDesc.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-				std::snprintf(hitGroupScratch, ur_array_size(hitGroupScratch), "hit_group_%i", igroup);
-				StringToWstring(hitGroupScratch, hitGroupNames.back());
-				d3dHitGroupDesc.HitGroupExport = hitGroupNames.back().c_str();
+				std::snprintf(groupNameScratch, ur_array_size(groupNameScratch), "hit_group_%i", igroup);
+				StringToWstring(groupNameScratch, shaderGroupName);
+				d3dHitGroupDesc.HitGroupExport = shaderGroupName.c_str();
 				if (grafGroupDesc.AnyHitShaderIdx != GrafRayTracingShaderGroupDesc::UnusedShaderIdx)
 					d3dHitGroupDesc.AnyHitShaderImport = shaderLibEntryPoints[grafGroupDesc.AnyHitShaderIdx].c_str();
 				if (grafGroupDesc.ClosestHitShaderIdx != GrafRayTracingShaderGroupDesc::UnusedShaderIdx)
@@ -3391,14 +3392,17 @@ namespace UnlimRealms
 			else if (GrafRayTracingShaderGroupType::ProceduralHit == grafGroupDesc.Type)
 			{
 				d3dHitGroups.resize(d3dHitGroups.size() + 1);
-				hitGroupNames.resize(hitGroupNames.size() + 1);
 				D3D12_HIT_GROUP_DESC& d3dHitGroupDesc = d3dHitGroups.back();
 				d3dHitGroupDesc.Type = D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE;
-				std::snprintf(hitGroupScratch, ur_array_size(hitGroupScratch), "hit_group_%i", igroup);
-				StringToWstring(hitGroupScratch, hitGroupNames.back());
-				d3dHitGroupDesc.HitGroupExport = hitGroupNames.back().c_str();
+				std::snprintf(groupNameScratch, ur_array_size(groupNameScratch), "hit_group_%i", igroup);
+				StringToWstring(groupNameScratch, shaderGroupName);
+				d3dHitGroupDesc.HitGroupExport = shaderGroupName.c_str();
 				if (grafGroupDesc.IntersectionShaderIdx != GrafRayTracingShaderGroupDesc::UnusedShaderIdx)
 					d3dHitGroupDesc.IntersectionShaderImport = shaderLibEntryPoints[grafGroupDesc.IntersectionShaderIdx].c_str();
+			}
+			else if (grafGroupDesc.GeneralShaderIdx != GrafRayTracingShaderGroupDesc::UnusedShaderIdx)
+			{
+				shaderGroupName = shaderLibEntryPoints[grafGroupDesc.GeneralShaderIdx];
 			}
 		}
 
@@ -3487,7 +3491,39 @@ namespace UnlimRealms
 
 	Result GrafRayTracingPipelineDX12::GetShaderGroupHandles(ur_uint firstGroup, ur_uint groupCount, ur_size dstBufferSize, ur_byte* dstBufferPtr)
 	{
-		return Result(NotImplemented);
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(NotInitialized, std::string("GrafRayTracingPipelineDX12::GetShaderGroupHandles: invalid GrafDevice"));
+		}
+
+		if (ur_null == this->d3dStateObject.get() )
+		{
+			return ResultError(NotInitialized, std::string("GrafRayTracingPipelineDX12::GetShaderGroupHandles: state object is not initialized"));
+		}
+
+		shared_ref<ID3D12StateObjectProperties> d3dStateProperties;
+		HRESULT hres = this->d3dStateObject->QueryInterface<ID3D12StateObjectProperties>(d3dStateProperties);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafRayTracingPipelineDX12::GetShaderGroupHandles: QueryInterface<ID3D12StateObjectProperties> failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		ur_uint shaderIdentifierSize = grafDeviceDX12->GetPhysicalDeviceDesc()->RayTracing.ShaderGroupHandleSize;
+		ur_uint shaderGroupAlignment = grafDeviceDX12->GetPhysicalDeviceDesc()->RayTracing.ShaderGroupBaseAlignment;
+		if (dstBufferSize < groupCount * shaderIdentifierSize)
+		{
+			return ResultError(Failure, std::string("GrafRayTracingPipelineDX12::GetShaderGroupHandles: invalid destination buffer size"));
+		}
+
+		for (ur_uint igroup = 0; igroup < groupCount; ++igroup)
+		{
+			ur_uint groupIdx = firstGroup + igroup;
+			void* shaderGroupID = d3dStateProperties->GetShaderIdentifier(this->shaderGroupNames[groupIdx].c_str());
+			memcpy(dstBufferPtr + groupIdx * shaderGroupAlignment, shaderGroupID, shaderIdentifierSize);
+		}
+
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

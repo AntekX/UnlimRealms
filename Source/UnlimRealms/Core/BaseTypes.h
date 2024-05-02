@@ -25,4 +25,4 @@ typedef double				ur_double;
 
 #define ur_array_size(a) (sizeof(a) / sizeof(*a))
 
-#define ur_align(value, alignment) ((value + alignment - 1) / alignment * alignment)
+#define ur_align(value, alignment) (((value) + (alignment) - 1) / (alignment) * (alignment))
