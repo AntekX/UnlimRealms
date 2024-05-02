@@ -854,6 +854,7 @@ namespace UnlimRealms
 	}
 
 	const GrafRayTracingPipeline::InitParams GrafRayTracingPipeline::InitParams::Default = {
+		ur_null, // GrafShaderLib*
 		ur_null, // GrafShader**
 		0, // ShaderStageCount;
 		ur_null, // GrafRayTracingShaderGroupDesc*

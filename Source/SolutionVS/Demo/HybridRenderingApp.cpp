@@ -1290,6 +1290,7 @@ int HybridRenderingApp::Run()
 					this->raytraceDescTableLayout.get()
 				};
 				GrafRayTracingPipeline::InitParams raytracePipelineParams = GrafRayTracingPipeline::InitParams::Default;
+				raytracePipelineParams.ShaderLib = this->shaderLibRT.get();
 				raytracePipelineParams.ShaderStages = shaderStages;
 				raytracePipelineParams.ShaderStageCount = ur_array_size(shaderStages);
 				raytracePipelineParams.ShaderGroups = shaderGroups;
@@ -1445,7 +1446,7 @@ int HybridRenderingApp::Run()
 				cmdList->Begin();
 
 				auto createDefaultImage = [&grafSystem, &grafDevice, &cmdList]
-				(std::unique_ptr<GrafImage>& defaultImage, GrafFormat format, GrafClearValue fillColor) -> Result
+					(std::unique_ptr<GrafImage>& defaultImage, GrafFormat format, GrafClearValue fillColor) -> Result
 				{
 					GrafImageDesc imageDesc = {
 						GrafImageType::Tex2D,
@@ -1734,6 +1735,7 @@ int HybridRenderingApp::Run()
 			Allocation uploadAllocation = grafRenderer->GetDynamicUploadBufferAllocation(updateSize);
 			GrafBuffer* uploadBuffer = grafRenderer->GetDynamicUploadBuffer();
 			uploadBuffer->Write((const ur_byte*)sampleInstances.data(), uploadAllocation.Size, 0, uploadAllocation.Offset);
+			grafCmdList->BufferMemoryBarrier(this->instanceBuffer.get(), GrafBufferState::Current, GrafBufferState::TransferDst);
 			grafCmdList->Copy(uploadBuffer, this->instanceBuffer.get(), updateSize, uploadAllocation.Offset, 0);
 
 			if (grafDeviceDesc->RayTracing.RayTraceSupported)
@@ -1750,6 +1752,7 @@ int HybridRenderingApp::Run()
 				sampleGeometryDataTL.InstancesData = &asInstanceData;
 				sampleGeometryDataTL.PrimitiveCount = ur_uint32(sampleInstances.size());
 
+				grafCmdList->BufferMemoryBarrier(this->instanceBuffer.get(), GrafBufferState::Current, GrafBufferState::RayTracingRead);
 				grafCmdList->BuildAccelerationStructure(this->accelerationStructureTL.get(), &sampleGeometryDataTL, 1);
 			}
 

@@ -1393,15 +1393,46 @@ namespace UnlimRealms
 
 		this->d3dCommandList->SetPipelineState1(grafPipelineDX12->GetD3DStateObject());
 
-		// TODO
-		//this->d3dCommandList->SetComputeRootSignature(grafPipelineDX12->GetD3DRootSignature());
+		this->d3dCommandList->SetComputeRootSignature(grafPipelineDX12->GetD3DRootSignature());
 
 		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::BindRayTracingDescriptorTable(GrafDescriptorTable* descriptorTable, GrafRayTracingPipeline* grafPipeline)
 	{
-		return Result(NotImplemented);
+		if (ur_null == descriptorTable || ur_null == grafPipeline)
+			return Result(InvalidArgs);
+
+		GrafDescriptorTableDX12* descriptorTableDX12 = static_cast<GrafDescriptorTableDX12*>(descriptorTable);
+
+		// bind descriptor heaps
+
+		ur_uint descriptorHeapCount = 0;
+		ID3D12DescriptorHeap* d3dDescriptorHeaps[2];
+		if (descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().IsValid())
+		{
+			d3dDescriptorHeaps[descriptorHeapCount++] = descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
+		}
+		if (descriptorTableDX12->GetSamplerDescriptorHeapHandle().IsValid())
+		{
+			d3dDescriptorHeaps[descriptorHeapCount++] = descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
+		}
+
+		this->d3dCommandList->SetDescriptorHeaps((UINT)descriptorHeapCount, d3dDescriptorHeaps);
+
+		// set table offsets in heaps
+
+		ur_uint rootParameterIdx = 0;
+		if (descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().IsValid())
+		{
+			this->d3dCommandList->SetComputeRootDescriptorTable(rootParameterIdx++, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
+		}
+		if (descriptorTableDX12->GetSamplerDescriptorHeapHandle().IsValid())
+		{
+			this->d3dCommandList->SetComputeRootDescriptorTable(rootParameterIdx++, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
+		}
+
+		return Result(Success);
 	}
 
 	Result GrafCommandListDX12::DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
@@ -2142,6 +2173,10 @@ namespace UnlimRealms
 		{
 			sizeInBytesAligned = ur_align(initParams.BufferDesc.SizeInBytes, grafDeviceDX12->GetPhysicalDeviceDesc()->ConstantBufferOffsetAlignment);
 		}
+		else if (ur_uint(GrafBufferUsageFlag::AccelerationStructure) & initParams.BufferDesc.Usage)
+		{
+			sizeInBytesAligned = ur_align(initParams.BufferDesc.SizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT);
+		}
 		this->bufferDesc.SizeInBytes = sizeInBytesAligned;
 
 		D3D12_HEAP_PROPERTIES d3dHeapProperties = {};
@@ -2171,6 +2206,11 @@ namespace UnlimRealms
 		if (FAILED(hres))
 		{
 			return ResultError(Failure, std::string("GrafBufferDX12: CreateCommittedResource failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		if (ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress) & initParams.BufferDesc.Usage)
+		{
+			this->bufferDeviceAddress = (ur_uint64)this->d3dResource->GetGPUVirtualAddress();
 		}
 
 		// create CBV
@@ -2393,6 +2433,9 @@ namespace UnlimRealms
 
 	Result GrafShaderDX12::Deinitialize()
 	{
+		this->byteCodeSize = 0;
+		this->byteCodeBuffer.reset(ur_null);
+
 		return Result(Success);
 	}
 
@@ -2439,6 +2482,8 @@ namespace UnlimRealms
 	Result GrafShaderLibDX12::Deinitialize()
 	{
 		this->shaders.clear();
+		this->byteCodeSize = 0;
+		this->byteCodeBuffer.reset(ur_null);
 
 		return Result(Success);
 	}
@@ -2566,6 +2611,12 @@ namespace UnlimRealms
 			this->shaders.push_back(std::move(grafShader));
 		}
 
+		// store byte code locally
+
+		this->byteCodeSize = initParams.ByteCodeSize;
+		this->byteCodeBuffer.reset(new ur_byte[this->byteCodeSize]);
+		memcpy(this->byteCodeBuffer.get(), initParams.ByteCode, this->byteCodeSize);
+
 		return res;
 	}
 
@@ -2633,7 +2684,10 @@ namespace UnlimRealms
 			DescriptorTableDesc* descriptorTableDesc = nullptr;
 			if (GrafDescriptorType::ConstantBuffer == grafDescriptorRange.Type ||
 				GrafDescriptorType::Texture == grafDescriptorRange.Type || GrafDescriptorType::Buffer == grafDescriptorRange.Type ||
-				GrafDescriptorType::RWTexture == grafDescriptorRange.Type || GrafDescriptorType::RWBuffer == grafDescriptorRange.Type)
+				GrafDescriptorType::RWTexture == grafDescriptorRange.Type || GrafDescriptorType::RWBuffer == grafDescriptorRange.Type ||
+				GrafDescriptorType::AccelerationStructure == grafDescriptorRange.Type ||
+				GrafDescriptorType::TextureDynamicArray == grafDescriptorRange.Type ||
+				GrafDescriptorType::BufferDynamicArray == grafDescriptorRange.Type)
 			{
 				descriptorTableDesc = &this->descriptorTableDesc[GrafShaderVisibleDescriptorHeapTypeDX12_SrvUavCbv];
 			}
@@ -2811,7 +2865,19 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableDX12::SetImageArray(ur_uint bindingIdx, GrafImage** images, ur_uint imageCount)
 	{
-		return Result(NotImplemented);
+		D3D12_CPU_DESCRIPTOR_HANDLE d3dBindingHandle;
+		Result res = GetD3DDescriptorHandle(d3dBindingHandle, bindingIdx, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+		if (Failed(res))
+			return ResultError(InvalidArgs, std::string("GrafDescriptorTableDX12: failed to get descriptor for binding"));
+
+		GrafImageDX12* imageDX12 = static_cast<GrafImageDX12*>(images[0]);
+		GrafImageSubresourceDX12* imageSubresourceDX12 = static_cast<GrafImageSubresourceDX12*>(imageDX12->GetDefaultSubresource());
+		D3D12_CPU_DESCRIPTOR_HANDLE d3dResourceHandle = imageSubresourceDX12->GetSRVDescriptorHandle().GetD3DHandleCPU();
+
+		ID3D12Device5* d3dDevice = static_cast<GrafDeviceDX12*>(this->GetGrafDevice())->GetD3DDevice();
+		d3dDevice->CopyDescriptorsSimple(imageCount, d3dBindingHandle, d3dResourceHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+		return Result(Success);
 	}
 
 	Result GrafDescriptorTableDX12::SetBuffer(ur_uint bindingIdx, GrafBuffer* buffer)
@@ -2823,7 +2889,18 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableDX12::SetBufferArray(ur_uint bindingIdx, GrafBuffer** buffers, ur_uint bufferCount)
 	{
-		return Result(NotImplemented);
+		D3D12_CPU_DESCRIPTOR_HANDLE d3dBindingHandle;
+		Result res = GetD3DDescriptorHandle(d3dBindingHandle, bindingIdx, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+		if (Failed(res))
+			return ResultError(InvalidArgs, std::string("GrafDescriptorTableDX12: failed to get descriptor for binding"));
+
+		GrafBufferDX12* bufferDX12 = static_cast<GrafBufferDX12*>(buffers[0]);
+		D3D12_CPU_DESCRIPTOR_HANDLE d3dResourceHandle = bufferDX12->GetSRVDescriptorHandle().GetD3DHandleCPU();
+
+		ID3D12Device5* d3dDevice = static_cast<GrafDeviceDX12*>(this->GetGrafDevice())->GetD3DDevice();
+		d3dDevice->CopyDescriptorsSimple(bufferCount, d3dBindingHandle, d3dResourceHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+		return Result(Success);
 	}
 
 	Result GrafDescriptorTableDX12::SetRWImage(ur_uint bindingIdx, GrafImage* image)
@@ -2849,7 +2926,11 @@ namespace UnlimRealms
 
 	Result GrafDescriptorTableDX12::SetAccelerationStructure(ur_uint bindingIdx, GrafAccelerationStructure* accelerationStructure)
 	{
-		return Result(NotImplemented);
+		GrafAccelerationStructureDX12* accelerationStructureDX12 = static_cast<GrafAccelerationStructureDX12*>(accelerationStructure);
+		GrafBufferDX12* accelerationStructureBufferDX12 = static_cast<GrafBufferDX12*>(accelerationStructureDX12->GetStorageBuffer());
+		return CopyResourceDescriptorToTable(bindingIdx,
+			accelerationStructureBufferDX12->GetSRVDescriptorHandle().GetD3DHandleCPU(),
+			D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3225,6 +3306,12 @@ namespace UnlimRealms
 
 		// shader library
 
+		GrafShaderLibDX12* shaderLibDX12 = static_cast<GrafShaderLibDX12*>(initParams.ShaderLib);
+		if (ur_null == shaderLibDX12)
+		{
+			return ResultError(InvalidArgs, std::string("GrafRayTracingPipelineDX12: failed to initialize, shader lib can not be null"));
+		}
+
 		std::vector<std::wstring> shaderLibEntryPoints;
 		shaderLibEntryPoints.resize(initParams.ShaderStageCount);
 		for (ur_uint ishader = 0; ishader < initParams.ShaderStageCount; ++ishader)
@@ -3244,8 +3331,8 @@ namespace UnlimRealms
 		D3D12_DXIL_LIBRARY_DESC d3dShaderLibDesc = {};
 		d3dShaderLibDesc.NumExports = (UINT)d3dShaderLibExports.size();
 		d3dShaderLibDesc.pExports = d3dShaderLibExports.data();
-		d3dShaderLibDesc.DXILLibrary.pShaderBytecode = ur_null;// TODO
-		d3dShaderLibDesc.DXILLibrary.BytecodeLength = 0;
+		d3dShaderLibDesc.DXILLibrary.pShaderBytecode = shaderLibDX12->GetByteCodePtr();
+		d3dShaderLibDesc.DXILLibrary.BytecodeLength = shaderLibDX12->GetByteCodeSize();
 
 		// shader hit groups
 
@@ -3288,7 +3375,7 @@ namespace UnlimRealms
 		// shader config
 
 		D3D12_RAYTRACING_SHADER_CONFIG d3dShaderConfig = {};
-		d3dShaderConfig.MaxPayloadSizeInBytes = sizeof(ur_float) * 4; // float4 color
+		d3dShaderConfig.MaxPayloadSizeInBytes = sizeof(ur_float) * 4 + 16; // float4 color + 16 bytes of custom data
 		d3dShaderConfig.MaxAttributeSizeInBytes = sizeof(ur_float) * 2; // float2 barycentrics
 
 		// pipeline config
@@ -3411,7 +3498,11 @@ namespace UnlimRealms
 	Result GrafAccelerationStructureDX12::Deinitialize()
 	{
 		this->grafScratchBuffer.reset();
+		this->grafStorageBuffer.reset();
 		this->d3dPrebuildInfo = {};
+		this->structureType = GrafAccelerationStructureType::Undefined;
+		this->structureBuildFlags = GrafAccelerationStructureBuildFlags(0);
+		this->structureDeviceAddress = 0;
 
 		return Result(Success);
 	}
@@ -3480,13 +3571,32 @@ namespace UnlimRealms
 
 		d3dDevice->GetRaytracingAccelerationStructurePrebuildInfo(&d3dBuildInputs, &this->d3dPrebuildInfo);
 
+		// storage buffer for acceleration structure
+
+		Result res = grafSystemDX12.CreateBuffer(this->grafStorageBuffer);
+		if (Succeeded(res))
+		{
+			GrafBuffer::InitParams storageBufferParams = {};
+			storageBufferParams.BufferDesc.Usage = GrafBufferUsageFlags(GrafBufferUsageFlag::AccelerationStructure) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress) | ur_uint(GrafBufferUsageFlag::StorageBuffer);
+			storageBufferParams.BufferDesc.MemoryType = GrafDeviceMemoryFlags(GrafDeviceMemoryFlag::GpuLocal);
+			storageBufferParams.BufferDesc.SizeInBytes = this->d3dPrebuildInfo.ResultDataMaxSizeInBytes;
+
+			res = this->grafStorageBuffer->Initialize(grafDevice, storageBufferParams);
+		}
+		if (Failed(res))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, "GrafAccelerationStructureDX12: failed to create storage buffer");
+		}
+		this->structureDeviceAddress = this->grafStorageBuffer->GetDeviceAddress();
+
 		// scratch buffer
 
-		Result res = grafSystemDX12.CreateBuffer(this->grafScratchBuffer);
+		res = grafSystemDX12.CreateBuffer(this->grafScratchBuffer);
 		if (Succeeded(res))
 		{
 			GrafBuffer::InitParams scrathBufferParams = {};
-			scrathBufferParams.BufferDesc.Usage = GrafBufferUsageFlags(ur_uint(GrafBufferUsageFlag::AccelerationStructure) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress));
+			scrathBufferParams.BufferDesc.Usage = GrafBufferUsageFlags(ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress) | ur_uint(GrafBufferUsageFlag::StorageBuffer));
 			scrathBufferParams.BufferDesc.MemoryType = GrafDeviceMemoryFlags(GrafDeviceMemoryFlag::GpuLocal);
 			scrathBufferParams.BufferDesc.SizeInBytes = std::max(this->d3dPrebuildInfo.ScratchDataSizeInBytes, this->d3dPrebuildInfo.UpdateScratchDataSizeInBytes);
 
@@ -3700,8 +3810,10 @@ namespace UnlimRealms
 		}
 		else
 		{
-			// D3D12: Buffers are effectively created in state D3D12_RESOURCE_STATE_COMMON
-			d3dStates = D3D12_RESOURCE_STATE_COMMON;
+			if (bufferUsage & ur_uint(GrafBufferUsageFlag::AccelerationStructure))
+				d3dStates = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
+			else
+				d3dStates = D3D12_RESOURCE_STATE_COMMON; // D3D12: Buffers are effectively created in state D3D12_RESOURCE_STATE_COMMON
 			/*if (bufferUsage & ur_uint(GrafBufferUsageFlag::VertexBuffer))
 				d3dStates = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
 			if (bufferUsage & ur_uint(GrafBufferUsageFlag::IndexBuffer))

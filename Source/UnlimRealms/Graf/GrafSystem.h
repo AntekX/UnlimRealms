@@ -1372,6 +1372,7 @@ namespace UnlimRealms
 
 		struct UR_DECL InitParams
 		{
+			GrafShaderLib* ShaderLib;
 			GrafShader** ShaderStages;
 			ur_uint ShaderStageCount;
 			GrafRayTracingShaderGroupDesc* ShaderGroups;

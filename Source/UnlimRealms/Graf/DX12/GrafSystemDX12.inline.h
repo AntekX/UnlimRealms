@@ -248,6 +248,16 @@ namespace UnlimRealms
 		return this->byteCodeSize;
 	}
 
+	inline const void* GrafShaderLibDX12::GetByteCodePtr() const
+	{
+		return this->byteCodeBuffer.get();
+	}
+
+	inline ur_size GrafShaderLibDX12::GetByteCodeSize() const
+	{
+		return this->byteCodeSize;
+	}
+
 	inline ID3D12PipelineState* GrafPipelineDX12::GetD3DPipelineState() const
 	{
 		return this->d3dPipelineState.get();
@@ -286,6 +296,11 @@ namespace UnlimRealms
 	inline GrafBuffer* GrafAccelerationStructureDX12::GetScratchBuffer() const
 	{
 		return this->grafScratchBuffer.get();
+	}
+
+	inline GrafBuffer* GrafAccelerationStructureDX12::GetStorageBuffer() const
+	{
+		return this->grafStorageBuffer.get();
 	}
 
 } // end namespace UnlimRealms

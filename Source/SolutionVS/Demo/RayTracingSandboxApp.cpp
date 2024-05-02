@@ -696,6 +696,7 @@ int RayTracingSandboxApp::Run()
 				this->bindingTableLayout.get()
 			};
 			GrafRayTracingPipeline::InitParams pipelineParams = GrafRayTracingPipeline::InitParams::Default;
+			pipelineParams.ShaderLib = this->shaderLib.get();
 			pipelineParams.ShaderStages = shaderStages;
 			pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
 			pipelineParams.ShaderGroups = shaderGroups;

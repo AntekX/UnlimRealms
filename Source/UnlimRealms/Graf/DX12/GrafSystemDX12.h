@@ -557,9 +557,16 @@ namespace UnlimRealms
 
 		virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams);
 
+		inline const void* GetByteCodePtr() const;
+
+		inline ur_size GetByteCodeSize() const;
+
 	protected:
 
 		Result Deinitialize();
+
+		std::unique_ptr<ur_byte[]> byteCodeBuffer; // required for RT state sub ojects
+		ur_size byteCodeSize;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -773,11 +780,14 @@ namespace UnlimRealms
 
 		inline GrafBuffer* GetScratchBuffer() const;
 
+		inline GrafBuffer* GetStorageBuffer() const;
+
 	protected:
 
 		Result Deinitialize();
 
 		std::unique_ptr<GrafBuffer> grafScratchBuffer;
+		std::unique_ptr<GrafBuffer> grafStorageBuffer;
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO d3dPrebuildInfo;
 	};
 
