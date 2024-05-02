@@ -1440,6 +1440,8 @@ namespace UnlimRealms
 		const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
 		const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable)
 	{
+		return Result(NotImplemented); // TODO
+
 		static const D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE NullD3DRegion = { 0, 0, 0 };
 		auto FillD3DRegion = [](D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE& d3dRegion, const GrafStridedBufferRegionDesc* grafStridedBufferRegion) -> void
 		{
@@ -1551,8 +1553,6 @@ namespace UnlimRealms
 
 	Result GrafCanvasDX12::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
 	{
-		//return Result(NotImplemented);
-
 		this->Deinitialize();
 
 		LogNoteGrafDbg("GrafCanvasDX12: initialization...");
@@ -3510,17 +3510,10 @@ namespace UnlimRealms
 		}
 
 		ur_uint shaderIdentifierSize = grafDeviceDX12->GetPhysicalDeviceDesc()->RayTracing.ShaderGroupHandleSize;
-		ur_uint shaderGroupAlignment = grafDeviceDX12->GetPhysicalDeviceDesc()->RayTracing.ShaderGroupBaseAlignment;
-		if (dstBufferSize < groupCount * shaderIdentifierSize)
-		{
-			return ResultError(Failure, std::string("GrafRayTracingPipelineDX12::GetShaderGroupHandles: invalid destination buffer size"));
-		}
-
 		for (ur_uint igroup = 0; igroup < groupCount; ++igroup)
 		{
-			ur_uint groupIdx = firstGroup + igroup;
-			void* shaderGroupID = d3dStateProperties->GetShaderIdentifier(this->shaderGroupNames[groupIdx].c_str());
-			memcpy(dstBufferPtr + groupIdx * shaderGroupAlignment, shaderGroupID, shaderIdentifierSize);
+			void* shaderGroupID = d3dStateProperties->GetShaderIdentifier(this->shaderGroupNames[firstGroup + igroup].c_str());
+			memcpy(dstBufferPtr + igroup * shaderIdentifierSize, shaderGroupID, shaderIdentifierSize);
 		}
 
 		return Result(Success);

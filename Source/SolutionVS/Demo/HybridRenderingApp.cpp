@@ -1303,23 +1303,33 @@ int HybridRenderingApp::Run()
 
 				// shader group handles buffer
 
+				grafSystem->CreateBuffer(this->raytraceShaderHandlesBuffer);
+
 				ur_size sgHandleSize = grafDeviceDesc->RayTracing.ShaderGroupHandleSize;
-				ur_size shaderBufferSize = raytracePipelineParams.ShaderGroupCount * sgHandleSize;
+				ur_size sgTableAlign = grafDeviceDesc->RayTracing.ShaderGroupBaseAlignment;
+				ur_size sgTableOfs = 0;
+				this->rayGenShaderTable		= { this->raytraceShaderHandlesBuffer.get(), sgTableOfs, 1 * sgHandleSize, sgHandleSize };
+				sgTableOfs = ur_align(sgTableOfs + this->rayGenShaderTable.Size, sgTableAlign);
+				this->rayMissShaderTable	= { this->raytraceShaderHandlesBuffer.get(), sgTableOfs, 2 * sgHandleSize, sgHandleSize };
+				sgTableOfs = ur_align(sgTableOfs + this->rayMissShaderTable.Size, sgTableAlign);
+				this->rayHitShaderTable		= { this->raytraceShaderHandlesBuffer.get(), sgTableOfs, 2 * sgHandleSize, sgHandleSize };
+				sgTableOfs = ur_align(sgTableOfs + this->rayHitShaderTable.Size, sgTableAlign);
+				ur_size shaderBufferSize = sgTableOfs;
+
 				GrafBuffer::InitParams shaderBufferParams = {};
 				shaderBufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::RayTracing) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress) | ur_uint(GrafBufferUsageFlag::TransferSrc);
 				shaderBufferParams.BufferDesc.MemoryType = (ur_uint)GrafDeviceMemoryFlag::CpuVisible;
 				shaderBufferParams.BufferDesc.SizeInBytes = shaderBufferSize;
-				grafSystem->CreateBuffer(this->raytraceShaderHandlesBuffer);
+				
 				this->raytraceShaderHandlesBuffer->Initialize(grafDevice, shaderBufferParams);
-				GrafRayTracingPipeline* rayTracingPipeline = this->raytracePipelineState.get();
-				this->raytraceShaderHandlesBuffer->Write([rayTracingPipeline, raytracePipelineParams, shaderBufferParams](ur_byte* mappedDataPtr) -> Result
+				this->raytraceShaderHandlesBuffer->Write([this, raytracePipelineParams, shaderBufferParams](ur_byte* mappedDataPtr) -> Result
 				{
-					rayTracingPipeline->GetShaderGroupHandles(0, raytracePipelineParams.ShaderGroupCount, shaderBufferParams.BufferDesc.SizeInBytes, mappedDataPtr);
+					GrafRayTracingPipeline* rayTracingPipeline = this->raytracePipelineState.get();
+					rayTracingPipeline->GetShaderGroupHandles(0, 1, shaderBufferParams.BufferDesc.SizeInBytes, mappedDataPtr + this->rayGenShaderTable.Offset);
+					rayTracingPipeline->GetShaderGroupHandles(1, 2, shaderBufferParams.BufferDesc.SizeInBytes, mappedDataPtr + this->rayMissShaderTable.Offset);
+					rayTracingPipeline->GetShaderGroupHandles(3, 2, shaderBufferParams.BufferDesc.SizeInBytes, mappedDataPtr + this->rayHitShaderTable.Offset);
 					return Result(Success);
 				});
-				this->rayGenShaderTable		= { this->raytraceShaderHandlesBuffer.get(),	0 * sgHandleSize,	1 * sgHandleSize,	sgHandleSize };
-				this->rayMissShaderTable	= { this->raytraceShaderHandlesBuffer.get(),	1 * sgHandleSize,	2 * sgHandleSize,	sgHandleSize };
-				this->rayHitShaderTable		= { this->raytraceShaderHandlesBuffer.get(),	3 * sgHandleSize,	2 * sgHandleSize,	sgHandleSize };
 
 				// ray tracing result mips generation pipeline
 
@@ -1754,6 +1764,7 @@ int HybridRenderingApp::Run()
 
 				grafCmdList->BufferMemoryBarrier(this->instanceBuffer.get(), GrafBufferState::Current, GrafBufferState::RayTracingRead);
 				grafCmdList->BuildAccelerationStructure(this->accelerationStructureTL.get(), &sampleGeometryDataTL, 1);
+				grafCmdList->BufferMemoryBarrier(this->instanceBuffer.get(), GrafBufferState::Current, GrafBufferState::ShaderRead);
 			}
 
 			grafCmdList->End();
