@@ -1439,7 +1439,37 @@ namespace UnlimRealms
 		const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
 		const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable)
 	{
-		return Result(NotImplemented);
+		static const D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE NullD3DRegion = { 0, 0, 0 };
+		auto FillD3DRegion = [](D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE& d3dRegion, const GrafStridedBufferRegionDesc* grafStridedBufferRegion) -> void
+		{
+			if (grafStridedBufferRegion)
+			{
+				d3dRegion.StartAddress = (D3D12_GPU_VIRTUAL_ADDRESS)(grafStridedBufferRegion->BufferPtr ? grafStridedBufferRegion->BufferPtr->GetDeviceAddress() + grafStridedBufferRegion->Offset : 0);
+				d3dRegion.StrideInBytes = (UINT64)grafStridedBufferRegion->Stride;
+				d3dRegion.SizeInBytes = (UINT64)grafStridedBufferRegion->Size;
+			}
+			else
+			{
+				d3dRegion = NullD3DRegion;
+			}
+		};
+
+		D3D12_DISPATCH_RAYS_DESC d3dDispatchDesc = {};
+		d3dDispatchDesc.Width = width;
+		d3dDispatchDesc.Height = height;
+		d3dDispatchDesc.Depth = depth;
+		if (rayGenShaderTable != ur_null)
+		{
+			d3dDispatchDesc.RayGenerationShaderRecord.StartAddress = (rayGenShaderTable->BufferPtr ? rayGenShaderTable->BufferPtr->GetDeviceAddress() + rayGenShaderTable->Offset : 0);
+			d3dDispatchDesc.RayGenerationShaderRecord.SizeInBytes = rayGenShaderTable->Size;
+		}
+		FillD3DRegion(d3dDispatchDesc.MissShaderTable, missShaderTable);
+		FillD3DRegion(d3dDispatchDesc.HitGroupTable, hitShaderTable);
+		FillD3DRegion(d3dDispatchDesc.CallableShaderTable, callableShaderTable);
+
+		this->d3dCommandList->DispatchRays(&d3dDispatchDesc);
+
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
