@@ -1329,7 +1329,7 @@ namespace UnlimRealms
 				}
 				if (geometry.InstancesData->IsPointersArray)
 				{
-					LogError(std::string("GrafCommandListDX12::BuildAccelerationStructure: IsPointersArray per geomtry is not supported"));
+					LogError(std::string("GrafCommandListDX12::BuildAccelerationStructure: IsPointersArray per geometry is not supported"));
 					return Result(InvalidArgs);
 				}
 				d3dBuildDesc.Inputs.InstanceDescs = geometryData->InstancesData->DeviceAddress;
@@ -2263,7 +2263,24 @@ namespace UnlimRealms
 
 		// create SRV
 
-		if (ur_uint(GrafBufferUsageFlag::StorageBuffer) & initParams.BufferDesc.Usage)
+		if (ur_uint(GrafBufferUsageFlag::AccelerationStructure) & initParams.BufferDesc.Usage)
+		{
+			this->srvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+			if (!this->srvDescriptorHandle.IsValid())
+			{
+				this->Deinitialize();
+				return ResultError(InvalidArgs, std::string("GrafBufferDX12: failed to allocate SRV descriptor"));
+			}
+
+			D3D12_SHADER_RESOURCE_VIEW_DESC d3dSrvDesc = {};
+			d3dSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
+			d3dSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+			d3dSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			d3dSrvDesc.RaytracingAccelerationStructure.Location = this->d3dResource->GetGPUVirtualAddress();
+
+			grafDeviceDX12->GetD3DDevice()->CreateShaderResourceView(ur_null, &d3dSrvDesc, this->srvDescriptorHandle.GetD3DHandleCPU());
+		}
+		else if (ur_uint(GrafBufferUsageFlag::StorageBuffer) & initParams.BufferDesc.Usage)
 		{
 			this->srvDescriptorHandle = grafDeviceDX12->AllocateDescriptorRangeCPU(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
 			if (!this->srvDescriptorHandle.IsValid())
@@ -3865,7 +3882,7 @@ namespace UnlimRealms
 	{
 		D3D12_RESOURCE_STATES d3dStates = D3D12_RESOURCE_STATE_COMMON;
 		// by default CPU visible memory is considered to be used for upload,
-		// upload heap resource must be created generic read state
+		// upload heap resource must be created in generic read state
 		if (memoryFlags & ur_uint(GrafDeviceMemoryFlag::CpuVisible))
 		{
 			d3dStates = D3D12_RESOURCE_STATE_GENERIC_READ;
