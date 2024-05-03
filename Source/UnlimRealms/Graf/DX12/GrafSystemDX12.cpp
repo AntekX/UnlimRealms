@@ -847,10 +847,12 @@ namespace UnlimRealms
 		if (ur_null == grafBuffer)
 			return Result(InvalidArgs);
 
-		if (grafBuffer->GetState() == dstState)
-			return Result(Success);
-
 		srcState = (GrafBufferState::Current == srcState ? grafBuffer->GetState() : srcState);
+		static_cast<GrafBufferDX12*>(grafBuffer)->SetState(dstState);
+		D3D12_RESOURCE_STATES d3dStateSrc = GrafUtilsDX12::GrafToD3DBufferState(srcState);
+		D3D12_RESOURCE_STATES d3dStateDst = GrafUtilsDX12::GrafToD3DBufferState(dstState);
+		if (d3dStateSrc == d3dStateDst)
+			return Result(Success);
 
 		GrafBufferDX12* grafBufferDX12 = static_cast<GrafBufferDX12*>(grafBuffer);
 		ID3D12Resource* d3dResource = grafBufferDX12->GetD3DResource();
@@ -860,12 +862,10 @@ namespace UnlimRealms
 		d3dBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
 		d3dBarrier.Transition.pResource = d3dResource;
 		d3dBarrier.Transition.Subresource = 0;
-		d3dBarrier.Transition.StateBefore = GrafUtilsDX12::GrafToD3DBufferState(srcState);
-		d3dBarrier.Transition.StateAfter = GrafUtilsDX12::GrafToD3DBufferState(dstState);
+		d3dBarrier.Transition.StateBefore = d3dStateSrc;
+		d3dBarrier.Transition.StateAfter = d3dStateDst;
 
 		this->d3dCommandList->ResourceBarrier(1, &d3dBarrier);
-
-		static_cast<GrafBufferDX12*>(grafBuffer)->SetState(dstState);
 		
 		return Result(Success);
 	}
@@ -892,6 +892,8 @@ namespace UnlimRealms
 			return Result(InvalidArgs);
 
 		srcState = (GrafImageState::Current == srcState ? grafImageSubresource->GetState() : srcState);
+		static_cast<GrafImageSubresourceDX12*>(grafImageSubresource)->SetState(dstState);
+
 		D3D12_RESOURCE_STATES d3dStateSrc = GrafUtilsDX12::GrafToD3DImageState(srcState);
 		D3D12_RESOURCE_STATES d3dStateDst = GrafUtilsDX12::GrafToD3DImageState(dstState);
 		if (d3dStateSrc == d3dStateDst)
@@ -916,8 +918,6 @@ namespace UnlimRealms
 		}
 
 		this->d3dCommandList->ResourceBarrier(UINT(subresCount), d3dBarriers.data());
-
-		static_cast<GrafImageSubresourceDX12*>(grafImageSubresource)->SetState(dstState);
 
 		return Result(Success);
 	}
