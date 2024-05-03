@@ -1440,8 +1440,6 @@ namespace UnlimRealms
 		const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
 		const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable)
 	{
-		return Result(NotImplemented); // TODO
-
 		static const D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE NullD3DRegion = { 0, 0, 0 };
 		auto FillD3DRegion = [](D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE& d3dRegion, const GrafStridedBufferRegionDesc* grafStridedBufferRegion) -> void
 		{
@@ -2178,6 +2176,7 @@ namespace UnlimRealms
 
 		this->d3dVBView = {};
 		this->d3dIBView = {};
+		this->d3dResource.reset(nullptr);
 
 		return Result(Success);
 	}
@@ -3587,16 +3586,20 @@ namespace UnlimRealms
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS d3dBuildInputs = {};
 		d3dBuildInputs.Type = GrafUtilsDX12::GrafToD3DAccelerationStructureType(initParams.StructureType);
 		d3dBuildInputs.Flags = GrafUtilsDX12::GrafToD3DAccelerationStructureBuildFlags(initParams.BuildFlags);
-		d3dBuildInputs.NumDescs = initParams.GeometryCount;
 		d3dBuildInputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 
 		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> d3dGeometryDescArray;
 		if (GrafAccelerationStructureType::TopLevel == initParams.StructureType)
 		{
+			if (initParams.GeometryCount != 1 || GrafAccelerationStructureGeometryType::Instances != initParams.Geometry[0].GeometryType)
+				return ResultError(InvalidArgs, std::string("GrafAccelerationStructureDX12: failed to initialize, top level AS expects only one geomtry description of Instances type"));
+			GrafAccelerationStructureGeometryDesc& grafGeometryDesc = initParams.Geometry[0];
+			d3dBuildInputs.NumDescs = grafGeometryDesc.PrimitiveCountMax; // max number of instances
 			d3dBuildInputs.InstanceDescs = D3D12_GPU_VIRTUAL_ADDRESS(0); // not required for prebuild
 		}
 		else if (GrafAccelerationStructureType::BottomLevel == initParams.StructureType)
 		{
+			d3dBuildInputs.NumDescs = initParams.GeometryCount;
 			d3dGeometryDescArray.resize(initParams.GeometryCount);
 			for (ur_uint32 igeom = 0; igeom < initParams.GeometryCount; ++igeom)
 			{
