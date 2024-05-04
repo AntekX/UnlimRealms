@@ -1102,7 +1102,9 @@ namespace UnlimRealms
 		if (ur_null == grafVertexBuffer)
 			return Result(InvalidArgs);
 
-		this->d3dCommandList->IASetVertexBuffers(0, 1, static_cast<GrafBufferDX12*>(grafVertexBuffer)->GetD3DVertexBufferView());
+		D3D12_VERTEX_BUFFER_VIEW d3dVBView = *static_cast<GrafBufferDX12*>(grafVertexBuffer)->GetD3DVertexBufferView();
+		d3dVBView.BufferLocation += bufferOffset;
+		this->d3dCommandList->IASetVertexBuffers(0, 1, &d3dVBView);
 
 		return Result(Success);
 	}
@@ -1112,7 +1114,9 @@ namespace UnlimRealms
 		if (ur_null == grafIndexBuffer)
 			return Result(InvalidArgs);
 
-		this->d3dCommandList->IASetIndexBuffer(static_cast<GrafBufferDX12*>(grafIndexBuffer)->GetD3DIndexBufferView());
+		D3D12_INDEX_BUFFER_VIEW d3dIBView = *static_cast<GrafBufferDX12*>(grafIndexBuffer)->GetD3DIndexBufferView();
+		d3dIBView.BufferLocation += bufferOffset;
+		this->d3dCommandList->IASetIndexBuffer(&d3dIBView);
 
 		return Result(Success);
 	}
