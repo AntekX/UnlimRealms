@@ -2917,12 +2917,17 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(InvalidArgs, std::string("GrafDescriptorTableDX12: failed to get descriptor for binding"));
 
-		GrafImageDX12* imageDX12 = static_cast<GrafImageDX12*>(images[0]);
-		GrafImageSubresourceDX12* imageSubresourceDX12 = static_cast<GrafImageSubresourceDX12*>(imageDX12->GetDefaultSubresource());
-		D3D12_CPU_DESCRIPTOR_HANDLE d3dResourceHandle = imageSubresourceDX12->GetSRVDescriptorHandle().GetD3DHandleCPU();
-
 		ID3D12Device5* d3dDevice = static_cast<GrafDeviceDX12*>(this->GetGrafDevice())->GetD3DDevice();
-		d3dDevice->CopyDescriptorsSimple(imageCount, d3dBindingHandle, d3dResourceHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		const DescriptorTableData& tableData = this->descriptorTableData[GrafShaderVisibleDescriptorHeapTypeDX12_SrvUavCbv];
+		ur_size tableIncrementSize = tableData.descriptorHeapHandle.GetHeap()->GetDescriptorIncrementSize();
+		for (ur_uint iimage = 0; iimage < imageCount; ++iimage)
+		{
+			GrafImageDX12* imageDX12 = static_cast<GrafImageDX12*>(images[iimage]);
+			GrafImageSubresourceDX12* imageSubresourceDX12 = static_cast<GrafImageSubresourceDX12*>(imageDX12->GetDefaultSubresource());
+			D3D12_CPU_DESCRIPTOR_HANDLE d3dResourceHandle = imageSubresourceDX12->GetSRVDescriptorHandle().GetD3DHandleCPU();
+			d3dDevice->CopyDescriptorsSimple(1, d3dBindingHandle, d3dResourceHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+			d3dBindingHandle.ptr += tableIncrementSize;
+		}
 
 		return Result(Success);
 	}
@@ -2941,11 +2946,16 @@ namespace UnlimRealms
 		if (Failed(res))
 			return ResultError(InvalidArgs, std::string("GrafDescriptorTableDX12: failed to get descriptor for binding"));
 
-		GrafBufferDX12* bufferDX12 = static_cast<GrafBufferDX12*>(buffers[0]);
-		D3D12_CPU_DESCRIPTOR_HANDLE d3dResourceHandle = bufferDX12->GetSRVDescriptorHandle().GetD3DHandleCPU();
-
 		ID3D12Device5* d3dDevice = static_cast<GrafDeviceDX12*>(this->GetGrafDevice())->GetD3DDevice();
-		d3dDevice->CopyDescriptorsSimple(bufferCount, d3dBindingHandle, d3dResourceHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		const DescriptorTableData& tableData = this->descriptorTableData[GrafShaderVisibleDescriptorHeapTypeDX12_SrvUavCbv];
+		ur_size tableIncrementSize = tableData.descriptorHeapHandle.GetHeap()->GetDescriptorIncrementSize();
+		for (ur_uint ibuffer = 0; ibuffer < bufferCount; ++ibuffer)
+		{
+			GrafBufferDX12* bufferDX12 = static_cast<GrafBufferDX12*>(buffers[ibuffer]);
+			D3D12_CPU_DESCRIPTOR_HANDLE d3dResourceHandle = bufferDX12->GetSRVDescriptorHandle().GetD3DHandleCPU();
+			d3dDevice->CopyDescriptorsSimple(1, d3dBindingHandle, d3dResourceHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+			d3dBindingHandle.ptr += tableIncrementSize;
+		}
 
 		return Result(Success);
 	}

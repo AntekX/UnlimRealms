@@ -2807,8 +2807,9 @@ SceneState RunDemoScene(
 
 					grafRenderer->ShowImgui();
 					ImGui::Begin("Demo");
-					if (ImGui::CollapsingHeader("Graphics API"))
+					if (ImGui::CollapsingHeader("Graphics System"))
 					{
+						ImGui::Text("%s", typeid(*grafRenderer->GetGrafSystem()).name());
 						if (ImGui::Button("Recreate for Vulkan"))
 							sceneState = SceneState::RecreateForVulkan;
 						if (ImGui::Button("Recreate for DX12"))
