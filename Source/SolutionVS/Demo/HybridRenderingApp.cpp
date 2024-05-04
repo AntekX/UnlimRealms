@@ -95,6 +95,24 @@ struct Settings
 	RayTracingSettings RayTracing;
 } g_Settings;
 
+enum class SceneState : int
+{
+	Initialize = 0,
+	Run,
+	Finish,
+	RecreateForVulkan,
+	RecreateForDX12,
+};
+
+SceneState RunDemoScene(
+	std::unique_ptr<GrafSystem> grafSystem,
+	// TODO: make it a member function and declare all inputs as HybridRenderingApp members
+	Realm& realm,
+	LightDesc& sunLight, LightDesc& sunLight2, LightDesc& sphericalLight1, LightDesc* sphericalLight1Ptr, LightingDesc& lightingDesc,
+	ur_float& lightCycleTime, ur_float& lightCrntCycleFactor, ur_bool& lightAnimationEnabled, ur_float& lightAnimationElapsedTime,
+	AtmosphereDesc& atmosphereDesc,
+	Camera& camera, CameraControl& cameraControl);
+
 int HybridRenderingApp::Run()
 {
 	// create realm
@@ -105,27 +123,131 @@ int HybridRenderingApp::Run()
 	std::unique_ptr<WinCanvas> canvas(new WinCanvas(realm, WinCanvas::Style::OverlappedWindowMaximized, L"HybridRenderingDemo"));
 	canvas->Initialize(RectI(0, 0, (ur_uint)GetSystemMetrics(SM_CXSCREEN), (ur_uint)GetSystemMetrics(SM_CYSCREEN)));
 	realm.SetCanvas(std::move(canvas));
-	ur_float canvasScale = 1.0f;
-	ur_uint canvasWidth = ur_uint(realm.GetCanvas()->GetClientBound().Width() * canvasScale);
-	ur_uint canvasHeight = ur_uint(realm.GetCanvas()->GetClientBound().Height() * canvasScale);
-	ur_bool canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
-	ur_bool canvasChanged = false;
 
 	// create input system
 	std::unique_ptr<WinInput> input(new WinInput(realm));
 	input->Initialize();
 	realm.SetInput(std::move(input));
 
+	// light source params
+	LightDesc sunLight = {}; // main directional light source
+	sunLight.Type = LightType_Directional;
+	sunLight.Color = { 1.0f, 1.0f, 1.0f };
+	sunLight.Intensity = SolarIlluminanceNoon;
+	sunLight.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
+	sunLight.Direction = { -0.8165f,-0.40825f,-0.40825f };
+	sunLight.Size = SolarDiskHalfAngleTangent * 2.0f;
+	LightDesc sunLight2 = {}; // artificial second star
+	sunLight2.Type = LightType_Directional;
+	sunLight2.Color = { 1.0f, 0.1f, 0.0f };
+	sunLight2.Intensity = SolarIlluminanceNoon * 0.5;
+	sunLight2.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere * 0.5;
+	sunLight2.Direction = { 0.8018f,-0.26726f,-0.5345f };
+	sunLight2.Size = SolarDiskHalfAngleTangent * 4.0f;
+	LightDesc sphericalLight1 = {}; // main directional light source
+	LightDesc* sphericalLight1Ptr = ur_null;
+	sphericalLight1.Type = LightType_Spherical;
+	sphericalLight1.Color = { 1.0f, 1.0f, 1.0f };
+	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE) || (SCENE_TYPE_FOREST == SCENE_TYPE)
+	sphericalLight1.Position = { 10.0f, 10.0f, 10.0f };
+	sphericalLight1.Intensity = SolarIlluminanceNoon * powf(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
+	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
+	sphericalLight1.Position = { 2.0f, 2.0f, 2.0f };
+	sphericalLight1.Intensity = SolarIlluminanceNoon * powf(sphericalLight1.Position.y, 2) * 1;
+	#endif
+	sphericalLight1.Size = 1.0f;
+	LightingDesc lightingDesc = {};
+	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
+	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
+	sphericalLight1Ptr = &lightingDesc.LightSources[lightingDesc.LightSourceCount];
+	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sphericalLight1;
+	#endif
+	//lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
+
+	// light source animation
+	ur_float lightCycleTime = 120.0f;
+	ur_float lightCrntCycleFactor = 0.0f;
+	ur_bool lightAnimationEnabled = true;
+	ur_float lightAnimationElapsedTime = 20.0f;
+
+	// atmosphere params
+	// temp: super low Mie & G to fake sun disc
+	AtmosphereDesc atmosphereDesc = {
+		6371.0e+3f,
+		6381.0e+3f,
+		0.250f,
+		-0.980f,
+		3.0e-8f,
+		7.0e-7f,
+		2.718f,
+	};
+
+	// setup main camera
+	Camera camera(realm);
+	CameraControl cameraControl(realm, &camera, CameraControl::Mode::FixedUp);
+	cameraControl.SetTargetPoint(ur_float3(-10.0f, 2.0f, -1.0f));
+	cameraControl.SetSpeed(4.0);
+	camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
+	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
+	camera.SetPosition(ur_float3(9.541f, 5.412f, -12.604f));
+	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
+	camera.SetPosition(ur_float3(9.541f, 1.8f, -12.604f));
+	#elif (SCENE_TYPE_SANMIGUEL == SCENE_TYPE)
+	camera.SetPosition(ur_float3(10.0f, 1.8f, -13.0f));
+	cameraControl.SetTargetPoint(ur_float3(5.0f, 1.8f, -15.0f));
+	#elif (SCENE_TYPE_RUNGHOLT == SCENE_TYPE)
+	camera.SetPosition(ur_float3(80.0f, 25.0f, -80.0f));
+	#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
+	camera.SetPosition(ur_float3(6.0f, 2.0f, -14.0f));
+	#endif
+	camera.SetLookAt(cameraControl.GetTargetPoint(), cameraControl.GetWorldUp());
+
+	SceneState sceneState = SceneState::Initialize;
+	do
+	{
+		// (re)create GRAF system
+		std::unique_ptr<GrafSystem> grafSystem;
+		switch (sceneState)
+		{
+		case SceneState::Initialize: grafSystem.reset(new UR_GRAF_SYSTEM(realm)); break;
+		case SceneState::RecreateForVulkan: grafSystem.reset(new GrafSystemVulkan(realm)); break;
+		case SceneState::RecreateForDX12: grafSystem.reset(new GrafSystemDX12(realm)); break;
+		};
+		Result res = grafSystem->Initialize(realm.GetCanvas());
+		if (Failed(res)) break;
+
+		// run demo scene
+		sceneState = RunDemoScene(
+			std::move(grafSystem),
+			realm,
+			sunLight, sunLight2, sphericalLight1, sphericalLight1Ptr, lightingDesc,
+			lightCycleTime, lightCrntCycleFactor, lightAnimationEnabled, lightAnimationElapsedTime,
+			atmosphereDesc,
+			camera, cameraControl);
+	} while (SceneState::Finish != sceneState);
+
+	return 0;
+}
+
+SceneState RunDemoScene(
+	std::unique_ptr<GrafSystem> grafSystem,
+	Realm& realm,
+	LightDesc& sunLight, LightDesc& sunLight2, LightDesc& sphericalLight1, LightDesc* sphericalLight1Ptr, LightingDesc& lightingDesc,
+	ur_float& lightCycleTime, ur_float& lightCrntCycleFactor, ur_bool& lightAnimationEnabled, ur_float& lightAnimationElapsedTime,
+	AtmosphereDesc& atmosphereDesc,
+	Camera& camera, CameraControl& cameraControl)
+{
+	ur_float canvasScale = 1.0f;
+	ur_uint canvasWidth = ur_uint(realm.GetCanvas()->GetClientBound().Width() * canvasScale);
+	ur_uint canvasHeight = ur_uint(realm.GetCanvas()->GetClientBound().Height() * canvasScale);
+	ur_bool canvasValid = (realm.GetCanvas()->GetClientBound().Area() > 0);
+	ur_bool canvasChanged = false;
+
 	// create GRAF renderer
 	GrafRenderer *grafRenderer = realm.AddComponent<GrafRenderer>(realm);
 	Result res = Success;
 	do
 	{
-		// create GRAF system
-		std::unique_ptr<GrafSystem> grafSystem(new UR_GRAF_SYSTEM(realm));
-		res = grafSystem->Initialize(realm.GetCanvas());
-		if (Failed(res)) break;
-
 		// initialize renderer
 		GrafRenderer::InitParams grafRendererParams = GrafRenderer::InitParams::Default;
 		grafRendererParams.DeviceId = grafSystem->GetRecommendedDeviceId();
@@ -2156,7 +2278,7 @@ int HybridRenderingApp::Run()
 			ur_int editableInt = 0;
 			ur_float editableFloat3[3];
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::CollapsingHeader("DemoScene"))
+			if (ImGui::CollapsingHeader("Scene"))
 			{
 				ImGui::Checkbox("InstancesAnimationEnabled", &this->animationEnabled);
 				editableInt = (int)this->sampleInstanceCount;
@@ -2227,86 +2349,14 @@ int HybridRenderingApp::Run()
 		}
 	}
 
-	// light source params
-	LightDesc sunLight = {}; // main directional light source
-	sunLight.Type = LightType_Directional;
-	sunLight.Color = { 1.0f, 1.0f, 1.0f };
-	sunLight.Intensity = SolarIlluminanceNoon;
-	sunLight.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere;
-	sunLight.Direction = { -0.8165f,-0.40825f,-0.40825f };
-	sunLight.Size = SolarDiskHalfAngleTangent * 2.0f;
-	LightDesc sunLight2 = {}; // artificial second star
-	sunLight2.Type = LightType_Directional;
-	sunLight2.Color = { 1.0f, 0.1f, 0.0f };
-	sunLight2.Intensity = SolarIlluminanceNoon * 0.5;
-	sunLight2.IntensityTopAtmosphere = SolarIlluminanceTopAtmosphere * 0.5;
-	sunLight2.Direction = { 0.8018f,-0.26726f,-0.5345f };
-	sunLight2.Size = SolarDiskHalfAngleTangent * 4.0f;
-	LightDesc sphericalLight1 = {}; // main directional light source
-	LightDesc* sphericalLight1Ptr = ur_null;
-	sphericalLight1.Type = LightType_Spherical;
-	sphericalLight1.Color = { 1.0f, 1.0f, 1.0f };
-	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE) || (SCENE_TYPE_FOREST == SCENE_TYPE)
-	sphericalLight1.Position = { 10.0f, 10.0f, 10.0f };
-	sphericalLight1.Intensity = SolarIlluminanceNoon * powf(sphericalLight1.Position.y, 2) * 2; // match illuminance to day light
-	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
-	sphericalLight1.Position = { 2.0f, 2.0f, 2.0f };
-	sphericalLight1.Intensity = SolarIlluminanceNoon * powf(sphericalLight1.Position.y, 2) * 1;
-	#endif
-	sphericalLight1.Size = 1.0f;
-	LightingDesc lightingDesc = {};
-	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight;
-	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
-	sphericalLight1Ptr = &lightingDesc.LightSources[lightingDesc.LightSourceCount];
-	lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sphericalLight1;
-	#endif
-	//lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
-
-	// light source animation
-	ur_float lightCycleTime = 120.0f;
-	ur_float lightCrntCycleFactor = 0.0f;
-	ur_bool lightAnimationEnabled = true;
-	ur_float lightAnimationElapsedTime = 20.0f;
-
-	// atmosphere params
-	// temp: super low Mie & G to fake sun disc
-	AtmosphereDesc atmosphereDesc = {
-		6371.0e+3f,
-		6381.0e+3f,
-		0.250f,
-		-0.980f,
-		3.0e-8f,
-		7.0e-7f,
-		2.718f,
-	};
-
-	// setup main camera
-	Camera camera(realm);
-	CameraControl cameraControl(realm, &camera, CameraControl::Mode::FixedUp);
-	cameraControl.SetTargetPoint(ur_float3(-10.0f, 2.0f, -1.0f));
-	cameraControl.SetSpeed(4.0);
-	camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
-	#if (SCENE_TYPE_MEDIEVAL_BUILDINGS == SCENE_TYPE)
-	camera.SetPosition(ur_float3(9.541f, 5.412f, -12.604f));
-	#elif (SCENE_TYPE_SPONZA == SCENE_TYPE)
-	camera.SetPosition(ur_float3(9.541f, 1.8f, -12.604f));
-	#elif (SCENE_TYPE_SANMIGUEL == SCENE_TYPE)
-	camera.SetPosition(ur_float3(10.0f, 1.8f, -13.0f));
-	cameraControl.SetTargetPoint(ur_float3(5.0f, 1.8f, -15.0f));
-	#elif (SCENE_TYPE_RUNGHOLT == SCENE_TYPE)
-	camera.SetPosition(ur_float3(80.0f, 25.0f, -80.0f));
-	#elif (SCENE_TYPE_FOREST == SCENE_TYPE)
-	camera.SetPosition(ur_float3(6.0f, 2.0f, -14.0f));
-	#endif
-	camera.SetLookAt(cameraControl.GetTargetPoint(), cameraControl.GetWorldUp());
-
-	// Main message loop:
+	// Main loop
+	SceneState sceneState = SceneState::Run;
 	ClockTime timer = Clock::now();
 	MSG msg;
 	ZeroMemory(&msg, sizeof(msg));
-	while (msg.message != WM_QUIT && !realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::Escape))
+	while (SceneState::Run == sceneState)
 	{
-		// process messages first
+		// process messages & input
 
 		ClockTime timeBefore = Clock::now();
 		while (PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE) && msg.message != WM_QUIT)
@@ -2317,8 +2367,11 @@ int HybridRenderingApp::Run()
 			WinInput* winInput = static_cast<WinInput*>(realm.GetInput());
 			winInput->ProcessMsg(msg);
 		}
-		if (msg.message == WM_QUIT)
+		if (msg.message == WM_QUIT || realm.GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::Escape))
+		{
+			sceneState = SceneState::Finish;
 			break;
+		}
 		auto inputDelay = Clock::now() - timeBefore;
 		timer += inputDelay; // skip input delay
 
@@ -2752,6 +2805,14 @@ int HybridRenderingApp::Run()
 					ImGui::ShowMetricsWindow();
 
 					grafRenderer->ShowImgui();
+					ImGui::Begin("Demo");
+					if (ImGui::CollapsingHeader("Graphics API"))
+					{
+						if (ImGui::Button("Recreate for Vulkan"))
+							sceneState = SceneState::RecreateForVulkan;
+						if (ImGui::Button("Recreate for DX12"))
+							sceneState = SceneState::RecreateForDX12;
+					}
 					cameraControl.ShowImgui();
 					if (hdrRender != ur_null)
 					{
@@ -2919,5 +2980,5 @@ int HybridRenderingApp::Run()
 	realm.RemoveComponent<GenericRender>();
 	realm.RemoveComponent<GrafRenderer>();
 
-	return 0;
+	return sceneState;
 }
