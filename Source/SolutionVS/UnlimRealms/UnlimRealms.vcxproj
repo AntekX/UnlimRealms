@@ -106,7 +106,8 @@
       <ShaderModel>5.0</ShaderModel>
     </FxCompile>
     <PostBuildEvent>
-      <Command>xcopy $(SolutionDir)..\..\..\Tools\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y</Command>
+      <Command>xcopy $(SolutionDir)..\..\..\Tools\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y
+xcopy $(SolutionDir)..\..\..\Source\3rdParty\WinPixEventRuntime\bin\x64\WinPixEventRuntime.dll $(SolutionDir)..\..\..\Bin\. /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -128,7 +129,8 @@
       <ShaderModel>5.0</ShaderModel>
     </FxCompile>
     <PostBuildEvent>
-      <Command>xcopy $(SolutionDir)..\..\..\Tools\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y</Command>
+      <Command>xcopy $(SolutionDir)..\..\..\Tools\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y
+xcopy $(SolutionDir)..\..\..\Source\3rdParty\WinPixEventRuntime\bin\x64\WinPixEventRuntime.dll $(SolutionDir)..\..\..\Bin\. /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -154,7 +156,8 @@
       <ShaderModel>5.0</ShaderModel>
     </FxCompile>
     <PostBuildEvent>
-      <Command>xcopy $(SolutionDir)..\..\..\Tools\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y</Command>
+      <Command>xcopy $(SolutionDir)..\..\..\Tools\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y
+xcopy $(SolutionDir)..\..\..\Source\3rdParty\WinPixEventRuntime\bin\x64\WinPixEventRuntime.dll $(SolutionDir)..\..\..\Bin\. /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -180,7 +183,8 @@
       <ShaderModel>5.0</ShaderModel>
     </FxCompile>
     <PostBuildEvent>
-      <Command>xcopy $(SolutionDir)..\..\..\Tools\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y</Command>
+      <Command>xcopy $(SolutionDir)..\..\..\Tools\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y
+xcopy $(SolutionDir)..\..\..\Source\3rdParty\WinPixEventRuntime\bin\x64\WinPixEventRuntime.dll $(SolutionDir)..\..\..\Bin\. /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

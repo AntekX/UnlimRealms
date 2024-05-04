@@ -13,10 +13,12 @@
 #include "Gfx/D3D12/d3dx12.h"
 #include "Gfx/DXGIUtils/DXGIUtils.h"
 #include "3rdParty/DXCompiler/inc/dxcapi.h"
+#include "3rdParty/WinPixEventRuntime/include/pix3.h"
 #include "comdef.h"
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "../../../Source/3rdParty/DXCompiler/lib/x64/dxcompiler.lib")
+#pragma comment(lib, "../../../Source/3rdParty/WinPixEventRuntime/bin/x64/WinPixEventRuntime.lib")
 
 namespace UnlimRealms
 {
@@ -31,6 +33,7 @@ namespace UnlimRealms
 		D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE,
 	};
 	#endif
+	#define UR_GRAF_DX12_DEBUG_LABLES 1
 
 	// command buffer synchronisation policy
 	#define UR_GRAF_DX12_COMMAND_LIST_SYNC_DESTROY	1
@@ -826,20 +829,32 @@ namespace UnlimRealms
 
 	Result GrafCommandListDX12::InsertDebugLabel(const char* name, const ur_float4& color)
 	{
-		// requires pix shite
+	#if (UR_GRAF_DX12_DEBUG_LABLES)
+		PIXSetMarker(this->d3dCommandList.get(), UINT64(Vector4ToRGBA32(color)), name);
+		return Result(Success);
+	#else
 		return Result(NotImplemented);
+	#endif
 	}
 
 	Result GrafCommandListDX12::BeginDebugLabel(const char* name, const ur_float4& color)
 	{
-		// requires pix shite
+	#if (UR_GRAF_DX12_DEBUG_LABLES)
+		PIXBeginEvent(this->d3dCommandList.get(), UINT64(Vector4ToRGBA32(color)), name);
+		return Result(Success);
+	#else
 		return Result(NotImplemented);
+	#endif
 	}
 
 	Result GrafCommandListDX12::EndDebugLabel()
 	{
-		// requires pix shite
+	#if (UR_GRAF_DX12_DEBUG_LABLES)
+		PIXEndEvent(this->d3dCommandList.get());
+		return Result(Success);
+	#else
 		return Result(NotImplemented);
+	#endif
 	}
 
 	Result GrafCommandListDX12::BufferMemoryBarrier(GrafBuffer* grafBuffer, GrafBufferState srcState, GrafBufferState dstState)

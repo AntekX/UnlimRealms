@@ -824,7 +824,6 @@ namespace UnlimRealms
 		static inline DXGI_FORMAT GrafToDXGIFormat(GrafIndexType indexType);
 		static inline DXGI_FORMAT GrafToDXGIFormat(GrafFormat grafFormat);
 		static inline GrafFormat DXGIToGrafFormat(DXGI_FORMAT dxgiFormat);
-		//static inline VkRayTracingShaderGroupTypeKHR GrafToVkRayTracingShaderGroupType(GrafRayTracingShaderGroupType shaderGroupType);
 		static inline D3D12_RAYTRACING_GEOMETRY_TYPE GrafToD3DAccelerationStructureGeometryType(GrafAccelerationStructureGeometryType geometryType);
 		static inline D3D12_RAYTRACING_GEOMETRY_FLAGS GrafToD3DAccelerationStructureGeometryFlags(GrafAccelerationStructureGeometryFlags geometryFlags);
 		static inline D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE GrafToD3DAccelerationStructureType(GrafAccelerationStructureType structureType);
