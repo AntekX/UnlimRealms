@@ -13,6 +13,8 @@
 namespace UnlimRealms
 {
 
+	static const wchar_t WndClassName[] = L"UnlimRealms_WinCanvas_WndClass";
+
 	WinCanvas::WinCanvas(Realm &realm, Style style, const wchar_t *title) :
 		Canvas(realm)
 	{
@@ -24,12 +26,18 @@ namespace UnlimRealms
 
 	WinCanvas::~WinCanvas()
 	{
+		if (this->hwnd != NULL)
+		{
+			DestroyWindow(this->hwnd);
+		}
+		if (this->hinst != NULL)
+		{
+			UnregisterClassW(WndClassName, this->hinst);
+		}
 	}
 
 	Result WinCanvas::OnInitialize(const RectI &bound)
 	{
-		static const wchar_t WndClassName[] = L"UnlimRealms_WinCanvas_WndClass";
-
 		// get active process handle
 
 		this->hinst = GetModuleHandle(NULL);

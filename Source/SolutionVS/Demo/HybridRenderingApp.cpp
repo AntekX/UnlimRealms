@@ -224,6 +224,7 @@ int HybridRenderingApp::Run()
 			lightCycleTime, lightCrntCycleFactor, lightAnimationEnabled, lightAnimationElapsedTime,
 			atmosphereDesc,
 			camera, cameraControl);
+
 	} while (SceneState::Finish != sceneState);
 
 	return 0;
@@ -2906,6 +2907,7 @@ SceneState RunDemoScene(
 						canvasScale = std::max(1.0f / 16.0f, std::min(4.0f, canvasScale));
 						canvasChanged |= (canvasScale != canvasScalePrev);
 					}
+					ImGui::End();
 
 					GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ImGui", DebugLabelColorRender);
 					imguiRender->Render(*grafCmdListCrnt);
