@@ -31,16 +31,30 @@ struct MeshPixelOutput
 	float4 Target2	: SV_Target2;
 };
 
-// Shadow buffer
-#define SHADOW_BUFFER_APPLY_HISTORY_IN_RAYGEN 0 // allows to apply temporal accumulation without separate filter pass
-#define SHADOW_BUFFER_ONE_LIGHT_PER_FRAME 0 // enables light sources tracing distribution between multiple frames (requires temporal accumulation enabled)
-static const uint ShadowBufferEntriesPerPixel = 4; // 4 channel float buffer
+// Ray tracing
 
-// Ray tracing shader table offsets
+#define RT_GI 1
+#define RT_GI_MIN_FAKE_AMBIENT 1
+#define RT_REFLECTION 0
+#define RT_ALPHATEST 0
+#define RT_ALPHATEST_VALUE 0.25
+
+#if (RT_ALPHATEST)
+#define RT_DEFAULT_TRACE_FLAGS (RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_NON_OPAQUE);
+#else
+#define RT_DEFAULT_TRACE_FLAGS (RAY_FLAG_CULL_BACK_FACING_TRIANGLES);
+#endif
+
+// Shader table offsets
 static const uint ShaderGroupIdx_MissDirect = 0;
 static const uint ShaderGroupIdx_MissIndirect = 1;
 static const uint ShaderGroupIdx_ClosestHitDirect = 0;
 static const uint ShaderGroupIdx_ClosestHitIndirect = 1;
+
+// Shadow generation
+#define SHADOW_BUFFER_APPLY_HISTORY_IN_RAYGEN 0 // allows to apply temporal accumulation without separate filter pass
+#define SHADOW_BUFFER_ONE_LIGHT_PER_FRAME 0 // enables light sources tracing distribution between multiple frames (requires temporal accumulation enabled)
+static const uint ShadowBufferEntriesPerPixel = 4; // 4 channel float buffer
 
 struct RayDataDirect
 {

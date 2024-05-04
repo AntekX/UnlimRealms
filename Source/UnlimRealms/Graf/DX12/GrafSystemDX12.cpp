@@ -1313,30 +1313,30 @@ namespace UnlimRealms
 		d3dBuildDesc.ScratchAccelerationStructureData = D3D12_GPU_VIRTUAL_ADDRESS(dstStructureDX12->GetScratchBuffer()->GetDeviceAddress());
 		d3dBuildDesc.Inputs.Type = GrafUtilsDX12::GrafToD3DAccelerationStructureType(dstStructureDX12->GetStructureType());
 		d3dBuildDesc.Inputs.Flags = GrafUtilsDX12::GrafToD3DAccelerationStructureBuildFlags(dstStructureDX12->GetStructureBuildFlags());
-		d3dBuildDesc.Inputs.NumDescs = geometryCount;
 		d3dBuildDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 
 		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> d3dGeometryDescArray;
 		if (GrafAccelerationStructureType::TopLevel == dstStructureDX12->GetStructureType())
 		{
-			for (ur_uint32 igeom = 0; igeom < geometryCount; ++igeom)
+			if (geometryCount != 1 || GrafAccelerationStructureGeometryType::Instances != geometryData[0].GeometryType)
+				return ResultError(InvalidArgs, std::string("GrafCommandListDX12::BuildAccelerationStructure: top level AS expects only one geomtry description of Instances type"));
+			GrafAccelerationStructureGeometryData& geometry = geometryData[0];
+			if (ur_null == geometry.InstancesData || 0 == geometry.InstancesData->DeviceAddress)
 			{
-				GrafAccelerationStructureGeometryData& geometry = geometryData[igeom];
-				if (ur_null == geometry.InstancesData || 0 == geometry.InstancesData->DeviceAddress)
-				{
-					LogError(std::string("GrafCommandListDX12::BuildAccelerationStructure: top level AS must have instance data with valid device address"));
-					return Result(InvalidArgs);
-				}
-				if (geometry.InstancesData->IsPointersArray)
-				{
-					LogError(std::string("GrafCommandListDX12::BuildAccelerationStructure: IsPointersArray per geometry is not supported"));
-					return Result(InvalidArgs);
-				}
-				d3dBuildDesc.Inputs.InstanceDescs = geometryData->InstancesData->DeviceAddress;
+				LogError(std::string("GrafCommandListDX12::BuildAccelerationStructure: top level AS must have instance data with valid device address"));
+				return Result(InvalidArgs);
 			}
+			if (geometry.InstancesData->IsPointersArray)
+			{
+				LogError(std::string("GrafCommandListDX12::BuildAccelerationStructure: IsPointersArray per geometry is not supported"));
+				return Result(InvalidArgs);
+			}
+			d3dBuildDesc.Inputs.InstanceDescs = geometry.InstancesData->DeviceAddress;
+			d3dBuildDesc.Inputs.NumDescs = geometry.PrimitiveCount;
 		}
 		else if (GrafAccelerationStructureType::BottomLevel == dstStructureDX12->GetStructureType())
 		{
+			d3dBuildDesc.Inputs.NumDescs = geometryCount;
 			d3dGeometryDescArray.resize(geometryCount);
 			for (ur_uint32 igeom = 0; igeom < geometryCount; ++igeom)
 			{
@@ -1358,9 +1358,9 @@ namespace UnlimRealms
 					d3dGeometryTriangles.IndexCount = geometry.PrimitiveCount * 3;
 					d3dGeometryTriangles.VertexCount = geometry.TrianglesData->VertexCount;
 					d3dGeometryTriangles.VertexBuffer.StrideInBytes = geometry.TrianglesData->VertexStride;
-					d3dGeometryTriangles.VertexBuffer.StartAddress = geometry.TrianglesData->VerticesDeviceAddress;
-					d3dGeometryTriangles.IndexBuffer = geometry.TrianglesData->IndicesDeviceAddress;
-					d3dGeometryTriangles.Transform3x4 = geometry.TrianglesData->TransformsDeviceAddress;
+					d3dGeometryTriangles.VertexBuffer.StartAddress = geometry.TrianglesData->VerticesDeviceAddress + geometry.FirstVertexIndex * geometry.TrianglesData->VertexStride;
+					d3dGeometryTriangles.IndexBuffer = geometry.TrianglesData->IndicesDeviceAddress + geometry.PrimitivesOffset;
+					d3dGeometryTriangles.Transform3x4 = geometry.TrianglesData->TransformsDeviceAddress + geometry.TransformsOffset;
 				}
 				else if (GrafAccelerationStructureGeometryType::AABBs == geometry.GeometryType)
 				{

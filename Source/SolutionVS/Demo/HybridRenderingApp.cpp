@@ -1301,7 +1301,7 @@ int HybridRenderingApp::Run()
 				grafSystem->CreateRayTracingPipeline(this->raytracePipelineState);
 				this->raytracePipelineState->Initialize(grafDevice, raytracePipelineParams);
 
-				// shader group handles buffer
+				// ray tracing shader table
 
 				grafSystem->CreateBuffer(this->raytraceShaderHandlesBuffer);
 
@@ -1641,7 +1641,7 @@ int HybridRenderingApp::Run()
 				ur_float4x4& transform = transforms[i];
 				transform = {
 					1.0f, 0.0f, 0.0f, radius* cosf(ur_float(i) / sphereInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
-					0.0f, 1.0f, 0.0f, height + cosf(ur_float(i) / sphereInstanceCount * MathConst<ur_float>::Pi * 6.0f + animAngle) * 1.0f,
+					0.0f, 1.0f, 0.0f, height + cosf(ur_float(i) / sphereInstanceCount * MathConst<ur_float>::Pi * 6.0f + animAngle),
 					0.0f, 0.0f, 1.0f, radius* sinf(ur_float(i) / sphereInstanceCount * MathConst<ur_float>::Pi * 2.0f + animAngle),
 					0.0f, 0.0f, 0.0f, 1.0f
 				};

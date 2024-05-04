@@ -262,10 +262,7 @@ void RayGenMain()
 					uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitDirect;
 					uint multiplierForGeometryContributionToShaderIndex = 1;
 					uint missShaderIndex = ShaderGroupIdx_MissDirect;
-					uint traceFlags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
-					#if (RT_ALPHATEST)
-					traceFlags = traceFlags | RAY_FLAG_FORCE_NON_OPAQUE;
-					#endif
+					uint traceFlags = RT_DEFAULT_TRACE_FLAGS;
 					TraceRay(g_SceneStructure,
 						traceFlags,
 						instanceInclusionMask,
@@ -375,10 +372,7 @@ void RayGenMain()
 				uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitIndirect;
 				uint multiplierForGeometryContributionToShaderIndex = 1;
 				uint missShaderIndex = ShaderGroupIdx_MissIndirect;
-				uint traceFlags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
-				#if (RT_ALPHATEST)
-				traceFlags = traceFlags | RAY_FLAG_FORCE_NON_OPAQUE;
-				#endif
+				uint traceFlags = RT_DEFAULT_TRACE_FLAGS;
 				TraceRay(g_SceneStructure,
 					traceFlags,
 					instanceInclusionMask,
@@ -522,10 +516,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitIndirect;
 		uint multiplierForGeometryContributionToShaderIndex = 1;
 		uint missShaderIndex = ShaderGroupIdx_MissIndirect;
-		uint traceFlags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
-		#if (RT_ALPHATEST)
-		traceFlags = traceFlags | RAY_FLAG_FORCE_NON_OPAQUE;
-		#endif
+		uint traceFlags = RT_DEFAULT_TRACE_FLAGS;
 		TraceRay(g_SceneStructure,
 			traceFlags,
 			instanceInclusionMask,
@@ -582,10 +573,7 @@ void ClosestHitIndirect(inout RayDataIndirect rayData, in BuiltInTriangleInterse
 		uint rayContributionToHitGroupIndex = ShaderGroupIdx_ClosestHitDirect;
 		uint multiplierForGeometryContributionToShaderIndex = 1;
 		uint missShaderIndex = ShaderGroupIdx_MissDirect;
-		uint traceFlags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
-		#if (RT_ALPHATEST)
-		traceFlags = traceFlags | RAY_FLAG_FORCE_NON_OPAQUE;
-		#endif
+		uint traceFlags = RT_DEFAULT_TRACE_FLAGS;
 		TraceRay(g_SceneStructure,
 			traceFlags,
 			instanceInclusionMask,
