@@ -79,4 +79,42 @@ namespace UnlimRealms
 		return this->constantBufferAllocator.Allocate(size);
 	}
 
+	inline GrafRenderer& GrafRendererEntity::GetGrafRenderer() const
+	{
+		return this->grafRenderer;
+	}
+
+	template <class TGrafObject>
+	GrafRendererManagedEntity<TGrafObject>::GrafRendererManagedEntity(GrafRenderer& grafRenderer) :
+		GrafRendererEntity(grafRenderer)
+	{
+	}
+
+	template <class TGrafObject>
+	GrafRendererManagedEntity<TGrafObject>::~GrafRendererManagedEntity()
+	{
+		this->Deinitialize();
+	}
+
+	template <class TGrafObject>
+	Result GrafRendererManagedEntity<TGrafObject>::Initialize()
+	{
+		this->grafObjectPerFrame.resize(this->GetGrafRenderer().GetRecordedFrameCount());
+		return Result(Success);
+	}
+
+	template <class TGrafObject>
+	Result GrafRendererManagedEntity<TGrafObject>::Deinitialize()
+	{
+		this->grafObjectPerFrame.clear();
+		return Result(Success);
+	}
+
+	template <class TGrafObject>
+	inline TGrafObject* GrafRendererManagedEntity<TGrafObject>::GetCurrentObject() const
+	{
+		ur_uint crntFrameId = this->GetGrafRenderer().GetCurrentFrameId();
+		return (crntFrameId < this->grafObjectPerFrame.size() ? static_cast<TGrafObject*>(this->grafObjectPerFrame[crntFrameId].get()) : ur_null);
+	}
+
 } // end namespace UnlimRealmscs

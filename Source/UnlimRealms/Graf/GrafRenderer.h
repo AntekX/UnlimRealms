@@ -100,7 +100,7 @@ namespace UnlimRealms
 
 		inline Allocation GetDynamicConstantBufferAllocation(ur_size size);
 
-	protected:
+	private:
 
 		struct UR_DECL PendingCommandListCallbackData
 		{
@@ -146,6 +146,67 @@ namespace UnlimRealms
 		//std::shared_ptr<Job> processingCommandListCallbacksJob;
 		//ur_uint pendingCommandListCallbacksIdx;
 		std::mutex pendingCommandListMutex;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafRendererEntity : public RealmEntity
+	{
+	public:
+
+		GrafRendererEntity(GrafRenderer& grafRenderer);
+
+		virtual ~GrafRendererEntity();
+
+		inline GrafRenderer& GetGrafRenderer() const;
+
+	private:
+
+		GrafRenderer& grafRenderer;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	template <class TGrafObject>
+	class GrafRendererManagedEntity : public GrafRendererEntity
+	{
+	public:
+
+		GrafRendererManagedEntity(GrafRenderer& grafRenderer);
+
+		virtual ~GrafRendererManagedEntity();
+
+		Result Initialize();
+
+		Result Deinitialize();
+
+		inline TGrafObject* GetCurrentObject() const;
+
+	protected:
+
+		std::vector<std::unique_ptr<TGrafObject>> grafObjectPerFrame;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafManagedCommandList : public GrafRendererManagedEntity<GrafCommandList>
+	{
+	public:
+
+		GrafManagedCommandList(GrafRenderer& grafRenderer);
+
+		virtual ~GrafManagedCommandList();
+
+		Result Initialize();
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafManagedDescriptorTable : public GrafRendererManagedEntity<GrafDescriptorTable>
+	{
+	public:
+
+		GrafManagedDescriptorTable(GrafRenderer& grafRenderer);
+
+		virtual ~GrafManagedDescriptorTable();
+
+		Result Initialize(const GrafDescriptorTable::InitParams& initParams);
 	};
 
 } // end namespace UnlimRealms

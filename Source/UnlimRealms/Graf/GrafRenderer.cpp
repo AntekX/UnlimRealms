@@ -14,6 +14,8 @@
 namespace UnlimRealms
 {
 
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	const GrafRenderer::InitParams GrafRenderer::InitParams::Default = {
 		GrafRenderer::InitParams::RecommendedDeviceId,
 		GrafCanvas::InitParams::Default,
@@ -757,6 +759,104 @@ namespace UnlimRealms
 		}
 
 		ImGui::End();
+
+		return Result(Success);
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GrafRendererEntity::GrafRendererEntity(GrafRenderer& grafRenderer) :
+		RealmEntity(grafRenderer.GetRealm()),
+		grafRenderer(grafRenderer)
+	{
+	}
+
+	GrafRendererEntity::~GrafRendererEntity()
+	{
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GrafManagedCommandList::GrafManagedCommandList(GrafRenderer& grafRenderer) :
+		GrafRendererManagedEntity<GrafCommandList>(grafRenderer)
+	{
+	}
+
+	GrafManagedCommandList::~GrafManagedCommandList()
+	{
+	}
+
+	Result GrafManagedCommandList::Initialize()
+	{
+		this->Deinitialize();
+
+		GrafSystem* grafSystem = this->GetGrafRenderer().GetGrafSystem();
+		GrafDevice* grafDevice = this->GetGrafRenderer().GetGrafDevice();
+		if (ur_null == grafSystem || ur_null == grafDevice)
+		{
+			LogError(std::string("GrafManagedCommandList: failed to initialize, invalid args"));
+			return Result(InvalidArgs);
+		}
+
+		GrafRendererManagedEntity<GrafCommandList>::Initialize();
+
+		for (std::unique_ptr<GrafCommandList>& grafCommandList : this->grafObjectPerFrame)
+		{
+			Result res = grafSystem->CreateCommandList(grafCommandList);
+			if (Succeeded(res))
+			{
+				res = grafCommandList->Initialize(grafDevice);
+			}
+			if (Failed(res))
+			{
+				this->Deinitialize();
+				LogError(std::string("GrafManagedCommandList: failed to initialize command list(s)"));
+				return Result(res);
+			}
+		}
+
+		return Result(Success);
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GrafManagedDescriptorTable::GrafManagedDescriptorTable(GrafRenderer& grafRenderer) :
+		GrafRendererManagedEntity<GrafDescriptorTable>(grafRenderer)
+	{
+	}
+
+	GrafManagedDescriptorTable::~GrafManagedDescriptorTable()
+	{
+	}
+
+	Result GrafManagedDescriptorTable::Initialize(const GrafDescriptorTable::InitParams& initParams)
+	{
+		this->Deinitialize();
+
+		GrafSystem* grafSystem = this->GetGrafRenderer().GetGrafSystem();
+		GrafDevice* grafDevice = this->GetGrafRenderer().GetGrafDevice();
+		if (ur_null == grafSystem || ur_null == grafDevice || ur_null == initParams.Layout)
+		{
+			LogError(std::string("GrafManagedDescriptorTable: failed to initialize, invalid args"));
+			return Result(InvalidArgs);
+		}
+
+		GrafRendererManagedEntity<GrafDescriptorTable>::Initialize();
+
+		for (std::unique_ptr<GrafDescriptorTable>& grafDescriptorTable : this->grafObjectPerFrame)
+		{
+			Result res = grafSystem->CreateDescriptorTable(grafDescriptorTable);
+			if (Succeeded(res))
+			{
+				res = grafDescriptorTable->Initialize(grafDevice, initParams);
+			}
+			if (Failed(res))
+			{
+				this->Deinitialize();
+				LogError(std::string("GrafManagedDescriptorTable: failed to initialize descriptor table(s)"));
+				return Result(res);
+			}
+		}
 
 		return Result(Success);
 	}
