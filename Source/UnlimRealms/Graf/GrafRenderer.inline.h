@@ -111,10 +111,11 @@ namespace UnlimRealms
 	}
 
 	template <class TGrafObject>
-	inline TGrafObject* GrafRendererManagedEntity<TGrafObject>::GetCurrentObject() const
+	inline TGrafObject* GrafRendererManagedEntity<TGrafObject>::GetFrameObject(ur_uint frameId) const
 	{
-		ur_uint crntFrameId = this->GetGrafRenderer().GetCurrentFrameId();
-		return (crntFrameId < this->grafObjectPerFrame.size() ? static_cast<TGrafObject*>(this->grafObjectPerFrame[crntFrameId].get()) : ur_null);
+		if (frameId >= this->GetGrafRenderer().GetRecordedFrameCount())
+			frameId = this->GetGrafRenderer().GetCurrentFrameId();
+		return (frameId < this->grafObjectPerFrame.size() ? static_cast<TGrafObject*>(this->grafObjectPerFrame[frameId].get()) : ur_null);
 	}
 
 } // end namespace UnlimRealmscs

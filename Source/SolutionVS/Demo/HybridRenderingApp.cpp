@@ -356,7 +356,7 @@ SceneState RunDemoScene(
 
 	static const ur_uint BlurPassCountPerFrame = 32; // reserved descriptor tables per frame
 
-	std::vector<std::unique_ptr<GrafCommandList>> cmdListPerFrame;
+	std::unique_ptr<GrafManagedCommandList> managedCommandList;
 	std::unique_ptr<GrafRenderPass> rasterRenderPass;
 	std::unique_ptr<RenderTargetSet> renderTargetSet;
 	std::unique_ptr<LightingBufferSet> lightingBufferSet;
@@ -516,7 +516,7 @@ SceneState RunDemoScene(
 		// here we expect that device is idle
 		DestroyFrameBufferObjects();
 		rasterRenderPass.reset();
-		cmdListPerFrame.clear();
+		managedCommandList.reset();
 	};
 
 	auto InitGrafObjects = [&]() -> Result
@@ -525,16 +525,9 @@ SceneState RunDemoScene(
 		GrafSystem *grafSystem = grafRenderer->GetGrafSystem();
 		GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 
-		// command lists (per frame)
-		ur_uint frameCount = grafRenderer->GetRecordedFrameCount();
-		cmdListPerFrame.resize(frameCount);
-		for (ur_uint iframe = 0; iframe < frameCount; ++iframe)
-		{
-			res = grafSystem->CreateCommandList(cmdListPerFrame[iframe]);
-			if (Failed(res)) break;
-			res = cmdListPerFrame[iframe]->Initialize(grafDevice);
-			if (Failed(res)) break;
-		}
+		// main command list (managed per frame)
+		managedCommandList.reset(new GrafManagedCommandList(*grafRenderer));
+		res = managedCommandList->Initialize();
 		if (Failed(res)) return res;
 
 		// rasterization render pass
@@ -620,7 +613,7 @@ SceneState RunDemoScene(
 				std::unique_ptr<GrafImage> colorImage;
 				std::unique_ptr<GrafImage> maskImage;
 				std::unique_ptr<GrafImage> normalImage;
-				std::vector<std::unique_ptr<GrafDescriptorTable>> descTablePerFrame;
+				std::unique_ptr<GrafManagedDescriptorTable> descriptorTable;
 				std::unique_ptr<GrafAccelerationStructure> accelerationStructureBL;
 				ur_uint64 accelerationStructureHandle;
 				ur_uint32 gpuRegistryIdx;
@@ -801,12 +794,8 @@ SceneState RunDemoScene(
 
 					// descriptor table
 
-					subMesh.descTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
-					for (auto& descTable : subMesh.descTablePerFrame)
-					{
-						grafSystem->CreateDescriptorTable(descTable);
-						descTable->Initialize(grafDevice, { demoScene->rasterDescTableLayout.get() });
-					}
+					subMesh.descriptorTable.reset(new GrafManagedDescriptorTable(*grafRenderer));
+					subMesh.descriptorTable->Initialize({ demoScene->rasterDescTableLayout.get() });
 
 					// ray tracing data
 
@@ -988,31 +977,31 @@ SceneState RunDemoScene(
 		std::vector<std::unique_ptr<Mesh>> meshes;
 		std::unique_ptr<GrafBuffer> instanceBuffer;
 		std::unique_ptr<GrafDescriptorTableLayout> rasterDescTableLayout;
-		std::vector<std::unique_ptr<GrafDescriptorTable>> rasterDescTablePerFrame;
+		std::unique_ptr<GrafManagedDescriptorTable> rasterDescTable;
 		std::unique_ptr<GrafPipeline> rasterPipelineState;
 		std::unique_ptr<GrafImage> skyImage;
 		std::unique_ptr<GrafDescriptorTableLayout> skyPrecomputeDescTableLayout;
-		std::vector<std::unique_ptr<GrafDescriptorTable>> skyPrecomputeDescTablePerFrame;
+		std::unique_ptr<GrafManagedDescriptorTable> skyPrecomputeDescTable;
 		std::unique_ptr<GrafComputePipeline> skyPrecomputePipelineState;
 		std::unique_ptr<GrafDescriptorTableLayout> lightingDescTableLayout;
-		std::vector<std::unique_ptr<GrafDescriptorTable>> lightingDescTablePerFrame;
+		std::unique_ptr<GrafManagedDescriptorTable> lightingDescTable;
 		std::unique_ptr<GrafComputePipeline> lightingPipelineState;
 		std::unique_ptr<GrafAccelerationStructure> accelerationStructureTL;
 		std::unique_ptr<GrafDescriptorTableLayout> raytraceDescTableLayout;
-		std::vector<std::unique_ptr<GrafDescriptorTable>> raytraceDescTablePerFrame;
+		std::unique_ptr<GrafManagedDescriptorTable> raytraceDescTable;
 		std::unique_ptr<GrafRayTracingPipeline> raytracePipelineState;
 		std::unique_ptr<GrafBuffer> raytraceShaderHandlesBuffer;
 		GrafStridedBufferRegionDesc rayGenShaderTable;
 		GrafStridedBufferRegionDesc rayMissShaderTable;
 		GrafStridedBufferRegionDesc rayHitShaderTable;
 		std::unique_ptr<GrafDescriptorTableLayout> shadowMipsDescTableLayout;
-		std::vector<std::unique_ptr<GrafDescriptorTable>> shadowMipsDescTablePerFrame;
+		std::unique_ptr<GrafManagedDescriptorTable> shadowMipsDescTable;
 		std::unique_ptr<GrafComputePipeline> shadowMipsPipelineState;
 		std::unique_ptr<GrafDescriptorTableLayout> blurDescTableLayout;
-		std::vector<std::unique_ptr<GrafDescriptorTable>> blurDescTables;
+		std::vector<std::unique_ptr<GrafManagedDescriptorTable>> blurDescTables;
 		std::unique_ptr<GrafComputePipeline> blurPipelineState;
 		std::unique_ptr<GrafDescriptorTableLayout> accumulationDescTableLayout;
-		std::vector<std::unique_ptr<GrafDescriptorTable>> accumulationDescTablePerFrame;
+		std::unique_ptr<GrafManagedDescriptorTable> accumulationDescTable;
 		std::unique_ptr<GrafComputePipeline> accumulationPipelineState;
 		std::unique_ptr<GrafShaderLib> shaderLib;
 		std::unique_ptr<GrafShaderLib> shaderLibRT;
@@ -1039,7 +1028,8 @@ SceneState RunDemoScene(
 
 		DemoScene(Realm& realm) : RealmEntity(realm), grafRenderer(ur_null)
 		{
-			memset(&this->sceneConstants, 0, sizeof(SceneConstants));
+			this->sceneConstants = {};
+			this->sceneConstants.FrameNumber = 0;
 			this->sceneConstants.DirectLightFactor = 1.0f;
 			this->sceneConstants.IndirectLightFactor = 1.0f;
 			this->blurDescTableIdx = 0;
@@ -1049,7 +1039,6 @@ SceneState RunDemoScene(
 			this->debugVec3 = ur_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			
 			// default material override
-			this->sceneConstants.FrameNumber = 0;
 			this->sceneConstants.OverrideMaterial = false;
 			this->sceneConstants.Material.BaseColor = { 0.5f, 0.5f, 0.5f };
 			this->sceneConstants.Material.Roughness = 0.5f;
@@ -1194,12 +1183,8 @@ SceneState RunDemoScene(
 			};
 			grafSystem->CreateDescriptorTableLayout(this->rasterDescTableLayout);
 			this->rasterDescTableLayout->Initialize(grafDevice, { rasterDescTableLayoutDesc });
-			this->rasterDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
-			for (auto& descTable : this->rasterDescTablePerFrame)
-			{
-				grafSystem->CreateDescriptorTable(descTable);
-				descTable->Initialize(grafDevice, { this->rasterDescTableLayout.get() });
-			}
+			this->rasterDescTable.reset(new GrafManagedDescriptorTable(*grafRenderer));
+			this->rasterDescTable->Initialize({ this->rasterDescTableLayout.get() });
 
 			// rasterization pipeline configuration
 			
@@ -1258,12 +1243,8 @@ SceneState RunDemoScene(
 			};
 			grafSystem->CreateDescriptorTableLayout(this->skyPrecomputeDescTableLayout);
 			this->skyPrecomputeDescTableLayout->Initialize(grafDevice, { skyPrecomputeDescTableLayoutDesc });
-			this->skyPrecomputeDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
-			for (auto& descTable : this->skyPrecomputeDescTablePerFrame)
-			{
-				grafSystem->CreateDescriptorTable(descTable);
-				descTable->Initialize(grafDevice, { this->skyPrecomputeDescTableLayout.get() });
-			}
+			this->skyPrecomputeDescTable.reset(new GrafManagedDescriptorTable(*grafRenderer));
+			this->skyPrecomputeDescTable->Initialize({ this->skyPrecomputeDescTableLayout.get() });
 
 			// sky precompute pipeline configuration
 
@@ -1302,12 +1283,8 @@ SceneState RunDemoScene(
 			};
 			grafSystem->CreateDescriptorTableLayout(this->lightingDescTableLayout);
 			this->lightingDescTableLayout->Initialize(grafDevice, { lightingDescTableLayoutDesc });
-			this->lightingDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
-			for (auto& descTable : this->lightingDescTablePerFrame)
-			{
-				grafSystem->CreateDescriptorTable(descTable);
-				descTable->Initialize(grafDevice, { this->lightingDescTableLayout.get() });
-			}
+			this->lightingDescTable.reset(new GrafManagedDescriptorTable(*grafRenderer));
+			this->lightingDescTable->Initialize({ this->lightingDescTableLayout.get() });
 
 			// lighting compute pipeline configuration
 
@@ -1372,12 +1349,8 @@ SceneState RunDemoScene(
 				};
 				grafSystem->CreateDescriptorTableLayout(this->raytraceDescTableLayout);
 				this->raytraceDescTableLayout->Initialize(grafDevice, { raytraceDescTableLayoutDesc });
-				this->raytraceDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
-				for (auto& descTable : this->raytraceDescTablePerFrame)
-				{
-					grafSystem->CreateDescriptorTable(descTable);
-					descTable->Initialize(grafDevice, { this->raytraceDescTableLayout.get() });
-				}
+				this->raytraceDescTable.reset(new GrafManagedDescriptorTable(*grafRenderer));
+				this->raytraceDescTable->Initialize({ this->raytraceDescTableLayout.get() });
 
 				// ray tracing pipeline
 
@@ -1470,12 +1443,8 @@ SceneState RunDemoScene(
 				};
 				grafSystem->CreateDescriptorTableLayout(this->shadowMipsDescTableLayout);
 				this->shadowMipsDescTableLayout->Initialize(grafDevice, { shadowMipsDescTableLayoutDesc });
-				this->shadowMipsDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
-				for (auto& descTable : this->shadowMipsDescTablePerFrame)
-				{
-					grafSystem->CreateDescriptorTable(descTable);
-					descTable->Initialize(grafDevice, { this->shadowMipsDescTableLayout.get() });
-				}
+				this->shadowMipsDescTable.reset(new GrafManagedDescriptorTable(*grafRenderer));
+				this->shadowMipsDescTable->Initialize({ this->shadowMipsDescTableLayout.get() });
 
 				grafSystem->CreateComputePipeline(this->shadowMipsPipelineState);
 				{
@@ -1507,11 +1476,11 @@ SceneState RunDemoScene(
 				};
 				grafSystem->CreateDescriptorTableLayout(this->blurDescTableLayout);
 				this->blurDescTableLayout->Initialize(grafDevice, { blurDescTableLayoutDesc });
-				this->blurDescTables.resize(grafRenderer->GetRecordedFrameCount() * BlurPassCountPerFrame);
+				this->blurDescTables.resize(BlurPassCountPerFrame);
 				for (auto& descTable : this->blurDescTables)
 				{
-					grafSystem->CreateDescriptorTable(descTable);
-					descTable->Initialize(grafDevice, { this->blurDescTableLayout.get() });
+					descTable.reset(new GrafManagedDescriptorTable(*grafRenderer));
+					descTable->Initialize({ this->blurDescTableLayout.get() });
 				}
 
 				grafSystem->CreateComputePipeline(this->blurPipelineState);
@@ -1552,12 +1521,8 @@ SceneState RunDemoScene(
 				};
 				grafSystem->CreateDescriptorTableLayout(this->accumulationDescTableLayout);
 				this->accumulationDescTableLayout->Initialize(grafDevice, { accumulationDescTableLayoutDesc });
-				this->accumulationDescTablePerFrame.resize(grafRenderer->GetRecordedFrameCount());
-				for (auto& descTable : this->accumulationDescTablePerFrame)
-				{
-					grafSystem->CreateDescriptorTable(descTable);
-					descTable->Initialize(grafDevice, { this->accumulationDescTableLayout.get() });
-				}
+				this->accumulationDescTable.reset(new GrafManagedDescriptorTable(*grafRenderer));
+				this->accumulationDescTable->Initialize({ this->accumulationDescTableLayout.get() });
 
 				grafSystem->CreateComputePipeline(this->accumulationPipelineState);
 				{
@@ -1971,7 +1936,7 @@ SceneState RunDemoScene(
 					GrafImage* colorImage = (subMesh.colorImage.get() ? subMesh.colorImage.get() : this->defaultImageWhite.get());
 					GrafImage* normalImage = (subMesh.normalImage.get() ? subMesh.normalImage.get() : this->defaultImageNormal.get());
 					GrafImage* maskImage = (subMesh.maskImage.get() ? subMesh.maskImage.get() : this->defaultImageWhite.get());
-					GrafDescriptorTable* descriptorTable = subMesh.descTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+					GrafDescriptorTable* descriptorTable = subMesh.descriptorTable->GetFrameObject();
 					descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, dynamicCB, this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 					descriptorTable->SetConstantBuffer(g_SubMeshCBDescriptor, dynamicCB, subMeshCBAlloc.Offset, subMeshCBAlloc.Size);
 					descriptorTable->SetBuffer(g_InstanceBufferDescriptor, this->instanceBuffer.get());
@@ -2023,7 +1988,7 @@ SceneState RunDemoScene(
 			// update descriptor table
 			// common constant buffer is expected to be uploaded during rasterization pass
 
-			GrafDescriptorTable* descriptorTable = this->skyPrecomputeDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			GrafDescriptorTable* descriptorTable = this->skyPrecomputeDescTable->GetFrameObject();
 			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 			descriptorTable->SetRWImage(g_PrecomputedSkyTargetDescriptor, this->skyImage.get());
 
@@ -2042,7 +2007,7 @@ SceneState RunDemoScene(
 			// update descriptor table
 			// common constant buffer is expected to be uploaded during rasterization pass
 
-			GrafDescriptorTable* descriptorTable = this->raytraceDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			GrafDescriptorTable* descriptorTable = this->raytraceDescTable->GetFrameObject();
 			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 			descriptorTable->SetSampler(g_SamplerBilinearWrapDescriptor, this->samplerBilinearWrap.get());
 			descriptorTable->SetImage(g_BlueNoiseImageDescriptor, this->blueNoiseImage.get());
@@ -2081,7 +2046,7 @@ SceneState RunDemoScene(
 			// update descriptor table
 			// common constant buffer is expected to be uploaded during rasterization pass
 
-			GrafDescriptorTable* descriptorTable = this->shadowMipsDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			GrafDescriptorTable* descriptorTable = this->shadowMipsDescTable->GetFrameObject();
 			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 			descriptorTable->SetImage(g_ShadowResultDescriptor, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][0].get());
 			descriptorTable->SetRWImage(g_ShadowMip1Descriptor, lightingBufferSet->subresources[LightingImageUsage_DirectShadow][std::min(1u, lastMipId)].get());
@@ -2128,8 +2093,8 @@ SceneState RunDemoScene(
 				// update descriptor table
 				// common constant buffer is expected to be uploaded during rasterization pass
 
-				this->blurDescTableIdx = (this->blurDescTableIdx + 1) % ur_uint(this->blurDescTables.size());
-				GrafDescriptorTable* descriptorTable = this->blurDescTables[this->blurDescTableIdx].get();
+				this->blurDescTableIdx = (this->blurDescTableIdx + 1) % BlurPassCountPerFrame;
+				GrafDescriptorTable* descriptorTable = this->blurDescTables[this->blurDescTableIdx]->GetFrameObject();
 				descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 				descriptorTable->SetConstantBuffer(g_BlurPassCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), passCBAlloc.Offset, passCBAlloc.Size);
 				descriptorTable->SetImage(g_GeometryDepthDescriptor, renderTargetSet->images[RenderTargetImageUsage_Depth]);
@@ -2159,7 +2124,7 @@ SceneState RunDemoScene(
 			// update descriptor table
 			// common constant buffer is expected to be uploaded during rasterization pass
 
-			GrafDescriptorTable* descriptorTable = this->accumulationDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			GrafDescriptorTable* descriptorTable = this->accumulationDescTable->GetFrameObject();
 			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 			descriptorTable->SetSampler(g_SamplerBilinearDescriptor, this->samplerBilinear.get());
 			descriptorTable->SetSampler(g_SamplerTrilinearDescriptor, this->samplerTrilinear.get());
@@ -2229,7 +2194,7 @@ SceneState RunDemoScene(
 			// update descriptor table
 			// common constant buffer is expected to be uploaded during rasterization pass
 
-			GrafDescriptorTable* descriptorTable = this->lightingDescTablePerFrame[this->grafRenderer->GetCurrentFrameId()].get();
+			GrafDescriptorTable* descriptorTable = this->lightingDescTable->GetFrameObject();
 			descriptorTable->SetConstantBuffer(g_SceneCBDescriptor, this->grafRenderer->GetDynamicConstantBuffer(), this->sceneCBCrntFrameAlloc.Offset, this->sceneCBCrntFrameAlloc.Size);
 			descriptorTable->SetSampler(g_SamplerBilinearWrapDescriptor, this->samplerBilinearWrap.get());
 			descriptorTable->SetSampler(g_SamplerTrilinearDescriptor, this->samplerTrilinear.get());
@@ -2482,7 +2447,7 @@ SceneState RunDemoScene(
 			GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
 			const GrafPhysicalDeviceDesc* grafDeviceDesc = grafSystem->GetPhysicalDeviceDesc(grafDevice->GetDeviceId());
 			
-			GrafCommandList* grafCmdListCrnt = cmdListPerFrame[grafRenderer->GetCurrentFrameId()].get();
+			GrafCommandList* grafCmdListCrnt = managedCommandList->GetFrameObject();
 			grafCmdListCrnt->Begin();
 			grafCmdListCrnt->BeginDebugLabel("DrawFrame", DebugLabelColorMain);
 
@@ -2938,7 +2903,7 @@ SceneState RunDemoScene(
 				canvasWidth = canvasWidthNew;
 				canvasHeight = canvasHeightNew;
 				// use prev frame command list to make sure frame buffer objects are destroyed only when it is no longer used
-				DestroyFrameBufferObjects(cmdListPerFrame[grafRenderer->GetPrevFrameId()].get());
+				DestroyFrameBufferObjects(managedCommandList->GetFrameObject(grafRenderer->GetPrevFrameId()));
 				// recreate frame buffer objects for new canvas dimensions
 				InitFrameBufferObjects(canvasWidth, canvasHeight);
 				// reinit HDR renderer images

@@ -178,7 +178,7 @@ namespace UnlimRealms
 
 		Result Deinitialize();
 
-		inline TGrafObject* GetCurrentObject() const;
+		inline TGrafObject* GetFrameObject(ur_uint frameId = ur_uint(-1)) const;
 
 	protected:
 
