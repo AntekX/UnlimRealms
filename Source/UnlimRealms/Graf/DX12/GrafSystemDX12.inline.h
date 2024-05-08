@@ -308,4 +308,9 @@ namespace UnlimRealms
 		return this->d3dStateObject.get();
 	}
 
+	inline const D3D12_PROGRAM_IDENTIFIER& GrafWorkGraphPipelineDX12::GetD3DProgramIdentifier() const
+	{
+		return this->d3dProgramIdentifier;
+	}
+
 } // end namespace UnlimRealms

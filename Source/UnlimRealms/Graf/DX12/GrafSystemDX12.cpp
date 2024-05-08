@@ -1486,6 +1486,72 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafCommandListDX12::BindWorkGraphPipeline(GrafWorkGraphPipeline* grafPipeline)
+	{
+	#if (UR_GRAF_DX12_AGILITY_SDK_VERSION >= 613)
+		if (ur_null == grafPipeline)
+			return Result(InvalidArgs);
+
+		GrafWorkGraphPipelineDX12* grafPipelineDX12 = static_cast<GrafWorkGraphPipelineDX12*>(grafPipeline);
+
+		shared_ref<ID3D12GraphicsCommandList10> d3dCommandList10;
+		HRESULT hres = this->d3dCommandList->QueryInterface(__uuidof(ID3D12GraphicsCommandList10), d3dCommandList10);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafCommandListDX12::BindWorkGraphPipeline: failed to query ID3D12GraphicsCommandList10 with HRESULT = ") + HResultToString(hres));
+		}
+
+		D3D12_SET_PROGRAM_DESC d3dProgramDesc = {};
+		d3dProgramDesc.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH;
+		d3dProgramDesc.WorkGraph.ProgramIdentifier = grafPipelineDX12->GetD3DProgramIdentifier();
+		d3dProgramDesc.WorkGraph.Flags = D3D12_SET_WORK_GRAPH_FLAG_NONE;
+		d3dProgramDesc.WorkGraph.BackingMemory;
+		// TODO
+		//d3dCommandList10->SetProgram(&d3dProgramDesc);
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
+	}
+
+	Result GrafCommandListDX12::BindWorkGraphDescriptorTable(GrafDescriptorTable* descriptorTable, GrafWorkGraphPipeline* grafPipeline)
+	{
+		if (ur_null == descriptorTable || ur_null == grafPipeline)
+			return Result(InvalidArgs);
+
+		GrafDescriptorTableDX12* descriptorTableDX12 = static_cast<GrafDescriptorTableDX12*>(descriptorTable);
+
+		// bind descriptor heaps
+
+		ur_uint descriptorHeapCount = 0;
+		ID3D12DescriptorHeap* d3dDescriptorHeaps[2];
+		if (descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().IsValid())
+		{
+			d3dDescriptorHeaps[descriptorHeapCount++] = descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
+		}
+		if (descriptorTableDX12->GetSamplerDescriptorHeapHandle().IsValid())
+		{
+			d3dDescriptorHeaps[descriptorHeapCount++] = descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetHeap()->GetD3DDescriptorHeap();
+		}
+
+		this->d3dCommandList->SetDescriptorHeaps((UINT)descriptorHeapCount, d3dDescriptorHeaps);
+
+		// set table offsets in heaps
+
+		ur_uint rootParameterIdx = 0;
+		if (descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().IsValid())
+		{
+			this->d3dCommandList->SetComputeRootDescriptorTable(rootParameterIdx++, descriptorTableDX12->GetSrvUavCbvDescriptorHeapHandle().GetD3DHandleGPU());
+		}
+		if (descriptorTableDX12->GetSamplerDescriptorHeapHandle().IsValid())
+		{
+			this->d3dCommandList->SetComputeRootDescriptorTable(rootParameterIdx++, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
+		}
+
+		return Result(Success);
+	}
+
 	Result GrafCommandListDX12::DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
 		const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
 		const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable)
@@ -3766,6 +3832,7 @@ namespace UnlimRealms
 	{
 		this->d3dRootSignature.reset(ur_null);
 		this->d3dStateObject.reset(ur_null);
+		this->d3dProgramIdentifier = {};
 
 		return Result(Success);
 	}
@@ -3887,6 +3954,17 @@ namespace UnlimRealms
 			this->Deinitialize();
 			return ResultError(Failure, std::string("GrafWorkGraphPipelineDX12: CreateStateObject failed with HRESULT = ") + HResultToString(hres));
 		}
+
+		// identifier
+
+		shared_ref<ID3D12StateObjectProperties1> d3dStateProperties;
+		hres = this->d3dStateObject->QueryInterface<ID3D12StateObjectProperties1>(d3dStateProperties);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafWorkGraphPipelineDX12: QueryInterface<ID3D12StateObjectProperties1> failed with HRESULT = ") + HResultToString(hres));
+		}
+		this->d3dProgramIdentifier = d3dStateProperties->GetProgramIdentifier(programName.c_str());
 
 		return Result(Success);
 	#else

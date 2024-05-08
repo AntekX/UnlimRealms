@@ -23,6 +23,9 @@
 // results are printed to console.
 // 
 // ================================================================================================================================
+
+#include "GPUWorkGraphsCommon.hlsli"
+
 GlobalRootSignature globalRS = { "UAV(u0)" };
 RWStructuredBuffer<uint> UAV : register(u0); // 16MB byte buffer from global root sig
 

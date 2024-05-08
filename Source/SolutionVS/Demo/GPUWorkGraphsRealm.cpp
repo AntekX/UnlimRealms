@@ -57,15 +57,53 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 		if (Failed(res))
 			break;
 
+		res = grafSystem->CreateDescriptorTableLayout(this->graphicsObjects->workGraphDescTableLayout);
+		if (Succeeded(res))
+		{
+			GrafDescriptorRangeDesc descTableLayoutRanges[] = {
+				g_UAVDescriptor
+			};
+			GrafDescriptorTableLayoutDesc descTableLayoutDesc = {
+				ur_uint(GrafShaderStageFlag::Compute),
+				descTableLayoutRanges, ur_array_size(descTableLayoutRanges)
+			};
+			res = this->graphicsObjects->workGraphDescTableLayout->Initialize(grafDevice, { descTableLayoutDesc });
+		}
+		if (Failed(res))
+			break;
+
+		this->graphicsObjects->workGraphDescTable.reset(new GrafManagedDescriptorTable(*this->GetGrafRenderer()));
+		res = this->graphicsObjects->workGraphDescTable->Initialize({ this->graphicsObjects->workGraphDescTableLayout.get() });
+		if (Failed(res))
+			break;
+
 		res = grafSystem->CreateWorkGraphPipeline(this->graphicsObjects->workGraphPipeline);
 		if (Succeeded(res))
 		{
+			GrafDescriptorTableLayout* workGraphDescriptorLayouts[] = {
+				this->graphicsObjects->workGraphDescTableLayout.get()
+			};
 			GrafWorkGraphPipeline::InitParams initParams = {};
 			initParams.Name = "HelloWorkGraphs";
 			initParams.ShaderLib = this->graphicsObjects->workGraphShaderLib.get();
-			initParams.DescriptorTableLayouts = ur_null;
-			initParams.DescriptorTableLayoutCount = 0;
+			initParams.DescriptorTableLayouts = workGraphDescriptorLayouts;
+			initParams.DescriptorTableLayoutCount = ur_array_size(workGraphDescriptorLayouts);
 			res = this->graphicsObjects->workGraphPipeline->Initialize(grafDevice, initParams);
+		}
+		if (Failed(res))
+			break;
+
+		res = grafSystem->CreateBuffer(this->graphicsObjects->workGraphBuffer);
+		if (Succeeded(res))
+		{
+			GrafBuffer::InitParams bufferParams = {};
+			bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferDst);
+			bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
+			bufferParams.BufferDesc.SizeInBytes = 16777216 * sizeof(ur_uint32);
+			res = this->graphicsObjects->workGraphBuffer->Initialize(grafDevice, bufferParams);
+			
+			// TODO: upload initial data
+			//this->GetGrafRenderer()->Upload((ur_byte*)intialData, this->graphicsObjects->workGraphBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
 		}
 		if (Failed(res))
 			break;
@@ -74,8 +112,7 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 	if (Failed(res))
 	{
 		this->DeinitializeGraphicObjects();
-		LogError("GPUWorkGraphsRealm: failed to initialize graphic objects");
-		return Result(Failure);
+		return ResultError(Failure, "GPUWorkGraphsRealm: failed to initialize graphic objects");
 	}
 
 	return Result(Success);
@@ -95,5 +132,19 @@ Result GPUWorkGraphsRealm::Update(const UpdateContext& updateContext)
 
 Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 {
+	if (ur_null == this->graphicsObjects.get())
+		return Result(NotInitialized);
+
+	// prepare resources
+	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);
+
+	// update descriptor table
+	GrafDescriptorTable* workGraphFrameTable = this->graphicsObjects->workGraphDescTable->GetFrameObject();
+	workGraphFrameTable->SetRWBuffer(g_UAVDescriptor, this->graphicsObjects->workGraphBuffer.get());
+
+	// bind pipeline
+	renderContext.CommandList->BindWorkGraphPipeline(this->graphicsObjects->workGraphPipeline.get());
+	renderContext.CommandList->BindWorkGraphDescriptorTable(workGraphFrameTable, this->graphicsObjects->workGraphPipeline.get());
+
 	return Result(Success);
 }

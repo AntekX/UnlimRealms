@@ -950,6 +950,10 @@ namespace UnlimRealms
 
 		virtual Result BindRayTracingDescriptorTable(GrafDescriptorTable* descriptorTable, GrafRayTracingPipeline* grafPipeline);
 
+		virtual Result BindWorkGraphPipeline(GrafWorkGraphPipeline* grafPipeline);
+
+		virtual Result BindWorkGraphDescriptorTable(GrafDescriptorTable* descriptorTable, GrafWorkGraphPipeline* grafPipeline);
+
 		virtual Result DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
 			const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
 			const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable);

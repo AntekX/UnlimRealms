@@ -467,6 +467,16 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafCommandList::BindWorkGraphPipeline(GrafWorkGraphPipeline* grafPipeline)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result GrafCommandList::BindWorkGraphDescriptorTable(GrafDescriptorTable* descriptorTable, GrafWorkGraphPipeline* grafPipeline)
+	{
+		return Result(NotImplemented);
+	}
+
 	Result GrafCommandList::DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
 		const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
 		const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable)

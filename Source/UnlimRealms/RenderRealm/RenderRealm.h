@@ -56,6 +56,7 @@ namespace UnlimRealms
 
 		struct UR_DECL RenderContext
 		{
+			GrafCommandList* CommandList;
 		};
 
 		RenderRealm();

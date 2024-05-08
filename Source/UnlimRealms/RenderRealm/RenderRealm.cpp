@@ -292,7 +292,11 @@ namespace UnlimRealms
 				}
 
 				// perfrom rendering
+				renderContext.CommandList = this->GetGrafRenderer()->GetTransientCommandList();
+				renderContext.CommandList->Begin();
 				this->Render(renderContext);
+				renderContext.CommandList->End();
+				this->GetGrafRenderer()->GetGrafDevice()->Record(renderContext.CommandList);
 
 				// finalize & move to next frame
 				this->GetGrafRenderer()->EndFrameAndPresent();

@@ -27,6 +27,9 @@ private:
 	{
 		std::unique_ptr<GrafShaderLib> workGraphShaderLib;
 		std::unique_ptr<GrafWorkGraphPipeline> workGraphPipeline;
+		std::unique_ptr<GrafDescriptorTableLayout> workGraphDescTableLayout;
+		std::unique_ptr<GrafManagedDescriptorTable> workGraphDescTable;
+		std::unique_ptr<GrafBuffer> workGraphBuffer;
 	};
 	std::unique_ptr<GraphicsObjects> graphicsObjects;
 };

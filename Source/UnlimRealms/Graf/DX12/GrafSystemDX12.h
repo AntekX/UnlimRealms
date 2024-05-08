@@ -320,6 +320,10 @@ namespace UnlimRealms
 
 		virtual Result BindRayTracingDescriptorTable(GrafDescriptorTable* descriptorTable, GrafRayTracingPipeline* grafPipeline);
 
+		virtual Result BindWorkGraphPipeline(GrafWorkGraphPipeline* grafPipeline);
+
+		virtual Result BindWorkGraphDescriptorTable(GrafDescriptorTable* descriptorTable, GrafWorkGraphPipeline* grafPipeline);
+
 		virtual Result DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
 			const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
 			const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable);
@@ -812,12 +816,15 @@ namespace UnlimRealms
 
 		inline ID3D12StateObject* GetD3DStateObject() const;
 
+		inline const D3D12_PROGRAM_IDENTIFIER& GetD3DProgramIdentifier() const;
+
 	protected:
 
 		Result Deinitialize();
 
 		shared_ref<ID3D12StateObject> d3dStateObject;
 		shared_ref<ID3D12RootSignature> d3dRootSignature;
+		D3D12_PROGRAM_IDENTIFIER d3dProgramIdentifier;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

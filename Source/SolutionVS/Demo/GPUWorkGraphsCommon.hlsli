@@ -5,10 +5,12 @@
 
 // constant buffers
 
-//struct WorkGraphGlobalConstants
-//{
-//};
-//
-//DESCRIPTOR_ByteAddressBuffer(g_UAV, 0);
+struct WorkGraphGlobalConstants
+{
+};
+
+// descriptors
+
+DESCRIPTOR_RWByteAddressBuffer(g_UAV, 0);
 
 #endif // GPU_WORK_GRAPHS_COMMON_HLSLI
