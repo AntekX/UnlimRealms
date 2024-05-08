@@ -191,6 +191,7 @@ call "Utils\CompileShadersDemo.bat"</Command>
   <ItemGroup>
     <ClInclude Include="D3D12SandboxApp.h" />
     <ClInclude Include="Demo.h" />
+    <ClInclude Include="GPUWorkGraphsCommon.h" />
     <ClInclude Include="GPUWorkGraphsRealm.h" />
     <ClInclude Include="HybridRenderingCommon.h" />
     <ClInclude Include="HybridRenderingApp.h" />
@@ -225,6 +226,7 @@ call "Utils\CompileShadersDemo.bat"</Command>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\Utils\CompileShadersDemo.bat" />
+    <None Include="GPUWorkGraphsCommon.hlsli" />
     <None Include="GPUWorkGraphs_cs_lib.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Library</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">6.3</ShaderModel>

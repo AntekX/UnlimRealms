@@ -73,6 +73,8 @@ namespace UnlimRealms
 
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
 
+		virtual Result CreateWorkGraphPipeline(std::unique_ptr<GrafWorkGraphPipeline>& grafWorkGraphPipeline);
+
 		virtual const char* GetShaderExtension() const;
 
 		inline IDXGIFactory5* GetDXGIFactory() const;
@@ -795,6 +797,27 @@ namespace UnlimRealms
 		std::unique_ptr<GrafBuffer> grafScratchBuffer;
 		std::unique_ptr<GrafBuffer> grafStorageBuffer;
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO d3dPrebuildInfo;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafWorkGraphPipelineDX12 : public GrafWorkGraphPipeline
+	{
+	public:
+
+		GrafWorkGraphPipelineDX12(GrafSystem& grafSystem);
+
+		~GrafWorkGraphPipelineDX12();
+
+		virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams);
+
+		inline ID3D12StateObject* GetD3DStateObject() const;
+
+	protected:
+
+		Result Deinitialize();
+
+		shared_ref<ID3D12StateObject> d3dStateObject;
+		shared_ref<ID3D12RootSignature> d3dRootSignature;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

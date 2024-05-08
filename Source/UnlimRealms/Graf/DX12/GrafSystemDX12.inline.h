@@ -303,4 +303,9 @@ namespace UnlimRealms
 		return this->grafStorageBuffer.get();
 	}
 
+	inline ID3D12StateObject* GrafWorkGraphPipelineDX12::GetD3DStateObject() const
+	{
+		return this->d3dStateObject.get();
+	}
+
 } // end namespace UnlimRealms

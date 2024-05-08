@@ -56,7 +56,11 @@ namespace UnlimRealms
 	};
 
 	// default target shader model (for run time linker)
+	#if (UR_GRAF_DX12_AGILITY_SDK_VERSION >= 613)
+	static const std::wstring DXCLinkerShaderModel = L"6_8";
+	#else
 	static const std::wstring DXCLinkerShaderModel = L"6_3";
+	#endif
 
 	// string utils
 
@@ -316,6 +320,12 @@ namespace UnlimRealms
 	Result GrafSystemDX12::CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct)
 	{
 		grafAccelStruct.reset(new GrafAccelerationStructureDX12(*this));
+		return Result(Success);
+	}
+
+	Result GrafSystemDX12::CreateWorkGraphPipeline(std::unique_ptr<GrafWorkGraphPipeline>& grafWorkGraphPipeline)
+	{
+		grafWorkGraphPipeline.reset(new GrafWorkGraphPipelineDX12(*this));
 		return Result(Success);
 	}
 
@@ -3738,6 +3748,150 @@ namespace UnlimRealms
 		}
 
 		return Result(Success);
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	GrafWorkGraphPipelineDX12::GrafWorkGraphPipelineDX12(GrafSystem& grafSystem) :
+		GrafWorkGraphPipeline(grafSystem)
+	{
+	}
+
+	GrafWorkGraphPipelineDX12::~GrafWorkGraphPipelineDX12()
+	{
+		this->Deinitialize();
+	}
+
+	Result GrafWorkGraphPipelineDX12::Deinitialize()
+	{
+		this->d3dRootSignature.reset(ur_null);
+		this->d3dStateObject.reset(ur_null);
+
+		return Result(Success);
+	}
+
+	Result GrafWorkGraphPipelineDX12::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
+	{
+		this->Deinitialize();
+
+		GrafWorkGraphPipeline::Initialize(grafDevice, initParams);
+
+		// validate device
+
+		GrafSystemDX12& grafSystemDX12 = static_cast<GrafSystemDX12&>(this->GetGrafSystem());
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(grafDevice);
+		if (ur_null == grafDeviceDX12 || ur_null == grafDeviceDX12->GetD3DDevice())
+		{
+			return ResultError(InvalidArgs, std::string("GrafWorkGraphPipelineDX12: failed to initialize, invalid GrafDevice"));
+		}
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+	#if (UR_GRAF_DX12_AGILITY_SDK_VERSION >= 613)
+
+		std::vector<D3D12_STATE_SUBOBJECT> d3dStateSubobjects;
+
+		// shader library
+
+		GrafShaderLibDX12* shaderLibDX12 = static_cast<GrafShaderLibDX12*>(initParams.ShaderLib);
+		if (ur_null == shaderLibDX12)
+		{
+			return ResultError(InvalidArgs, std::string("GrafWorkGraphPipelineDX12: failed to initialize, shader lib can not be null"));
+		}
+
+		D3D12_DXIL_LIBRARY_DESC d3dShaderLibDesc = {};
+		d3dShaderLibDesc.DXILLibrary.pShaderBytecode = shaderLibDX12->GetByteCodePtr();
+		d3dShaderLibDesc.DXILLibrary.BytecodeLength = shaderLibDX12->GetByteCodeSize();
+
+		d3dStateSubobjects.emplace_back(D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &d3dShaderLibDesc);
+
+		// work graph
+
+		std::wstring programName = L"WorkGraphProgram";
+		if (initParams.Name != ur_null)
+		{
+			StringToWstring(initParams.Name, programName);
+		}
+
+		D3D12_WORK_GRAPH_DESC d3dWorkGraphDesc = {};
+		d3dWorkGraphDesc.ProgramName = programName.c_str();
+		d3dWorkGraphDesc.Flags = D3D12_WORK_GRAPH_FLAG_INCLUDE_ALL_AVAILABLE_NODES;
+		d3dWorkGraphDesc.NumEntrypoints = 0;
+		d3dWorkGraphDesc.pEntrypoints = ur_null;
+		d3dWorkGraphDesc.NumExplicitlyDefinedNodes = 0;
+		d3dWorkGraphDesc.pExplicitlyDefinedNodes = ur_null;
+
+		d3dStateSubobjects.emplace_back(D3D12_STATE_SUBOBJECT_TYPE_WORK_GRAPH, &d3dWorkGraphDesc);
+
+		// root signature
+
+		D3D12_ROOT_SIGNATURE_DESC d3dRootSigDesc = {};
+		d3dRootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+		std::vector<D3D12_ROOT_PARAMETER> d3dRootParameters;
+		for (ur_uint descriptorLayoutIdx = 0; descriptorLayoutIdx < initParams.DescriptorTableLayoutCount; ++descriptorLayoutIdx)
+		{
+			GrafDescriptorTableLayoutDX12* tableLayoutDX12 = static_cast<GrafDescriptorTableLayoutDX12*>(initParams.DescriptorTableLayouts[descriptorLayoutIdx]);
+			const D3D12_ROOT_PARAMETER& tableSrvUavCbvD3DRootPatameter = tableLayoutDX12->GetSrvUavCbvTableD3DRootParameter();
+			if (tableSrvUavCbvD3DRootPatameter.DescriptorTable.NumDescriptorRanges > 0)
+			{
+				d3dRootParameters.emplace_back(tableSrvUavCbvD3DRootPatameter);
+				d3dRootSigDesc.NumParameters += 1;
+			}
+			const D3D12_ROOT_PARAMETER& tableSamplerD3DRootPatameter = tableLayoutDX12->GetSamplerTableD3DRootParameter();
+			if (tableSamplerD3DRootPatameter.DescriptorTable.NumDescriptorRanges > 0)
+			{
+				d3dRootParameters.emplace_back(tableSamplerD3DRootPatameter);
+				d3dRootSigDesc.NumParameters += 1;
+			}
+		}
+
+		if (!d3dRootParameters.empty())
+		{
+			d3dRootSigDesc.pParameters = &d3dRootParameters.front();
+
+			shared_ref<ID3DBlob> d3dSignatureBlob;
+			shared_ref<ID3DBlob> d3dErrorBlob;
+			HRESULT hres = D3D12SerializeRootSignature(&d3dRootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, d3dSignatureBlob, d3dErrorBlob);
+			if (FAILED(hres))
+			{
+				this->Deinitialize();
+				return ResultError(Failure, std::string("GrafWorkGraphPipelineDX12: D3D12SerializeRootSignature failed with HRESULT = ") + HResultToString(hres));
+			}
+
+			UINT nodeMask = 0;
+			hres = d3dDevice->CreateRootSignature(nodeMask, d3dSignatureBlob->GetBufferPointer(), d3dSignatureBlob->GetBufferSize(),
+				__uuidof(this->d3dRootSignature), this->d3dRootSignature);
+			if (FAILED(hres))
+			{
+				this->Deinitialize();
+				return ResultError(Failure, std::string("GrafWorkGraphPipelineDX12: CreateRootSignature failed with HRESULT = ") + HResultToString(hres));
+			}
+		}
+
+		D3D12_GLOBAL_ROOT_SIGNATURE d3dGlobalRootSignatureDesc = {};
+		if (this->d3dRootSignature.get() != ur_null)
+		{
+			d3dGlobalRootSignatureDesc.pGlobalRootSignature = this->d3dRootSignature.get();
+			d3dStateSubobjects.emplace_back(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &d3dGlobalRootSignatureDesc);
+		}
+
+		// state object
+
+		D3D12_STATE_OBJECT_DESC d3dStateDesc = {};
+		d3dStateDesc.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
+		d3dStateDesc.pSubobjects = d3dStateSubobjects.data();
+		d3dStateDesc.NumSubobjects = (UINT)d3dStateSubobjects.size();
+
+		HRESULT hres = d3dDevice->CreateStateObject(&d3dStateDesc, __uuidof(ID3D12StateObject), this->d3dStateObject);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafWorkGraphPipelineDX12: CreateStateObject failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		return Result(Success);
+	#else
+		return Result(NotImplemented);
+	#endif
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

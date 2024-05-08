@@ -175,6 +175,11 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result GrafSystem::CreateWorkGraphPipeline(std::unique_ptr<GrafWorkGraphPipeline>& grafWorkGraphPipeline)
+	{
+		return Result(NotImplemented);
+	}
+
 	ur_uint GrafSystem::GetRecommendedDeviceId()
 	{
 		ur_uint recommendedDeviceId = ur_uint(-1);
@@ -918,6 +923,21 @@ namespace UnlimRealms
 		GrafDeviceEntity::Initialize(grafDevice);
 		this->structureType = initParams.StructureType;
 		this->structureBuildFlags = initParams.BuildFlags;
+		return Result(NotImplemented);
+	}
+
+	GrafWorkGraphPipeline::GrafWorkGraphPipeline(GrafSystem& grafSystem) :
+		GrafDeviceEntity(grafSystem)
+	{
+	}
+
+	GrafWorkGraphPipeline::~GrafWorkGraphPipeline()
+	{
+	}
+
+	Result GrafWorkGraphPipeline::Initialize(GrafDevice* grafDevice, const InitParams& initParams)
+	{
+		GrafDeviceEntity::Initialize(grafDevice);
 		return Result(NotImplemented);
 	}
 

@@ -62,6 +62,9 @@
     <ClInclude Include="GPUWorkGraphsRealm.h">
       <Filter>GPUWorkGraphsRealm</Filter>
     </ClInclude>
+    <ClInclude Include="GPUWorkGraphsCommon.h">
+      <Filter>GPUWorkGraphsRealm</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -134,5 +137,8 @@
       <Filter>Source Files</Filter>
     </None>
     <None Include="..\..\..\Utils\CompileShadersDemo.bat" />
+    <None Include="GPUWorkGraphsCommon.hlsli">
+      <Filter>GPUWorkGraphsRealm</Filter>
+    </None>
   </ItemGroup>
 </Project>

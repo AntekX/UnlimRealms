@@ -1,7 +1,6 @@
 
 #include "stdafx.h"
 #include "GPUWorkGraphsRealm.h"
-
 #include "UnlimRealms.h"
 #include "Sys/Storage.h"
 #include "Sys/Log.h"
@@ -10,16 +9,11 @@
 #include "Sys/Windows/WinInput.h"
 #include "Core/Math.h"
 #include "Graf/GrafRenderer.h"
-#include "ImguiRender/ImguiRender.h"
-#include "GenericRender/GenericRender.h"
-#include "Camera/CameraControl.h"
-
 #include "Graf/Vulkan/GrafSystemVulkan.h"
 #include "Graf/DX12/GrafSystemDX12.h"
-#include "HDRRender/HDRRender.h"
-#include "Atmosphere/Atmosphere.h"
-#include "HybridRenderingCommon.h"
+#include "GPUWorkGraphsCommon.h"
 #pragma comment(lib, "UnlimRealms.lib")
+
 using namespace UnlimRealms;
 
 #define UR_GRAF_SYSTEM GrafSystemDX12
@@ -45,20 +39,61 @@ Result GPUWorkGraphsRealm::Initialize()
 
 Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 {
-	return Result(NotImplemented);
+	GrafSystem* grafSystem = this->GetGrafRenderer()->GetGrafSystem();
+	GrafDevice* grafDevice = this->GetGrafRenderer()->GetGrafDevice();
+	this->graphicsObjects.reset(new GraphicsObjects());
+	
+	Result res = Success;
+	do
+	{
+		res = grafSystem->CreateShaderLib(this->graphicsObjects->workGraphShaderLib);
+		if (Succeeded(res))
+		{
+			GrafShaderLib::EntryPoint ShaderLibEntries[] = {
+				{ "firstNode", GrafShaderType::Node }
+			};
+			res = GrafUtils::CreateShaderLibFromFile(*grafDevice, "GPUWorkGraphs_cs_lib", ShaderLibEntries, ur_array_size(ShaderLibEntries), this->graphicsObjects->workGraphShaderLib);
+		}
+		if (Failed(res))
+			break;
+
+		res = grafSystem->CreateWorkGraphPipeline(this->graphicsObjects->workGraphPipeline);
+		if (Succeeded(res))
+		{
+			GrafWorkGraphPipeline::InitParams initParams = {};
+			initParams.Name = "HelloWorkGraphs";
+			initParams.ShaderLib = this->graphicsObjects->workGraphShaderLib.get();
+			initParams.DescriptorTableLayouts = ur_null;
+			initParams.DescriptorTableLayoutCount = 0;
+			res = this->graphicsObjects->workGraphPipeline->Initialize(grafDevice, initParams);
+		}
+		if (Failed(res))
+			break;
+
+	} while (false);
+	if (Failed(res))
+	{
+		this->DeinitializeGraphicObjects();
+		LogError("GPUWorkGraphsRealm: failed to initialize graphic objects");
+		return Result(Failure);
+	}
+
+	return Result(Success);
 }
 
 Result GPUWorkGraphsRealm::DeinitializeGraphicObjects()
 {
-	return Result(NotImplemented);
+	this->graphicsObjects.reset(ur_null);
+
+	return Result(Success);
 }
 
 Result GPUWorkGraphsRealm::Update(const UpdateContext& updateContext)
 {
-	return Result(NotImplemented);
+	return Result(Success);
 }
 
 Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 {
-	return Result(NotImplemented);
+	return Result(Success);
 }

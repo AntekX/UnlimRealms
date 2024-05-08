@@ -230,6 +230,7 @@ namespace UnlimRealms
 		RenderContext renderContext = {};
 
 		// Main loop
+		this->SetState(State::Run);
 		MSG msg;
 		ZeroMemory(&msg, sizeof(msg));
 		while (State::Run == this->GetState())
@@ -259,7 +260,10 @@ namespace UnlimRealms
 
 			// update
 
-			// move timer
+			// input
+			this->GetInput()->Update();
+
+			// update timer
 			ClockTime timeNow = Clock::now();
 			updateContext.CurrentRunTime = ClockDeltaAs<std::chrono::milliseconds>(timeNow - runStartTime).count();
 			updateContext.ElapsedTime = ClockDeltaAs<std::chrono::milliseconds>(timeNow - lastUpdateTime).count();

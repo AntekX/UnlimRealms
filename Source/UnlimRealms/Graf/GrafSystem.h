@@ -47,6 +47,7 @@ namespace UnlimRealms
 	class GrafComputePipeline;
 	class GrafRayTracingPipeline;
 	class GrafAccelerationStructure;
+	class GrafWorkGraphPipeline;
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	struct UR_DECL GrafRayTracingProperties
@@ -373,6 +374,7 @@ namespace UnlimRealms
 		Callable = (0x1 << 8),
 		Task = (0x1 << 9),
 		Mesh = (0x1 << 10),
+		Node = (0x1 << 11),
 		AllGraphics = (Vertex | Pixel),
 		AllRayTracing = (RayGen | AnyHit | ClosestHit | Miss | Intersection | Callable),
 		All = ~(0)
@@ -787,6 +789,8 @@ namespace UnlimRealms
 		virtual Result CreateRayTracingPipeline(std::unique_ptr<GrafRayTracingPipeline>& grafRayTracingPipeline);
 
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
+
+		virtual Result CreateWorkGraphPipeline(std::unique_ptr<GrafWorkGraphPipeline>& grafWorkGraphPipeline);
 
 		virtual ur_uint GetRecommendedDeviceId();
 
@@ -1430,6 +1434,26 @@ namespace UnlimRealms
 		GrafAccelerationStructureType structureType;
 		GrafAccelerationStructureBuildFlags structureBuildFlags;
 		ur_uint64 structureDeviceAddress;
+	};
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class UR_DECL GrafWorkGraphPipeline : public GrafDeviceEntity
+	{
+	public:
+
+		struct UR_DECL InitParams
+		{
+			const char* Name;
+			GrafShaderLib* ShaderLib;
+			GrafDescriptorTableLayout** DescriptorTableLayouts;
+			ur_uint DescriptorTableLayoutCount;
+		};
+
+		GrafWorkGraphPipeline(GrafSystem& grafSystem);
+
+		~GrafWorkGraphPipeline();
+
+		virtual Result Initialize(GrafDevice* grafDevice, const InitParams& initParams);
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
