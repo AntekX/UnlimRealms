@@ -511,7 +511,7 @@ namespace UnlimRealms
 	}
 
 	const GrafCanvas::InitParams GrafCanvas::InitParams::Default = {
-		GrafFormat::B8G8R8A8_UNORM, GrafPresentMode::VerticalSync, 3
+		GrafFormat::B8G8R8A8_UNORM, GrafPresentMode::Immediate, 3
 	};
 
 	Result GrafCanvas::Initialize(GrafDevice* grafDevice, const InitParams& initParams)

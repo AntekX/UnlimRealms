@@ -108,7 +108,7 @@ void ComputeLighting(const uint3 dispatchThreadId : SV_DispatchThreadID)
 		}
 
 		// blend light buffer results
-		[unroll] for (/*uint */i = 0; i < 4; ++i)
+		[unroll] for (uint i = 0; i < 4; ++i)
 		{
 			int2 lightSamplePos = int2(clamp(lightBufferPos + QuadSampleOfs[i], float2(0, 0), g_SceneCB.LightBufferSize.xy - 1));
 			float4 shadowResultData = g_ShadowResult.Load(int3(lightSamplePos.xy, 0));
@@ -211,7 +211,7 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 	srcSize = imageSize / 2;
 	srcPos = imagePos.xy / 2;
 	mipData = 0;
-	[unroll] for (i = 0; i < 4; ++i)
+	[unroll] for (uint i = 0; i < 4; ++i)
 	{
 		uint2 subPos = (min(srcPos.xy + uint2(QuadSampleOfs[i].xy), srcSize.xy) * 2) % g_ShadowMipGroupSize;
 		mipData += g_ShadowMipGroupData[subPos.x + subPos.y * g_ShadowMipGroupSize];
@@ -234,7 +234,7 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 	srcSize = imageSize / 4;
 	srcPos = imagePos.xy / 4;
 	mipData = 0;
-	[unroll] for (i = 0; i < 4; ++i)
+	[unroll] for (uint i = 0; i < 4; ++i)
 	{
 		uint2 subPos = (min(srcPos.xy + uint2(QuadSampleOfs[i].xy), srcSize.xy) * 4) % g_ShadowMipGroupSize;
 		mipData += g_ShadowMipGroupData[subPos.x + subPos.y * g_ShadowMipGroupSize];
@@ -257,7 +257,7 @@ void ComputeShadowMips(const uint3 dispatchThreadId : SV_DispatchThreadID, const
 	srcSize = imageSize / 8;
 	srcPos = imagePos.xy / 8;
 	mipData = 0;
-	[unroll] for (i = 0; i < 4; ++i)
+	[unroll] for (uint i = 0; i < 4; ++i)
 	{
 		uint2 subPos = (min(srcPos.xy + uint2(QuadSampleOfs[i].xy), srcSize.xy) * 8) % g_ShadowMipGroupSize;
 		mipData += g_ShadowMipGroupData[subPos.x + subPos.y * g_ShadowMipGroupSize];
@@ -399,7 +399,6 @@ void BlurLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID, cons
 		return;
 
 	int2 blurStartPos = int2(bufferPos.xy) - int(BlurKernelSize / 2);
-
 	#if (BLUR_COMPUTE_VARIANCE)
 	float4 averageValue = 0.0;
 	for (py = 0; py < BlurKernelSize; ++py)
@@ -657,7 +656,7 @@ void AccumulateLightingResult(const uint3 dispatchThreadId : SV_DispatchThreadID
 		// fetch lighting history sub samples and apply computed weights
 		float4 directShadowHistory = 0.0;
 		float4 indirectLightHistory = 0.0;
-		[unroll] for (/*uint */i = 0; i < 4; ++i)
+		[unroll] for (uint i = 0; i < 4; ++i)
 		{
 			int2 lightSamplePos = int2(clamp(lightBufferPosPrev + QuadSampleOfs[i], float2(0, 0), g_SceneCB.LightBufferSize.xy - 1));
 			directShadowHistory += g_ShadowHistory.Load(int3(lightSamplePos.xy, 0)) * sampleWeight[i];

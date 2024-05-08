@@ -270,12 +270,6 @@
     <ClInclude Include="..\..\UnlimRealms\Terrain\Terrain.h">
       <Filter>Terrain</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\UnlimRealms\Gfx\D3D12\GfxSystemD3D12.h">
-      <Filter>Gfx\D3D12</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\UnlimRealms\Gfx\D3D12\GfxSystemD3D12.inline.h">
-      <Filter>Gfx\D3D12</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\UnlimRealms\Sys\Windows\WinUtils.h">
       <Filter>Sys\Windows</Filter>
     </ClInclude>
@@ -335,6 +329,12 @@
     </ClInclude>
     <ClInclude Include="..\..\3rdParty\imgui\imstb_truetype.h">
       <Filter>3rdParty\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\RenderRealm\RenderRealm.h">
+      <Filter>RenderRealm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\RenderRealm\RenderRealm.inline.h">
+      <Filter>RenderRealm</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -659,9 +659,6 @@
     <ClCompile Include="..\..\UnlimRealms\Terrain\Terrain.cpp">
       <Filter>Terrain</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\UnlimRealms\Gfx\D3D12\GfxSystemD3D12.cpp">
-      <Filter>Gfx\D3D12</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\Gfx\DXGIUtils\DXGIUtils.cpp">
       <Filter>Gfx\DXGIUtils</Filter>
     </ClCompile>
@@ -694,6 +691,9 @@
     </ClCompile>
     <ClCompile Include="..\..\3rdParty\imgui\imgui_widgets.cpp">
       <Filter>3rdParty\Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\RenderRealm\RenderRealm.cpp">
+      <Filter>RenderRealm</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -769,9 +769,6 @@
     <Filter Include="Terrain">
       <UniqueIdentifier>{5cfe85cb-64fd-401a-8801-9e67b395ec25}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Gfx\D3D12">
-      <UniqueIdentifier>{5e4d8931-ec46-4a9d-a2c0-5f8c46e08009}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Gfx\DXGIUtils">
       <UniqueIdentifier>{a7f7a6da-22b4-4fbf-8e11-7fbf22bc0ee8}</UniqueIdentifier>
     </Filter>
@@ -787,62 +784,9 @@
     <Filter Include="Graf\DX12">
       <UniqueIdentifier>{647b6f4b-d875-460e-9528-406600958b57}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="..\..\UnlimRealms\ImguiRender\Imgui_ps.hlsl">
-      <Filter>ImguiRender</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\ImguiRender\Imgui_vs.hlsl">
-      <Filter>ImguiRender</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\GenericRender\Generic_ps.hlsl">
-      <Filter>GenericRender</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\GenericRender\Generic_vs.hlsl">
-      <Filter>GenericRender</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\Isosurface\Isosurface_ps.hlsl">
-      <Filter>Isosurface</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\Isosurface\Isosurface_vs.hlsl">
-      <Filter>Isosurface</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\Isosurface\IsosurfaceDbg_ps.hlsl">
-      <Filter>Isosurface</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\Atmosphere\Atmosphere_vs.hlsl">
-      <Filter>Atmosphere</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\Atmosphere\Atmosphere_ps.hlsl">
-      <Filter>Atmosphere</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\HDRRender\AverageLuminance_ps.hlsl">
-      <Filter>HDRRender</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\HDRRender\ToneMapping_ps.hlsl">
-      <Filter>HDRRender</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\HDRRender\HDRTargetLuminance_ps.hlsl">
-      <Filter>HDRRender</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\HDRRender\BloomLuminance_ps.hlsl">
-      <Filter>HDRRender</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\HDRRender\Blur_ps.hlsl">
-      <Filter>HDRRender</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\Atmosphere\LightShafts_ps.hlsl">
-      <Filter>Atmosphere</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\Terrain\Terrain_vs.hlsl">
-      <Filter>Terrain</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\Terrain\Terrain_ps.hlsl">
-      <Filter>Terrain</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\UnlimRealms\GenericRender\FullScreenQuad_vs.hlsl">
-      <Filter>GenericRender</Filter>
-    </FxCompile>
+    <Filter Include="RenderRealm">
+      <UniqueIdentifier>{67ced7d0-1697-4b17-a305-f43d641e031c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\UnlimRealms\Isosurface\Isosurface.hlsli">
@@ -884,5 +828,60 @@
     <None Include="..\..\UnlimRealms\Atmosphere\AtmosphereCommon.hlsli">
       <Filter>Atmosphere</Filter>
     </None>
+    <None Include="..\..\UnlimRealms\Atmosphere\Atmosphere_ps.hlsl">
+      <Filter>Atmosphere</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\Atmosphere\Atmosphere_vs.hlsl">
+      <Filter>Atmosphere</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\Atmosphere\LightShafts_ps.hlsl">
+      <Filter>Atmosphere</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\GenericRender\FullScreenQuad_vs.hlsl">
+      <Filter>GenericRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\GenericRender\Generic_ps.hlsl">
+      <Filter>GenericRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\GenericRender\Generic_vs.hlsl">
+      <Filter>GenericRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\HDRRender\AverageLuminance_ps.hlsl">
+      <Filter>HDRRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\HDRRender\BloomLuminance_ps.hlsl">
+      <Filter>HDRRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\HDRRender\Blur_ps.hlsl">
+      <Filter>HDRRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\HDRRender\HDRTargetLuminance_ps.hlsl">
+      <Filter>HDRRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\HDRRender\ToneMapping_ps.hlsl">
+      <Filter>HDRRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\ImguiRender\Imgui_ps.hlsl">
+      <Filter>ImguiRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\ImguiRender\Imgui_vs.hlsl">
+      <Filter>ImguiRender</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\Isosurface\Isosurface_ps.hlsl">
+      <Filter>Isosurface</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\Isosurface\Isosurface_vs.hlsl">
+      <Filter>Isosurface</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\Isosurface\IsosurfaceDbg_ps.hlsl">
+      <Filter>Isosurface</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\Terrain\Terrain_ps.hlsl">
+      <Filter>Terrain</Filter>
+    </None>
+    <None Include="..\..\UnlimRealms\Terrain\Terrain_vs.hlsl">
+      <Filter>Terrain</Filter>
+    </None>
+    <None Include="..\..\..\Utils\CompileShadersUnlimRealms.bat" />
   </ItemGroup>
 </Project>

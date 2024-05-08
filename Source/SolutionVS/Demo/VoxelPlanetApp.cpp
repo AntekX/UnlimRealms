@@ -8,7 +8,6 @@
 #include "Sys/Windows/WinCanvas.h"
 #include "Sys/Windows/WinInput.h"
 #include "Gfx/D3D11/GfxSystemD3D11.h"
-#include "Gfx/D3D12/GfxSystemD3D12.h"
 #include "Graf/Vulkan/GrafSystemVulkan.h"
 #include "Graf/DX12/GrafSystemDX12.h"
 #include "Graf/GrafRenderer.h"

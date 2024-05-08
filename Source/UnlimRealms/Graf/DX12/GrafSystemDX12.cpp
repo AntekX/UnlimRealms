@@ -5,18 +5,22 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+//#define UR_GRAF_DX12_AGILITY_SDK_VERSION 613
+#if (UR_GRAF_DX12_AGILITY_SDK_VERSION)
+extern "C" { __declspec(dllexport) extern const unsigned int D3D12SDKVersion = UR_GRAF_DX12_AGILITY_SDK_VERSION; }
+extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
+#endif
+
 #include "GrafSystemDX12.h"
 #include "Sys/Log.h"
 #if defined(_WINDOWS)
 #include "Sys/Windows/WinCanvas.h"
 #endif
-#include "Gfx/D3D12/d3dx12.h"
-#include "Gfx/DXGIUtils/DXGIUtils.h"
-#include "3rdParty/DXCompiler/inc/dxcapi.h"
+#include "3rdParty/DXCompiler/include/dxcapi.h"
 #include "3rdParty/WinPixEventRuntime/include/pix3.h"
 #include "comdef.h"
-#pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "../../../Source/3rdParty/DXCompiler/lib/x64/dxcompiler.lib")
 #pragma comment(lib, "../../../Source/3rdParty/WinPixEventRuntime/bin/x64/WinPixEventRuntime.lib")
 
@@ -184,6 +188,17 @@ namespace UnlimRealms
 			grafDeviceDesc.RayTracing.RecursionDepthMax = ~ur_uint32(0);
 			grafDeviceDesc.RayTracing.InstanceCountMax = ~ur_uint64(0);
 			grafDeviceDesc.RayTracing.PrimitiveCountMax = ~ur_uint64(0);
+
+			#if (UR_GRAF_DX12_AGILITY_SDK_VERSION)
+			D3D12_FEATURE_DATA_D3D12_OPTIONS21 d3dOptions21;
+			hres = d3dDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS21, &d3dOptions21, sizeof(d3dOptions21));
+			if (FAILED(hres))
+				continue;
+
+			grafDeviceDesc.WorkGraphs.Supported = (d3dOptions21.WorkGraphsTier != D3D12_WORK_GRAPHS_TIER_NOT_SUPPORTED);
+			#else
+			grafDeviceDesc.WorkGraphs.Supported = false;
+			#endif
 		}
 		if (FAILED(hres))
 		{
@@ -1131,6 +1146,7 @@ namespace UnlimRealms
 
 		D3D12_VERTEX_BUFFER_VIEW d3dVBView = *static_cast<GrafBufferDX12*>(grafVertexBuffer)->GetD3DVertexBufferView();
 		d3dVBView.BufferLocation += bufferOffset;
+		d3dVBView.SizeInBytes = UINT(d3dVBView.SizeInBytes - bufferOffset);
 		this->d3dCommandList->IASetVertexBuffers(0, 1, &d3dVBView);
 
 		return Result(Success);
@@ -1143,6 +1159,7 @@ namespace UnlimRealms
 
 		D3D12_INDEX_BUFFER_VIEW d3dIBView = *static_cast<GrafBufferDX12*>(grafIndexBuffer)->GetD3DIndexBufferView();
 		d3dIBView.BufferLocation += bufferOffset;
+		d3dIBView.SizeInBytes = UINT(d3dIBView.SizeInBytes - bufferOffset);
 		this->d3dCommandList->IASetIndexBuffer(&d3dIBView);
 
 		return Result(Success);

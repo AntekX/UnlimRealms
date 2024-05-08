@@ -10,6 +10,16 @@
 namespace UnlimRealms
 {
 
+	inline const Canvas::Style& Canvas::GetStyle() const
+	{
+		return this->style;
+	}
+
+	inline const std::wstring& Canvas::GetTitle() const
+	{
+		return this->title;
+	}
+
 	inline void Canvas::SetPos(ur_int x, ur_int y)
 	{
 		this->bound.Move(x, y);

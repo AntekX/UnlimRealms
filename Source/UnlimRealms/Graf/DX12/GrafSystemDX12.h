@@ -14,8 +14,13 @@
 #include "Graf/GrafSystem.h"
 #include "Sys/Windows/WinUtils.h"
 #include "Core/Memory.h"
-#include <dxgi1_5.h>
+
+#if (UR_GRAF_DX12_AGILITY_SDK_VERSION)
+#include <D3D12SDK/include/d3d12.h>
+#else
 #include <d3d12.h>
+#endif
+#include <dxgi1_5.h>
 
 namespace UnlimRealms
 {

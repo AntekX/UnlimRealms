@@ -16,10 +16,9 @@ namespace UnlimRealms
 	static const wchar_t WndClassName[] = L"UnlimRealms_WinCanvas_WndClass";
 
 	WinCanvas::WinCanvas(Realm &realm, Style style, const wchar_t *title) :
-		Canvas(realm)
+		Canvas(realm, style, title)
 	{
 		this->title = (title ? title : L"UnlimRealms");
-		this->style = style;
 		this->hinst = NULL;
 		this->hwnd = NULL;
 	}

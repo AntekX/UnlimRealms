@@ -24,9 +24,9 @@
     <Filter Include="D3D12SandboxApp">
       <UniqueIdentifier>{1b8a2bc8-b535-4649-8763-57206b584016}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="ReadMe.txt" />
+    <Filter Include="GPUWorkGraphsRealm">
+      <UniqueIdentifier>{8deaee54-2f55-4983-bfa1-7a9dd88c5d14}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="HybridRenderingApp.h">
@@ -59,6 +59,9 @@
     <ClInclude Include="HybridRenderingCommon.h">
       <Filter>HybridRenderingApp</Filter>
     </ClInclude>
+    <ClInclude Include="GPUWorkGraphsRealm.h">
+      <Filter>GPUWorkGraphsRealm</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -82,6 +85,9 @@
     <ClCompile Include="VulkanSandboxApp.cpp">
       <Filter>VulkanSandboxApp</Filter>
     </ClCompile>
+    <ClCompile Include="GPUWorkGraphsRealm.cpp">
+      <Filter>GPUWorkGraphsRealm</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Demo.rc">
@@ -97,37 +103,36 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="sample_vs.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
-    <FxCompile Include="sample_ps.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
-    <FxCompile Include="HybridRendering_ps.hlsl">
-      <Filter>HybridRenderingApp</Filter>
-    </FxCompile>
-    <FxCompile Include="HybridRendering_vs.hlsl">
-      <Filter>HybridRenderingApp</Filter>
-    </FxCompile>
-    <FxCompile Include="sample_raytracing_lib.hlsl">
-      <Filter>RayTracingSandboxApp</Filter>
-    </FxCompile>
-    <FxCompile Include="HybridRendering_rt_lib.hlsl">
-      <Filter>HybridRenderingApp</Filter>
-    </FxCompile>
-    <FxCompile Include="HybridRendering_cs_lib.hlsl">
-      <Filter>HybridRenderingApp</Filter>
-    </FxCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\..\Tools\CompileHLSL_SPIRV.bat">
-      <Filter>Source Files</Filter>
-    </None>
     <None Include="HybridRendering.hlsli">
       <Filter>HybridRenderingApp</Filter>
     </None>
     <None Include="HybridRenderingCommon.hlsli">
       <Filter>HybridRenderingApp</Filter>
     </None>
+    <None Include="HybridRendering_ps.hlsl">
+      <Filter>HybridRenderingApp</Filter>
+    </None>
+    <None Include="GPUWorkGraphs_cs_lib.hlsl">
+      <Filter>GPUWorkGraphsRealm</Filter>
+    </None>
+    <None Include="HybridRendering_cs_lib.hlsl">
+      <Filter>HybridRenderingApp</Filter>
+    </None>
+    <None Include="HybridRendering_rt_lib.hlsl">
+      <Filter>HybridRenderingApp</Filter>
+    </None>
+    <None Include="HybridRendering_vs.hlsl">
+      <Filter>HybridRenderingApp</Filter>
+    </None>
+    <None Include="sample_raytracing_lib.hlsl">
+      <Filter>RayTracingSandboxApp</Filter>
+    </None>
+    <None Include="sample_ps.hlsl">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="sample_vs.hlsl">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="..\..\..\Utils\CompileShadersDemo.bat" />
   </ItemGroup>
 </Project>

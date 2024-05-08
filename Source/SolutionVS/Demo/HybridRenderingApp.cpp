@@ -165,8 +165,8 @@ int HybridRenderingApp::Run()
 	//lightingDesc.LightSources[lightingDesc.LightSourceCount++] = sunLight2;
 
 	// light source animation
-	ur_float lightCycleTime = 120.0f;
-	ur_float lightCrntCycleFactor = 0.0f;
+	ur_float lightCycleTime = 1600.0f;
+	ur_float lightCrntCycleFactor = 0.16f;
 	ur_bool lightAnimationEnabled = true;
 	ur_float lightAnimationElapsedTime = 20.0f;
 
@@ -2372,8 +2372,8 @@ SceneState RunDemoScene(
 
 			// upadte light source(s)
 
+			lightAnimationElapsedTime = lightCrntCycleFactor * lightCycleTime;
 			if (lightAnimationEnabled) lightAnimationElapsedTime += elapsedTime;
-			else lightAnimationElapsedTime = lightCrntCycleFactor * lightCycleTime;
 			ur_float crntTimeFactor = (lightAnimationEnabled ? (lightAnimationElapsedTime / lightCycleTime) : lightCrntCycleFactor);
 			ur_float modY;
 			lightCrntCycleFactor = std::modf(crntTimeFactor, &modY);

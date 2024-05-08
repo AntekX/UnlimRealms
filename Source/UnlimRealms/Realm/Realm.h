@@ -34,6 +34,8 @@ namespace UnlimRealms
 
 		virtual Result Initialize();
 
+		virtual Result Deinitialize();
+
 		template <class TStorage>
 		void SetStorage(std::unique_ptr<TStorage> storage);
 

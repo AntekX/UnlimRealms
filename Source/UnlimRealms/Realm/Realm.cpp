@@ -24,9 +24,7 @@ namespace UnlimRealms
 
 	Realm::~Realm()
 	{
-		// remove components before Log and/or Storage destroyed
-		this->RemoveComponents();
-		this->GetLog().WriteLine("Realm: destroyed");
+		this->Deinitialize();
 	}
 
 	Result Realm::Initialize()
@@ -35,6 +33,20 @@ namespace UnlimRealms
 		this->SetLog( this->CreateDefaultLog() );
 		this->SetJobSystem( this->CreateDefaultJobSystem() );
 		this->GetLog().WriteLine("Realm: initialized");
+		return Result(Success);
+	}
+
+	Result Realm::Deinitialize()
+	{
+		// remove components before Log and/or Storage destroyed
+		this->RemoveComponents();
+		this->jobSystem.reset(ur_null);
+		this->storage.reset(ur_null);
+		if (this->log.get())
+		{
+			this->log->WriteLine("Realm: destroyed");
+			this->log.reset(ur_null);
+		}
 		return Result(Success);
 	}
 

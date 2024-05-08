@@ -19,13 +19,24 @@ namespace UnlimRealms
 	{
 	public:
 
-		Canvas(Realm &realm);
+		enum class Style
+		{
+			BorderlessWindow,
+			OverlappedWindow,
+			OverlappedWindowMaximized,
+		};
+
+		Canvas(Realm &realm, Style style = Style::BorderlessWindow, const wchar_t* title = ur_null);
 
 		virtual ~Canvas();
 
 		Result Initialize(const RectI &bound);
 
 		Result SetBound(const RectI &bound);
+
+		inline const Style& GetStyle() const;
+
+		inline const std::wstring& GetTitle() const;
 
 		inline void SetPos(ur_int x, ur_int y);
 
@@ -43,6 +54,8 @@ namespace UnlimRealms
 
 	protected:
 
+		Style style;
+		std::wstring title;
 		RectI clientBound;
 
 	private:

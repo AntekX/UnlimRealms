@@ -13,8 +13,10 @@
 namespace UnlimRealms
 {
 
-	Canvas::Canvas(Realm &realm) :
-		RealmEntity(realm)
+	Canvas::Canvas(Realm &realm, Style style, const wchar_t* title) :
+		RealmEntity(realm),
+		style(style),
+		title(title)
 	{
 		LogNote("Canvas: created");
 	}
