@@ -1,8 +1,9 @@
 // Demo.cpp : Defines the entry point for the application.
-//
 
 #include "stdafx.h"
 #include "Demo.h"
+#include "UnlimRealmsAppConfig.h"
+
 #include "VoxelPlanetApp.h"
 #include "D3D12SandboxApp.h"
 #include "VulkanSandboxApp.h"
@@ -23,8 +24,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	HybridRenderingApp demoApp;
 	return demoApp.Run();
 #else
-	std::unique_ptr<RenderRealm> demoRealm;
-	demoRealm.reset(new GPUWorkGraphsRealm());
+	std::unique_ptr<RenderRealm> demoRealm(new GPUWorkGraphsRealm());
 	Result res = demoRealm->Initialize();
 	if (Succeeded(res))
 	{

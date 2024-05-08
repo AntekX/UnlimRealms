@@ -336,6 +336,7 @@
     <ClInclude Include="..\..\UnlimRealms\RenderRealm\RenderRealm.inline.h">
       <Filter>RenderRealm</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\UnlimRealms\UnlimRealmsAppConfig.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">

@@ -5,12 +5,6 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//#define UR_GRAF_DX12_AGILITY_SDK_VERSION 613
-#if (UR_GRAF_DX12_AGILITY_SDK_VERSION)
-extern "C" { __declspec(dllexport) extern const unsigned int D3D12SDKVersion = UR_GRAF_DX12_AGILITY_SDK_VERSION; }
-extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
-#endif
-
 #include "GrafSystemDX12.h"
 #include "Sys/Log.h"
 #if defined(_WINDOWS)
@@ -177,27 +171,25 @@ namespace UnlimRealms
 				continue;
 
 			D3D12_FEATURE_DATA_D3D12_OPTIONS5 d3dOptions5;
-			hres = d3dDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &d3dOptions5, sizeof(d3dOptions5));
-			if (FAILED(hres))
-				continue;
-
-			grafDeviceDesc.RayTracing.RayTraceSupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0);
-			grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1);
-			grafDeviceDesc.RayTracing.ShaderGroupHandleSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-			grafDeviceDesc.RayTracing.ShaderGroupBaseAlignment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
-			grafDeviceDesc.RayTracing.RecursionDepthMax = ~ur_uint32(0);
-			grafDeviceDesc.RayTracing.InstanceCountMax = ~ur_uint64(0);
-			grafDeviceDesc.RayTracing.PrimitiveCountMax = ~ur_uint64(0);
+			HRESULT hresFeature = d3dDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &d3dOptions5, sizeof(d3dOptions5));
+			if (SUCCEEDED(hresFeature))
+			{
+				grafDeviceDesc.RayTracing.RayTraceSupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0);
+				grafDeviceDesc.RayTracing.RayQuerySupported = (ur_bool)(d3dOptions5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1);
+				grafDeviceDesc.RayTracing.ShaderGroupHandleSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+				grafDeviceDesc.RayTracing.ShaderGroupBaseAlignment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+				grafDeviceDesc.RayTracing.RecursionDepthMax = ~ur_uint32(0);
+				grafDeviceDesc.RayTracing.InstanceCountMax = ~ur_uint64(0);
+				grafDeviceDesc.RayTracing.PrimitiveCountMax = ~ur_uint64(0);
+			}
 
 			#if (UR_GRAF_DX12_AGILITY_SDK_VERSION)
 			D3D12_FEATURE_DATA_D3D12_OPTIONS21 d3dOptions21;
-			hres = d3dDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS21, &d3dOptions21, sizeof(d3dOptions21));
-			if (FAILED(hres))
-				continue;
-
-			grafDeviceDesc.WorkGraphs.Supported = (d3dOptions21.WorkGraphsTier != D3D12_WORK_GRAPHS_TIER_NOT_SUPPORTED);
-			#else
-			grafDeviceDesc.WorkGraphs.Supported = false;
+			hresFeature = d3dDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS21, &d3dOptions21, sizeof(d3dOptions21));
+			if (SUCCEEDED(hresFeature))
+			{
+				grafDeviceDesc.WorkGraphs.Supported = (d3dOptions21.WorkGraphsTier != D3D12_WORK_GRAPHS_TIER_NOT_SUPPORTED);
+			}
 			#endif
 		}
 		if (FAILED(hres))

@@ -21,7 +21,7 @@
 #pragma comment(lib, "UnlimRealms.lib")
 using namespace UnlimRealms;
 
-#define UR_GRAF_SYSTEM GrafSystemVulkan
+#define UR_GRAF_SYSTEM GrafSystemDX12
 
 #define SCENE_TYPE_MEDIEVAL_BUILDINGS 0
 #define SCENE_TYPE_SPONZA 1
