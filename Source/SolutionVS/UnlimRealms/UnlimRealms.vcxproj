@@ -107,6 +107,8 @@
     </FxCompile>
     <PostBuildEvent>
       <Command>xcopy $(SolutionDir)..\..\..\Source\3rdParty\WinPixEventRuntime\bin\x64\WinPixEventRuntime.dll $(SolutionDir)..\..\..\Bin\. /Y
+mkdir $(SolutionDir)..\..\..\Bin\D3D12
+xcopy $(SolutionDir)..\..\..\Source\3rdParty\D3D12SDK\bin\x64\D3D12Core.dll $(SolutionDir)..\..\..\Bin\D3D12\. /Y
 xcopy $(SolutionDir)..\..\..\Source\3rdParty\DXCompiler\bin\x64\dxcompiler.dll $(SolutionDir)..\..\..\Bin\. /Y
 xcopy $(SolutionDir)..\..\..\Source\3rdParty\DXCompiler\bin\x64\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y
 cd $(SolutionDir)..\..\..\
@@ -133,6 +135,8 @@ call "Utils\CompileShadersUnlimRealms.bat"</Command>
     </FxCompile>
     <PostBuildEvent>
       <Command>xcopy $(SolutionDir)..\..\..\Source\3rdParty\WinPixEventRuntime\bin\x64\WinPixEventRuntime.dll $(SolutionDir)..\..\..\Bin\. /Y
+mkdir $(SolutionDir)..\..\..\Bin\D3D12
+xcopy $(SolutionDir)..\..\..\Source\3rdParty\D3D12SDK\bin\x64\D3D12Core.dll $(SolutionDir)..\..\..\Bin\D3D12\. /Y
 xcopy $(SolutionDir)..\..\..\Source\3rdParty\DXCompiler\bin\x64\dxcompiler.dll $(SolutionDir)..\..\..\Bin\. /Y
 xcopy $(SolutionDir)..\..\..\Source\3rdParty\DXCompiler\bin\x64\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y
 cd $(SolutionDir)..\..\..\
@@ -163,6 +167,8 @@ call "Utils\CompileShadersUnlimRealms.bat"</Command>
     </FxCompile>
     <PostBuildEvent>
       <Command>xcopy $(SolutionDir)..\..\..\Source\3rdParty\WinPixEventRuntime\bin\x64\WinPixEventRuntime.dll $(SolutionDir)..\..\..\Bin\. /Y
+mkdir $(SolutionDir)..\..\..\Bin\D3D12
+xcopy $(SolutionDir)..\..\..\Source\3rdParty\D3D12SDK\bin\x64\D3D12Core.dll $(SolutionDir)..\..\..\Bin\D3D12\. /Y
 xcopy $(SolutionDir)..\..\..\Source\3rdParty\DXCompiler\bin\x64\dxcompiler.dll $(SolutionDir)..\..\..\Bin\. /Y
 xcopy $(SolutionDir)..\..\..\Source\3rdParty\DXCompiler\bin\x64\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y
 cd $(SolutionDir)..\..\..\
@@ -193,6 +199,8 @@ call "Utils\CompileShadersUnlimRealms.bat"</Command>
     </FxCompile>
     <PostBuildEvent>
       <Command>xcopy $(SolutionDir)..\..\..\Source\3rdParty\WinPixEventRuntime\bin\x64\WinPixEventRuntime.dll $(SolutionDir)..\..\..\Bin\. /Y
+mkdir $(SolutionDir)..\..\..\Bin\D3D12
+xcopy $(SolutionDir)..\..\..\Source\3rdParty\D3D12SDK\bin\x64\D3D12Core.dll $(SolutionDir)..\..\..\Bin\D3D12\. /Y
 xcopy $(SolutionDir)..\..\..\Source\3rdParty\DXCompiler\bin\x64\dxcompiler.dll $(SolutionDir)..\..\..\Bin\. /Y
 xcopy $(SolutionDir)..\..\..\Source\3rdParty\DXCompiler\bin\x64\dxil.dll $(SolutionDir)..\..\..\Bin\. /Y
 cd $(SolutionDir)..\..\..\
