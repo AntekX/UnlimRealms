@@ -296,6 +296,8 @@ call "Utils\CompileShadersUnlimRealms.bat"</Command>
     <ClInclude Include="..\..\UnlimRealms\RenderRealm\RenderRealm.inline.h" />
     <ClInclude Include="..\..\UnlimRealms\Resources\Resources.h" />
     <ClInclude Include="..\..\UnlimRealms\UnlimRealmsAppConfig.h" />
+    <None Include="..\..\..\Utils\CompileShadersDefinitions.bat" />
+    <None Include="..\..\..\Utils\CompileShadersFunctions.bat" />
     <None Include="..\..\..\Utils\CompileShadersUnlimRealms.bat" />
     <None Include="..\..\UnlimRealms\Atmosphere\AtmosphereCommon.hlsli" />
     <None Include="..\..\UnlimRealms\ShaderLib\CommonTypes.hlsli" />

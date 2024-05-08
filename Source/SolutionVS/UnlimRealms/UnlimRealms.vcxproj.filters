@@ -884,5 +884,7 @@
       <Filter>Terrain</Filter>
     </None>
     <None Include="..\..\..\Utils\CompileShadersUnlimRealms.bat" />
+    <None Include="..\..\..\Utils\CompileShadersDefinitions.bat" />
+    <None Include="..\..\..\Utils\CompileShadersFunctions.bat" />
   </ItemGroup>
 </Project>
