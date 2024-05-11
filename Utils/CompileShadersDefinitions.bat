@@ -1,3 +1,4 @@
+@echo off
 
 :: Compiler
 set "DXC=Source\3rdParty\DXCompiler\bin\x64\dxc.exe"

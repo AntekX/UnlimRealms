@@ -123,6 +123,7 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 			bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::CpuVisible);
 			bufferParams.BufferDesc.SizeInBytes = 16777216 * sizeof(ur_uint32);
 			res = this->graphicsObjects->workGraphReadbackBuffer->Initialize(grafDevice, bufferParams);
+			this->graphicsObjects->workGraphReadbackPending = false;
 		}
 		if (Failed(res))
 			break;
@@ -154,6 +155,9 @@ Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 	if (ur_null == this->graphicsObjects.get())
 		return Result(NotInitialized);
 
+	if (this->graphicsObjects->workGraphReadbackPending)
+		return Result(Success); // do not dispatch another work graph till readback is done
+
 	// prepare resources
 	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);
 
@@ -178,12 +182,23 @@ Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 	// dispatch work graph
 	renderContext.CommandList->DispatchGraph(0, (ur_byte*)graphInputData.data(), (ur_uint)graphInputData.size(), sizeof(entryRecord));
 
-	// readback
+	// schedule readback
 	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::TransferSrc);
 	renderContext.CommandList->Copy(this->graphicsObjects->workGraphDataBuffer.get(), this->graphicsObjects->workGraphReadbackBuffer.get());
-	std::vector<ur_uint32> readbackData(16777216, 0);
-	ur_byte* readbackDataPtr = (ur_byte*)readbackData.data();
-	this->graphicsObjects->workGraphReadbackBuffer->Read(readbackDataPtr);
+	this->graphicsObjects->workGraphReadbackPending = true;
+
+	// retrieve data fro UAV when work graph executed
+	// TODO: redo, callback can be executed asynchronously
+	this->GetGrafRenderer()->AddCommandListCallback(renderContext.CommandList, {},
+		[this](GrafCallbackContext& ctx)->Result
+		{
+			this->graphicsObjects->workGraphReadbackData.resize(16777216);
+			ur_byte* readbackDataPtr = (ur_byte*)this->graphicsObjects->workGraphReadbackData.data();
+			this->graphicsObjects->workGraphReadbackBuffer->Read(readbackDataPtr);
+			this->graphicsObjects->workGraphReadbackPending = false;
+			return Result(Success);
+		}
+	);
 
 	return Result(Success);
 }

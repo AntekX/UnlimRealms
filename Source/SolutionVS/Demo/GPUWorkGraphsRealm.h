@@ -31,6 +31,8 @@ private:
 		std::unique_ptr<GrafManagedDescriptorTable> workGraphDescTable;
 		std::unique_ptr<GrafBuffer> workGraphDataBuffer;
 		std::unique_ptr<GrafBuffer> workGraphReadbackBuffer;
+		std::vector<ur_uint32> workGraphReadbackData;
+		ur_bool workGraphReadbackPending;
 	};
 	std::unique_ptr<GraphicsObjects> graphicsObjects;
 };
