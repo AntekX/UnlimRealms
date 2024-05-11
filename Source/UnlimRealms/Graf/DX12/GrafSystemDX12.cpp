@@ -56,11 +56,8 @@ namespace UnlimRealms
 	};
 
 	// default target shader model (for run time linker)
-	#if (UR_GRAF_DX12_AGILITY_SDK_VERSION >= 613)
-	static const std::wstring DXCLinkerShaderModel = L"6_8";
-	#else
-	static const std::wstring DXCLinkerShaderModel = L"6_3";
-	#endif
+	static const std::wstring DXCLinkerShaderModelDefault = L"6_3";
+	static const std::wstring DXCLinkerShaderModelWorkGraphs = L"6_8";
 
 	// string utils
 
@@ -187,7 +184,7 @@ namespace UnlimRealms
 				grafDeviceDesc.RayTracing.PrimitiveCountMax = ~ur_uint64(0);
 			}
 
-			#if (UR_GRAF_DX12_AGILITY_SDK_VERSION)
+			#if (UR_GRAF_DX12_AGILITY_SDK_VERSION >= 613)
 			D3D12_FEATURE_DATA_D3D12_OPTIONS21 d3dOptions21;
 			hresFeature = d3dDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS21, &d3dOptions21, sizeof(d3dOptions21));
 			if (SUCCEEDED(hresFeature))
@@ -2728,7 +2725,10 @@ namespace UnlimRealms
 			case GrafShaderType::Compute: linkTargetProfile = L"cs_"; break;
 			default: linkTargetProfile = L"lib_";
 			};
-			linkTargetProfile += DXCLinkerShaderModel;
+			if (GrafShaderType::Node == libEntryPoint.Type)
+				linkTargetProfile += DXCLinkerShaderModelWorkGraphs;
+			else
+				linkTargetProfile += DXCLinkerShaderModelDefault;
 
 			shared_ref<IDxcOperationResult> dxcLinkResult;
 			hres = dxcLinker->Link(linkEntryPoint.c_str(), linkTargetProfile.c_str(),
