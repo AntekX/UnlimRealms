@@ -103,13 +103,26 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 		if (Succeeded(res))
 		{
 			GrafBuffer::InitParams bufferParams = {};
-			bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferDst);
+			bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferSrc);
 			bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
 			bufferParams.BufferDesc.SizeInBytes = 16777216 * sizeof(ur_uint32);
 			res = this->graphicsObjects->workGraphDataBuffer->Initialize(grafDevice, bufferParams);
 			
-			// TODO: upload initial data
-			//this->GetGrafRenderer()->Upload((ur_byte*)intialData, this->graphicsObjects->workGworkGraphDataBufferraphBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
+			// upload initial data
+			std::vector<ur_uint32> initialData(16777216, 0);
+			this->GetGrafRenderer()->Upload((ur_byte*)initialData.data(), this->graphicsObjects->workGraphDataBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
+		}
+		if (Failed(res))
+			break;
+
+		res = grafSystem->CreateBuffer(this->graphicsObjects->workGraphReadbackBuffer);
+		if (Succeeded(res))
+		{
+			GrafBuffer::InitParams bufferParams = {};
+			bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::TransferDst);
+			bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::CpuVisible);
+			bufferParams.BufferDesc.SizeInBytes = 16777216 * sizeof(ur_uint32);
+			res = this->graphicsObjects->workGraphReadbackBuffer->Initialize(grafDevice, bufferParams);
 		}
 		if (Failed(res))
 			break;
@@ -140,6 +153,13 @@ Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 {
 	if (ur_null == this->graphicsObjects.get())
 		return Result(NotInitialized);
+
+	// readback
+	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::TransferSrc);
+	renderContext.CommandList->Copy(this->graphicsObjects->workGraphDataBuffer.get(), this->graphicsObjects->workGraphReadbackBuffer.get());
+	std::vector<ur_uint32> readbackData(16777216, 0);
+	ur_byte* readbackDataPtr = (ur_byte*)readbackData.data();
+	this->graphicsObjects->workGraphReadbackBuffer->Read(readbackDataPtr);
 
 	// prepare resources
 	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);

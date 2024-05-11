@@ -30,6 +30,7 @@ private:
 		std::unique_ptr<GrafDescriptorTableLayout> workGraphDescTableLayout;
 		std::unique_ptr<GrafManagedDescriptorTable> workGraphDescTable;
 		std::unique_ptr<GrafBuffer> workGraphDataBuffer;
+		std::unique_ptr<GrafBuffer> workGraphReadbackBuffer;
 	};
 	std::unique_ptr<GraphicsObjects> graphicsObjects;
 };

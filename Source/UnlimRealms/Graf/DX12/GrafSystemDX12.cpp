@@ -2534,7 +2534,33 @@ namespace UnlimRealms
 
 	Result GrafBufferDX12::Read(ur_byte*& dataPtr, ur_size dataSize, ur_size srcOffset, ur_size dstOffset)
 	{
-		return Result(NotImplemented);
+		if (0 == dataSize)
+			dataSize = this->GetDesc().SizeInBytes; // entire allocation range
+
+		if (dstOffset + dataSize > this->GetDesc().SizeInBytes)
+			return Result(InvalidArgs);
+
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
+
+		D3D12_RANGE d3dRange;
+		d3dRange.Begin = dstOffset;
+		d3dRange.End = dstOffset + dataSize;
+
+		void* mappedMemoryPtr = nullptr;
+		HRESULT hres = this->d3dResource->Map(0, &d3dRange, &mappedMemoryPtr);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafBufferDX12: Map failed with HRESULT = ") + HResultToString(hres));
+		}
+
+		mappedMemoryPtr = (void*)((ur_byte*)mappedMemoryPtr + dstOffset);
+
+		memcpy(dataPtr + dstOffset, mappedMemoryPtr, dataSize);
+
+		this->d3dResource->Unmap(0, &d3dRange);
+
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -4223,11 +4249,13 @@ namespace UnlimRealms
 	D3D12_RESOURCE_STATES GrafUtilsDX12::GrafToD3DBufferInitialState(GrafBufferUsageFlags bufferUsage, GrafDeviceMemoryFlags memoryFlags)
 	{
 		D3D12_RESOURCE_STATES d3dStates = D3D12_RESOURCE_STATE_COMMON;
-		// by default CPU visible memory is considered to be used for upload,
-		// upload heap resource must be created in generic read state
 		if (memoryFlags & ur_uint(GrafDeviceMemoryFlag::CpuVisible))
 		{
-			d3dStates = D3D12_RESOURCE_STATE_GENERIC_READ;
+			if (bufferUsage & ur_uint(GrafBufferUsageFlag::TransferDst))
+				d3dStates = D3D12_RESOURCE_STATE_COPY_DEST;
+			else
+				// upload heap resource must be created in generic read state
+				d3dStates = D3D12_RESOURCE_STATE_GENERIC_READ;
 		}
 		else
 		{
