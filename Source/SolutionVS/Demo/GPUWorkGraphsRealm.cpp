@@ -28,6 +28,8 @@ GPUWorkGraphsRealm::~GPUWorkGraphsRealm()
 
 Result GPUWorkGraphsRealm::Initialize()
 {
+#if (UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED)
+
 	RenderRealm::InitParams realmParams = RenderRealm::InitParams::Default;
 	realmParams.Title = L"GPUWorkGraphsApp";
 	realmParams.CanvasStyle = WinCanvas::Style::OverlappedWindowMaximized;
@@ -35,6 +37,9 @@ Result GPUWorkGraphsRealm::Initialize()
 	realmParams.RendererParams = GrafRenderer::InitParams::Default;
 
 	return RenderRealm::Initialize(realmParams);
+#else
+	return Result(NotImplemented); // used DX12 SDK does not support work graphs
+#endif
 }
 
 Result GPUWorkGraphsRealm::InitializeGraphicObjects()
