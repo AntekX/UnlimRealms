@@ -323,11 +323,15 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+#if (UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED)
+
 	Result GrafSystemDX12::CreateWorkGraphPipeline(std::unique_ptr<GrafWorkGraphPipeline>& grafWorkGraphPipeline)
 	{
 		grafWorkGraphPipeline.reset(new GrafWorkGraphPipelineDX12(*this));
 		return Result(Success);
 	}
+
+#endif // UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED
 
 	const char* GrafSystemDX12::GetShaderExtension() const
 	{
@@ -1486,9 +1490,47 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
+	Result GrafCommandListDX12::DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
+		const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
+		const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable)
+	{
+		static const D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE NullD3DRegion = { 0, 0, 0 };
+		auto FillD3DRegion = [](D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE& d3dRegion, const GrafStridedBufferRegionDesc* grafStridedBufferRegion) -> void
+		{
+			if (grafStridedBufferRegion)
+			{
+				d3dRegion.StartAddress = (D3D12_GPU_VIRTUAL_ADDRESS)(grafStridedBufferRegion->BufferPtr ? grafStridedBufferRegion->BufferPtr->GetDeviceAddress() + grafStridedBufferRegion->Offset : 0);
+				d3dRegion.StrideInBytes = (UINT64)grafStridedBufferRegion->Stride;
+				d3dRegion.SizeInBytes = (UINT64)grafStridedBufferRegion->Size;
+			}
+			else
+			{
+				d3dRegion = NullD3DRegion;
+			}
+		};
+
+		D3D12_DISPATCH_RAYS_DESC d3dDispatchDesc = {};
+		d3dDispatchDesc.Width = width;
+		d3dDispatchDesc.Height = height;
+		d3dDispatchDesc.Depth = depth;
+		if (rayGenShaderTable != ur_null)
+		{
+			d3dDispatchDesc.RayGenerationShaderRecord.StartAddress = (rayGenShaderTable->BufferPtr ? rayGenShaderTable->BufferPtr->GetDeviceAddress() + rayGenShaderTable->Offset : 0);
+			d3dDispatchDesc.RayGenerationShaderRecord.SizeInBytes = rayGenShaderTable->Size;
+		}
+		FillD3DRegion(d3dDispatchDesc.MissShaderTable, missShaderTable);
+		FillD3DRegion(d3dDispatchDesc.HitGroupTable, hitShaderTable);
+		FillD3DRegion(d3dDispatchDesc.CallableShaderTable, callableShaderTable);
+
+		this->d3dCommandList->DispatchRays(&d3dDispatchDesc);
+
+		return Result(Success);
+	}
+
+#if (UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED)
+
 	Result GrafCommandListDX12::BindWorkGraphPipeline(GrafWorkGraphPipeline* grafPipeline)
 	{
-	#if (UR_GRAF_DX12_AGILITY_SDK_VERSION >= 613)
 		if (ur_null == grafPipeline)
 			return Result(InvalidArgs);
 
@@ -1505,14 +1547,11 @@ namespace UnlimRealms
 		d3dProgramDesc.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH;
 		d3dProgramDesc.WorkGraph.ProgramIdentifier = grafPipelineDX12->GetD3DProgramIdentifier();
 		d3dProgramDesc.WorkGraph.Flags = D3D12_SET_WORK_GRAPH_FLAG_NONE;
-		d3dProgramDesc.WorkGraph.BackingMemory;
-		// TODO
-		//d3dCommandList10->SetProgram(&d3dProgramDesc);
+		d3dProgramDesc.WorkGraph.BackingMemory.StartAddress = (D3D12_GPU_VIRTUAL_ADDRESS)grafPipelineDX12->GetBackingBuffer()->GetDeviceAddress();
+		d3dProgramDesc.WorkGraph.BackingMemory.SizeInBytes = (UINT64)grafPipelineDX12->GetBackingBuffer()->GetDesc().SizeInBytes;
+		d3dCommandList10->SetProgram(&d3dProgramDesc);
 
 		return Result(Success);
-	#else
-		return Result(NotImplemented);
-	#endif
 	}
 
 	Result GrafCommandListDX12::BindWorkGraphDescriptorTable(GrafDescriptorTable* descriptorTable, GrafWorkGraphPipeline* grafPipeline)
@@ -1552,42 +1591,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafCommandListDX12::DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
-		const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
-		const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable)
-	{
-		static const D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE NullD3DRegion = { 0, 0, 0 };
-		auto FillD3DRegion = [](D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE& d3dRegion, const GrafStridedBufferRegionDesc* grafStridedBufferRegion) -> void
-		{
-			if (grafStridedBufferRegion)
-			{
-				d3dRegion.StartAddress = (D3D12_GPU_VIRTUAL_ADDRESS)(grafStridedBufferRegion->BufferPtr ? grafStridedBufferRegion->BufferPtr->GetDeviceAddress() + grafStridedBufferRegion->Offset : 0);
-				d3dRegion.StrideInBytes = (UINT64)grafStridedBufferRegion->Stride;
-				d3dRegion.SizeInBytes = (UINT64)grafStridedBufferRegion->Size;
-			}
-			else
-			{
-				d3dRegion = NullD3DRegion;
-			}
-		};
-
-		D3D12_DISPATCH_RAYS_DESC d3dDispatchDesc = {};
-		d3dDispatchDesc.Width = width;
-		d3dDispatchDesc.Height = height;
-		d3dDispatchDesc.Depth = depth;
-		if (rayGenShaderTable != ur_null)
-		{
-			d3dDispatchDesc.RayGenerationShaderRecord.StartAddress = (rayGenShaderTable->BufferPtr ? rayGenShaderTable->BufferPtr->GetDeviceAddress() + rayGenShaderTable->Offset : 0);
-			d3dDispatchDesc.RayGenerationShaderRecord.SizeInBytes = rayGenShaderTable->Size;
-		}
-		FillD3DRegion(d3dDispatchDesc.MissShaderTable, missShaderTable);
-		FillD3DRegion(d3dDispatchDesc.HitGroupTable, hitShaderTable);
-		FillD3DRegion(d3dDispatchDesc.CallableShaderTable, callableShaderTable);
-
-		this->d3dCommandList->DispatchRays(&d3dDispatchDesc);
-
-		return Result(Success);
-	}
+#endif // UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -3818,6 +3822,8 @@ namespace UnlimRealms
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if (UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED)
+
 	GrafWorkGraphPipelineDX12::GrafWorkGraphPipelineDX12(GrafSystem& grafSystem) :
 		GrafWorkGraphPipeline(grafSystem)
 	{
@@ -3830,6 +3836,7 @@ namespace UnlimRealms
 
 	Result GrafWorkGraphPipelineDX12::Deinitialize()
 	{
+		this->grafBackingBuffer.reset(ur_null);
 		this->d3dRootSignature.reset(ur_null);
 		this->d3dStateObject.reset(ur_null);
 		this->d3dProgramIdentifier = {};
@@ -3852,8 +3859,6 @@ namespace UnlimRealms
 			return ResultError(InvalidArgs, std::string("GrafWorkGraphPipelineDX12: failed to initialize, invalid GrafDevice"));
 		}
 		ID3D12Device5* d3dDevice = grafDeviceDX12->GetD3DDevice();
-
-	#if (UR_GRAF_DX12_AGILITY_SDK_VERSION >= 613)
 
 		std::vector<D3D12_STATE_SUBOBJECT> d3dStateSubobjects;
 
@@ -3966,11 +3971,44 @@ namespace UnlimRealms
 		}
 		this->d3dProgramIdentifier = d3dStateProperties->GetProgramIdentifier(programName.c_str());
 
+		// backing memory buffer
+
+		shared_ref<ID3D12WorkGraphProperties> d3dWorkGraphProperties;
+		hres = this->d3dStateObject->QueryInterface<ID3D12WorkGraphProperties>(d3dWorkGraphProperties);
+		if (FAILED(hres))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafWorkGraphPipelineDX12: QueryInterface<ID3D12WorkGraphProperties> failed with HRESULT = ") + HResultToString(hres));
+		}
+		ur_uint workGraphIndex = d3dWorkGraphProperties->GetWorkGraphIndex(programName.c_str());
+		if (workGraphIndex >= d3dWorkGraphProperties->GetNumWorkGraphs())
+		{
+			this->Deinitialize();
+			return ResultError(Failure, std::string("GrafWorkGraphPipelineDX12: invalid work graph index"));
+		}
+		D3D12_WORK_GRAPH_MEMORY_REQUIREMENTS d3dWorkGraphMemoryReqs;
+		d3dWorkGraphProperties->GetWorkGraphMemoryRequirements(workGraphIndex, &d3dWorkGraphMemoryReqs);
+
+		Result res = grafSystemDX12.CreateBuffer(this->grafBackingBuffer);
+		if (Succeeded(res))
+		{
+			GrafBuffer::InitParams bufferParams = {};
+			bufferParams.BufferDesc.Usage = GrafBufferUsageFlags(ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::ShaderDeviceAddress));
+			bufferParams.BufferDesc.MemoryType = GrafDeviceMemoryFlags(GrafDeviceMemoryFlag::GpuLocal);
+			bufferParams.BufferDesc.SizeInBytes = d3dWorkGraphMemoryReqs.MaxSizeInBytes;
+
+			res = this->grafBackingBuffer->Initialize(grafDeviceDX12, bufferParams);
+		}
+		if (Failed(res))
+		{
+			this->Deinitialize();
+			return ResultError(Failure, "GrafWorkGraphPipelineDX12: failed to create backing buffer");
+		}
+
 		return Result(Success);
-	#else
-		return Result(NotImplemented);
-	#endif
 	}
+
+#endif // UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// GrafUtilsDX12

@@ -15,13 +15,15 @@
 #include "Sys/Windows/WinUtils.h"
 #include "Core/Memory.h"
 
-#define UR_GRAF_DX12_AGILITY_SDK_VERSION 613
+//#define UR_GRAF_DX12_AGILITY_SDK_VERSION 613
 #if (UR_GRAF_DX12_AGILITY_SDK_VERSION)
 #include <D3D12SDK/include/d3d12.h>
 #else
 #include <d3d12.h>
 #endif
 #include <dxgi1_5.h>
+
+#define UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED (UR_GRAF_DX12_AGILITY_SDK_VERSION >= 613)
 
 namespace UnlimRealms
 {
@@ -73,7 +75,9 @@ namespace UnlimRealms
 
 		virtual Result CreateAccelerationStructure(std::unique_ptr<GrafAccelerationStructure>& grafAccelStruct);
 
+		#if (UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED)
 		virtual Result CreateWorkGraphPipeline(std::unique_ptr<GrafWorkGraphPipeline>& grafWorkGraphPipeline);
+		#endif
 
 		virtual const char* GetShaderExtension() const;
 
@@ -320,13 +324,19 @@ namespace UnlimRealms
 
 		virtual Result BindRayTracingDescriptorTable(GrafDescriptorTable* descriptorTable, GrafRayTracingPipeline* grafPipeline);
 
+		virtual Result DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
+			const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
+			const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable);
+
+		#if (UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED)
+
 		virtual Result BindWorkGraphPipeline(GrafWorkGraphPipeline* grafPipeline);
 
 		virtual Result BindWorkGraphDescriptorTable(GrafDescriptorTable* descriptorTable, GrafWorkGraphPipeline* grafPipeline);
 
-		virtual Result DispatchRays(ur_uint width, ur_uint height, ur_uint depth,
-			const GrafStridedBufferRegionDesc* rayGenShaderTable, const GrafStridedBufferRegionDesc* missShaderTable,
-			const GrafStridedBufferRegionDesc* hitShaderTable, const GrafStridedBufferRegionDesc* callableShaderTable);
+		// TODO: DispatchGraph
+
+		#endif // UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED
 
 		inline GrafDeviceDX12::CommandAllocator* GetCommandAllocator() const;
 
@@ -804,6 +814,7 @@ namespace UnlimRealms
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	#if (UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED)
 	class UR_DECL GrafWorkGraphPipelineDX12 : public GrafWorkGraphPipeline
 	{
 	public:
@@ -818,6 +829,8 @@ namespace UnlimRealms
 
 		inline const D3D12_PROGRAM_IDENTIFIER& GetD3DProgramIdentifier() const;
 
+		inline GrafBuffer* GetBackingBuffer() const;
+
 	protected:
 
 		Result Deinitialize();
@@ -825,7 +838,9 @@ namespace UnlimRealms
 		shared_ref<ID3D12StateObject> d3dStateObject;
 		shared_ref<ID3D12RootSignature> d3dRootSignature;
 		D3D12_PROGRAM_IDENTIFIER d3dProgramIdentifier;
+		std::unique_ptr<GrafBuffer> grafBackingBuffer;
 	};
+	#endif
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	class UR_DECL GrafUtilsDX12

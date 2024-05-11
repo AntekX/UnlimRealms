@@ -93,17 +93,17 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 		if (Failed(res))
 			break;
 
-		res = grafSystem->CreateBuffer(this->graphicsObjects->workGraphBuffer);
+		res = grafSystem->CreateBuffer(this->graphicsObjects->workGraphDataBuffer);
 		if (Succeeded(res))
 		{
 			GrafBuffer::InitParams bufferParams = {};
 			bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferDst);
 			bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
 			bufferParams.BufferDesc.SizeInBytes = 16777216 * sizeof(ur_uint32);
-			res = this->graphicsObjects->workGraphBuffer->Initialize(grafDevice, bufferParams);
+			res = this->graphicsObjects->workGraphDataBuffer->Initialize(grafDevice, bufferParams);
 			
 			// TODO: upload initial data
-			//this->GetGrafRenderer()->Upload((ur_byte*)intialData, this->graphicsObjects->workGraphBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
+			//this->GetGrafRenderer()->Upload((ur_byte*)intialData, this->graphicsObjects->workGworkGraphDataBufferraphBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
 		}
 		if (Failed(res))
 			break;
@@ -136,15 +136,17 @@ Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 		return Result(NotInitialized);
 
 	// prepare resources
-	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);
+	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);
 
 	// update descriptor table
 	GrafDescriptorTable* workGraphFrameTable = this->graphicsObjects->workGraphDescTable->GetFrameObject();
-	workGraphFrameTable->SetRWBuffer(g_UAVDescriptor, this->graphicsObjects->workGraphBuffer.get());
+	//workGraphFrameTable->SetRWBuffer(g_UAVDescriptor, this->graphicsObjects->workGraphDataBuffer.get());
 
 	// bind pipeline
 	renderContext.CommandList->BindWorkGraphPipeline(this->graphicsObjects->workGraphPipeline.get());
 	renderContext.CommandList->BindWorkGraphDescriptorTable(workGraphFrameTable, this->graphicsObjects->workGraphPipeline.get());
+
+	// TODO: dispatch work graph
 
 	return Result(Success);
 }

@@ -303,6 +303,8 @@ namespace UnlimRealms
 		return this->grafStorageBuffer.get();
 	}
 
+#if (UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED)
+
 	inline ID3D12StateObject* GrafWorkGraphPipelineDX12::GetD3DStateObject() const
 	{
 		return this->d3dStateObject.get();
@@ -312,5 +314,12 @@ namespace UnlimRealms
 	{
 		return this->d3dProgramIdentifier;
 	}
+
+	inline GrafBuffer* GrafWorkGraphPipelineDX12::GetBackingBuffer() const
+	{
+		return this->grafBackingBuffer.get();
+	}
+
+#endif // UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED
 
 } // end namespace UnlimRealms
