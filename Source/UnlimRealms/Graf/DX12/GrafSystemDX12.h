@@ -827,6 +827,8 @@ namespace UnlimRealms
 
 		inline ID3D12StateObject* GetD3DStateObject() const;
 
+		inline ID3D12RootSignature* GetD3DRootSignature() const;
+
 		inline const D3D12_PROGRAM_IDENTIFIER& GetD3DProgramIdentifier() const;
 
 		inline GrafBuffer* GetBackingBuffer() const;

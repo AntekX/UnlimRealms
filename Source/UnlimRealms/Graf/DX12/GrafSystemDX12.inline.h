@@ -310,6 +310,11 @@ namespace UnlimRealms
 		return this->d3dStateObject.get();
 	}
 
+	inline ID3D12RootSignature* GrafWorkGraphPipelineDX12::GetD3DRootSignature() const
+	{
+		return this->d3dRootSignature.get();
+	}
+
 	inline const D3D12_PROGRAM_IDENTIFIER& GrafWorkGraphPipelineDX12::GetD3DProgramIdentifier() const
 	{
 		return this->d3dProgramIdentifier;

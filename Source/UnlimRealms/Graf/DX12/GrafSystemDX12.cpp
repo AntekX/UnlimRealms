@@ -1548,6 +1548,8 @@ namespace UnlimRealms
 		d3dProgramDesc.WorkGraph.BackingMemory.SizeInBytes = (UINT64)grafPipelineDX12->GetBackingBuffer()->GetDesc().SizeInBytes;
 		d3dCommandList10->SetProgram(&d3dProgramDesc);
 
+		this->d3dCommandList->SetComputeRootSignature(grafPipelineDX12->GetD3DRootSignature());
+
 		return Result(Success);
 	}
 
