@@ -154,13 +154,6 @@ Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 	if (ur_null == this->graphicsObjects.get())
 		return Result(NotInitialized);
 
-	// readback
-	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::TransferSrc);
-	renderContext.CommandList->Copy(this->graphicsObjects->workGraphDataBuffer.get(), this->graphicsObjects->workGraphReadbackBuffer.get());
-	std::vector<ur_uint32> readbackData(16777216, 0);
-	ur_byte* readbackDataPtr = (ur_byte*)readbackData.data();
-	this->graphicsObjects->workGraphReadbackBuffer->Read(readbackDataPtr);
-
 	// prepare resources
 	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);
 
@@ -184,6 +177,13 @@ Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 
 	// dispatch work graph
 	renderContext.CommandList->DispatchGraph(0, (ur_byte*)graphInputData.data(), (ur_uint)graphInputData.size(), sizeof(entryRecord));
+
+	// readback
+	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::TransferSrc);
+	renderContext.CommandList->Copy(this->graphicsObjects->workGraphDataBuffer.get(), this->graphicsObjects->workGraphReadbackBuffer.get());
+	std::vector<ur_uint32> readbackData(16777216, 0);
+	ur_byte* readbackDataPtr = (ur_byte*)readbackData.data();
+	this->graphicsObjects->workGraphReadbackBuffer->Read(readbackDataPtr);
 
 	return Result(Success);
 }

@@ -1186,6 +1186,8 @@ namespace UnlimRealms
 	{
 		GrafBufferDX12* srcBufferDX12 = static_cast<GrafBufferDX12*>(srcBuffer);
 		GrafBufferDX12* dstBufferDX12 = static_cast<GrafBufferDX12*>(dstBuffer);
+		if (0 == dataSize)
+			dataSize = srcBuffer->GetDesc().SizeInBytes; // entire allocation range
 
 		this->d3dCommandList->CopyBufferRegion(dstBufferDX12->GetD3DResource(), (UINT64)dstOffset, srcBufferDX12->GetD3DResource(), (UINT64)srcOffset, (UINT64)dataSize);;
 
