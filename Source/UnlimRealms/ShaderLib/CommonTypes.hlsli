@@ -12,6 +12,7 @@
 // base types
 #if defined(CPP_CODE)
 
+#define GPU_ONLY(...)
 #define CFLOAT(v) ur_float v
 #define CFLOAT2(v) ur_float2 v
 #define CFLOAT3(v) ur_float3 v
@@ -29,6 +30,7 @@
 
 #else
 
+#define GPU_ONLY(...) __VA_ARGS__
 #define CFLOAT(v) float v
 #define CFLOAT2(v) float2 v
 #define CFLOAT3(v) float3 v

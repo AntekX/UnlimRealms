@@ -1543,7 +1543,7 @@ namespace UnlimRealms
 		D3D12_SET_PROGRAM_DESC d3dProgramDesc = {};
 		d3dProgramDesc.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH;
 		d3dProgramDesc.WorkGraph.ProgramIdentifier = grafPipelineDX12->GetD3DProgramIdentifier();
-		d3dProgramDesc.WorkGraph.Flags = D3D12_SET_WORK_GRAPH_FLAG_NONE;
+		d3dProgramDesc.WorkGraph.Flags = D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE;
 		d3dProgramDesc.WorkGraph.BackingMemory.StartAddress = (D3D12_GPU_VIRTUAL_ADDRESS)grafPipelineDX12->GetBackingBuffer()->GetDeviceAddress();
 		d3dProgramDesc.WorkGraph.BackingMemory.SizeInBytes = (UINT64)grafPipelineDX12->GetBackingBuffer()->GetDesc().SizeInBytes;
 		d3dCommandList10->SetProgram(&d3dProgramDesc);
@@ -1584,6 +1584,26 @@ namespace UnlimRealms
 		{
 			this->d3dCommandList->SetComputeRootDescriptorTable(rootParameterIdx++, descriptorTableDX12->GetSamplerDescriptorHeapHandle().GetD3DHandleGPU());
 		}
+
+		return Result(Success);
+	}
+
+	Result GrafCommandListDX12::DispatchGraph(ur_uint entryPointIdx, ur_byte* inputRecords, ur_uint recordCount, ur_uint recordStride)
+	{
+		D3D12_DISPATCH_GRAPH_DESC d3dDispatchGraphDesc = {};
+		d3dDispatchGraphDesc.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT;
+		d3dDispatchGraphDesc.NodeCPUInput.EntrypointIndex = entryPointIdx;
+		d3dDispatchGraphDesc.NodeCPUInput.pRecords = inputRecords;
+		d3dDispatchGraphDesc.NodeCPUInput.NumRecords = recordCount;
+		d3dDispatchGraphDesc.NodeCPUInput.RecordStrideInBytes = (UINT64)recordStride;
+
+		shared_ref<ID3D12GraphicsCommandList10> d3dCommandList10;
+		HRESULT hres = this->d3dCommandList->QueryInterface(__uuidof(ID3D12GraphicsCommandList10), d3dCommandList10);
+		if (FAILED(hres))
+		{
+			return ResultError(Failure, std::string("GrafCommandListDX12::DispatchGraph: failed to query ID3D12GraphicsCommandList10 with HRESULT = ") + HResultToString(hres));
+		}
+		d3dCommandList10->DispatchGraph(&d3dDispatchGraphDesc);
 
 		return Result(Success);
 	}
@@ -3897,7 +3917,7 @@ namespace UnlimRealms
 		// root signature
 
 		D3D12_ROOT_SIGNATURE_DESC d3dRootSigDesc = {};
-		d3dRootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+		d3dRootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 		std::vector<D3D12_ROOT_PARAMETER> d3dRootParameters;
 		for (ur_uint descriptorLayoutIdx = 0; descriptorLayoutIdx < initParams.DescriptorTableLayoutCount; ++descriptorLayoutIdx)
 		{

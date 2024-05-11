@@ -26,14 +26,8 @@
 
 #include "GPUWorkGraphsCommon.hlsli"
 
-GlobalRootSignature globalRS = { "UAV(u0)" };
-RWStructuredBuffer<uint> UAV : register(u0); // 16MB byte buffer from global root sig
-
-struct entryRecord
-{
-    uint gridSize : SV_DispatchGrid;
-    uint recordIndex;
-};
+//GlobalRootSignature globalRS = { "UAV(u0)" };
+//RWStructuredBuffer<uint> UAV : register(u0); // 16MB byte buffer from global root sig
 
 struct secondNodeInput
 {
@@ -96,7 +90,8 @@ void secondNode(
     // In a future language version, "->" will be available instead of ".Get()" to access record members
 
     // UAV[entryRecordIndex] (as uint) is the sum of all outputs from upstream node for graph entry [entryRecordIndex]
-    InterlockedAdd(UAV[inputData.Get().entryRecordIndex], inputData.Get().incrementValue);
+    //InterlockedAdd(g_UAV[inputData.Get().entryRecordIndex], inputData.Get().incrementValue);
+    g_UAV.InterlockedAdd(inputData.Get().entryRecordIndex * 4, inputData.Get().incrementValue);
 
     // For every thread send a task to thirdNode
     ThreadNodeOutputRecords<thirdNodeInput> outRec = thirdNode.GetThreadNodeOutputRecords(1);
@@ -144,6 +139,7 @@ void thirdNode(
     for (uint l = 0; l < c_numEntryRecords; l++)
     {
         uint recordIndex = c_numEntryRecords + l;
-        InterlockedAdd(UAV[recordIndex], g_sum[l]);
+        //InterlockedAdd(g_UAV[recordIndex], g_sum[l]);
+        g_UAV.InterlockedAdd(recordIndex * 4, g_sum[l]);
     }
 }

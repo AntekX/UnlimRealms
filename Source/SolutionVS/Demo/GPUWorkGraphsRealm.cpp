@@ -66,6 +66,7 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 		if (Succeeded(res))
 		{
 			GrafDescriptorRangeDesc descTableLayoutRanges[] = {
+				g_CBDescriptor,
 				g_UAVDescriptor
 			};
 			GrafDescriptorTableLayoutDesc descTableLayoutDesc = {
@@ -145,13 +146,24 @@ Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 
 	// update descriptor table
 	GrafDescriptorTable* workGraphFrameTable = this->graphicsObjects->workGraphDescTable->GetFrameObject();
-	//workGraphFrameTable->SetRWBuffer(g_UAVDescriptor, this->graphicsObjects->workGraphDataBuffer.get());
+	workGraphFrameTable->SetRWBuffer(g_UAVDescriptor, this->graphicsObjects->workGraphDataBuffer.get());
 
 	// bind pipeline
 	renderContext.CommandList->BindWorkGraphPipeline(this->graphicsObjects->workGraphPipeline.get());
 	renderContext.CommandList->BindWorkGraphDescriptorTable(workGraphFrameTable, this->graphicsObjects->workGraphPipeline.get());
 
-	// TODO: dispatch work graph
+	// generate graph inputs
+	std::vector<entryRecord> graphInputData;
+	UINT numRecords = 4;
+	graphInputData.resize(numRecords);
+	for (UINT recordIndex = 0; recordIndex < numRecords; recordIndex++)
+	{
+		graphInputData[recordIndex].gridSize = recordIndex + 1;
+		graphInputData[recordIndex].recordIndex = recordIndex;
+	}
+
+	// dispatch work graph
+	renderContext.CommandList->DispatchGraph(0, (ur_byte*)graphInputData.data(), (ur_uint)graphInputData.size(), sizeof(entryRecord));
 
 	return Result(Success);
 }

@@ -334,7 +334,7 @@ namespace UnlimRealms
 
 		virtual Result BindWorkGraphDescriptorTable(GrafDescriptorTable* descriptorTable, GrafWorkGraphPipeline* grafPipeline);
 
-		// TODO: DispatchGraph
+		virtual Result DispatchGraph(ur_uint entryPointIdx, ur_byte* inputRecords, ur_uint recordCount, ur_uint recordStride);
 
 		#endif // UR_GRAF_DX12_WORK_GRAPHS_SUPPORTED
 
