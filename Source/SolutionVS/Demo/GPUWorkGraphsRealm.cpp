@@ -105,11 +105,11 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 			GrafBuffer::InitParams bufferParams = {};
 			bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferSrc);
 			bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
-			bufferParams.BufferDesc.SizeInBytes = 16777216 * sizeof(ur_uint32);
+			bufferParams.BufferDesc.SizeInBytes = 1024 * sizeof(ur_uint32);
 			res = this->graphicsObjects->workGraphDataBuffer->Initialize(grafDevice, bufferParams);
 			
 			// upload initial data
-			std::vector<ur_uint32> initialData(16777216, 0);
+			std::vector<ur_uint32> initialData(1024, 0);
 			this->GetGrafRenderer()->Upload((ur_byte*)initialData.data(), this->graphicsObjects->workGraphDataBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
 		}
 		if (Failed(res))
@@ -178,6 +178,9 @@ Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 			return Result(Success); // do not dispatch another work graph till readback is done
 	}
 
+	if (this->GetGrafRenderer()->GetFrameIdx() % 256 != 0)
+		return Result(Success); // slow down update
+
 	// prepare resources
 	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);
 
@@ -206,6 +209,27 @@ Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::TransferSrc);
 	renderContext.CommandList->Copy(this->graphicsObjects->workGraphDataBuffer.get(), this->graphicsObjects->workGraphReadbackBuffer.get());
 	this->graphicsObjects->workGraphReadbackFence->SetState(GrafFenceState::Reset);
+
+	return Result(Success);
+}
+
+Result GPUWorkGraphsRealm::DisplayImgui()
+{
+	std::string titleString;
+	WstringToString(this->GetCanvas()->GetTitle(), titleString);
+	ImGui::Begin(titleString.c_str());
+	if (ImGui::CollapsingHeader("SampleWorkGraph"))
+	{
+		std::stringstream outputStr;
+		ur_uint32* dataPtr = (ur_uint32*)this->graphicsObjects->workGraphReadbackData.data();
+		for (ur_uint i = 0; i < 16; ++i)
+		{
+			if (i > 0) outputStr << ", ";
+			outputStr << *(ur_uint32*)dataPtr++;
+		}
+		ImGui::TextWrapped("Output: %s", outputStr.str().c_str());
+	}
+	ImGui::End();
 
 	return Result(Success);
 }

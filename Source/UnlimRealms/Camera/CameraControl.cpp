@@ -119,7 +119,7 @@ namespace UnlimRealms
 		}
 	}
 
-	void CameraControl::ShowImgui()
+	void CameraControl::DisplayImgui()
 	{
 		if (ur_null == this->camera)
 			return;

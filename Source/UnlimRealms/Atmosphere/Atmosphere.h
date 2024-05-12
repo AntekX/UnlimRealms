@@ -54,7 +54,7 @@ namespace UnlimRealms
 		Result RenderPostEffects(GrafCommandList &grafCmdList, GrafRenderTarget &renderTarget,
 			const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const LightDesc* light);
 
-		void ShowImgui();
+		void DisplayImgui();
 
 		inline const AtmosphereDesc& GetDesc() const { return this->desc; }
 

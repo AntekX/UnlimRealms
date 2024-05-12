@@ -29,4 +29,9 @@ namespace UnlimRealms
 		return this->grafRenderer;
 	}
 
+	inline ImguiRender* RenderRealm::GetImguiRenderer()
+	{
+		return this->imguiRender;
+	}
+
 } // end namespace UnlimRealms

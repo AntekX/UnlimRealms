@@ -16,6 +16,7 @@
 #include "Core/ResultTypes.h"
 #include "Sys/Canvas.h"
 #include "Graf/GrafRenderer.h"
+#include "ImguiRender/ImguiRender.h"
 
 namespace UnlimRealms
 {
@@ -44,6 +45,7 @@ namespace UnlimRealms
 			const wchar_t* Title;
 			Canvas::Style CanvasStyle;
 			GrafSystemType GrafSystemType;
+			ur_bool ImguiEnabled;
 			GrafRenderer::InitParams RendererParams;
 			static const InitParams Default;
 		};
@@ -75,6 +77,8 @@ namespace UnlimRealms
 
 		virtual Result Render(const RenderContext& renderContext);
 
+		virtual Result DisplayImgui();
+
 		inline Realm& GetRealm();
 
 		inline void SetState(State state);
@@ -82,6 +86,8 @@ namespace UnlimRealms
 		inline State GetState() const;
 
 		inline GrafRenderer* GetGrafRenderer();
+
+		inline ImguiRender* GetImguiRenderer();
 
 	protected:
 
@@ -102,6 +108,7 @@ namespace UnlimRealms
 	private:
 
 		GrafRenderer* grafRenderer; // component shortcut
+		ImguiRender* imguiRender; // component shortcut
 	};
 
 #if defined(_WINDOWS)

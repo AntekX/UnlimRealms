@@ -337,6 +337,9 @@
       <Filter>RenderRealm</Filter>
     </ClInclude>
     <ClInclude Include="..\..\UnlimRealms\UnlimRealmsAppConfig.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\StringUtils.h">
+      <Filter>Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp">
@@ -695,6 +698,9 @@
     </ClCompile>
     <ClCompile Include="..\..\UnlimRealms\RenderRealm\RenderRealm.cpp">
       <Filter>RenderRealm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\UnlimRealms\Core\StringUtils.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

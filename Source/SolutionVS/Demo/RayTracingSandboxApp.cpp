@@ -1081,7 +1081,7 @@ int RayTracingSandboxApp::Run()
 			}
 		}
 
-		void ShowImgui()
+		void DisplayImgui()
 		{
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::CollapsingHeader("RayTracingScene"))
@@ -1284,11 +1284,11 @@ int RayTracingSandboxApp::Run()
 						ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiCond_Once);
 						ImGui::ShowMetricsWindow();
 
-						grafRenderer->ShowImgui();
-						cameraControl.ShowImgui();
+						grafRenderer->DisplayImgui();
+						cameraControl.DisplayImgui();
 						if (hdrRender != ur_null)
 						{
-							hdrRender->ShowImgui();
+							hdrRender->DisplayImgui();
 						}
 						if (ImGui::CollapsingHeader("Lighting"))
 						{
@@ -1310,7 +1310,7 @@ int RayTracingSandboxApp::Run()
 						}
 						if (rayTracingScene != ur_null)
 						{
-							rayTracingScene->ShowImgui();
+							rayTracingScene->DisplayImgui();
 						}
 						if (ImGui::CollapsingHeader("Canvas"))
 						{

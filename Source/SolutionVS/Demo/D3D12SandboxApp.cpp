@@ -629,7 +629,7 @@ int D3D12SandboxApp::Run()
 						ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiCond_Once);
 						ImGui::ShowMetricsWindow();
 
-						grafRenderer->ShowImgui();
+						grafRenderer->DisplayImgui();
 
 						imguiRender->Render(*grafCmdListCrnt);
 					}

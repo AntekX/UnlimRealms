@@ -529,7 +529,7 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
-	void Isosurface::Presentation::ShowImgui()
+	void Isosurface::Presentation::DisplayImgui()
 	{
 
 	}
@@ -1962,7 +1962,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	void Isosurface::HybridCubes::ShowImgui()
+	void Isosurface::HybridCubes::DisplayImgui()
 	{
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::TreeNode("HybridCubes"))
@@ -2340,14 +2340,14 @@ namespace UnlimRealms
 	#endif
 	}
 
-	void Isosurface::ShowImgui()
+	void Isosurface::DisplayImgui()
 	{
 		if (ImGui::CollapsingHeader("Isosurface"))
 		{
 			ImGui::Checkbox("Draw wireframe", &this->drawWireframe);
 			if (this->presentation.get() != ur_null)
 			{
-				this->presentation->ShowImgui();
+				this->presentation->DisplayImgui();
 			}
 		}
 	}

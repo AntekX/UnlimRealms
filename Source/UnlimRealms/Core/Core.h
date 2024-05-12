@@ -11,4 +11,5 @@
 #include "Core/ResultTypes.h"
 #include "Core/Math.h"
 #include "Core/Algorithms.h"
+#include "Core/StringUtils.h"
 #include "Core/Composite.h"

@@ -72,7 +72,7 @@ namespace UnlimRealms
 
 		virtual Result Upload(GrafBuffer *srcBuffer, ur_size srcOffset, GrafImage* dstImage, GrafImageState dstImageState);
 
-		virtual Result ShowImgui();
+		virtual Result DisplayImgui();
 
 		inline GrafSystem* GetGrafSystem() const;
 

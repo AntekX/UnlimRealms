@@ -59,26 +59,7 @@ namespace UnlimRealms
 	static const std::wstring DXCLinkerShaderModelDefault = L"6_3";
 	static const std::wstring DXCLinkerShaderModelWorkGraphs = L"6_8";
 
-	// string utils
-
-	void StringToWstring(const std::string& src, std::wstring& dst)
-	{
-		#pragma warning(push)
-		#pragma warning(disable: 4996) // std::wstring_convert is depricated
-		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> strConverter;
-		dst = std::wstring(strConverter.from_bytes(src));
-		#pragma warning(pop)
-	}
-
-	void WstringToString(const std::wstring& src, std::string& dst)
-	{
-		#pragma warning(push)
-		#pragma warning(disable: 4996) // std::wstring_convert is depricated
-		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> strConverter;
-		dst = std::string(strConverter.to_bytes(src));
-		#pragma warning(pop)
-	}
-
+	// error code conversion helper
 	static std::string HResultToString(HRESULT res)
 	{
 		_com_error err(res);

@@ -21,6 +21,8 @@ public:
 
 	virtual Result Render(const RenderContext& renderContext);
 
+	virtual Result DisplayImgui();
+
 private:
 
 	struct GraphicsObjects

@@ -37,7 +37,7 @@ namespace UnlimRealms
 
 		void Update();
 
-		void ShowImgui();
+		void DisplayImgui();
 
 		inline Camera* GetCamera() const;
 

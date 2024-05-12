@@ -278,6 +278,7 @@ call "Utils\CompileShadersUnlimRealms.bat"</Command>
     <ClInclude Include="..\..\UnlimRealms\Core\Math.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\Memory.h" />
     <ClInclude Include="..\..\UnlimRealms\Core\ResultTypes.h" />
+    <ClInclude Include="..\..\UnlimRealms\Core\StringUtils.h" />
     <ClInclude Include="..\..\UnlimRealms\GenericRender\GenericRender.h" />
     <ClInclude Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.h" />
     <ClInclude Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.inline.h" />
@@ -422,6 +423,7 @@ call "Utils\CompileShadersUnlimRealms.bat"</Command>
     <ClCompile Include="..\..\UnlimRealms\Core\Math.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Core\Memory.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Core\ResultTypes.cpp" />
+    <ClCompile Include="..\..\UnlimRealms\Core\StringUtils.cpp" />
     <ClCompile Include="..\..\UnlimRealms\GenericRender\GenericRender.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Gfx\D3D11\GfxSystemD3D11.cpp" />
     <ClCompile Include="..\..\UnlimRealms\Gfx\DXGIUtils\DXGIUtils.cpp" />

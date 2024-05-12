@@ -175,7 +175,7 @@ namespace UnlimRealms
 
 			virtual Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj);
 
-			virtual void ShowImgui();
+			virtual void DisplayImgui();
 		};
 
 
@@ -206,7 +206,7 @@ namespace UnlimRealms
 
 			virtual Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj);
 
-			virtual void ShowImgui();
+			virtual void DisplayImgui();
 
 		private:
 
@@ -394,7 +394,7 @@ namespace UnlimRealms
 
 		Result Render(GrafCommandList &grafCmdList, const ur_float4x4 &viewProj, const ur_float3 &cameraPos, const Atmosphere *atmosphere, const LightDesc* light);
 
-		void ShowImgui();
+		void DisplayImgui();
 
 		inline DataVolume* GetData() const { return this->data.get(); }
 

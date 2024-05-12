@@ -1105,7 +1105,7 @@ namespace UnlimRealms
 	#endif
 	}
 
-	void HDRRender::ShowImgui()
+	void HDRRender::DisplayImgui()
 	{
 		if (ImGui::CollapsingHeader("HDR Rendering"))
 		{

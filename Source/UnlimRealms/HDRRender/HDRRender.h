@@ -55,7 +55,7 @@ namespace UnlimRealms
 
 		Result Resolve(GrafCommandList &grafCmdList, GrafRenderTarget* resolveTarget);
 
-		void ShowImgui();
+		void DisplayImgui();
 
 		inline GfxRenderTarget* GetHDRTarget() const
 		{

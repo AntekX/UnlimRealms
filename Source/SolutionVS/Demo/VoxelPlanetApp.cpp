@@ -475,19 +475,19 @@ int VoxelPlanetApp::Run()
 						ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiCond_Once);
 						ImGui::ShowMetricsWindow();
 						
-						grafRenderer->ShowImgui();
-						cameraControl.ShowImgui();
+						grafRenderer->DisplayImgui();
+						cameraControl.DisplayImgui();
 						if (isosurface != ur_null)
 						{
-							isosurface->ShowImgui();
+							isosurface->DisplayImgui();
 						}
 						if (atmosphere != ur_null)
 						{
-							atmosphere->ShowImgui();
+							atmosphere->DisplayImgui();
 						}
 						if (hdrRender != ur_null)
 						{
-							hdrRender->ShowImgui();
+							hdrRender->DisplayImgui();
 						}
 
 						GrafUtils::ScopedDebugLabel label(grafCmdListCrnt, "ImGui", DebugLabelColorRender);
@@ -793,10 +793,10 @@ int VoxelPlanetApp::Run()
 				ImGui::SetNextWindowPos({ canvasWidth - imguiDemoWndSize.x, 0.0f }, ImGuiSetCond_Once);
 				ImGui::Begin("Control Panel");
 				ImGui::Text("Gfx Adapter: %S", gfxContext->GetGfxSystem().GetActiveAdapterDesc().Description.c_str());
-				cameraControl.ShowImgui();
-				isosurface->ShowImgui();
-				atmosphere->ShowImgui();
-				hdrRender->ShowImgui();
+				cameraControl.DisplayImgui();
+				isosurface->DisplayImgui();
+				atmosphere->DisplayImgui();
+				hdrRender->DisplayImgui();
 				ImGui::End();
 
 				// Imgui metrics

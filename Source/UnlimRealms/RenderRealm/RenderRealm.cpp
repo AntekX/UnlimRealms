@@ -14,7 +14,6 @@
 #include "Graf/GrafRenderer.h"
 #include "Graf/DX12/GrafSystemDX12.h"
 #include "Graf/Vulkan/GrafSystemVulkan.h"
-#include "ImguiRender/ImguiRender.h"
 #include "GenericRender/GenericRender.h"
 #include "Camera/CameraControl.h"
 
@@ -22,10 +21,16 @@ namespace UnlimRealms
 {
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	GrafClearValue DefaultClearColor = { 0.08f, 0.08f, 0.16f, 0.0f };
+
+	static const ur_float4 DebugLabelColorForeground = { 0.8f, 0.8f, 1.0f, 1.0f };
+	static const ur_float4 DebugLabelColorImGui = { 0.8f, 0.8f, 1.0f, 1.0f };
+
 	const RenderRealm::InitParams RenderRealm::InitParams::Default = {
 		L"UnlimRealmsRenderRealm",
 		Canvas::Style::OverlappedWindowMaximized,
 		GrafSystemType::DX12,
+		true, // ImguiEnabled
 		GrafRenderer::InitParams::Default,
 	};
 
@@ -84,8 +89,21 @@ namespace UnlimRealms
 		if (Failed(res))
 		{
 			this->Deinitialize();
-			LogError("RenderRealm::Initialize: failed to initlize ghraphics");
+			LogError("RenderRealm::Initialize: failed to initlize graphics");
 			return res;
+		}
+
+		// initialize ImGui renderer
+		if (initParams.ImguiEnabled)
+		{
+			this->imguiRender = this->AddComponent<ImguiRender>(*this);
+			Result res = this->imguiRender->Init();
+			if (Failed(res))
+			{
+				this->Deinitialize();
+				LogError("RenderRealm::Initialize: failed to initlize ImguiRender");
+				return res;
+			}
 		}
 
 		return Result(Success);
@@ -150,6 +168,13 @@ namespace UnlimRealms
 		// release graphic objects
 		this->DeinitializeGraphicObjects();
 
+		// destroy Imgui renderer
+		if (this->imguiRender)
+		{
+			this->RemoveComponent<ImguiRender>();
+			this->imguiRender = ur_null;
+		}
+
 		// destroy renderer
 		if (this->grafRenderer)
 		{
@@ -172,6 +197,11 @@ namespace UnlimRealms
 	}
 
 	Result RenderRealm::Render(const RenderContext& renderContext)
+	{
+		return Result(NotImplemented);
+	}
+
+	Result RenderRealm::DisplayImgui()
 	{
 		return Result(NotImplemented);
 	}
@@ -294,7 +324,49 @@ namespace UnlimRealms
 				// perfrom rendering
 				renderContext.CommandList = this->GetGrafRenderer()->GetTransientCommandList();
 				renderContext.CommandList->Begin();
+
+				// clear swap chain current image
+				GrafClearValue rtClearValue = DefaultClearColor;
+				renderContext.CommandList->ImageMemoryBarrier(this->GetGrafRenderer()->GetGrafCanvas()->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorClear);
+				renderContext.CommandList->ClearColorImage(this->GetGrafRenderer()->GetGrafCanvas()->GetCurrentImage(), rtClearValue);
+
+				// main render pass
 				this->Render(renderContext);
+
+				// foreground pass (drawing directly into renderer's swap chain image)
+				{
+					GrafUtils::ScopedDebugLabel label(renderContext.CommandList, "Foreground", DebugLabelColorForeground);
+					renderContext.CommandList->ImageMemoryBarrier(this->GetGrafRenderer()->GetGrafCanvas()->GetCurrentImage(), GrafImageState::Current, GrafImageState::ColorWrite);
+					renderContext.CommandList->BeginRenderPass(this->GetGrafRenderer()->GetCanvasRenderPass(), this->GetGrafRenderer()->GetCanvasRenderTarget());
+
+					GrafViewportDesc grafViewport = {};
+					grafViewport.Width = (ur_float)this->GetGrafRenderer()->GetGrafCanvas()->GetCurrentImage()->GetDesc().Size.x;
+					grafViewport.Height = (ur_float)this->GetGrafRenderer()->GetGrafCanvas()->GetCurrentImage()->GetDesc().Size.y;
+					grafViewport.Near = 0.0f;
+					grafViewport.Far = 1.0f;
+					renderContext.CommandList->SetViewport(grafViewport, true);
+
+					// ImGui
+					static bool showGUI = true;
+					showGUI = (this->GetInput()->GetKeyboard()->IsKeyReleased(Input::VKey::F1) ? !showGUI : showGUI);
+					if (this->GetImguiRenderer() && showGUI)
+					{
+						GrafUtils::ScopedDebugLabel label(renderContext.CommandList, "ImGui", DebugLabelColorImGui);
+						this->GetImguiRenderer()->NewFrame();
+
+						ImGui::SetNextWindowSize({ 0.0f, 0.0f }, ImGuiCond_FirstUseEver);
+						ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiCond_Once);
+						ImGui::ShowMetricsWindow();
+
+						this->GetGrafRenderer()->DisplayImgui();
+						this->DisplayImgui();
+
+						this->GetImguiRenderer()->Render(*renderContext.CommandList);
+					}
+
+					renderContext.CommandList->EndRenderPass();
+				}
+
 				renderContext.CommandList->End();
 				this->GetGrafRenderer()->GetGrafDevice()->Record(renderContext.CommandList);
 

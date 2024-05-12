@@ -913,7 +913,7 @@ namespace UnlimRealms
 	#endif
 	}
 
-	void Atmosphere::ShowImgui()
+	void Atmosphere::DisplayImgui()
 	{
 		if (ImGui::CollapsingHeader("Atmosphere"))
 		{

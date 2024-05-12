@@ -622,7 +622,7 @@ namespace UnlimRealms
 		return Result(Success);
 	}
 
-	Result GrafRenderer::ShowImgui()
+	Result GrafRenderer::DisplayImgui()
 	{
 		if (ur_null == this->grafSystem)
 			return Result(NotInitialized);

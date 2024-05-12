@@ -2239,7 +2239,7 @@ SceneState RunDemoScene(
 			renderTargetSet->resetHistory = false;
 		}
 
-		void ShowImgui()
+		void DisplayImgui()
 		{
 			ur_int editableInt = 0;
 			ur_float editableFloat3[3];
@@ -2770,7 +2770,7 @@ SceneState RunDemoScene(
 					ImGui::SetNextWindowPos({ 0.0f, 0.0f }, ImGuiCond_Once);
 					ImGui::ShowMetricsWindow();
 
-					grafRenderer->ShowImgui();
+					grafRenderer->DisplayImgui();
 					ImGui::Begin("Demo");
 					if (ImGui::CollapsingHeader("Graphics System"))
 					{
@@ -2780,10 +2780,10 @@ SceneState RunDemoScene(
 						if (ImGui::Button("Recreate for DX12"))
 							sceneState = SceneState::RecreateForDX12;
 					}
-					cameraControl.ShowImgui();
+					cameraControl.DisplayImgui();
 					if (hdrRender != ur_null)
 					{
-						hdrRender->ShowImgui();
+						hdrRender->DisplayImgui();
 					}
 					if (ImGui::CollapsingHeader("Lighting"))
 					{
@@ -2819,7 +2819,7 @@ SceneState RunDemoScene(
 					}
 					if (demoScene != ur_null)
 					{
-						demoScene->ShowImgui();
+						demoScene->DisplayImgui();
 					}
 					if (ImGui::CollapsingHeader("RayTracing"))
 					{
