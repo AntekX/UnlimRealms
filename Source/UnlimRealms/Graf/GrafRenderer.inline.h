@@ -42,19 +42,24 @@ namespace UnlimRealms
 		return crntCmdList;
 	}
 
-	inline ur_uint GrafRenderer::GetRecordedFrameCount() const
+	inline ur_uint64 GrafRenderer::GetFrameIdx() const
 	{
-		return this->frameCount;
+		return this->rendererFrameIdx;
 	}
 
-	inline ur_uint GrafRenderer::GetCurrentFrameId() const
+	inline ur_uint GrafRenderer::GetRecordedFrameCount() const
 	{
-		return this->frameIdx;
+		return this->recordedFrameCount;
 	}
-	
-	inline ur_uint GrafRenderer::GetPrevFrameId() const
+
+	inline ur_uint GrafRenderer::GetRecordedFrameIdx() const
 	{
-		return (this->frameIdx > 0 ? this->frameIdx - 1 : this->frameCount - 1);
+		return this->recordedFrameIdx;
+	}
+
+	inline ur_uint GrafRenderer::GetPrevRecordedFrameIdx() const
+	{
+		return (this->recordedFrameIdx > 0 ? this->recordedFrameIdx - 1 : this->recordedFrameCount - 1);
 	}
 
 	inline GrafBuffer* GrafRenderer::GetDynamicUploadBuffer() const
@@ -114,7 +119,7 @@ namespace UnlimRealms
 	inline TGrafObject* GrafRendererManagedEntity<TGrafObject>::GetFrameObject(ur_uint frameId) const
 	{
 		if (frameId >= this->GetGrafRenderer().GetRecordedFrameCount())
-			frameId = this->GetGrafRenderer().GetCurrentFrameId();
+			frameId = this->GetGrafRenderer().GetRecordedFrameIdx();
 		return (frameId < this->grafObjectPerFrame.size() ? static_cast<TGrafObject*>(this->grafObjectPerFrame[frameId].get()) : ur_null);
 	}
 

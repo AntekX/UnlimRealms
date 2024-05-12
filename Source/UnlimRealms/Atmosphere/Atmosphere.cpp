@@ -783,7 +783,7 @@ namespace UnlimRealms
 		dynamicCB->Write((ur_byte*)&cbData, sizeof(cbData), 0, dynamicCBAlloc.Offset);
 
 		// update shader descriptors
-		ur_uint frameIdx = this->grafRenderer->GetCurrentFrameId();
+		ur_uint frameIdx = this->grafRenderer->GetRecordedFrameIdx();
 		GrafDescriptorTable *shaderDescriptorTable = this->grafObjects->shaderDescriptorTable[frameIdx].get();
 		shaderDescriptorTable->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
 
@@ -869,7 +869,7 @@ namespace UnlimRealms
 			{ 1.0f, 0.0f, 0.0f, 0.0f }
 		};
 
-		GrafDescriptorTable* descTable = this->grafObjects->lightShaftsMaskDescriptorTable[this->grafRenderer->GetCurrentFrameId()].get();
+		GrafDescriptorTable* descTable = this->grafObjects->lightShaftsMaskDescriptorTable[this->grafRenderer->GetRecordedFrameIdx()].get();
 		descTable->SetSampler(0, this->grafObjects->samplerPoint.get());
 		descTable->SetImage(0, renderTarget.GetImage(0));
 
@@ -895,7 +895,7 @@ namespace UnlimRealms
 		Allocation lightShaftsCBAlloc = grafRenderer->GetDynamicConstantBufferAllocation(sizeof(LightShaftsCB));
 		dynamicCB->Write((ur_byte*)&this->lightShafts, sizeof(this->lightShafts), 0, lightShaftsCBAlloc.Offset);
 
-		descTable = this->grafObjects->lightShaftsApplyDescriptorTable[this->grafRenderer->GetCurrentFrameId()].get();
+		descTable = this->grafObjects->lightShaftsApplyDescriptorTable[this->grafRenderer->GetRecordedFrameIdx()].get();
 		descTable->SetConstantBuffer(1, dynamicCB, commonCBAlloc.Offset, commonCBAlloc.Size);
 		descTable->SetConstantBuffer(2, dynamicCB, lightShaftsCBAlloc.Offset, lightShaftsCBAlloc.Size);
 		descTable->SetSampler(0, this->grafObjects->samplerLinear.get());

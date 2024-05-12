@@ -286,7 +286,7 @@ namespace UnlimRealms
 					canvasWidth = canvasWidthActual;
 					canvasHeight = canvasHeightActual;
 					// use prev frame command list to make sure frame buffer objects are destroyed only when it is no longer used
-					//DestroyFrameBufferObjects(managedCommandList->GetFrameObject(this->GetGrafRenderer()->GetPrevFrameId()));
+					//DestroyFrameBufferObjects(managedCommandList->GetFrameObject(this->GetGrafRenderer()->GetPrevRecordedFrameIdx()));
 					// recreate frame buffer objects for new canvas dimensions
 					//InitFrameBufferObjects(canvasWidth, canvasHeight);
 				}

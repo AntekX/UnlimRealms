@@ -1619,6 +1619,7 @@ namespace UnlimRealms
 	GrafFenceDX12::GrafFenceDX12(GrafSystem &grafSystem) :
 		GrafFence(grafSystem)
 	{
+		this->fenceValue = 0;
 	}
 
 	GrafFenceDX12::~GrafFenceDX12()
@@ -1628,28 +1629,58 @@ namespace UnlimRealms
 
 	Result GrafFenceDX12::Deinitialize()
 	{
-		return Result(NotImplemented);
+		this->fenceValue = 0;
+
+		return Result(Success);
 	}
 
 	Result GrafFenceDX12::Initialize(GrafDevice *grafDevice)
 	{
+		this->Deinitialize();
+
 		GrafDeviceEntity::Initialize(grafDevice);
-		return Result(NotImplemented);
+
+		return Result(Success);
 	}
 
 	Result GrafFenceDX12::SetState(GrafFenceState state)
 	{
-		return Result(NotImplemented);
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+		switch (state)
+		{
+		case GrafFenceState::Reset:
+			{
+				std::lock_guard<std::mutex> lockRecord(grafDeviceDX12->graphicsQueue->recordMutex);
+				this->fenceValue = grafDeviceDX12->graphicsQueue->nextSubmitFenceValue;
+			}
+			break;
+		case GrafFenceState::Signaled:
+			this->fenceValue = 0;
+			break;
+		};
+		return Result(Success);
 	}
 
 	Result GrafFenceDX12::GetState(GrafFenceState& state)
 	{
-		return Result(NotImplemented);
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+		if (this->fenceValue > grafDeviceDX12->graphicsQueue->d3dSubmitFence->GetCompletedValue())
+			state = GrafFenceState::Reset;
+		else
+			state = GrafFenceState::Signaled;
+		return Result(Success);
 	}
 
 	Result GrafFenceDX12::WaitSignaled()
 	{
-		return Result(NotImplemented);
+		GrafDeviceDX12* grafDeviceDX12 = static_cast<GrafDeviceDX12*>(this->GetGrafDevice());
+		while (this->fenceValue > grafDeviceDX12->graphicsQueue->d3dSubmitFence->GetCompletedValue())
+		{
+			#if (UR_GRAF_DX12_SLEEPZERO_WHILE_WAIT)
+			Sleep(0);
+			#endif
+		}
+		return Result(Success);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

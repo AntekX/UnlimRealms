@@ -368,7 +368,7 @@ int VoxelPlanetApp::Run()
 				canvasWidth = realm.GetCanvas()->GetClientBound().Width();
 				canvasHeight = realm.GetCanvas()->GetClientBound().Height();
 				// use prev frame command list to make sure RT objects are no longer used before destroying
-				deinitializeGrafRenderTargetObjects(grafMainCmdList[grafRenderer->GetPrevFrameId()].get());
+				deinitializeGrafRenderTargetObjects(grafMainCmdList[grafRenderer->GetPrevRecordedFrameIdx()].get());
 				// recreate RT objects for new canvas dimensions
 				initializeGrafRenderTargetObjects();
 				// reinit HDR renderer images
@@ -386,7 +386,7 @@ int VoxelPlanetApp::Run()
 
 				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
-				GrafCommandList* grafCmdListCrnt = grafMainCmdList[grafRenderer->GetCurrentFrameId()].get();
+				GrafCommandList* grafCmdListCrnt = grafMainCmdList[grafRenderer->GetRecordedFrameIdx()].get();
 				grafCmdListCrnt->Begin();
 				grafCmdListCrnt->BeginDebugLabel("DrawFrame", DebugLabelColorMain);
 

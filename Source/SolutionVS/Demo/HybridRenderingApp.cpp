@@ -2903,7 +2903,7 @@ SceneState RunDemoScene(
 				canvasWidth = canvasWidthNew;
 				canvasHeight = canvasHeightNew;
 				// use prev frame command list to make sure frame buffer objects are destroyed only when it is no longer used
-				DestroyFrameBufferObjects(managedCommandList->GetFrameObject(grafRenderer->GetPrevFrameId()));
+				DestroyFrameBufferObjects(managedCommandList->GetFrameObject(grafRenderer->GetPrevRecordedFrameIdx()));
 				// recreate frame buffer objects for new canvas dimensions
 				InitFrameBufferObjects(canvasWidth, canvasHeight);
 				// reinit HDR renderer images

@@ -947,7 +947,7 @@ namespace UnlimRealms
 			return Result(NotInitialized);
 
 		Result res = Success;
-		ur_uint frameIdx = this->grafRenderer->GetCurrentFrameId();
+		ur_uint frameIdx = this->grafRenderer->GetRecordedFrameIdx();
 		ur_uint frameFirstTableId = frameIdx * (ur_uint)this->grafRTObjects->lumRTChain.size();
 
 		// HDR RT to first luminance image

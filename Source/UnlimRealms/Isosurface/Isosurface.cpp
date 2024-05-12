@@ -2317,7 +2317,7 @@ namespace UnlimRealms
 			dynamicCB->Write((ur_byte*)&cbData, sizeof(cbData), 0, dynamicCBAlloc.Offset);
 
 			// fill shader descriptors
-			ur_uint frameIdx = this->grafRenderer->GetCurrentFrameId();
+			ur_uint frameIdx = this->grafRenderer->GetRecordedFrameIdx();
 			GrafDescriptorTable *shaderDescriptorTable = this->grafObjects.shaderDescriptorTable[frameIdx].get();
 			shaderDescriptorTable->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
 

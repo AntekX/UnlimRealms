@@ -1015,7 +1015,7 @@ int RayTracingSandboxApp::Run()
 			ur_float3 pos = (ur_float3&)cb.cameraPos + (ur_float3&)cb.cameraDir * dist;
 			ur_float3 posPrev = (ur_float3&)cb.cameraPos + (ur_float3&)dir * dist;
 
-			GrafDescriptorTable* descriptorTable = this->bindingTables[this->grafRenderer->GetCurrentFrameId()].get();
+			GrafDescriptorTable* descriptorTable = this->bindingTables[this->grafRenderer->GetRecordedFrameIdx()].get();
 			descriptorTable->SetConstantBuffer(0, dynamicCB, dynamicCBAlloc.Offset, dynamicCBAlloc.Size);
 			descriptorTable->SetAccelerationStructure(0, this->accelerationStructureTL.get());
 			descriptorTable->SetBuffer(1, this->vertexBuffer.get());
@@ -1213,7 +1213,7 @@ int RayTracingSandboxApp::Run()
 				canvasWidth = realm.GetCanvas()->GetClientBound().Width() / canvasDenom;
 				canvasHeight = realm.GetCanvas()->GetClientBound().Height() / canvasDenom;
 				// use prev frame command list to make sure RT objects are no longer used before destroying
-				deinitializeGrafRenderTargetObjects(grafMainCmdList[grafRenderer->GetPrevFrameId()].get());
+				deinitializeGrafRenderTargetObjects(grafMainCmdList[grafRenderer->GetPrevRecordedFrameIdx()].get());
 				// recreate RT objects for new canvas dimensions
 				initializeGrafRenderTargetObjects();
 				// reinit HDR renderer images
@@ -1228,7 +1228,7 @@ int RayTracingSandboxApp::Run()
 			{
 				GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 				GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
-				GrafCommandList* grafCmdListCrnt = grafMainCmdList[grafRenderer->GetCurrentFrameId()].get();
+				GrafCommandList* grafCmdListCrnt = grafMainCmdList[grafRenderer->GetRecordedFrameIdx()].get();
 				grafCmdListCrnt->Begin();
 
 				GrafViewportDesc grafViewport = {};

@@ -182,6 +182,7 @@ namespace UnlimRealms
 	private:
 
 		friend class GrafCommandListDX12;
+		friend class GrafFenceDX12;
 		struct CommandAllocator;
 		struct CommandAllocatorPool;
 		struct DeviceQueue;
@@ -374,6 +375,8 @@ namespace UnlimRealms
 	private:
 
 		Result Deinitialize();
+
+		ur_uint64 fenceValue;
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

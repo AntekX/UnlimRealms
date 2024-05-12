@@ -121,9 +121,17 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 			GrafBuffer::InitParams bufferParams = {};
 			bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::TransferDst);
 			bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::CpuVisible);
-			bufferParams.BufferDesc.SizeInBytes = 16777216 * sizeof(ur_uint32);
+			bufferParams.BufferDesc.SizeInBytes = this->graphicsObjects->workGraphDataBuffer->GetDesc().SizeInBytes;
 			res = this->graphicsObjects->workGraphReadbackBuffer->Initialize(grafDevice, bufferParams);
-			this->graphicsObjects->workGraphReadbackPending = false;
+		}
+		if (Failed(res))
+			break;
+
+		res = grafSystem->CreateFence(this->graphicsObjects->workGraphReadbackFence);
+		if (Succeeded(res))
+		{
+			this->graphicsObjects->workGraphReadbackFence->Initialize(grafDevice);
+			this->graphicsObjects->workGraphReadbackFence->SetState(GrafFenceState::Signaled);
 		}
 		if (Failed(res))
 			break;
@@ -155,8 +163,20 @@ Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 	if (ur_null == this->graphicsObjects.get())
 		return Result(NotInitialized);
 
-	if (this->graphicsObjects->workGraphReadbackPending)
-		return Result(Success); // do not dispatch another work graph till readback is done
+	// readback work graph output
+	if (this->GetGrafRenderer()->GetFrameIdx() > 0)
+	{
+		GrafFenceState readbackFenceState;
+		this->graphicsObjects->workGraphReadbackFence->GetState(readbackFenceState);
+		if (GrafFenceState::Signaled == readbackFenceState)
+		{
+			this->graphicsObjects->workGraphReadbackData.resize(this->graphicsObjects->workGraphDataBuffer->GetDesc().SizeInBytes);
+			ur_byte* readbackDstPtr = this->graphicsObjects->workGraphReadbackData.data();
+			this->graphicsObjects->workGraphReadbackBuffer->Read(readbackDstPtr);
+		}
+		else if (GrafFenceState::Reset == readbackFenceState)
+			return Result(Success); // do not dispatch another work graph till readback is done
+	}
 
 	// prepare resources
 	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);
@@ -185,20 +205,7 @@ Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
 	// schedule readback
 	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->workGraphDataBuffer.get(), GrafBufferState::Current, GrafBufferState::TransferSrc);
 	renderContext.CommandList->Copy(this->graphicsObjects->workGraphDataBuffer.get(), this->graphicsObjects->workGraphReadbackBuffer.get());
-	this->graphicsObjects->workGraphReadbackPending = true;
-
-	// retrieve data fro UAV when work graph executed
-	// TODO: redo, callback can be executed asynchronously
-	this->GetGrafRenderer()->AddCommandListCallback(renderContext.CommandList, {},
-		[this](GrafCallbackContext& ctx)->Result
-		{
-			this->graphicsObjects->workGraphReadbackData.resize(16777216);
-			ur_byte* readbackDataPtr = (ur_byte*)this->graphicsObjects->workGraphReadbackData.data();
-			this->graphicsObjects->workGraphReadbackBuffer->Read(readbackDataPtr);
-			this->graphicsObjects->workGraphReadbackPending = false;
-			return Result(Success);
-		}
-	);
+	this->graphicsObjects->workGraphReadbackFence->SetState(GrafFenceState::Reset);
 
 	return Result(Success);
 }

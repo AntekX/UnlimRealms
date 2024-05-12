@@ -63,8 +63,9 @@ namespace UnlimRealms
 
 			// number of recorded (in flight) frames
 			// can differ from swap chain size
-			this->frameCount = std::max(ur_uint(2), this->grafCanvas->GetSwapChainImageCount() - 1);
-			this->frameIdx = 0;
+			this->recordedFrameCount = std::max(ur_uint(2), this->grafCanvas->GetSwapChainImageCount() - 1);
+			this->recordedFrameIdx = 0;
+			this->rendererFrameIdx = 0;
 			//this->pendingCommandListCallbacksIdx = 0;
 
 			// swap chain render pass
@@ -278,7 +279,8 @@ namespace UnlimRealms
 		}
 
 		// move to next frame
-		this->frameIdx = (this->frameIdx + 1) % this->frameCount;
+		++this->rendererFrameIdx;
+		this->recordedFrameIdx = ur_uint(this->rendererFrameIdx % this->recordedFrameCount);
 
 		return res;
 	}
@@ -671,7 +673,7 @@ namespace UnlimRealms
 						const GrafImageDesc& imageDesc = this->grafCanvas->GetCurrentImage()->GetDesc();
 						ImGui::Text("Image Size: %i x %i", imageDesc.Size.x, imageDesc.Size.y);
 					}
-					ImGui::Text("Recorded frame count: %i", this->frameCount);
+					ImGui::Text("Recorded frame count: %i", this->recordedFrameCount);
 					ImGui::TreePop();
 				}
 			}

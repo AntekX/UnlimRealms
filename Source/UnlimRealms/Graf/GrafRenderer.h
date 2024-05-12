@@ -85,12 +85,14 @@ namespace UnlimRealms
 		inline GrafRenderTarget* GetCanvasRenderTarget() const;
 
 		inline GrafCommandList* GetTransientCommandList();
+		
+		inline ur_uint64 GetFrameIdx() const;
 
 		inline ur_uint GetRecordedFrameCount() const;
 
-		inline ur_uint GetCurrentFrameId() const;
+		inline ur_uint GetRecordedFrameIdx() const;
 
-		inline ur_uint GetPrevFrameId() const;
+		inline ur_uint GetPrevRecordedFrameIdx() const;
 
 		inline GrafBuffer* GetDynamicUploadBuffer() const;
 
@@ -136,8 +138,9 @@ namespace UnlimRealms
 		std::unique_ptr<GrafBuffer> grafDynamicConstantBuffer;
 		LinearAllocator constantBufferAllocator;
 		std::mutex constantBufferMutex;
-		ur_uint frameCount;
-		ur_uint frameIdx;
+		ur_uint64 rendererFrameIdx;
+		ur_uint recordedFrameIdx;
+		ur_uint recordedFrameCount;
 		std::map<std::thread::id, std::unique_ptr<CommandListCache>> grafCommandListCache;
 		std::mutex grafCommandListCacheMutex;
 		std::vector<std::unique_ptr<PendingCommandListCallbackData>> pendingCommandListCallbacks;

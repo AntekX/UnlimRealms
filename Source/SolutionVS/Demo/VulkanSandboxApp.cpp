@@ -525,7 +525,7 @@ int VulkanSandboxApp::Run()
 				canvasHeight != realm.GetCanvas()->GetClientBound().Height())
 			{
 				// make sure prev RT objects are no longer used before destroying
-				GrafCommandList* grafCmdListPrev = grafMainCmdList[grafRenderer->GetPrevFrameId()].get();
+				GrafCommandList* grafCmdListPrev = grafMainCmdList[grafRenderer->GetPrevRecordedFrameIdx()].get();
 				deinitializeGrafRenderTargetObjects(grafCmdListPrev);
 				// recreate RT objects for new canvas dimensions
 				canvasWidth = realm.GetCanvas()->GetClientBound().Width();
@@ -536,7 +536,7 @@ int VulkanSandboxApp::Run()
 			// begin frame rendering
 			GrafDevice *grafDevice = grafRenderer->GetGrafDevice();
 			GrafCanvas *grafCanvas = grafRenderer->GetGrafCanvas();
-			ur_uint frameIdx = grafRenderer->GetCurrentFrameId();
+			ur_uint frameIdx = grafRenderer->GetRecordedFrameIdx();
 			grafRenderer->BeginFrame();
 
 			auto drawFrameJob = realm.GetJobSystem().Add(ur_null, [&](Job::Context& ctx) -> void {

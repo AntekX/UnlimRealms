@@ -593,7 +593,7 @@ namespace UnlimRealms
 
 		ImDrawData *drawData = ImGui::GetDrawData();
 
-		ur_uint frameIdx = this->grafRenderer->GetCurrentFrameId();
+		ur_uint frameIdx = this->grafRenderer->GetRecordedFrameIdx();
 
 		// prepare VB
 		ur_uint vbSizeRequired = (ur_uint)drawData->TotalVtxCount * sizeof(ImDrawVert);
