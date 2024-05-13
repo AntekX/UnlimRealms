@@ -140,5 +140,14 @@
     <None Include="GPUWorkGraphsCommon.hlsli">
       <Filter>GPUWorkGraphsRealm</Filter>
     </None>
+    <None Include="ProceduralGenerationGraph.hlsli">
+      <Filter>GPUWorkGraphsRealm</Filter>
+    </None>
+    <None Include="ProceduralGenerationGraph.h">
+      <Filter>GPUWorkGraphsRealm</Filter>
+    </None>
+    <None Include="ProceduralGenerationGraph_lib.hlsl">
+      <Filter>GPUWorkGraphsRealm</Filter>
+    </None>
   </ItemGroup>
 </Project>

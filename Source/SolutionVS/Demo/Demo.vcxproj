@@ -195,6 +195,7 @@ call "Utils\CompileShadersDemo.bat"</Command>
     <ClInclude Include="GPUWorkGraphsRealm.h" />
     <ClInclude Include="HybridRenderingCommon.h" />
     <ClInclude Include="HybridRenderingApp.h" />
+    <None Include="ProceduralGenerationGraph.h" />
     <ClInclude Include="RayTracingSandboxApp.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="stdafx.h" />
@@ -330,6 +331,7 @@ call "Utils\CompileShadersDemo.bat"</Command>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </None>
+    <None Include="ProceduralGenerationGraph.hlsli" />
     <None Include="sample_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
@@ -388,6 +390,11 @@ call "Utils\CompileShadersDemo.bat"</Command>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ProceduralGenerationGraph_lib.hlsl">
+      <FileType>Document</FileType>
     </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
