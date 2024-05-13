@@ -6,23 +6,32 @@
 // global constants
 
 static const CUINT(PartitionDepthMax) = 10;
-static const CUINT(PartitionTetrahedraMax) = 4 * 1024; // 4 root tetrahedra * 2^PartitionDepthMax
+static const CUINT(PartitionTetrahedraRootCount) = 6; // 6 tetrahedra forming root cube space
+static const CUINT(PartitionTetrahedraCountMax) = PartitionTetrahedraRootCount * 1024; // 6 root cell tetrahedra * 2^PartitionDepthMax
+static const CUINT(PartitionTetrahedraVertexCount) = 4;
 static const CUINT(PartitionTetrahedraVertexSize) = 12; // 3 * sizeof(float)
-static const CUINT(PartitionTetrahedraSize) = PartitionTetrahedraVertexSize * 4; // 4 vertices x sizeof(Vertex)
-static const CUINT(PartitionDataSizeMax) = PartitionTetrahedraMax * PartitionTetrahedraSize;
+static const CUINT(PartitionTetrahedraSize) = PartitionTetrahedraVertexCount * PartitionTetrahedraVertexSize;
+static const CUINT(PartitionTetrahedraDataSizeMax) = PartitionTetrahedraCountMax * PartitionTetrahedraSize;
 
-// 4 root tetrahedra vertices in [-1,1] space scaled by RootExtent
-// TODO
-static const CFLOAT3(PartitionRootTetrahedra)[][4] = {
-	{ { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } },
-	{ { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } },
-	{ { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } },
-	{ { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } }
+// 6 root tetrahedra vertices in [-1,1] space scaled by RootExtent
+static const CFLOAT3(PartitionRootVertices)[8] = {
+	{-1.0f,-1.0f,-1.0f }, {+1.0f,-1.0f,-1.0f }, {-1.0f,+1.0f,-1.0f }, {+1.0f,+1.0f,-1.0f },
+	{-1.0f,-1.0f,+1.0f }, {+1.0f,-1.0f,+1.0f }, {-1.0f,+1.0f,+1.0f }, {+1.0f,+1.0f,+1.0f }
 };
+#define PRV PartitionRootVertices
+static const CFLOAT3(PartitionRootTetrahedra)[PartitionTetrahedraRootCount][PartitionTetrahedraVertexCount] = {
+	{ PRV[0], PRV[7], PRV[2], PRV[3] },
+	{ PRV[0], PRV[7], PRV[3], PRV[1] },
+	{ PRV[0], PRV[7], PRV[1], PRV[5] },
+	{ PRV[0], PRV[7], PRV[5], PRV[4] },
+	{ PRV[0], PRV[7], PRV[4], PRV[6] },
+	{ PRV[0], PRV[7], PRV[6], PRV[2] }
+};
+#undef PRV
 
 // constant buffers
 
-struct ProceduralGenConsts
+struct ProceduralConsts
 {
 	CFLOAT3(RootExtent);
 	CFLOAT3(RootPosition);
@@ -30,16 +39,16 @@ struct ProceduralGenConsts
 	CFLOAT3(__pad0);
 };
 
-// work graph entry record
+// work graph records
 
-struct ProceduralGenInputRecord
+struct PartitionUpdateRecord
 {
-	CUINT(GridSize) GPU_ONLY(: SV_DispatchGrid);
+	CFLOAT3(TetrahedraVertices)[4];
 };
 
 // descriptors
 
-DESCRIPTOR_ConstantBuffer(ProceduralGenConsts, g_ProceduralConsts, 0);
+DESCRIPTOR_ConstantBuffer(ProceduralConsts, g_ProceduralConsts, 0);
 DESCRIPTOR_RWByteAddressBuffer(g_PartitionData, 0);
 
 #endif // PROCEDURAL_GENERATION_GRAPH_HLSLI

@@ -193,7 +193,7 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 			GrafBuffer::InitParams bufferParams = {};
 			bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::StorageBuffer) | ur_uint(GrafBufferUsageFlag::TransferSrc);
 			bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::GpuLocal);
-			bufferParams.BufferDesc.SizeInBytes = PartitionDataSizeMax;
+			bufferParams.BufferDesc.SizeInBytes = PartitionTetrahedraDataSizeMax;
 			res = this->graphicsObjects->partitionDataBuffer->Initialize(grafDevice, bufferParams);
 
 			// upload initial data
