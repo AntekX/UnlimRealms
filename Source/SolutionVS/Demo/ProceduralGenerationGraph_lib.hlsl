@@ -27,7 +27,7 @@ void ReleasePartitionDataNode(in uint nodeIdx)
 {
 	uint nodesCounter;
 	g_PartitionData.InterlockedAdd(PartitionDataNodesCounterOfs, -1, nodesCounter);
-	//assert(nodesCounter > 0);
+	// assert(nodesCounter > 0);
 	g_PartitionData.Store(PartitionDataFreeNodesOfs + nodesCounter * PartitionDataFreeNodesStride, nodeIdx);
 }
 
@@ -64,30 +64,69 @@ void StorePartitionDataNode(in uint nodeIdx, in PartitionNodeData nodeData)
 	}
 }
 
-void UpdateNodePartition(NodeOutput<PartitionUpdateRecord> partitionNodeOutput, in PartitionNodeData nodeData)
+void UpdateNodePartition(NodeOutput<PartitionUpdateRecord> partitionNodeOutput, in uint nodeId, in PartitionNodeData nodeData)
 {
 	float3 edgeVec = nodeData.TetrahedraVertices[1] - nodeData.TetrahedraVertices[0];
 	float edgeLenSq = dot(edgeVec.xyz, edgeVec.xyz);
 	float3 edgeCenter = (nodeData.TetrahedraVertices[0] + nodeData.TetrahedraVertices[1]) * 0.5;
 	float3 edgeToRefVec = g_ProceduralConsts.RefinementPoint.xyz - edgeCenter;
 	float edgeToRefDistSq = dot(edgeToRefVec.xyz, edgeToRefVec.xyz);
+	bool doSplit = (edgeToRefDistSq < edgeLenSq * g_ProceduralConsts.RefinementDistanceFactor);
 
-	if (edgeToRefDistSq < edgeLenSq * g_ProceduralConsts.RefinementDistanceFactor)
+	// TODO: check PartitionMode coming from input record (parent), skip split in Merge mode
+	if (doSplit && nodeData.SubNodeIds[0] == InvalidIndex)
 	{
-		// do split: spawn 2 sub nodes
+		// split: create 2 sub nodes and proceed with parition update
+
+		// allocate
+		uint allocatedCount = 0;
+		[unroll] for (uint isubNode = 0; isubNode < 2; ++isubNode)
+		{
+			allocatedCount += (uint)AcquirePartitionDataNode(nodeData.SubNodeIds[isubNode]);
+		}
+		if (allocatedCount < 2)
+		{
+			// assert(nodeData.SubNodeIds[0] == InvalidIndex); // reserved nodes count must be even
+			return; // interrupt: out of memeory
+		}
+
+		// compute & store tetrahedra vertices
+		PartitionNodeData subNodeData = InitialNodeData();
+
+		subNodeData.TetrahedraVertices[0] = nodeData.TetrahedraVertices[0];
+		subNodeData.TetrahedraVertices[1] = nodeData.TetrahedraVertices[3];
+		subNodeData.TetrahedraVertices[2] = nodeData.TetrahedraVertices[2];
+		subNodeData.TetrahedraVertices[3] = edgeCenter;
+		StorePartitionDataNode(nodeData.SubNodeIds[0], subNodeData);
+
+		subNodeData.TetrahedraVertices[0] = nodeData.TetrahedraVertices[3];
+		subNodeData.TetrahedraVertices[1] = nodeData.TetrahedraVertices[1];
+		subNodeData.TetrahedraVertices[2] = nodeData.TetrahedraVertices[2];
+		subNodeData.TetrahedraVertices[3] = edgeCenter;
+		StorePartitionDataNode(nodeData.SubNodeIds[1], subNodeData);
+	}
+
+	if (!doSplit && nodeData.SubNodeIds[0] != InvalidIndex)
+	{
+		// merge: produce output to release sub nodes
+		// TODO
+	}
+
+	// output
+	// TODO: move to separate function?
+	if (nodeData.SubNodeIds[0] != InvalidIndex)
+	{
 		ThreadNodeOutputRecords<PartitionUpdateRecord> subNodeRecords = partitionNodeOutput.GetThreadNodeOutputRecords(2);
 
 		PartitionUpdateRecord subNodeRecord0 = subNodeRecords.Get(0);
-		subNodeRecord0.TetrahedraVertices[0] = nodeData.TetrahedraVertices[0];
-		subNodeRecord0.TetrahedraVertices[1] = nodeData.TetrahedraVertices[3];
-		subNodeRecord0.TetrahedraVertices[2] = nodeData.TetrahedraVertices[2];
-		subNodeRecord0.TetrahedraVertices[3] = edgeCenter;
+		subNodeRecord0.Mode = (doSplit ? PartitionMode::Split : PartitionMode::Merge);
+		subNodeRecord0.ParentNodeId = nodeId;
+		subNodeRecord0.NodeId = nodeData.SubNodeIds[0];
 
 		PartitionUpdateRecord subNodeRecord1 = subNodeRecords.Get(1);
-		subNodeRecord1.TetrahedraVertices[0] = nodeData.TetrahedraVertices[3];
-		subNodeRecord1.TetrahedraVertices[1] = nodeData.TetrahedraVertices[1];
-		subNodeRecord1.TetrahedraVertices[2] = nodeData.TetrahedraVertices[2];
-		subNodeRecord1.TetrahedraVertices[3] = edgeCenter;
+		subNodeRecord1.Mode = (doSplit ? PartitionMode::Split : PartitionMode::Merge);
+		subNodeRecord1.ParentNodeId = nodeId;
+		subNodeRecord0.NodeId = nodeData.SubNodeIds[1];
 
 		subNodeRecords.OutputComplete();
 	}
@@ -128,7 +167,7 @@ void PartitionUpdateRootNode(
 
 	// update root node partition
 
-	UpdateNodePartition(PartitionUpdateNode, nodeData);
+	UpdateNodePartition(PartitionUpdateNode, nodeIdx, nodeData);
 }
 
 [Shader("node")]

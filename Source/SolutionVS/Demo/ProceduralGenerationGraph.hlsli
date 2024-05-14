@@ -63,9 +63,17 @@ struct ProceduralConsts
 
 // work graph records
 
+struct PartitionMode
+{
+	static const CUINT(Merge) = 0;
+	static const CUINT(Split) = 1;
+};
+
 struct PartitionUpdateRecord
 {
-	CFLOAT3(TetrahedraVertices)[4];
+	CUINT(Mode); // PartitionMode
+	CUINT(ParentNodeId);
+	CUINT(NodeId);
 };
 
 // descriptors
