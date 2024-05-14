@@ -15,7 +15,7 @@
 #include "Sys/Windows/WinUtils.h"
 #include "Core/Memory.h"
 
-//#define UR_GRAF_DX12_AGILITY_SDK_VERSION 613
+#define UR_GRAF_DX12_AGILITY_SDK_VERSION 613
 #if (UR_GRAF_DX12_AGILITY_SDK_VERSION)
 #include <D3D12SDK/include/d3d12.h>
 #else
