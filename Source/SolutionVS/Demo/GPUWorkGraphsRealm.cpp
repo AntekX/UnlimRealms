@@ -196,9 +196,16 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 			bufferParams.BufferDesc.SizeInBytes = PartitionDataBufferSize;
 			res = this->graphicsObjects->partitionDataBuffer->Initialize(grafDevice, bufferParams);
 
-			// upload initial data
-			//std::vector<ur_uint32> initialData(1024, 0);
-			//this->GetGrafRenderer()->Upload((ur_byte*)initialData.data(), this->graphicsObjects->partitionDataBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
+			// initial setup of partition data buffer
+			std::vector<ur_byte> partitionInitialData(PartitionDataNodesCounterSize + PartitionDataFreeNodesSize);
+			ur_uint32* nodesCounterPtr = reinterpret_cast<ur_uint32*>(partitionInitialData.data() + PartitionDataNodesCounterOfs);
+			*nodesCounterPtr = 0;
+			ur_uint32* freeNodeIdPtr = reinterpret_cast<ur_uint32*>(partitionInitialData.data() + PartitionDataFreeNodesOfs);
+			for (ur_uint32 inode = 0; inode < PartitionNodeCountMax; ++inode)
+			{
+				*freeNodeIdPtr++ = inode;
+			}
+			this->GetGrafRenderer()->Upload((ur_byte*)partitionInitialData.data(), this->graphicsObjects->partitionDataBuffer.get(), partitionInitialData.size());
 		}
 		if (Failed(res))
 			break;
@@ -352,8 +359,19 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 	// prepare resources
 	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->partitionDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);
 
+	// update constants
+	ProceduralConsts proceduralConsts;
+	proceduralConsts.RootExtent = ur_float3(100.0f, 100.0f, 100.0f);
+	proceduralConsts.RootPosition = ur_float3(0.0f, 0.0f, 0.0f);
+	proceduralConsts.RefinementPoint = ur_float3(0.0f, 0.0f, -200.0f);
+	proceduralConsts.RefinementDistanceFactor = 1.0f;
+	Allocation proceduralConstsAlloc = this->GetGrafRenderer()->GetDynamicConstantBufferAllocation(sizeof(ProceduralConsts));
+	GrafBuffer* dynamicCB = this->GetGrafRenderer()->GetDynamicConstantBuffer();
+	dynamicCB->Write((ur_byte*)&proceduralConsts, sizeof(ProceduralConsts), 0, proceduralConstsAlloc.Offset);
+
 	// update descriptor table
 	GrafDescriptorTable* proceduralGraphFrameTable = this->graphicsObjects->proceduralGraphDescTable->GetFrameObject();
+	proceduralGraphFrameTable->SetConstantBuffer(g_ProceduralConstsDescriptor, dynamicCB, proceduralConstsAlloc.Offset, proceduralConstsAlloc.Size);
 	proceduralGraphFrameTable->SetRWBuffer(g_PartitionDataDescriptor, this->graphicsObjects->partitionDataBuffer.get());
 	// TODO: ProceduralConsts
 
@@ -362,7 +380,7 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 	renderContext.CommandList->BindWorkGraphDescriptorTable(proceduralGraphFrameTable, this->graphicsObjects->proceduralGraphPipeline.get());
 
 	// dispatch partition work graph
-	renderContext.CommandList->DispatchGraph(0, ur_null, 0, 0);
+	renderContext.CommandList->DispatchGraph(0, ur_null, 1, 0);
 
 	// readback partition data
 	if (!this->graphicsObjects->readbackPending)
