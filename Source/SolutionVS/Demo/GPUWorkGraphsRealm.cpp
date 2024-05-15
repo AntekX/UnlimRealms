@@ -355,6 +355,7 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 	// update descriptor table
 	GrafDescriptorTable* proceduralGraphFrameTable = this->graphicsObjects->proceduralGraphDescTable->GetFrameObject();
 	proceduralGraphFrameTable->SetRWBuffer(g_PartitionDataDescriptor, this->graphicsObjects->partitionDataBuffer.get());
+	// TODO: ProceduralConsts
 
 	// bind pipeline
 	renderContext.CommandList->BindWorkGraphPipeline(this->graphicsObjects->proceduralGraphPipeline.get());

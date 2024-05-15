@@ -153,7 +153,7 @@ void OutputNodePartition(NodeOutput<PartitionUpdateRecord> partitionNodeOutput, 
 void PartitionUpdateRootNode(
 	[MaxRecords(2)] NodeOutput<PartitionUpdateRecord> PartitionUpdateNode,
 	uint3 dispatchID : SV_DispatchThreadID)
-{	
+{
 	uint partitionTetrahedraCount = LoadPartitionDataNodesCounter();
 	GroupMemoryBarrierWithGroupSync(); // all threads must read counter first
 
@@ -190,6 +190,7 @@ void PartitionUpdateRootNode(
 
 [Shader("node")]
 [NodeLaunch("thread")]
+[NodeMaxRecursionDepth(PartitionDepthMax)]
 void PartitionUpdateNode(
 	ThreadNodeInputRecord<PartitionUpdateRecord> inputData,
 	[MaxRecords(2)] NodeOutput<PartitionUpdateRecord> PartitionUpdateNode)
