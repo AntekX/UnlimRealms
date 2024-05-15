@@ -143,7 +143,7 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 		if (Succeeded(res))
 		{
 			GrafShaderLib::EntryPoint shaderLibEntries[] = {
-				{ "ProceduralEntryNode", GrafShaderType::Node }
+				{ "PartitionUpdateRootNode", GrafShaderType::Node }
 			};
 			res = GrafUtils::CreateShaderLibFromFile(*grafDevice, "ProceduralGenerationGraph_lib", shaderLibEntries, ur_array_size(shaderLibEntries), this->graphicsObjects->proceduralGraphShaderLib);
 		}
@@ -199,6 +199,28 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 			// upload initial data
 			//std::vector<ur_uint32> initialData(1024, 0);
 			//this->GetGrafRenderer()->Upload((ur_byte*)initialData.data(), this->graphicsObjects->partitionDataBuffer.get(), bufferParams.BufferDesc.SizeInBytes);
+		}
+		if (Failed(res))
+			break;
+
+		res = grafSystem->CreateBuffer(this->graphicsObjects->readbackBuffer);
+		if (Succeeded(res))
+		{
+			GrafBuffer::InitParams bufferParams = {};
+			bufferParams.BufferDesc.Usage = ur_uint(GrafBufferUsageFlag::TransferDst);
+			bufferParams.BufferDesc.MemoryType = ur_uint(GrafDeviceMemoryFlag::CpuVisible);
+			bufferParams.BufferDesc.SizeInBytes = this->graphicsObjects->partitionDataBuffer->GetDesc().SizeInBytes;
+			res = this->graphicsObjects->readbackBuffer->Initialize(grafDevice, bufferParams);
+		}
+		if (Failed(res))
+			break;
+
+		res = grafSystem->CreateFence(this->graphicsObjects->readbackFence);
+		if (Succeeded(res))
+		{
+			this->graphicsObjects->readbackFence->Initialize(grafDevice);
+			this->graphicsObjects->readbackFence->SetState(GrafFenceState::Signaled);
+			this->graphicsObjects->readbackPending = false;
 		}
 		if (Failed(res))
 			break;
@@ -327,11 +349,52 @@ Result GPUWorkGraphsRealm::SampleDisplayImgui()
 
 Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 {
+	// prepare resources
+	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->partitionDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);
+
+	// update descriptor table
+	GrafDescriptorTable* proceduralGraphFrameTable = this->graphicsObjects->proceduralGraphDescTable->GetFrameObject();
+	proceduralGraphFrameTable->SetRWBuffer(g_PartitionDataDescriptor, this->graphicsObjects->partitionDataBuffer.get());
+
+	// bind pipeline
+	renderContext.CommandList->BindWorkGraphPipeline(this->graphicsObjects->proceduralGraphPipeline.get());
+	renderContext.CommandList->BindWorkGraphDescriptorTable(proceduralGraphFrameTable, this->graphicsObjects->proceduralGraphPipeline.get());
+
+	// dispatch partition work graph
+	renderContext.CommandList->DispatchGraph(0, ur_null, 0, 0);
+
+	// readback partition data
+	if (!this->graphicsObjects->readbackPending)
+	{
+		renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->partitionDataBuffer.get(), GrafBufferState::Current, GrafBufferState::TransferSrc);
+		renderContext.CommandList->Copy(this->graphicsObjects->partitionDataBuffer.get(), this->graphicsObjects->readbackBuffer.get());
+		this->graphicsObjects->readbackFence->SetState(GrafFenceState::Reset);
+		this->graphicsObjects->readbackPending = true;
+	}
+	else
+	{
+		GrafFenceState readbackFenceState;
+		this->graphicsObjects->readbackFence->GetState(readbackFenceState);
+		if (GrafFenceState::Signaled == readbackFenceState)
+		{
+			this->graphicsObjects->readbackData.resize(this->graphicsObjects->readbackBuffer->GetDesc().SizeInBytes);
+			ur_byte* readbackDstPtr = this->graphicsObjects->readbackData.data();
+			this->graphicsObjects->readbackBuffer->Read(readbackDstPtr);
+			this->graphicsObjects->readbackPending = false;
+		}
+	}
+
 	return Result(Success);
 }
 
 Result GPUWorkGraphsRealm::ProceduralDisplayImgui()
 {
+	std::string titleString;
+	WstringToString(this->GetCanvas()->GetTitle(), titleString);
+	ImGui::Begin(titleString.c_str());
+	// TODO
+	ImGui::End();
+
 	return Result(Success);
 }
 

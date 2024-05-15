@@ -36,6 +36,7 @@ struct PartitionNodeData
 	CFLOAT3(TetrahedraVertices)[4];
 	CUINT(SubNodeIds)[2];
 };
+static const CUINT(InvalidSubNodeIds)[2] = { InvalidIndex, InvalidIndex };
 static const CUINT(PartitionNodeDataSize) = PartitionTetrahedraSize + PartitionNodeIdSize * 2; // sizeof(PartitionNodeData)
 
 // partition data buffer layout

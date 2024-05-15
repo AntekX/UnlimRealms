@@ -53,6 +53,10 @@ private:
 		std::unique_ptr<GrafDescriptorTableLayout> proceduralGraphDescTableLayout;
 		std::unique_ptr<GrafManagedDescriptorTable> proceduralGraphDescTable;
 		std::unique_ptr<GrafBuffer> partitionDataBuffer;
+		std::unique_ptr<GrafBuffer> readbackBuffer;
+		std::vector<ur_byte> readbackData;
+		std::unique_ptr<GrafFence> readbackFence;
+		ur_bool readbackPending;
 	};
 
 	Result ProceduralRender(const RenderContext& renderContext);
