@@ -19,7 +19,7 @@ bool AcquirePartitionDataNode(out uint nodeIdx = InvalidIndex)
 		nodeIdx = InvalidIndex;
 		return false;
 	}
-	nodeIdx = g_PartitionData.Load(PartitionDataFreeNodesOfs + nodesCounter * PartitionDataFreeNodesStride);
+	g_PartitionData.InterlockedExchange(PartitionDataFreeNodesOfs + nodesCounter * PartitionDataFreeNodesStride, InvalidIndex, nodeIdx);
 	return true;
 }
 
