@@ -23,6 +23,22 @@ bool AcquirePartitionDataNode(out uint nodeIdx = InvalidIndex)
 	return true;
 }
 
+bool AcquirePartitionDataNodes(out uint nodeIds[2])
+{
+	uint nodesCounter;
+	g_PartitionData.InterlockedAdd(PartitionDataNodesCounterOfs, 2, nodesCounter);
+	if (nodesCounter >= PartitionNodeCountMax)
+	{
+		g_PartitionData.InterlockedAdd(PartitionDataNodesCounterOfs, -2);
+		nodeIds[0] = InvalidIndex;
+		nodeIds[1] = InvalidIndex;
+		return false;
+	}
+	g_PartitionData.InterlockedExchange(PartitionDataFreeNodesOfs + (nodesCounter + 0) * PartitionDataFreeNodesStride, InvalidIndex, nodeIds[0]);
+	g_PartitionData.InterlockedExchange(PartitionDataFreeNodesOfs + (nodesCounter + 1) * PartitionDataFreeNodesStride, InvalidIndex, nodeIds[1]);
+	return true;
+}
+
 void ReleasePartitionDataNode(in uint nodeIdx)
 {
 	uint nodesCounter;
@@ -69,7 +85,7 @@ void StorePartitionDataNode(in uint nodeIdx, in PartitionNodeData nodeData)
 	StorePartitionDataSubNodeIds(nodeIdx, nodeData.SubNodeIds);
 }
 
-uint UpdateNodePartition(in uint partitionMode, in uint nodeId, in PartitionNodeData nodeData)
+uint UpdateNodePartition(in uint partitionMode, in uint nodeId, inout PartitionNodeData nodeData)
 {
 	bool doSplit = (PartitionMode::Split == partitionMode); // skip split test if parent node is merged
 	if (doSplit && nodeData.SubNodeIds[0] == InvalidIndex)
@@ -86,16 +102,15 @@ uint UpdateNodePartition(in uint partitionMode, in uint nodeId, in PartitionNode
 			// split: create 2 sub nodes and proceed with parition update
 
 			// allocate
-			uint allocatedCount = 0;
-			[unroll] for (uint isubNode = 0; isubNode < 2; ++isubNode)
-			{
-				allocatedCount += (uint)AcquirePartitionDataNode(nodeData.SubNodeIds[isubNode]);
-			}
-			if (allocatedCount < 2)
+			bool nodesAcquired = AcquirePartitionDataNodes(nodeData.SubNodeIds);
+			if (!nodesAcquired)
 			{
 				// assert(nodeData.SubNodeIds[0] == InvalidIndex); // reserved nodes count must be even
 				return PartitionMode::Merge; // interrupt: out of memeory
 			}
+
+			// store refernce ids to new sub nodes
+			StorePartitionDataSubNodeIds(nodeId, nodeData.SubNodeIds);
 
 			// compute & store tetrahedra vertices
 			PartitionNodeData subNodeData = InitialNodeData();
@@ -117,7 +132,7 @@ uint UpdateNodePartition(in uint partitionMode, in uint nodeId, in PartitionNode
 	if (!doSplit && nodeData.SubNodeIds[0] != InvalidIndex)
 	{
 		// merge: invalidate references to sub nodes
-		// sub nodes data will released further down the graph
+		// sub nodes data will be released further down the graph
 
 		StorePartitionDataSubNodeIds(nodeId, InvalidSubNodeIds);
 	}
@@ -182,7 +197,7 @@ void PartitionUpdateRootNode(
 
 	uint partitionMode = PartitionMode::Split; // always try to split root node
 	partitionMode = UpdateNodePartition(partitionMode, nodeIdx, nodeData);
-
+	
 	// produce output
 
 	OutputNodePartition(PartitionUpdateNode, partitionMode, nodeIdx, nodeData);
@@ -201,7 +216,7 @@ void PartitionUpdateNode(
 
 	PartitionNodeData nodeData = InitialNodeData();
 	LoadPartitionDataNode(partitionInput.NodeId, nodeData);
-	
+
 	if (PartitionMode::Merge == partitionInput.Mode)
 	{
 		// if parent is merged - release this node data after loading to properly free it's sub nodes

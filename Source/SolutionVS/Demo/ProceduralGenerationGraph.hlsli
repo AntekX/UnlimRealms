@@ -49,7 +49,9 @@ static const CUINT(PartitionDataFreeNodesSize) = PartitionNodeCountMax * Partiti
 static const CUINT(PartitionDataNodesOfs) = PartitionDataFreeNodesOfs + PartitionDataFreeNodesSize;
 static const CUINT(PartitionDataNodesStride) = PartitionNodeDataSize;
 static const CUINT(PartitionDataNodesSize) = PartitionNodeCountMax * PartitionDataNodesStride;
-static const CUINT(PartitionDataBufferSize) = PartitionDataNodesOfs + PartitionDataNodesSize;
+static const CUINT(PartitionDataDebugOfs) = PartitionDataNodesOfs + PartitionDataNodesSize;
+static const CUINT(PartitionDataDebugSize) = 1024;
+static const CUINT(PartitionDataBufferSize) = PartitionDataDebugOfs + PartitionDataDebugSize;
 
 // constant buffers
 

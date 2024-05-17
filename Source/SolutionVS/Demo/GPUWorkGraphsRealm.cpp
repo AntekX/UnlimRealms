@@ -363,7 +363,7 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 	ProceduralConsts proceduralConsts;
 	proceduralConsts.RootExtent = ur_float3(100.0f, 100.0f, 100.0f);
 	proceduralConsts.RootPosition = ur_float3(0.0f, 0.0f, 0.0f);
-	proceduralConsts.RefinementPoint = ur_float3(0.0f, 0.0f, -200.0f);
+	proceduralConsts.RefinementPoint = ur_float3(0.0f, 0.0f, -50.0f);
 	proceduralConsts.RefinementDistanceFactor = 1.0f;
 	Allocation proceduralConstsAlloc = this->GetGrafRenderer()->GetDynamicConstantBufferAllocation(sizeof(ProceduralConsts));
 	GrafBuffer* dynamicCB = this->GetGrafRenderer()->GetDynamicConstantBuffer();
