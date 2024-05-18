@@ -41,7 +41,9 @@ static const CUINT(PartitionNodeDataSize) = PartitionTetrahedraSize + PartitionN
 
 // partition data buffer layout
 // [nodesCounter] [freeNodeIdx: 0...PartitionNodeCountMax-1] [nodeData: 0...PartitionNodeCountMax-1]
-static const CUINT(PartitionDataNodesCounterOfs) = 0;
+static const CUINT(PartitionDataDebugOfs) = 0;
+static const CUINT(PartitionDataDebugSize) = 1024;
+static const CUINT(PartitionDataNodesCounterOfs) = PartitionDataDebugOfs + PartitionDataDebugSize;
 static const CUINT(PartitionDataNodesCounterSize) = 4;
 static const CUINT(PartitionDataFreeNodesOfs) = PartitionDataNodesCounterOfs + PartitionDataNodesCounterSize;
 static const CUINT(PartitionDataFreeNodesStride) = 4;
@@ -49,9 +51,7 @@ static const CUINT(PartitionDataFreeNodesSize) = PartitionNodeCountMax * Partiti
 static const CUINT(PartitionDataNodesOfs) = PartitionDataFreeNodesOfs + PartitionDataFreeNodesSize;
 static const CUINT(PartitionDataNodesStride) = PartitionNodeDataSize;
 static const CUINT(PartitionDataNodesSize) = PartitionNodeCountMax * PartitionDataNodesStride;
-static const CUINT(PartitionDataDebugOfs) = PartitionDataNodesOfs + PartitionDataNodesSize;
-static const CUINT(PartitionDataDebugSize) = 1024;
-static const CUINT(PartitionDataBufferSize) = PartitionDataDebugOfs + PartitionDataDebugSize;
+static const CUINT(PartitionDataBufferSize) = PartitionDataNodesOfs + PartitionDataNodesSize;
 
 // constant buffers
 

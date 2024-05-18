@@ -85,6 +85,24 @@ void StorePartitionDataNode(in uint nodeIdx, in PartitionNodeData nodeData)
 	StorePartitionDataSubNodeIds(nodeIdx, nodeData.SubNodeIds);
 }
 
+void AddToDebugOutput(in uint value)
+{
+	uint outputIdx;
+	g_PartitionData.InterlockedAdd(PartitionDataDebugOfs, 1, outputIdx);
+	uint writePos = outputIdx * 4;
+	if (writePos + 8 < PartitionDataDebugSize)
+		g_PartitionData.Store(PartitionDataDebugOfs + 4 + writePos, value);
+}
+
+void AddToDebugOutput(in uint4 value)
+{
+	uint outputIdx;
+	g_PartitionData.InterlockedAdd(PartitionDataDebugOfs, 4, outputIdx);
+	uint writePos = outputIdx * 4;
+	if (writePos + 20 < PartitionDataDebugSize)
+		g_PartitionData.Store4(PartitionDataDebugOfs + 4 + writePos, value);
+}
+
 uint UpdateNodePartition(in uint partitionMode, in uint nodeId, inout PartitionNodeData nodeData)
 {
 	bool doSplit = (PartitionMode::Split == partitionMode); // skip split test if parent node is merged
@@ -95,7 +113,7 @@ uint UpdateNodePartition(in uint partitionMode, in uint nodeId, inout PartitionN
 		float3 edgeCenter = (nodeData.TetrahedraVertices[0] + nodeData.TetrahedraVertices[1]) * 0.5;
 		float3 edgeToRefVec = g_ProceduralConsts.RefinementPoint.xyz - edgeCenter;
 		float edgeToRefDistSq = dot(edgeToRefVec.xyz, edgeToRefVec.xyz);
-		doSplit = (edgeToRefDistSq < edgeLenSq * g_ProceduralConsts.RefinementDistanceFactor);
+		doSplit = true;// (edgeToRefDistSq < edgeLenSq * g_ProceduralConsts.RefinementDistanceFactor);
 
 		if (doSplit)
 		{
@@ -140,7 +158,7 @@ uint UpdateNodePartition(in uint partitionMode, in uint nodeId, inout PartitionN
 	return (doSplit ? PartitionMode::Split : PartitionMode::Merge);
 }
 
-void OutputNodePartition(NodeOutput<PartitionUpdateRecord> partitionNodeOutput, uint partitionMode, in uint nodeId, in PartitionNodeData nodeData)
+void OutputNodePartition(inout NodeOutput<PartitionUpdateRecord> partitionNodeOutput, in uint partitionMode, in uint nodeId, in PartitionNodeData nodeData)
 {
 	if (InvalidIndex == nodeData.SubNodeIds[0])
 		return; // leaf node reached, interrupt traversal
@@ -216,6 +234,9 @@ void PartitionUpdateNode(
 
 	PartitionNodeData nodeData = InitialNodeData();
 	LoadPartitionDataNode(partitionInput.NodeId, nodeData);
+
+	AddToDebugOutput(uint4(partitionInput.Mode, partitionInput.ParentNodeId, partitionInput.NodeId, 0));
+	return;
 
 	if (PartitionMode::Merge == partitionInput.Mode)
 	{

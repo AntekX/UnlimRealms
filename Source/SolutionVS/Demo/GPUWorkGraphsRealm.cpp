@@ -197,7 +197,9 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 			res = this->graphicsObjects->partitionDataBuffer->Initialize(grafDevice, bufferParams);
 
 			// initial setup of partition data buffer
-			std::vector<ur_byte> partitionInitialData(PartitionDataNodesCounterSize + PartitionDataFreeNodesSize);
+			std::vector<ur_byte> partitionInitialData(PartitionDataNodesOfs);
+			ur_byte* nodesDebugPtr = reinterpret_cast<ur_byte*>(partitionInitialData.data() + PartitionDataDebugOfs);
+			memset(nodesDebugPtr, 0, sizeof(PartitionDataDebugSize));
 			ur_uint32* nodesCounterPtr = reinterpret_cast<ur_uint32*>(partitionInitialData.data() + PartitionDataNodesCounterOfs);
 			*nodesCounterPtr = 0;
 			ur_uint32* freeNodeIdPtr = reinterpret_cast<ur_uint32*>(partitionInitialData.data() + PartitionDataFreeNodesOfs);
@@ -398,6 +400,8 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 		{
 			this->graphicsObjects->readbackData.resize(this->graphicsObjects->readbackBuffer->GetDesc().SizeInBytes);
 			ur_byte* readbackDstPtr = this->graphicsObjects->readbackData.data();
+			ur_byte* readbackNodesCounterPtr = readbackDstPtr + PartitionDataNodesCounterOfs;
+			ur_byte* readbackNodesDataPtr = readbackDstPtr + PartitionDataNodesOfs;
 			this->graphicsObjects->readbackBuffer->Read(readbackDstPtr);
 			this->graphicsObjects->readbackPending = false;
 		}
