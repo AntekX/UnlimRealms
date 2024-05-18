@@ -57,11 +57,11 @@ static const CUINT(PartitionDataBufferSize) = PartitionDataNodesOfs + PartitionD
 
 struct ProceduralConsts
 {
-	CFLOAT3(RootExtent);
 	CFLOAT3(RootPosition);
+	CFLOAT(RootExtent);
 	CFLOAT3(RefinementPoint);
 	CFLOAT(RefinementDistanceFactor);
-	CFLOAT2(__pad0);
+	//CFLOAT4(__pad0);
 };
 
 // work graph records

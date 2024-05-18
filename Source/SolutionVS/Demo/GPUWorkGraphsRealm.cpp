@@ -19,7 +19,9 @@ using namespace UnlimRealms;
 
 #define UR_GRAF_SYSTEM GrafSystemDX12
 
-GPUWorkGraphsRealm::GPUWorkGraphsRealm()
+GPUWorkGraphsRealm::GPUWorkGraphsRealm() :
+	camera(*this),
+	cameraControl(*this, &camera, CameraControl::Mode::FixedUp)
 {
 }
 
@@ -37,7 +39,23 @@ Result GPUWorkGraphsRealm::Initialize()
 	realmParams.GrafSystemType = RenderRealm::GrafSystemType::DX12;
 	realmParams.RendererParams = GrafRenderer::InitParams::Default;
 
-	return RenderRealm::Initialize(realmParams);
+	Result res = RenderRealm::Initialize(realmParams);
+	if (Failed(res))
+		return res;
+
+	// procedural object desc
+	this->proceduralObject = {};
+	this->proceduralObject.position = ur_float3(0.0f, 0.0f, 0.0f);
+	this->proceduralObject.extent = 1000.0f;
+
+	// camera
+	this->cameraControl.SetTargetPoint(this->proceduralObject.position);
+	this->cameraControl.SetSpeed(5.0);
+	this->camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
+	this->camera.SetPosition(this->proceduralObject.position + ur_float3(0.0f, 0.0f, -this->proceduralObject.extent * 2.0f));
+	this->camera.SetLookAt(cameraControl.GetTargetPoint(), cameraControl.GetWorldUp());
+
+	return res;
 #else
 	return Result(NotImplemented); // used DX12 SDK does not support work graphs
 #endif
@@ -254,7 +272,11 @@ Result GPUWorkGraphsRealm::DeinitializeGraphicObjects()
 
 Result GPUWorkGraphsRealm::Update(const UpdateContext& updateContext)
 {
+#if (GPUWORKGRAPH_SAMPLE)
 	return Result(Success);
+#else
+	return ProceduralUpdate(updateContext);
+#endif
 }
 
 Result GPUWorkGraphsRealm::Render(const RenderContext& renderContext)
@@ -356,6 +378,16 @@ Result GPUWorkGraphsRealm::SampleDisplayImgui()
 
 #else
 
+Result GPUWorkGraphsRealm::ProceduralUpdate(const UpdateContext& renderContext)
+{
+	this->camera.SetAspectRatio((float)this->GetCanvas()->GetClientBound().Width() / this->GetCanvas()->GetClientBound().Height());
+	ur_float distToObj = (camera.GetPosition() - this->proceduralObject.position).Length() - this->proceduralObject.extent;
+	this->cameraControl.SetSpeed(std::max(5.0f, distToObj * 0.5f));
+	this->cameraControl.Update();
+
+	return Result(Success);
+}
+
 Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 {
 	// prepare resources
@@ -363,9 +395,9 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 
 	// update constants
 	ProceduralConsts proceduralConsts;
-	proceduralConsts.RootExtent = ur_float3(100.0f, 100.0f, 100.0f);
-	proceduralConsts.RootPosition = ur_float3(0.0f, 0.0f, 0.0f);
-	proceduralConsts.RefinementPoint = ur_float3(0.0f, 0.0f, -50.0f);
+	proceduralConsts.RootPosition = this->proceduralObject.position;
+	proceduralConsts.RootExtent = this->proceduralObject.extent;
+	proceduralConsts.RefinementPoint = this->camera.GetPosition();
 	proceduralConsts.RefinementDistanceFactor = 1.0f;
 	Allocation proceduralConstsAlloc = this->GetGrafRenderer()->GetDynamicConstantBufferAllocation(sizeof(ProceduralConsts));
 	GrafBuffer* dynamicCB = this->GetGrafRenderer()->GetDynamicConstantBuffer();
@@ -375,7 +407,6 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 	GrafDescriptorTable* proceduralGraphFrameTable = this->graphicsObjects->proceduralGraphDescTable->GetFrameObject();
 	proceduralGraphFrameTable->SetConstantBuffer(g_ProceduralConstsDescriptor, dynamicCB, proceduralConstsAlloc.Offset, proceduralConstsAlloc.Size);
 	proceduralGraphFrameTable->SetRWBuffer(g_PartitionDataDescriptor, this->graphicsObjects->partitionDataBuffer.get());
-	// TODO: ProceduralConsts
 
 	// bind pipeline
 	renderContext.CommandList->BindWorkGraphPipeline(this->graphicsObjects->proceduralGraphPipeline.get());

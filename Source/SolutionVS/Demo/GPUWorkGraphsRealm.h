@@ -1,6 +1,8 @@
 #pragma once
 
 #include "RenderRealm/RenderRealm.h"
+#include "Camera/CameraControl.h"
+
 using namespace UnlimRealms;
 
 #define GPUWORKGRAPH_SAMPLE 0
@@ -59,8 +61,19 @@ private:
 		ur_bool readbackPending;
 	};
 
+	struct ProceduralObject
+	{
+		ur_float3 position;
+		ur_float extent;
+	};
+
+	Result ProceduralUpdate(const UpdateContext& renderContext);
 	Result ProceduralRender(const RenderContext& renderContext);
 	Result ProceduralDisplayImgui();
+
+	ProceduralObject proceduralObject;
+	Camera camera;
+	CameraControl cameraControl;
 
 #endif
 

@@ -85,6 +85,12 @@ void StorePartitionDataNode(in uint nodeIdx, in PartitionNodeData nodeData)
 	StorePartitionDataSubNodeIds(nodeIdx, nodeData.SubNodeIds);
 }
 
+void ResetDebugOutput()
+{
+	uint outputIdx;
+	g_PartitionData.InterlockedExchange(PartitionDataDebugOfs, 0, outputIdx);
+}
+
 void AddToDebugOutput(in uint value)
 {
 	uint outputIdx;
@@ -113,7 +119,7 @@ uint UpdateNodePartition(in uint partitionMode, in uint nodeId, inout PartitionN
 		float3 edgeCenter = (nodeData.TetrahedraVertices[0] + nodeData.TetrahedraVertices[1]) * 0.5;
 		float3 edgeToRefVec = g_ProceduralConsts.RefinementPoint.xyz - edgeCenter;
 		float edgeToRefDistSq = dot(edgeToRefVec.xyz, edgeToRefVec.xyz);
-		doSplit = true;// (edgeToRefDistSq < edgeLenSq * g_ProceduralConsts.RefinementDistanceFactor);
+		doSplit = (edgeToRefDistSq < edgeLenSq * g_ProceduralConsts.RefinementDistanceFactor);
 
 		if (doSplit)
 		{
@@ -165,15 +171,12 @@ void OutputNodePartition(inout NodeOutput<PartitionUpdateRecord> partitionNodeOu
 
 	ThreadNodeOutputRecords<PartitionUpdateRecord> subNodeRecords = partitionNodeOutput.GetThreadNodeOutputRecords(2);
 
-	PartitionUpdateRecord subNodeRecord0 = subNodeRecords.Get(0);
-	subNodeRecord0.Mode = partitionMode;
-	subNodeRecord0.ParentNodeId = nodeId;
-	subNodeRecord0.NodeId = nodeData.SubNodeIds[0];
-
-	PartitionUpdateRecord subNodeRecord1 = subNodeRecords.Get(1);
-	subNodeRecord1.Mode = partitionMode;
-	subNodeRecord1.ParentNodeId = nodeId;
-	subNodeRecord0.NodeId = nodeData.SubNodeIds[1];
+	subNodeRecords.Get(0).Mode = partitionMode;
+	subNodeRecords.Get(0).ParentNodeId = nodeId;
+	subNodeRecords.Get(0).NodeId = nodeData.SubNodeIds[0];
+	subNodeRecords.Get(1).Mode = partitionMode;
+	subNodeRecords.Get(1).ParentNodeId = nodeId;
+	subNodeRecords.Get(1).NodeId = nodeData.SubNodeIds[1];
 
 	subNodeRecords.OutputComplete();
 }
@@ -199,7 +202,7 @@ void PartitionUpdateRootNode(
 		// compute vertices in world space
 		[unroll] for (uint iv = 0; iv < 4; ++iv)
 		{
-			nodeData.TetrahedraVertices[iv] = PartitionRootTetrahedra[nodeIdx][iv] * g_ProceduralConsts.RootExtent.xyz + g_ProceduralConsts.RootPosition.xyz;
+			nodeData.TetrahedraVertices[iv] = PartitionRootTetrahedra[nodeIdx][iv] * g_ProceduralConsts.RootExtent + g_ProceduralConsts.RootPosition.xyz;
 		}
 		AcquirePartitionDataNode(); // returned idx does not matter, every root node writes at it's constant pos
 		StorePartitionDataNode(nodeIdx, nodeData);
@@ -234,9 +237,6 @@ void PartitionUpdateNode(
 
 	PartitionNodeData nodeData = InitialNodeData();
 	LoadPartitionDataNode(partitionInput.NodeId, nodeData);
-
-	AddToDebugOutput(uint4(partitionInput.Mode, partitionInput.ParentNodeId, partitionInput.NodeId, 0));
-	return;
 
 	if (PartitionMode::Merge == partitionInput.Mode)
 	{
