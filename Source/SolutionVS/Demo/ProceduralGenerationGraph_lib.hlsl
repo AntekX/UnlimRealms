@@ -166,7 +166,7 @@ uint UpdateNodePartition(in uint partitionMode, in uint nodeId, inout PartitionN
 
 void OutputNodePartition(inout NodeOutput<PartitionUpdateRecord> partitionNodeOutput, in uint partitionMode, in uint nodeId, in PartitionNodeData nodeData)
 {
-	if (InvalidIndex == nodeData.SubNodeIds[0])
+	if (0 == GetRemainingRecursionLevels() || InvalidIndex == nodeData.SubNodeIds[0])
 		return; // leaf node reached, interrupt traversal
 
 	ThreadNodeOutputRecords<PartitionUpdateRecord> subNodeRecords = partitionNodeOutput.GetThreadNodeOutputRecords(2);

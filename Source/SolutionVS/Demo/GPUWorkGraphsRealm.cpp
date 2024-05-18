@@ -438,6 +438,9 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 		}
 	}
 
+	// render partition structure
+	// TODO
+
 	return Result(Success);
 }
 
