@@ -85,6 +85,12 @@ namespace UnlimRealms
 
 		inline State GetState() const;
 
+		inline ur_float GetCanvasResolutionScale() const;
+
+		inline ur_uint GetCanvasWidth() const;
+
+		inline ur_uint GetCanvasHeight() const;
+
 		inline GrafRenderer* GetGrafRenderer();
 
 		inline ImguiRender* GetImguiRenderer();
@@ -103,7 +109,12 @@ namespace UnlimRealms
 		
 		virtual Result DeinitializeGraphicObjects(); // called before GrafRenderer deinitialization
 
+		virtual Result InitializeCanvasObjects(); // called during rendering when canvas resized
+
+		virtual Result SafeDeleteCanvasObjects(GrafCommandList* commandList); // called during rendering when canvas resized
+
 		State state;
+		ur_float canvasResolutionScale;
 
 	private:
 

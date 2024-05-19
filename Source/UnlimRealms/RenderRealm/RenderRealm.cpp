@@ -36,6 +36,7 @@ namespace UnlimRealms
 
 	RenderRealm::RenderRealm() :
 		state(State::Initialize),
+		canvasResolutionScale(1.0f),
 		grafRenderer(ur_null)
 	{
 	}
@@ -160,6 +161,9 @@ namespace UnlimRealms
 		// init graphic objects
 		this->InitializeGraphicObjects();
 
+		// init canvas graphics objects
+		this->InitializeCanvasObjects();
+
 		return Result(Success);
 	}
 
@@ -226,6 +230,16 @@ namespace UnlimRealms
 		return Result(NotImplemented);
 	}
 
+	Result RenderRealm::InitializeCanvasObjects()
+	{
+		return Result(NotImplemented);
+	}
+
+	Result RenderRealm::SafeDeleteCanvasObjects(GrafCommandList* commandList)
+	{
+		return Result(NotImplemented);
+	}
+
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	WinRenderRealm::WinRenderRealm()
@@ -250,9 +264,8 @@ namespace UnlimRealms
 
 	Result WinRenderRealm::Run()
 	{
-		ur_float canvasResolutionScale = 1.0f;
-		ur_uint canvasWidth = ur_uint(this->GetCanvas()->GetClientBound().Width() * canvasResolutionScale);
-		ur_uint canvasHeight = ur_uint(this->GetCanvas()->GetClientBound().Height() * canvasResolutionScale);
+		ur_uint canvasWidth = this->GetCanvasWidth();
+		ur_uint canvasHeight = this->GetCanvasHeight();
 		ur_bool canvasValid = false;
 		ClockTime runStartTime = Clock::now();
 		ClockTime lastUpdateTime = runStartTime;
@@ -308,22 +321,20 @@ namespace UnlimRealms
 				// begin new frame
 				this->GetGrafRenderer()->BeginFrame();
 
-				// update render target(s)
-				ur_uint canvasWidthActual = ur_uint(this->GetCanvas()->GetClientBound().Width() * canvasResolutionScale);
-				ur_uint canvasHeightActual = ur_uint(this->GetCanvas()->GetClientBound().Height() * canvasResolutionScale);
+				// perfrom rendering
+				renderContext.CommandList = this->GetGrafRenderer()->GetTransientCommandList();
+				renderContext.CommandList->Begin();
+
+				// update canvas render target(s)
+				ur_uint canvasWidthActual = this->GetCanvasWidth();
+				ur_uint canvasHeightActual = this->GetCanvasHeight();
 				if (canvasValid && (canvasWidth != canvasWidthActual || canvasHeight != canvasHeightActual))
 				{
 					canvasWidth = canvasWidthActual;
 					canvasHeight = canvasHeightActual;
-					// use prev frame command list to make sure frame buffer objects are destroyed only when it is no longer used
-					//DestroyFrameBufferObjects(managedCommandList->GetFrameObject(this->GetGrafRenderer()->GetPrevRecordedFrameIdx()));
-					// recreate frame buffer objects for new canvas dimensions
-					//InitFrameBufferObjects(canvasWidth, canvasHeight);
+					SafeDeleteCanvasObjects(renderContext.CommandList);
+					InitializeCanvasObjects();
 				}
-
-				// perfrom rendering
-				renderContext.CommandList = this->GetGrafRenderer()->GetTransientCommandList();
-				renderContext.CommandList->Begin();
 
 				// clear swap chain current image
 				GrafClearValue rtClearValue = DefaultClearColor;

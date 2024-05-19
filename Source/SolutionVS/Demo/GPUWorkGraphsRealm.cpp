@@ -19,6 +19,39 @@ using namespace UnlimRealms;
 
 #define UR_GRAF_SYSTEM GrafSystemDX12
 
+static const ur_float4 DebugLabelPass = { 0.8f, 0.8f, 1.0f, 1.0f };
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// gbuffer & lighting render target desc
+
+enum RTImageType
+{
+	RTImage_Depth = 0,
+	//RTImage_Geometry0, // xyz: baseColor; w: materialTypeID;
+	//RTImage_Lighting, // xyz: hdr color; w: unused;
+	RTImageCount,
+	RTColorImageCount = RTImageCount - 1,
+};
+
+struct RTImageDesc
+{
+	GrafImageUsageFlag Usage;
+	GrafFormat Format;
+	GrafClearValue ClearColor;
+	ur_bool HasHistory; // number of images stored, (Count > 1) means keep history of (Count-1) frames
+};
+
+static const ur_uint RTHistorySize = 0; // number of additional RT images to store history
+
+static const RTImageDesc g_RTImageDesc[RTImageCount] = {
+	{ GrafImageUsageFlag::DepthStencilRenderTarget, GrafFormat::D24_UNORM_S8_UINT, { 1.0f, 0.0f, 0.0f, 0.0f }, true },
+	//{ GrafImageUsageFlag::ColorRenderTarget, GrafFormat::R8G8B8A8_UNORM, { 0.0f, 0.0f, 0.0f, 0.0f }, false },
+	//{ GrafImageUsageFlag::ColorRenderTarget, GrafFormat::R16G16B16A16_SFLOAT, { 0.0f, 0.0f, 0.0f, 0.0f }, true }
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 GPUWorkGraphsRealm::GPUWorkGraphsRealm() :
 	camera(*this),
 	cameraControl(*this, &camera, CameraControl::Mode::FixedUp)
@@ -252,6 +285,49 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 		if (Failed(res))
 			break;
 
+		res = grafSystem->CreateRenderPass(this->graphicsObjects->directRenderPass);
+		if (Succeeded(res))
+		{
+			GrafRenderPassImageDesc grafRenderPassImages[] = {
+			{ // color
+				GrafFormat::B8G8R8A8_UNORM, // renderer's canvas format
+				GrafImageState::ColorWrite, GrafImageState::ColorWrite,
+				GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
+				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+			},
+			{ // depth
+				GrafFormat::D24_UNORM_S8_UINT,
+				GrafImageState::DepthStencilWrite, GrafImageState::DepthStencilWrite,
+				GrafRenderPassDataOp::Load, GrafRenderPassDataOp::Store,
+				GrafRenderPassDataOp::DontCare, GrafRenderPassDataOp::DontCare
+			}
+			};
+			res = this->graphicsObjects->directRenderPass->Initialize(grafDevice, { grafRenderPassImages, ur_array_size(grafRenderPassImages) });
+		}
+		if (Failed(res))
+			break;
+
+		res = grafSystem->CreateRenderPass(this->graphicsObjects->gbufferRenderPass);
+		if (Succeeded(res))
+		{
+			GrafRenderPassImageDesc rasterRenderPassImageDesc[RTImageCount];
+			for (ur_uint imageIdx = 0; imageIdx < RTImageCount; ++imageIdx)
+			{
+				auto& passImageDesc = rasterRenderPassImageDesc[imageIdx];
+				const RTImageDesc& rtImageDesc = g_RTImageDesc[imageIdx];
+				passImageDesc.Format = rtImageDesc.Format;
+				passImageDesc.InitialState = (GrafImageUsageFlag::DepthStencilRenderTarget == rtImageDesc.Usage ? GrafImageState::DepthStencilWrite : GrafImageState::ColorWrite);
+				passImageDesc.FinalState = passImageDesc.InitialState;
+				passImageDesc.LoadOp = GrafRenderPassDataOp::Load;
+				passImageDesc.StoreOp = GrafRenderPassDataOp::Store;
+				passImageDesc.StencilLoadOp = GrafRenderPassDataOp::DontCare;
+				passImageDesc.StencilStoreOp = GrafRenderPassDataOp::DontCare;
+			}
+			res = this->graphicsObjects->gbufferRenderPass->Initialize(grafDevice, { rasterRenderPassImageDesc, ur_array_size(rasterRenderPassImageDesc) });
+		}
+		if (Failed(res))
+			break;
+
 	#endif
 	} while (false);
 	if (Failed(res))
@@ -266,6 +342,135 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 Result GPUWorkGraphsRealm::DeinitializeGraphicObjects()
 {
 	this->graphicsObjects.reset(ur_null);
+
+	return Result(Success);
+}
+
+Result GPUWorkGraphsRealm::InitializeCanvasObjects()
+{
+	Result res = Success;
+	GrafSystem* grafSystem = this->GetGrafRenderer()->GetGrafSystem();
+	GrafDevice* grafDevice = this->GetGrafRenderer()->GetGrafDevice();
+	ur_uint canvasWidth = this->GetCanvasWidth();
+	ur_uint canvasHeight = this->GetCanvasHeight();
+	this->graphicsObjects->canvas.reset(new CanvasObjects());
+
+	// gbuffer RT(s)
+
+	ur_uint rtFrameCount = 1 + RTHistorySize;
+	ur_uint rtImageCommonFlags = ur_uint(GrafImageUsageFlag::TransferDst) | ur_uint(GrafImageUsageFlag::ShaderRead);
+	ur_uint rtImageCountWithHistory = RTImageCount * rtFrameCount;
+	this->graphicsObjects->canvas->rtImages.resize(rtImageCountWithHistory);
+	for (ur_uint imageIdx = 0; imageIdx < rtImageCountWithHistory; ++imageIdx)
+	{
+		const RTImageDesc& rtImageDesc = g_RTImageDesc[imageIdx % RTImageCount];
+		ur_bool isHistoryImage = (imageIdx < RTImageCount);
+		if (isHistoryImage && !rtImageDesc.HasHistory)
+			continue;
+
+		std::unique_ptr<GrafImage>& rtImage = this->graphicsObjects->canvas->rtImages[imageIdx];
+		res = grafSystem->CreateImage(rtImage);
+		if (Failed(res))
+			break;
+
+		GrafImageDesc grafImageDesc = {
+			GrafImageType::Tex2D,
+			rtImageDesc.Format,
+			ur_uint3(canvasWidth, canvasHeight, 1), 1,
+			ur_uint(rtImageDesc.Usage) | rtImageCommonFlags,
+			ur_uint(GrafDeviceMemoryFlag::GpuLocal)
+		};
+		res = rtImage->Initialize(grafDevice, { grafImageDesc });
+		if (Failed(res))
+			break;
+	}
+	if (Failed(res))
+	{
+		LogError("GPUWorkGraphsRealm::InitializeCanvasObjects: failed to initialize RT image(s)");
+		this->graphicsObjects->canvas.reset();
+	}
+
+	this->graphicsObjects->canvas->renderTargets.resize(rtFrameCount);
+	for (ur_uint frameIdx = 0; frameIdx < rtFrameCount; ++frameIdx)
+	{
+		std::unique_ptr<GrafRenderTarget>& renderTarget = this->graphicsObjects->canvas->renderTargets[frameIdx];
+		res = grafSystem->CreateRenderTarget(renderTarget);
+		if (Failed(res))
+			break;
+
+		GrafImage* rtImages[RTImageCount];
+		for (ur_uint imageIdx = 0; imageIdx < RTImageCount; ++imageIdx)
+		{
+			rtImages[imageIdx] = this->graphicsObjects->canvas->rtImages[imageIdx + (g_RTImageDesc[imageIdx].HasHistory ? frameIdx * RTImageCount : 0)].get();
+		}
+
+		GrafRenderTarget::InitParams grafRTParams = {
+			this->graphicsObjects->gbufferRenderPass.get(),
+			rtImages,
+			RTImageCount
+		};
+		res = renderTarget->Initialize(grafDevice, grafRTParams);
+		if (Failed(res))
+			break;
+	}
+	if (Failed(res))
+	{
+		LogError("GPUWorkGraphsRealm::InitializeCanvasObjects: failed to initialize render target(s)");
+		this->graphicsObjects->canvas.reset();
+	}
+
+	// direct rendering RTs (color image from swap chain + depth from gbuffer)
+
+	ur_uint canvasImageCount = this->GetGrafRenderer()->GetGrafCanvas()->GetSwapChainImageCount();
+	ur_uint depthImageCount = 1 + (g_RTImageDesc[RTImage_Depth].HasHistory ? RTHistorySize : 0);
+	ur_uint directRTCount = depthImageCount * canvasImageCount;
+	this->graphicsObjects->canvas->directRenderTargets.resize(directRTCount);
+	for (ur_uint depthIdx = 0; depthIdx < depthImageCount; ++depthIdx)
+	{
+		for (ur_uint canvasIdx = 0; canvasIdx < canvasImageCount; ++canvasIdx)
+		{
+			std::unique_ptr<GrafRenderTarget>& renderTarget = this->graphicsObjects->canvas->directRenderTargets[canvasIdx + depthIdx * canvasImageCount];
+			res = grafSystem->CreateRenderTarget(renderTarget);
+			if (Failed(res))
+				break;
+
+			GrafImage* rtImages[] = {
+				this->GetGrafRenderer()->GetGrafCanvas()->GetSwapChainImage(canvasIdx),
+				this->graphicsObjects->canvas->rtImages[RTImage_Depth + RTImageCount * depthIdx].get()
+			};
+
+			GrafRenderTarget::InitParams grafRTParams = {
+				this->graphicsObjects->directRenderPass.get(),
+				rtImages,
+				RTImageCount
+			};
+			res = renderTarget->Initialize(grafDevice, grafRTParams);
+			if (Failed(res))
+				break;
+		}
+		if (Failed(res))
+			break;
+	}
+	if (Failed(res))
+	{
+		LogError("GPUWorkGraphsRealm::InitializeCanvasObjects: failed to initialize direct render target(s)");
+		this->graphicsObjects->canvas.reset();
+	}
+
+	return res;
+}
+
+Result GPUWorkGraphsRealm::SafeDeleteCanvasObjects(GrafCommandList* commandList)
+{
+	CanvasObjects* canvasObjects = this->graphicsObjects->canvas.release();
+	if (canvasObjects != ur_null)
+	{
+		this->GetGrafRenderer()->AddCommandListCallback(commandList, {}, [canvasObjects](GrafCallbackContext& ctx) -> Result
+		{
+			delete canvasObjects;
+			return Result(Success);
+		});
+	}
 
 	return Result(Success);
 }
@@ -390,56 +595,76 @@ Result GPUWorkGraphsRealm::ProceduralUpdate(const UpdateContext& renderContext)
 
 Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 {
-	// prepare resources
-	renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->partitionDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);
-
-	// update constants
-	ProceduralConsts proceduralConsts;
-	proceduralConsts.RootPosition = this->proceduralObject.position;
-	proceduralConsts.RootExtent = this->proceduralObject.extent;
-	proceduralConsts.RefinementPoint = this->camera.GetPosition();
-	proceduralConsts.RefinementDistanceFactor = 1.0f;
-	Allocation proceduralConstsAlloc = this->GetGrafRenderer()->GetDynamicConstantBufferAllocation(sizeof(ProceduralConsts));
-	GrafBuffer* dynamicCB = this->GetGrafRenderer()->GetDynamicConstantBuffer();
-	dynamicCB->Write((ur_byte*)&proceduralConsts, sizeof(ProceduralConsts), 0, proceduralConstsAlloc.Offset);
-
-	// update descriptor table
-	GrafDescriptorTable* proceduralGraphFrameTable = this->graphicsObjects->proceduralGraphDescTable->GetFrameObject();
-	proceduralGraphFrameTable->SetConstantBuffer(g_ProceduralConstsDescriptor, dynamicCB, proceduralConstsAlloc.Offset, proceduralConstsAlloc.Size);
-	proceduralGraphFrameTable->SetRWBuffer(g_PartitionDataDescriptor, this->graphicsObjects->partitionDataBuffer.get());
-
-	// bind pipeline
-	renderContext.CommandList->BindWorkGraphPipeline(this->graphicsObjects->proceduralGraphPipeline.get());
-	renderContext.CommandList->BindWorkGraphDescriptorTable(proceduralGraphFrameTable, this->graphicsObjects->proceduralGraphPipeline.get());
-
-	// dispatch partition work graph
-	renderContext.CommandList->DispatchGraph(0, ur_null, 1, 0);
-
-	// readback partition data
-	if (!this->graphicsObjects->readbackPending)
+	// work graph pass
 	{
-		renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->partitionDataBuffer.get(), GrafBufferState::Current, GrafBufferState::TransferSrc);
-		renderContext.CommandList->Copy(this->graphicsObjects->partitionDataBuffer.get(), this->graphicsObjects->readbackBuffer.get());
-		this->graphicsObjects->readbackFence->SetState(GrafFenceState::Reset);
-		this->graphicsObjects->readbackPending = true;
-	}
-	else
-	{
-		GrafFenceState readbackFenceState;
-		this->graphicsObjects->readbackFence->GetState(readbackFenceState);
-		if (GrafFenceState::Signaled == readbackFenceState)
+		GrafUtils::ScopedDebugLabel label(renderContext.CommandList, "WorkGraphPass", DebugLabelPass);
+
+		// prepare resources
+		renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->partitionDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ComputeReadWrite);
+
+		// update constants
+		ProceduralConsts proceduralConsts;
+		proceduralConsts.RootPosition = this->proceduralObject.position;
+		proceduralConsts.RootExtent = this->proceduralObject.extent;
+		proceduralConsts.RefinementPoint = this->camera.GetPosition();
+		proceduralConsts.RefinementDistanceFactor = 1.0f;
+		Allocation proceduralConstsAlloc = this->GetGrafRenderer()->GetDynamicConstantBufferAllocation(sizeof(ProceduralConsts));
+		GrafBuffer* dynamicCB = this->GetGrafRenderer()->GetDynamicConstantBuffer();
+		dynamicCB->Write((ur_byte*)&proceduralConsts, sizeof(ProceduralConsts), 0, proceduralConstsAlloc.Offset);
+
+		// update descriptor table
+		GrafDescriptorTable* proceduralGraphFrameTable = this->graphicsObjects->proceduralGraphDescTable->GetFrameObject();
+		proceduralGraphFrameTable->SetConstantBuffer(g_ProceduralConstsDescriptor, dynamicCB, proceduralConstsAlloc.Offset, proceduralConstsAlloc.Size);
+		proceduralGraphFrameTable->SetRWBuffer(g_PartitionDataDescriptor, this->graphicsObjects->partitionDataBuffer.get());
+
+		// bind pipeline
+		renderContext.CommandList->BindWorkGraphPipeline(this->graphicsObjects->proceduralGraphPipeline.get());
+		renderContext.CommandList->BindWorkGraphDescriptorTable(proceduralGraphFrameTable, this->graphicsObjects->proceduralGraphPipeline.get());
+
+		// dispatch partition work graph
+		renderContext.CommandList->DispatchGraph(0, ur_null, 1, 0);
+
+		// readback partition data
+		if (!this->graphicsObjects->readbackPending)
 		{
-			this->graphicsObjects->readbackData.resize(this->graphicsObjects->readbackBuffer->GetDesc().SizeInBytes);
-			ur_byte* readbackDstPtr = this->graphicsObjects->readbackData.data();
-			ur_byte* readbackNodesCounterPtr = readbackDstPtr + PartitionDataNodesCounterOfs;
-			ur_byte* readbackNodesDataPtr = readbackDstPtr + PartitionDataNodesOfs;
-			this->graphicsObjects->readbackBuffer->Read(readbackDstPtr);
-			this->graphicsObjects->readbackPending = false;
+			renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->partitionDataBuffer.get(), GrafBufferState::Current, GrafBufferState::TransferSrc);
+			renderContext.CommandList->Copy(this->graphicsObjects->partitionDataBuffer.get(), this->graphicsObjects->readbackBuffer.get());
+			this->graphicsObjects->readbackFence->SetState(GrafFenceState::Reset);
+			this->graphicsObjects->readbackPending = true;
+		}
+		else
+		{
+			GrafFenceState readbackFenceState;
+			this->graphicsObjects->readbackFence->GetState(readbackFenceState);
+			if (GrafFenceState::Signaled == readbackFenceState)
+			{
+				this->graphicsObjects->readbackData.resize(this->graphicsObjects->readbackBuffer->GetDesc().SizeInBytes);
+				ur_byte* readbackDstPtr = this->graphicsObjects->readbackData.data();
+				ur_byte* readbackNodesCounterPtr = readbackDstPtr + PartitionDataNodesCounterOfs;
+				ur_byte* readbackNodesDataPtr = readbackDstPtr + PartitionDataNodesOfs;
+				this->graphicsObjects->readbackBuffer->Read(readbackDstPtr);
+				this->graphicsObjects->readbackPending = false;
+			}
 		}
 	}
 
-	// render partition structure
-	// TODO
+	// direct render pass
+	{
+		GrafUtils::ScopedDebugLabel label(renderContext.CommandList, "DirectRenderPass", DebugLabelPass);
+		
+		ur_uint canvasImageCount = this->GetGrafRenderer()->GetGrafCanvas()->GetSwapChainImageCount();
+		ur_uint canvasImageId = this->GetGrafRenderer()->GetGrafCanvas()->GetCurrentImageId();
+		ur_uint depthImageId = (g_RTImageDesc[RTImage_Depth].HasHistory ?  this->GetGrafRenderer()->GetFrameIdx() % (1 + RTHistorySize) : 0);
+		GrafRenderTarget* directRT = this->graphicsObjects->canvas->directRenderTargets[canvasImageId + depthImageId * canvasImageCount].get();
+		renderContext.CommandList->ImageMemoryBarrier(directRT->GetImage(0), GrafImageState::Current, GrafImageState::ColorWrite);
+		renderContext.CommandList->ImageMemoryBarrier(directRT->GetImage(1), GrafImageState::Current, GrafImageState::DepthStencilWrite);
+		renderContext.CommandList->BeginRenderPass(this->graphicsObjects->directRenderPass.get(), directRT);
+		
+		// render partition structure
+		// TODO
+
+		renderContext.CommandList->EndRenderPass();
+	}
 
 	return Result(Success);
 }

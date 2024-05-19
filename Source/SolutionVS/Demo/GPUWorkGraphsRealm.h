@@ -48,6 +48,14 @@ private:
 
 #else
 
+	struct CanvasObjects
+	{
+		std::vector<std::unique_ptr<GrafImage>> rtImages;
+		std::vector<std::unique_ptr<GrafRenderTarget>> renderTargets;
+		std::vector<std::unique_ptr<GrafRenderTarget>> directRenderTargets;
+		ur_bool resetHistory;
+	};
+
 	struct GraphicsObjects
 	{
 		std::unique_ptr<GrafShaderLib> proceduralGraphShaderLib;
@@ -59,6 +67,9 @@ private:
 		std::vector<ur_byte> readbackData;
 		std::unique_ptr<GrafFence> readbackFence;
 		ur_bool readbackPending;
+		std::unique_ptr<GrafRenderPass> directRenderPass;
+		std::unique_ptr<GrafRenderPass> gbufferRenderPass;
+		std::unique_ptr<CanvasObjects> canvas;
 	};
 
 	struct ProceduralObject
@@ -66,6 +77,9 @@ private:
 		ur_float3 position;
 		ur_float extent;
 	};
+
+	Result InitializeCanvasObjects();
+	Result SafeDeleteCanvasObjects(GrafCommandList* commandList);
 
 	Result ProceduralUpdate(const UpdateContext& renderContext);
 	Result ProceduralRender(const RenderContext& renderContext);
