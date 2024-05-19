@@ -328,6 +328,72 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 		if (Failed(res))
 			break;
 
+		res = grafSystem->CreateShaderLib(this->graphicsObjects->proceduralRenderShaderLib);
+		if (Succeeded(res))
+		{
+			GrafShaderLib::EntryPoint shaderLibEntries[] = {
+				{ "PartitionStructureVS", GrafShaderType::Vertex },
+				{ "PartitionStructurePS", GrafShaderType::Pixel }
+			};
+			res = GrafUtils::CreateShaderLibFromFile(*grafDevice, "ProceduralGenerationRender_lib", shaderLibEntries, ur_array_size(shaderLibEntries), this->graphicsObjects->proceduralRenderShaderLib);
+		}
+		if (Failed(res))
+			break;
+
+		res = grafSystem->CreateDescriptorTableLayout(this->graphicsObjects->proceduralRenderDescTableLayout);
+		if (Succeeded(res))
+		{
+			GrafDescriptorRangeDesc descTableLayoutRanges[] = {
+				g_SceneRenderConstsDescriptor,
+				g_PartitionDataDescriptor
+			};
+			GrafDescriptorTableLayoutDesc descTableLayoutDesc = {
+				ur_uint(GrafShaderStageFlag::Compute),
+				descTableLayoutRanges, ur_array_size(descTableLayoutRanges)
+			};
+			res = this->graphicsObjects->proceduralRenderDescTableLayout->Initialize(grafDevice, { descTableLayoutDesc });
+		}
+		if (Failed(res))
+			break;
+
+		this->graphicsObjects->proceduralRenderDescTable.reset(new GrafManagedDescriptorTable(*this->GetGrafRenderer()));
+		res = this->graphicsObjects->proceduralRenderDescTable->Initialize({ this->graphicsObjects->proceduralRenderDescTableLayout.get() });
+		if (Failed(res))
+			break;
+
+		res = grafSystem->CreatePipeline(this->graphicsObjects->proceduralRenderPipeline);
+		{
+			GrafShader* shaderStages[] = {
+				this->graphicsObjects->proceduralRenderShaderLib->GetShader(0),
+				this->graphicsObjects->proceduralRenderShaderLib->GetShader(1)
+			};
+			GrafDescriptorTableLayout* descriptorLayouts[] = {
+				this->graphicsObjects->proceduralRenderDescTableLayout.get(),
+			};
+			GrafColorBlendOpDesc colorTargetBlendOpDesc[] = {
+				GrafColorBlendOpDesc::Default
+			};
+			GrafPipeline::InitParams pipelineParams = GrafPipeline::InitParams::Default;
+			pipelineParams.RenderPass = this->graphicsObjects->directRenderPass.get();
+			pipelineParams.ShaderStages = shaderStages;
+			pipelineParams.ShaderStageCount = ur_array_size(shaderStages);
+			pipelineParams.DescriptorTableLayouts = descriptorLayouts;
+			pipelineParams.DescriptorTableLayoutCount = ur_array_size(descriptorLayouts);
+			pipelineParams.VertexInputDesc = ur_null;
+			pipelineParams.VertexInputCount = 0;
+			pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::LineList;
+			pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
+			pipelineParams.CullMode = GrafCullMode::None;
+			pipelineParams.DepthTestEnable = false;
+			pipelineParams.DepthWriteEnable = false;
+			pipelineParams.DepthCompareOp = GrafCompareOp::LessOrEqual;
+			pipelineParams.ColorBlendOpDesc = colorTargetBlendOpDesc;
+			pipelineParams.ColorBlendOpDescCount = ur_array_size(colorTargetBlendOpDesc);
+			res = this->graphicsObjects->proceduralRenderPipeline->Initialize(grafDevice, pipelineParams);
+		}
+		if (Failed(res))
+			break;
+
 	#endif
 	} while (false);
 	if (Failed(res))
@@ -348,6 +414,10 @@ Result GPUWorkGraphsRealm::DeinitializeGraphicObjects()
 
 Result GPUWorkGraphsRealm::InitializeCanvasObjects()
 {
+#if (GPUWORKGRAPH_SAMPLE)
+	return Result(Success);
+#else
+
 	Result res = Success;
 	GrafSystem* grafSystem = this->GetGrafRenderer()->GetGrafSystem();
 	GrafDevice* grafDevice = this->GetGrafRenderer()->GetGrafDevice();
@@ -458,10 +528,15 @@ Result GPUWorkGraphsRealm::InitializeCanvasObjects()
 	}
 
 	return res;
+#endif
 }
 
 Result GPUWorkGraphsRealm::SafeDeleteCanvasObjects(GrafCommandList* commandList)
 {
+#if (GPUWORKGRAPH_SAMPLE)
+	return Result(Success);
+#else
+
 	CanvasObjects* canvasObjects = this->graphicsObjects->canvas.release();
 	if (canvasObjects != ur_null)
 	{
@@ -473,6 +548,7 @@ Result GPUWorkGraphsRealm::SafeDeleteCanvasObjects(GrafCommandList* commandList)
 	}
 
 	return Result(Success);
+#endif
 }
 
 Result GPUWorkGraphsRealm::Update(const UpdateContext& updateContext)
@@ -651,7 +727,7 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 	// direct render pass
 	{
 		GrafUtils::ScopedDebugLabel label(renderContext.CommandList, "DirectRenderPass", DebugLabelPass);
-		
+
 		ur_uint canvasImageCount = this->GetGrafRenderer()->GetGrafCanvas()->GetSwapChainImageCount();
 		ur_uint canvasImageId = this->GetGrafRenderer()->GetGrafCanvas()->GetCurrentImageId();
 		ur_uint depthImageId = (g_RTImageDesc[RTImage_Depth].HasHistory ?  this->GetGrafRenderer()->GetFrameIdx() % (1 + RTHistorySize) : 0);
@@ -659,9 +735,28 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 		renderContext.CommandList->ImageMemoryBarrier(directRT->GetImage(0), GrafImageState::Current, GrafImageState::ColorWrite);
 		renderContext.CommandList->ImageMemoryBarrier(directRT->GetImage(1), GrafImageState::Current, GrafImageState::DepthStencilWrite);
 		renderContext.CommandList->BeginRenderPass(this->graphicsObjects->directRenderPass.get(), directRT);
-		
+
 		// render partition structure
-		// TODO
+
+		renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->partitionDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ShaderRead);
+
+		// update constants
+		SceneRenderConsts scsneRenderConsts;
+		scsneRenderConsts.ViewProjMatrix = this->camera.GetViewProj();
+		Allocation scsneRenderConstsAlloc = this->GetGrafRenderer()->GetDynamicConstantBufferAllocation(sizeof(SceneRenderConsts));
+		GrafBuffer* dynamicCB = this->GetGrafRenderer()->GetDynamicConstantBuffer();
+		dynamicCB->Write((ur_byte*)&scsneRenderConsts, sizeof(SceneRenderConsts), 0, scsneRenderConstsAlloc.Offset);
+
+		// update descriptor table
+		GrafDescriptorTable* proceduralRenderFrameTable = this->graphicsObjects->proceduralRenderDescTable->GetFrameObject();
+		proceduralRenderFrameTable->SetConstantBuffer(g_SceneRenderConstsDescriptor, dynamicCB, scsneRenderConstsAlloc.Offset, scsneRenderConstsAlloc.Size);
+		proceduralRenderFrameTable->SetRWBuffer(g_PartitionDataDescriptor, this->graphicsObjects->partitionDataBuffer.get());
+
+		renderContext.CommandList->BindPipeline(this->graphicsObjects->proceduralRenderPipeline.get());
+		renderContext.CommandList->BindDescriptorTable(this->graphicsObjects->proceduralRenderDescTable->GetFrameObject(), this->graphicsObjects->proceduralRenderPipeline.get());
+		// TODO: DrawIndirect
+		// TEMP: constant instance count
+		renderContext.CommandList->Draw(12, 1024, 0, 0);
 
 		renderContext.CommandList->EndRenderPass();
 	}

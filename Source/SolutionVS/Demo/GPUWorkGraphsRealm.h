@@ -15,17 +15,23 @@ public:
 
 	virtual ~GPUWorkGraphsRealm();
 
-	Result Initialize();
-
-	virtual Result InitializeGraphicObjects();
-
-	virtual Result DeinitializeGraphicObjects();
+	virtual Result Initialize();
 
 	virtual Result Update(const UpdateContext& updateContext);
 
 	virtual Result Render(const RenderContext& renderContext);
 
 	virtual Result DisplayImgui();
+
+protected:
+
+	virtual Result InitializeGraphicObjects();
+
+	virtual Result DeinitializeGraphicObjects();
+
+	virtual Result InitializeCanvasObjects();
+
+	virtual Result SafeDeleteCanvasObjects(GrafCommandList* commandList);
 
 private:
 
@@ -69,6 +75,10 @@ private:
 		ur_bool readbackPending;
 		std::unique_ptr<GrafRenderPass> directRenderPass;
 		std::unique_ptr<GrafRenderPass> gbufferRenderPass;
+		std::unique_ptr<GrafShaderLib> proceduralRenderShaderLib;
+		std::unique_ptr<GrafDescriptorTableLayout> proceduralRenderDescTableLayout;
+		std::unique_ptr<GrafManagedDescriptorTable> proceduralRenderDescTable;
+		std::unique_ptr<GrafPipeline> proceduralRenderPipeline;
 		std::unique_ptr<CanvasObjects> canvas;
 	};
 
@@ -77,9 +87,6 @@ private:
 		ur_float3 position;
 		ur_float extent;
 	};
-
-	Result InitializeCanvasObjects();
-	Result SafeDeleteCanvasObjects(GrafCommandList* commandList);
 
 	Result ProceduralUpdate(const UpdateContext& renderContext);
 	Result ProceduralRender(const RenderContext& renderContext);

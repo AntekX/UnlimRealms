@@ -8,6 +8,7 @@ call Utils\CompileShadersDefinitions.bat %*
 
 call:CompileShader "Source\SolutionVS\Demo" "GPUWorkGraphs_cs" "lib" "6_8" "%SHADER_ENTRYPOINT%"
 call:CompileShader "Source\SolutionVS\Demo" "ProceduralGenerationGraph" "lib" "6_8" "%SHADER_ENTRYPOINT%"
+call:CompileShader "Source\SolutionVS\Demo" "ProceduralGenerationRender" "lib" "%SHADER_MODEL%" "%SHADER_ENTRYPOINT%"
 
 call:CompileShader "Source\SolutionVS\Demo" "sample" "vs" "%SHADER_MODEL%" "%SHADER_ENTRYPOINT%"
 call:CompileShader "Source\SolutionVS\Demo" "sample" "ps" "%SHADER_MODEL%" "%SHADER_ENTRYPOINT%"

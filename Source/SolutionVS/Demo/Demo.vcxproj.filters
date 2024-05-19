@@ -149,5 +149,8 @@
     <None Include="ProceduralGenerationGraph_lib.hlsl">
       <Filter>GPUWorkGraphsRealm</Filter>
     </None>
+    <None Include="ProceduralGenerationRender_lib.hlsl">
+      <Filter>GPUWorkGraphsRealm</Filter>
+    </None>
   </ItemGroup>
 </Project>

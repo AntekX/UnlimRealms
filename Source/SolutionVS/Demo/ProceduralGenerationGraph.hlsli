@@ -53,17 +53,6 @@ static const CUINT(PartitionDataNodesStride) = PartitionNodeDataSize;
 static const CUINT(PartitionDataNodesSize) = PartitionNodeCountMax * PartitionDataNodesStride;
 static const CUINT(PartitionDataBufferSize) = PartitionDataNodesOfs + PartitionDataNodesSize;
 
-// constant buffers
-
-struct ProceduralConsts
-{
-	CFLOAT3(RootPosition);
-	CFLOAT(RootExtent);
-	CFLOAT3(RefinementPoint);
-	CFLOAT(RefinementDistanceFactor);
-	//CFLOAT4(__pad0);
-};
-
 // work graph records
 
 struct PartitionMode
@@ -79,9 +68,26 @@ struct PartitionUpdateRecord
 	CUINT(NodeId);
 };
 
+// constant buffers
+
+struct ProceduralConsts
+{
+	CFLOAT3(RootPosition);
+	CFLOAT(RootExtent);
+	CFLOAT3(RefinementPoint);
+	CFLOAT(RefinementDistanceFactor);
+	//CFLOAT4(__pad0);
+};
+
+struct SceneRenderConsts
+{
+	CFLOAT4x4(ViewProjMatrix);
+};
+
 // descriptors
 
 DESCRIPTOR_ConstantBuffer(ProceduralConsts, g_ProceduralConsts, 0);
+DESCRIPTOR_ConstantBuffer(SceneRenderConsts, g_SceneRenderConsts, 0);
 DESCRIPTOR_RWByteAddressBuffer(g_PartitionData, 0);
 
 #endif // PROCEDURAL_GENERATION_GRAPH_HLSLI
