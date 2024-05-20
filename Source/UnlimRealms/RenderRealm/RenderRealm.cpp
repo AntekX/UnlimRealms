@@ -36,7 +36,6 @@ namespace UnlimRealms
 
 	RenderRealm::RenderRealm() :
 		state(State::Initialize),
-		canvasResolutionScale(1.0f),
 		grafRenderer(ur_null)
 	{
 	}
@@ -342,7 +341,16 @@ namespace UnlimRealms
 				renderContext.CommandList->ClearColorImage(this->GetGrafRenderer()->GetGrafCanvas()->GetCurrentImage(), rtClearValue);
 
 				// main render pass
-				this->Render(renderContext);
+				{
+					GrafViewportDesc grafViewport = {};
+					grafViewport.Width = (ur_float)canvasWidth;
+					grafViewport.Height = (ur_float)canvasHeight;
+					grafViewport.Near = 0.0f;
+					grafViewport.Far = 1.0f;
+					renderContext.CommandList->SetViewport(grafViewport, true);
+
+					this->Render(renderContext);
+				}
 
 				// foreground pass (drawing directly into renderer's swap chain image)
 				{
@@ -351,8 +359,8 @@ namespace UnlimRealms
 					renderContext.CommandList->BeginRenderPass(this->GetGrafRenderer()->GetCanvasRenderPass(), this->GetGrafRenderer()->GetCanvasRenderTarget());
 
 					GrafViewportDesc grafViewport = {};
-					grafViewport.Width = (ur_float)this->GetGrafRenderer()->GetGrafCanvas()->GetCurrentImage()->GetDesc().Size.x;
-					grafViewport.Height = (ur_float)this->GetGrafRenderer()->GetGrafCanvas()->GetCurrentImage()->GetDesc().Size.y;
+					grafViewport.Width = (ur_float)canvasWidth;
+					grafViewport.Height = (ur_float)canvasHeight;
 					grafViewport.Near = 0.0f;
 					grafViewport.Far = 1.0f;
 					renderContext.CommandList->SetViewport(grafViewport, true);

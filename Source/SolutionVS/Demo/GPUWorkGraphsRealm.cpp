@@ -54,7 +54,7 @@ static const RTImageDesc g_RTImageDesc[RTImageCount] = {
 
 GPUWorkGraphsRealm::GPUWorkGraphsRealm() :
 	camera(*this),
-	cameraControl(*this, &camera, CameraControl::Mode::FixedUp)
+	cameraControl(*this, &camera, CameraControl::Mode::AroundPoint)
 {
 }
 
@@ -384,8 +384,8 @@ Result GPUWorkGraphsRealm::InitializeGraphicObjects()
 			pipelineParams.PrimitiveTopology = GrafPrimitiveTopology::LineList;
 			pipelineParams.FrontFaceOrder = GrafFrontFaceOrder::Clockwise;
 			pipelineParams.CullMode = GrafCullMode::None;
-			pipelineParams.DepthTestEnable = false;
-			pipelineParams.DepthWriteEnable = false;
+			pipelineParams.DepthTestEnable = true;
+			pipelineParams.DepthWriteEnable = true;
 			pipelineParams.DepthCompareOp = GrafCompareOp::LessOrEqual;
 			pipelineParams.ColorBlendOpDesc = colorTargetBlendOpDesc;
 			pipelineParams.ColorBlendOpDescCount = ur_array_size(colorTargetBlendOpDesc);
@@ -661,7 +661,7 @@ Result GPUWorkGraphsRealm::SampleDisplayImgui()
 
 Result GPUWorkGraphsRealm::ProceduralUpdate(const UpdateContext& renderContext)
 {
-	this->camera.SetAspectRatio((float)this->GetCanvas()->GetClientBound().Width() / this->GetCanvas()->GetClientBound().Height());
+	this->camera.SetAspectRatio((float)this->GetCanvasWidth() / this->GetCanvasHeight());
 	ur_float distToObj = (camera.GetPosition() - this->proceduralObject.position).Length() - this->proceduralObject.extent;
 	this->cameraControl.SetSpeed(std::max(5.0f, distToObj * 0.5f));
 	this->cameraControl.Update();
@@ -741,15 +741,15 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 		renderContext.CommandList->BufferMemoryBarrier(this->graphicsObjects->partitionDataBuffer.get(), GrafBufferState::Current, GrafBufferState::ShaderRead);
 
 		// update constants
-		SceneRenderConsts scsneRenderConsts;
-		scsneRenderConsts.ViewProjMatrix = this->camera.GetViewProj();
-		Allocation scsneRenderConstsAlloc = this->GetGrafRenderer()->GetDynamicConstantBufferAllocation(sizeof(SceneRenderConsts));
+		SceneRenderConsts sceneRenderConsts;
+		sceneRenderConsts.ViewProj = this->camera.GetViewProj();
+		Allocation sceneRenderConstsAlloc = this->GetGrafRenderer()->GetDynamicConstantBufferAllocation(sizeof(SceneRenderConsts));
 		GrafBuffer* dynamicCB = this->GetGrafRenderer()->GetDynamicConstantBuffer();
-		dynamicCB->Write((ur_byte*)&scsneRenderConsts, sizeof(SceneRenderConsts), 0, scsneRenderConstsAlloc.Offset);
+		dynamicCB->Write((ur_byte*)&sceneRenderConsts, sizeof(SceneRenderConsts), 0, sceneRenderConstsAlloc.Offset);
 
 		// update descriptor table
 		GrafDescriptorTable* proceduralRenderFrameTable = this->graphicsObjects->proceduralRenderDescTable->GetFrameObject();
-		proceduralRenderFrameTable->SetConstantBuffer(g_SceneRenderConstsDescriptor, dynamicCB, scsneRenderConstsAlloc.Offset, scsneRenderConstsAlloc.Size);
+		proceduralRenderFrameTable->SetConstantBuffer(g_SceneRenderConstsDescriptor, dynamicCB, sceneRenderConstsAlloc.Offset, sceneRenderConstsAlloc.Size);
 		proceduralRenderFrameTable->SetRWBuffer(g_PartitionDataDescriptor, this->graphicsObjects->partitionDataBuffer.get());
 
 		renderContext.CommandList->BindPipeline(this->graphicsObjects->proceduralRenderPipeline.get());

@@ -85,8 +85,6 @@ namespace UnlimRealms
 
 		inline State GetState() const;
 
-		inline ur_float GetCanvasResolutionScale() const;
-
 		inline ur_uint GetCanvasWidth() const;
 
 		inline ur_uint GetCanvasHeight() const;
@@ -114,7 +112,6 @@ namespace UnlimRealms
 		virtual Result SafeDeleteCanvasObjects(GrafCommandList* commandList); // called during rendering when canvas resized
 
 		State state;
-		ur_float canvasResolutionScale;
 
 	private:
 

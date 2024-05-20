@@ -3,6 +3,10 @@
 
 #include "ShaderLib/CommonTypes.hlsli"
 
+#if !defined(CPP_CODE)
+#pragma pack_matrix(row_major)
+#endif
+
 // global constants
 
 static const CUINT(PartitionDepthMax) = 10;
@@ -81,7 +85,7 @@ struct ProceduralConsts
 
 struct SceneRenderConsts
 {
-	CFLOAT4x4(ViewProjMatrix);
+	CFLOAT4x4(ViewProj);
 };
 
 // descriptors

@@ -13,7 +13,7 @@ void LoadPartitionDataNode(in uint nodeIdx, out PartitionNodeData nodeData)
 	uint nodeDataOfs = PartitionDataNodesOfs + nodeIdx * PartitionDataNodesStride;
 	[unroll] for (uint iv = 0; iv < 4; ++iv)
 	{
-		nodeData.TetrahedraVertices[iv] = asfloat(g_PartitionData.Load(nodeDataOfs + iv * PartitionTetrahedraVertexSize));
+		nodeData.TetrahedraVertices[iv] = asfloat(g_PartitionData.Load3(nodeDataOfs + iv * PartitionTetrahedraVertexSize));
 	}
 	nodeDataOfs += PartitionTetrahedraSize;
 	[unroll] for (uint isub = 0; isub < 2; ++isub)
@@ -25,7 +25,7 @@ void LoadPartitionDataNode(in uint nodeIdx, out PartitionNodeData nodeData)
 struct StructureVSOutput
 {
 	float4 Pos : SV_Position0;
-	float4 Color : COLOR0;
+	float4 Color : Color0;
 };
 
 struct StructurePSOutput
@@ -49,10 +49,9 @@ StructureVSOutput PartitionStructureVS(uint vertexID : SV_VertexID, uint instanc
 	if (nodeData.SubNodeIds[0] != InvalidIndex)
 		return output; // discard: not a leaf node
 
-	float3 worldPos = nodeData.TetrahedraVertices[VertexIdToTetrahedra[vertexID]];
-
-	output.Pos = mul(float4(worldPos.xyz, 1.0), g_SceneRenderConsts.ViewProjMatrix);
-	//output.Pos = mul(g_SceneRenderConsts.ViewProjMatrix, float4(worldPos.xyz, 1.0));
+	float3 worldPos = nodeData.TetrahedraVertices[VertexIdToTetrahedra[vertexID % 12]].xyz;
+	
+	output.Pos = mul(float4(worldPos.xyz, 1.0), g_SceneRenderConsts.ViewProj);
 	output.Color = float4(1.0, 1.0, 0.0, 1.0);
 
 	return output;

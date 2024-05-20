@@ -57,7 +57,7 @@ void LoadPartitionDataNode(in uint nodeIdx, out PartitionNodeData nodeData)
 	uint nodeDataOfs = PartitionDataNodesOfs + nodeIdx * PartitionDataNodesStride;
 	[unroll] for (uint iv = 0; iv < 4; ++iv)
 	{
-		nodeData.TetrahedraVertices[iv] = asfloat(g_PartitionData.Load(nodeDataOfs + iv * PartitionTetrahedraVertexSize));
+		nodeData.TetrahedraVertices[iv] = asfloat(g_PartitionData.Load3(nodeDataOfs + iv * PartitionTetrahedraVertexSize));
 	}
 	nodeDataOfs += PartitionTetrahedraSize;
 	[unroll] for (uint isub = 0; isub < 2; ++isub)
@@ -80,7 +80,7 @@ void StorePartitionDataNode(in uint nodeIdx, in PartitionNodeData nodeData)
 	uint nodeDataOfs = PartitionDataNodesOfs + nodeIdx * PartitionDataNodesStride;
 	[unroll] for (uint iv = 0; iv < 4; ++iv)
 	{
-		g_PartitionData.Store(nodeDataOfs + iv * PartitionTetrahedraVertexSize, asuint(nodeData.TetrahedraVertices[iv]));
+		g_PartitionData.Store3(nodeDataOfs + iv * PartitionTetrahedraVertexSize, asuint(nodeData.TetrahedraVertices[iv]));
 	}
 	StorePartitionDataSubNodeIds(nodeIdx, nodeData.SubNodeIds);
 }
@@ -119,7 +119,7 @@ uint UpdateNodePartition(in uint partitionMode, in uint nodeId, inout PartitionN
 		float3 edgeCenter = (nodeData.TetrahedraVertices[0] + nodeData.TetrahedraVertices[1]) * 0.5;
 		float3 edgeToRefVec = g_ProceduralConsts.RefinementPoint.xyz - edgeCenter;
 		float edgeToRefDistSq = dot(edgeToRefVec.xyz, edgeToRefVec.xyz);
-		doSplit = (edgeToRefDistSq < edgeLenSq * g_ProceduralConsts.RefinementDistanceFactor);
+		doSplit = (edgeToRefDistSq < edgeLenSq * g_ProceduralConsts.RefinementDistanceFactor*2);
 
 		if (doSplit)
 		{
@@ -164,9 +164,9 @@ uint UpdateNodePartition(in uint partitionMode, in uint nodeId, inout PartitionN
 	return (doSplit ? PartitionMode::Split : PartitionMode::Merge);
 }
 
-void OutputNodePartition(inout NodeOutput<PartitionUpdateRecord> partitionNodeOutput, in uint partitionMode, in uint nodeId, in PartitionNodeData nodeData)
+void OutputNodePartition(NodeOutput<PartitionUpdateRecord> partitionNodeOutput, in uint partitionMode, in uint nodeId, in PartitionNodeData nodeData)
 {
-	if (0 == GetRemainingRecursionLevels() || InvalidIndex == nodeData.SubNodeIds[0])
+	if (InvalidIndex == nodeData.SubNodeIds[0])
 		return; // leaf node reached, interrupt traversal
 
 	ThreadNodeOutputRecords<PartitionUpdateRecord> subNodeRecords = partitionNodeOutput.GetThreadNodeOutputRecords(2);
@@ -231,6 +231,13 @@ void PartitionUpdateNode(
 	ThreadNodeInputRecord<PartitionUpdateRecord> inputData,
 	[MaxRecords(2)] NodeOutput<PartitionUpdateRecord> PartitionUpdateNode)
 {
+	if (GetRemainingRecursionLevels() == 0)
+	{
+		ThreadNodeOutputRecords<PartitionUpdateRecord> subNodeRecords = PartitionUpdateNode.GetThreadNodeOutputRecords(0);
+		subNodeRecords.OutputComplete();
+		return;
+	}
+
 	PartitionUpdateRecord partitionInput = inputData.Get();
 
 	// load node data

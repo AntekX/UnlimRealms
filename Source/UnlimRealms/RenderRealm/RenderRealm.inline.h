@@ -24,19 +24,14 @@ namespace UnlimRealms
 		return this->state;
 	}
 
-	inline ur_float RenderRealm::GetCanvasResolutionScale() const
-	{
-		return this->canvasResolutionScale;
-	}
-
 	inline ur_uint RenderRealm::GetCanvasWidth() const
 	{
-		return ur_uint(this->GetCanvas()->GetClientBound().Width() * this->canvasResolutionScale);
+		return this->GetCanvas()->GetClientBound().Width();
 	}
 
 	inline ur_uint RenderRealm::GetCanvasHeight() const
 	{
-		return ur_uint(this->GetCanvas()->GetClientBound().Height() * this->canvasResolutionScale);
+		return this->GetCanvas()->GetClientBound().Height();
 	}
 
 	inline GrafRenderer* RenderRealm::GetGrafRenderer()
