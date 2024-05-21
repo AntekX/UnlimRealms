@@ -85,7 +85,7 @@ Result GPUWorkGraphsRealm::Initialize()
 	this->cameraControl.SetTargetPoint(this->proceduralObject.position);
 	this->cameraControl.SetSpeed(5.0);
 	this->camera.SetProjection(0.1f, 1.0e+4f, camera.GetFieldOFView(), camera.GetAspectRatio());
-	this->camera.SetPosition(this->proceduralObject.position + ur_float3(0.0f, 0.0f, -this->proceduralObject.extent * 2.0f));
+	this->camera.SetPosition(this->proceduralObject.position + ur_float3(0.0f, 0.0f, -this->proceduralObject.extent * 4.0f));
 	this->camera.SetLookAt(cameraControl.GetTargetPoint(), cameraControl.GetWorldUp());
 
 	return res;
