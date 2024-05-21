@@ -11,6 +11,7 @@
 
 static const CUINT(PartitionDepthMax) = 10;
 static const CUINT(PartitionRootTetrahedraCount) = 6; // 6 tetrahedra forming root cube space
+static const CUINT(PartitionRootOutputRecordsMax) = PartitionRootTetrahedraCount * 2;
 static const CUINT(PartitionTetrahedraCountMax) = PartitionRootTetrahedraCount * 1024; // 6 root tetrahedra * 2^PartitionDepthMax
 static const CUINT(PartitionTetrahedraVertexSize) = 12; // 3 * sizeof(float)
 static const CUINT(PartitionTetrahedraSize) = 4 * PartitionTetrahedraVertexSize; // 4 vertices x size

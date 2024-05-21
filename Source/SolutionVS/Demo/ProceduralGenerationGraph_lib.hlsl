@@ -1,6 +1,12 @@
 
 #include "ProceduralGenerationGraph.hlsli"
 
+struct interiorRecord2 // just contriving to make it clear the same record doesn't have to be used everywhere
+{
+	uint index;
+	uint value;
+};
+
 PartitionNodeData InitialNodeData()
 {
 	PartitionNodeData nodeData = (PartitionNodeData)0;
@@ -112,16 +118,16 @@ void AddToDebugOutput(in uint4 value)
 uint UpdateNodePartition(in uint partitionMode, in uint nodeId, inout PartitionNodeData nodeData)
 {
 	bool doSplit = (PartitionMode::Split == partitionMode); // skip split test if parent node is merged
-	if (doSplit && nodeData.SubNodeIds[0] == InvalidIndex)
+	if (doSplit)
 	{
 		float3 edgeVec = nodeData.TetrahedraVertices[1] - nodeData.TetrahedraVertices[0];
 		float edgeLenSq = dot(edgeVec.xyz, edgeVec.xyz);
 		float3 edgeCenter = (nodeData.TetrahedraVertices[0] + nodeData.TetrahedraVertices[1]) * 0.5;
 		float3 edgeToRefVec = g_ProceduralConsts.RefinementPoint.xyz - edgeCenter;
 		float edgeToRefDistSq = dot(edgeToRefVec.xyz, edgeToRefVec.xyz);
-		doSplit = (edgeToRefDistSq < edgeLenSq * g_ProceduralConsts.RefinementDistanceFactor*2);
+		doSplit = (edgeToRefDistSq < edgeLenSq * g_ProceduralConsts.RefinementDistanceFactor);
 
-		if (doSplit)
+		if (doSplit && nodeData.SubNodeIds[0] == InvalidIndex)
 		{
 			// split: create 2 sub nodes and proceed with parition update
 
@@ -187,9 +193,13 @@ void OutputNodePartition(NodeOutput<PartitionUpdateRecord> partitionNodeOutput, 
 [NodeDispatchGrid(1, 1, 1)]
 [NumThreads(PartitionRootTetrahedraCount, 1, 1)]
 void PartitionUpdateRootNode(
-	[MaxRecords(2)] NodeOutput<PartitionUpdateRecord> PartitionUpdateNode,
+	[MaxRecords(PartitionRootOutputRecordsMax)] NodeOutput<PartitionUpdateRecord> PartitionUpdateNode,
 	uint3 dispatchID : SV_DispatchThreadID)
 {
+	if (WaveIsFirstLane())
+	{
+		ResetDebugOutput();
+	}
 	uint partitionTetrahedraCount = LoadPartitionDataNodesCounter();
 	GroupMemoryBarrierWithGroupSync(); // all threads must read counter first
 
@@ -218,7 +228,7 @@ void PartitionUpdateRootNode(
 
 	uint partitionMode = PartitionMode::Split; // always try to split root node
 	partitionMode = UpdateNodePartition(partitionMode, nodeIdx, nodeData);
-	
+
 	// produce output
 
 	OutputNodePartition(PartitionUpdateNode, partitionMode, nodeIdx, nodeData);
@@ -231,13 +241,6 @@ void PartitionUpdateNode(
 	ThreadNodeInputRecord<PartitionUpdateRecord> inputData,
 	[MaxRecords(2)] NodeOutput<PartitionUpdateRecord> PartitionUpdateNode)
 {
-	if (GetRemainingRecursionLevels() == 0)
-	{
-		ThreadNodeOutputRecords<PartitionUpdateRecord> subNodeRecords = PartitionUpdateNode.GetThreadNodeOutputRecords(0);
-		subNodeRecords.OutputComplete();
-		return;
-	}
-
 	PartitionUpdateRecord partitionInput = inputData.Get();
 
 	// load node data
@@ -251,11 +254,14 @@ void PartitionUpdateNode(
 		ReleasePartitionDataNode(partitionInput.NodeId);
 	}
 
-	// update partition
+	if (GetRemainingRecursionLevels() > 0)
+	{
+		// update partition
 
-	UpdateNodePartition(partitionInput.Mode, partitionInput.NodeId, nodeData);
+		uint partitionMode = UpdateNodePartition(partitionInput.Mode, partitionInput.NodeId, nodeData);
 
-	// produce output
+		// produce output
 
-	OutputNodePartition(PartitionUpdateNode, partitionInput.Mode, partitionInput.NodeId, nodeData);
+		OutputNodePartition(PartitionUpdateNode, partitionMode, partitionInput.NodeId, nodeData);
+	}
 }

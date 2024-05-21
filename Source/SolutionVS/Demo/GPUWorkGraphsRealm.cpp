@@ -769,7 +769,36 @@ Result GPUWorkGraphsRealm::ProceduralDisplayImgui()
 	std::string titleString;
 	WstringToString(this->GetCanvas()->GetTitle(), titleString);
 	ImGui::Begin(titleString.c_str());
-	// TODO
+	if (ImGui::CollapsingHeader("Partition"))
+	{
+		ur_byte* dataPtr = this->graphicsObjects->readbackData.data();
+		ur_uint32* nodesCounterPtr = reinterpret_cast<ur_uint32*>(dataPtr + PartitionDataNodesCounterOfs);
+		ur_uint32* freeNodesPtr = reinterpret_cast<ur_uint32*>(dataPtr + PartitionDataFreeNodesOfs);
+		ImGui::Text("NodesCount: %i", *nodesCounterPtr);
+		const ur_uint outputSize = 256;
+		const ur_uint outputWidth = 8;
+		std::stringstream outputStr;
+		for (ur_uint i = 0; i < outputSize; ++i)
+		{
+			if (i % outputWidth == 0) outputStr << "\n";
+			outputStr << (ur_int32)*freeNodesPtr++;
+			if (i + 1 < outputSize) outputStr << ", ";
+		}
+		ImGui::TextWrapped("Output: %s", outputStr.str().c_str());
+	}
+	if (ImGui::CollapsingHeader("DebugOutput"))
+	{
+		ur_uint32* dataPtr = (ur_uint32*)this->graphicsObjects->readbackData.data();
+		const ur_uint outputSize = 64;
+		std::stringstream outputStr;
+		for (ur_uint i = 0; i < outputSize; ++i)
+		{
+			if (i % 8 == 0) outputStr << "\n";
+			outputStr << *(ur_uint32*)dataPtr++;
+			if (i + 1 < outputSize) outputStr << ", ";
+		}
+		ImGui::TextWrapped("Output: %s", outputStr.str().c_str());
+	}
 	ImGui::End();
 
 	return Result(Success);
