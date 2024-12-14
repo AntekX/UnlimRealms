@@ -95,6 +95,8 @@ private:
 	ProceduralObject proceduralObject;
 	Camera camera;
 	CameraControl cameraControl;
+	ur_float3 refinementPoint;
+	ur_bool freezeRefPoint;
 
 #endif
 

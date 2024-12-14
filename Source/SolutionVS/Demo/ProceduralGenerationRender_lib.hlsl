@@ -50,6 +50,15 @@ StructureVSOutput PartitionStructureVS(uint vertexID : SV_VertexID, uint instanc
 		return output; // discard: not a leaf node
 
 	float3 worldPos = nodeData.TetrahedraVertices[VertexIdToTetrahedra[vertexID % 12]].xyz;
+
+	float3 center = 0;
+	[unroll] for (uint i = 0; i < 4; ++i)
+	{
+		center += nodeData.TetrahedraVertices[i].xyz;
+	}
+	center /= 4;
+	static const float TetrahedraScale = 1;
+	worldPos = (worldPos - center) * TetrahedraScale + center;
 	
 	output.Pos = mul(float4(worldPos.xyz, 1.0), g_SceneRenderConsts.ViewProj);
 	output.Color = (vertexID < 2 ? float4(1.0, 0.0, 0.0, 1.0) : float4(1.0, 1.0, 0.0, 1.0));

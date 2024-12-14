@@ -1,12 +1,6 @@
 
 #include "ProceduralGenerationGraph.hlsli"
 
-struct interiorRecord2 // just contriving to make it clear the same record doesn't have to be used everywhere
-{
-	uint index;
-	uint value;
-};
-
 PartitionNodeData InitialNodeData()
 {
 	PartitionNodeData nodeData = (PartitionNodeData)0;
@@ -50,7 +44,7 @@ void ReleasePartitionDataNode(in uint nodeIdx)
 	uint nodesCounter;
 	g_PartitionData.InterlockedAdd(PartitionDataNodesCounterOfs, -1, nodesCounter);
 	// assert(nodesCounter > 0);
-	g_PartitionData.Store(PartitionDataFreeNodesOfs + nodesCounter * PartitionDataFreeNodesStride, nodeIdx);
+	g_PartitionData.Store(PartitionDataFreeNodesOfs + (nodesCounter - 1) * PartitionDataFreeNodesStride, nodeIdx);
 }
 
 uint LoadPartitionDataNodesCounter()
@@ -115,8 +109,9 @@ void AddToDebugOutput(in uint4 value)
 		g_PartitionData.Store4(PartitionDataDebugOfs + 4 + writePos, value);
 }
 
-uint UpdateNodePartition(in uint partitionMode, in uint nodeId, inout PartitionNodeData nodeData)
+uint UpdateNodePartition(in uint partitionMode, in uint partitionDepth, in uint nodeId, inout PartitionNodeData nodeData)
 {
+	AddToDebugOutput(partitionDepth);
 	bool doSplit = (PartitionMode::Split == partitionMode); // skip split test if parent node is merged
 	if (doSplit)
 	{
@@ -145,15 +140,24 @@ uint UpdateNodePartition(in uint partitionMode, in uint nodeId, inout PartitionN
 			// compute & store tetrahedra vertices
 			PartitionNodeData subNodeData = InitialNodeData();
 
-			subNodeData.TetrahedraVertices[0] = nodeData.TetrahedraVertices[0];
-			subNodeData.TetrahedraVertices[1] = nodeData.TetrahedraVertices[3];
-			subNodeData.TetrahedraVertices[2] = nodeData.TetrahedraVertices[2];
+			const uint subdivTypeId = (partitionDepth % PartitionTetrahedraSubDivisionTypes);
+			#ifdef SUB_DIVISON_INDICES_WORKAROUND
+			const uint3 subdivIds0 = g_ProceduralConsts.SubDivisionIndices[subdivTypeId * 2 + 0].xyz;
+			const uint3 subdivIds1 = g_ProceduralConsts.SubDivisionIndices[subdivTypeId * 2 + 1].xyz;
+			#else
+			const uint3 subdivIds0 = PartitionTetrahedraSubDivisionIndices[subdivTypeId * 2 + 0];
+			const uint3 subdivIds1 = PartitionTetrahedraSubDivisionIndices[subdivTypeId * 2 + 1];
+			#endif
+
+			subNodeData.TetrahedraVertices[0] = nodeData.TetrahedraVertices[subdivIds0[0]];
+			subNodeData.TetrahedraVertices[1] = nodeData.TetrahedraVertices[subdivIds0[1]];
+			subNodeData.TetrahedraVertices[2] = nodeData.TetrahedraVertices[subdivIds0[2]];
 			subNodeData.TetrahedraVertices[3] = edgeCenter;
 			StorePartitionDataNode(nodeData.SubNodeIds[0], subNodeData);
 
-			subNodeData.TetrahedraVertices[0] = nodeData.TetrahedraVertices[3];
-			subNodeData.TetrahedraVertices[1] = nodeData.TetrahedraVertices[1];
-			subNodeData.TetrahedraVertices[2] = nodeData.TetrahedraVertices[2];
+			subNodeData.TetrahedraVertices[0] = nodeData.TetrahedraVertices[subdivIds1[0]];
+			subNodeData.TetrahedraVertices[1] = nodeData.TetrahedraVertices[subdivIds1[1]];
+			subNodeData.TetrahedraVertices[2] = nodeData.TetrahedraVertices[subdivIds1[2]];
 			subNodeData.TetrahedraVertices[3] = edgeCenter;
 			StorePartitionDataNode(nodeData.SubNodeIds[1], subNodeData);
 		}
@@ -216,7 +220,7 @@ void PartitionUpdateRootNode(
 		}
 		AcquirePartitionDataNode(); // returned idx does not matter, every root node writes at it's constant pos
 		StorePartitionDataNode(nodeIdx, nodeData);
-		GroupMemoryBarrierWithGroupSync(); // wait all root nodes to be stores
+		GroupMemoryBarrierWithGroupSync(); // wait all root nodes to be stored
 	}
 	else
 	{
@@ -227,7 +231,8 @@ void PartitionUpdateRootNode(
 	// update root node partition
 
 	uint partitionMode = PartitionMode::Split; // always try to split root node
-	partitionMode = UpdateNodePartition(partitionMode, nodeIdx, nodeData);
+	uint partitionDepth = 0;
+	partitionMode = UpdateNodePartition(partitionMode, partitionDepth, nodeIdx, nodeData);
 
 	// produce output
 
@@ -258,7 +263,8 @@ void PartitionUpdateNode(
 	{
 		// update partition
 
-		uint partitionMode = UpdateNodePartition(partitionInput.Mode, partitionInput.NodeId, nodeData);
+		uint partitionDepth = PartitionDepthMax - GetRemainingRecursionLevels() + 1;
+		uint partitionMode = UpdateNodePartition(partitionInput.Mode, partitionDepth, partitionInput.NodeId, nodeData);
 
 		// produce output
 

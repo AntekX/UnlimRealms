@@ -54,7 +54,9 @@ static const RTImageDesc g_RTImageDesc[RTImageCount] = {
 
 GPUWorkGraphsRealm::GPUWorkGraphsRealm() :
 	camera(*this),
-	cameraControl(*this, &camera, CameraControl::Mode::AroundPoint)
+	cameraControl(*this, &camera, CameraControl::Mode::AroundPoint),
+	refinementPoint(std::numeric_limits<ur_float>::max()),
+	freezeRefPoint(false)
 {
 }
 
@@ -665,6 +667,10 @@ Result GPUWorkGraphsRealm::ProceduralUpdate(const UpdateContext& renderContext)
 	ur_float distToObj = (camera.GetPosition() - this->proceduralObject.position).Length() - this->proceduralObject.extent;
 	this->cameraControl.SetSpeed(std::max(5.0f, distToObj * 0.5f));
 	this->cameraControl.Update();
+	if (!this->freezeRefPoint)
+	{
+		this->refinementPoint = this->camera.GetPosition();
+	}
 
 	return Result(Success);
 }
@@ -682,8 +688,17 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 		ProceduralConsts proceduralConsts;
 		proceduralConsts.RootPosition = this->proceduralObject.position;
 		proceduralConsts.RootExtent = this->proceduralObject.extent;
-		proceduralConsts.RefinementPoint = this->camera.GetPosition();
+		proceduralConsts.RefinementPoint = this->refinementPoint;
 		proceduralConsts.RefinementDistanceFactor = 1.0f;
+		#ifdef SUB_DIVISON_INDICES_WORKAROUND
+		for (ur_uint i = 0; i < PartitionTetrahedraSubDivisionTypes * 2; ++i)
+		{
+			proceduralConsts.SubDivisionIndices[i][0] = PartitionTetrahedraSubDivisionIndices[i][0];
+			proceduralConsts.SubDivisionIndices[i][1] = PartitionTetrahedraSubDivisionIndices[i][1];
+			proceduralConsts.SubDivisionIndices[i][2] = PartitionTetrahedraSubDivisionIndices[i][2];
+			proceduralConsts.SubDivisionIndices[i][3] = 0;
+		}
+		#endif
 		Allocation proceduralConstsAlloc = this->GetGrafRenderer()->GetDynamicConstantBufferAllocation(sizeof(ProceduralConsts));
 		GrafBuffer* dynamicCB = this->GetGrafRenderer()->GetDynamicConstantBuffer();
 		dynamicCB->Write((ur_byte*)&proceduralConsts, sizeof(ProceduralConsts), 0, proceduralConstsAlloc.Offset);
@@ -769,6 +784,7 @@ Result GPUWorkGraphsRealm::ProceduralDisplayImgui()
 	std::string titleString;
 	WstringToString(this->GetCanvas()->GetTitle(), titleString);
 	ImGui::Begin(titleString.c_str());
+	ImGui::Checkbox("Freeze Ref Point", &this->freezeRefPoint);
 	if (ImGui::CollapsingHeader("Partition"))
 	{
 		ur_byte* dataPtr = this->graphicsObjects->readbackData.data();
