@@ -690,13 +690,24 @@ Result GPUWorkGraphsRealm::ProceduralRender(const RenderContext& renderContext)
 		proceduralConsts.RootExtent = this->proceduralObject.extent;
 		proceduralConsts.RefinementPoint = this->refinementPoint;
 		proceduralConsts.RefinementDistanceFactor = 1.0f;
-		#ifdef SUB_DIVISON_INDICES_WORKAROUND
-		for (ur_uint i = 0; i < PartitionTetrahedraSubDivisionTypes * 2; ++i)
+		#ifdef STATIC_CONSTS_WORKAROUND
+		for (ur_uint i = 0; i < PartitionTetrahedraSubDivisionTypes * PartitionTetrahedraSubNodeCount; ++i)
 		{
 			proceduralConsts.SubDivisionIndices[i][0] = PartitionTetrahedraSubDivisionIndices[i][0];
 			proceduralConsts.SubDivisionIndices[i][1] = PartitionTetrahedraSubDivisionIndices[i][1];
 			proceduralConsts.SubDivisionIndices[i][2] = PartitionTetrahedraSubDivisionIndices[i][2];
-			proceduralConsts.SubDivisionIndices[i][3] = 0;
+		}
+		for (ur_uint i = 0; i < PartitionTetrahedraEdgeCount; ++i)
+		{
+			proceduralConsts.TetrahedraEdges[i][0] = PartitionTetrahedraEdges[i][0];
+			proceduralConsts.TetrahedraEdges[i][1] = PartitionTetrahedraEdges[i][1];
+		}
+		for (ur_uint i = 0; i < PartitionTetrahedraEdgeCount * PartitionTetrahedraSubNodeCount; ++i)
+		{
+			proceduralConsts.TetrahedraEdgeSplitInfo[i][0] = PartitionTetrahedraEdgeSplitInfo[i][0];
+			proceduralConsts.TetrahedraEdgeSplitInfo[i][1] = PartitionTetrahedraEdgeSplitInfo[i][1];
+			proceduralConsts.TetrahedraEdgeSplitInfo[i][2] = PartitionTetrahedraEdgeSplitInfo[i][2];
+			proceduralConsts.TetrahedraEdgeSplitInfo[i][3] = PartitionTetrahedraEdgeSplitInfo[i][3];
 		}
 		#endif
 		Allocation proceduralConstsAlloc = this->GetGrafRenderer()->GetDynamicConstantBufferAllocation(sizeof(ProceduralConsts));

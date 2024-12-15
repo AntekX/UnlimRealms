@@ -57,11 +57,11 @@ StructureVSOutput PartitionStructureVS(uint vertexID : SV_VertexID, uint instanc
 		center += nodeData.TetrahedraVertices[i].xyz;
 	}
 	center /= 4;
-	static const float TetrahedraScale = 1;
+	static const float TetrahedraScale = 0.96;
 	worldPos = (worldPos - center) * TetrahedraScale + center;
 	
 	output.Pos = mul(float4(worldPos.xyz, 1.0), g_SceneRenderConsts.ViewProj);
-	output.Color = (vertexID < 2 ? float4(1.0, 0.0, 0.0, 1.0) : float4(1.0, 1.0, 0.0, 1.0));
+	output.Color = float4(1.0, 1.0, 0.0, 1.0);
 
 	return output;
 }
